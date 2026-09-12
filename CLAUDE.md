@@ -1,15 +1,22 @@
 # meridian-python
 
-The Python SDK for building Meridian plugins, and the reference plugins built
-on it.
+The Python SDK for building Meridian plugins.
 
 ## Placement
 
-The SDK exposes a domain API over generated types. It never hands plugin authors
-raw wire types; that indirection is what lets a plugin survive a schema change.
+The SDK is a client for the sidecar and nothing else. The sidecar implements the
+operations; this calls them over loopback. Access control, provenance stamping,
+correlation and the bus live on the other side of that socket, and anything
+added here has to be a convenience rather than a decision. A decision made here
+is a decision made once per plugin, and wrong in a different way each time.
 
-Plugins here are reference implementations. Anything genuinely cross-cutting
-belongs in the sidecar, in the runtime, not duplicated into each plugin.
+Plugins live in their own repositories, so this one stays thin. A connector or a
+dashboard belongs beside its own vendor's code, not here.
+
+The SDK wraps the envelope machinery in dataclasses so a plugin author does not
+handle metadata by hand. Payloads stay generated message types: typed,
+role-specific operations are generated from the function matrix above this
+layer, and hand-writing them is the v1 failure decisions/007 names.
 
 ## Rules with teeth
 

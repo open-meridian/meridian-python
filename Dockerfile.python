@@ -1,0 +1,46 @@
+# syntax=docker/dockerfile:1
+#
+# Build, test and lint the SDK.
+#
+# The host is not asked for a Python toolchain or a virtualenv. Everything runs
+# here at a pinned version, so a contributor needs only Docker and every check
+# is reproducible. The same reasoning as meridian-core's Dockerfile.rust, and
+# the same reason: a gate whose verdict depends on whose machine ran it is not
+# a gate.
+
+ARG PYTHON_VERSION=3.12
+
+FROM python:${PYTHON_VERSION}-slim AS base
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends git ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+WORKDIR /w
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_CACHE_DIR=1
+
+# Dependencies resolve before the source is copied, so editing the SDK does not
+# re-fetch the pinned schema revision on every run.
+COPY pyproject.toml ./
+RUN mkdir -p src/meridian_sdk && touch src/meridian_sdk/__init__.py \
+ && pip install -e ".[dev]"
+
+COPY src/ src/
+COPY tests/ tests/
+
+FROM base AS check
+RUN python -c "import meridian_sdk; print(meridian_sdk.SCHEMA_VERSION)"
+
+# The conformance half needs the design repo's fixtures, which are not in this
+# repo and are not copied into the image: they are mounted at run time, because
+# baking a copy in is the vendored-copy problem again.
+FROM base AS test
+RUN python -m pytest -q --ignore=tests/test_conformance.py
+
+FROM base AS lint
+RUN python -m ruff check src tests \
+ && python -m ruff format --check src tests \
+ && python -m mypy
+
+# Conformance against the contract's pinned bytes. The fixtures live in
+# meridian-design and are mounted rather than copied, because a copy is a copy
+# that drifts, which is the thing this suite exists to detect.
+FROM base AS conformance
