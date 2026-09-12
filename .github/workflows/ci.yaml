@@ -32,7 +32,17 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  ci-local:
+  # Everything ci-local runs except conformance, which reads the contract's
+  # pinned bytes from meridian-design. That repo is private, and reaching it
+  # from here would mean a public repository holding a credential that reads
+  # private source. Ruled out 2026-09-12.
+  #
+  # The gate is not dropped. It runs in meridian-design's CI, which is private
+  # and already checks out every sibling, and it runs in `make ci-local` here,
+  # which the pre-push hook fires, so a push that breaks it does not happen from
+  # a workspace. What is missing is confirmation on a run started from GitHub
+  # alone, and that window is named rather than papered over.
+  ci-remote:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

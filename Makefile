@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 PY    := python3
 
-.PHONY: help ci-local ci-local-deep install-hooks ci-mirror-check contract-diff \
+.PHONY: help ci-local ci-remote ci-local-deep install-hooks ci-mirror-check contract-diff \
         build test lint conformance fmt
 
 help:
@@ -15,9 +15,23 @@ help:
 
 # Local green is the completion signal; CI is confirmation.
 # Every job in .github/workflows must be reachable from here.
-ci-local: contract-diff ci-mirror-check build test conformance lint
+ci-local: ci-remote conformance
 	@echo
 	@echo "ci-local: GREEN"
+
+# What CI can run. Conformance is not in it, because the fixtures it checks
+# against live in meridian-design, that repo is private, and a public repo
+# holding a credential that reads private source is a worse trade than a gate
+# confirmed elsewhere.
+#
+# Elsewhere is real, not a euphemism: meridian-design's own CI runs this SDK's
+# conformance suite against its fixtures, and it is private so it may. Here, the
+# pre-push hook runs ci-local, so conformance passes before any push from a
+# workspace. The uncovered case is a commit made through GitHub's web interface,
+# which nothing in this repo can check and design's next run will.
+ci-remote: contract-diff ci-mirror-check build test lint
+	@echo
+	@echo "ci-remote: GREEN (conformance not included; see this target's comment)"
 
 ci-local-deep: ci-local
 
