@@ -119,6 +119,11 @@ def no_ambient_address(monkeypatch: pytest.MonkeyPatch) -> None:
 
     Without this a developer with the variable set in their shell would run a
     different suite from CI, and the one that passes is the one nobody trusts.
+
+    test_interop.py wants the opposite and reads the variable at import, before
+    this runs. Do not "fix" that by narrowing this fixture: the protection is
+    worth more than the tidiness, and the interop suite is the exception rather
+    than the rule.
     """
     monkeypatch.delenv("MERIDIAN_SIDECAR_ADDRESS", raising=False)
 

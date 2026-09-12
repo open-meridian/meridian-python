@@ -33,7 +33,7 @@ RUN python -c "import meridian_sdk; print(meridian_sdk.SCHEMA_VERSION)"
 # repo and are not copied into the image: they are mounted at run time, because
 # baking a copy in is the vendored-copy problem again.
 FROM base AS test
-RUN python -m pytest -q --ignore=tests/test_conformance.py
+RUN python -m pytest -q --ignore=tests/test_conformance.py --ignore=tests/test_interop.py
 
 FROM base AS lint
 RUN python -m ruff check src tests \
@@ -44,3 +44,8 @@ RUN python -m ruff check src tests \
 # meridian-design and are mounted rather than copied, because a copy is a copy
 # that drifts, which is the thing this suite exists to detect.
 FROM base AS conformance
+
+# The SDK against a real runtime. Needs one running and reachable, which is why
+# meridian-core owns the target that starts it: the sidecar binds loopback, so
+# this container joins the runtime's network namespace rather than its network.
+FROM base AS interop
