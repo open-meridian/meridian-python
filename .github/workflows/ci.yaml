@@ -6,16 +6,20 @@
 # that correspondence from inside ci-local, so a job added here without a target
 # fails the build rather than quietly escaping local reproduction.
 #
-# The conformance gate reads the contract's pinned bytes, which live in
-# meridian-design and are deliberately not vendored here: a vendored copy is a
-# copy that drifts, and drift is the thing the gate exists to detect. So CI
-# reconstructs the workspace, the way the design repo's own CI does, using the
-# same organisation-level GitHub App. The token is minted per run and expires
-# with it.
+# This job runs ci-remote rather than ci-local, and the difference is one gate.
+# Conformance reads the contract's pinned bytes, which live in meridian-design
+# and are deliberately not vendored here, because a vendored copy is a copy that
+# drifts and drift is what the gate detects. That repo is private, so reaching
+# it from here would put a credential that reads private source into a public
+# repository. Ruled out on 2026-09-12.
 #
-# A pull request from a fork gets no secrets and therefore no fixtures. That run
-# fails rather than skipping the gate, because a conformance suite that passes
-# without its fixtures is indistinguishable from one that was never written.
+# The gate still runs, twice. `make ci-local` includes it and the pre-push hook
+# runs ci-local, so no push from a workspace can break it. meridian-design's CI
+# runs the same suite against its own fixtures, and being private it may.
+#
+# What neither covers is a commit made through GitHub's web interface. That is a
+# real hole and it is named here rather than papered over; design's next run
+# closes it.
 name: ci
 
 on:
@@ -49,31 +53,12 @@ jobs:
         with:
           # Full history, so the base commit resolves.
           fetch-depth: 0
-          path: workspace/meridian-python
-
-      - name: Mint a cross-repo token
-        id: app-token
-        uses: actions/create-github-app-token@v1
-        with:
-          app-id: ${{ vars.CROSS_REPO_APP_ID }}
-          private-key: ${{ secrets.CROSS_REPO_APP_KEY }}
-          owner: ${{ github.repository_owner }}
-
-      # Only the fixtures are read, but a sparse checkout of one directory is a
-      # second thing to keep true when the layout moves. The whole repo is
-      # cheaper to reason about.
-      - uses: actions/checkout@v4
-        with:
-          repository: ${{ github.repository_owner }}/meridian-design
-          token: ${{ steps.app-token.outputs.token }}
-          path: workspace/meridian-design
 
       # The gate needs a range to police. A default checkout is shallow and
       # detached, with no upstream and no origin/main, and the tool now fails
       # rather than passing on that. See the review finding on meridian-core#5,
       # where it reported success having inspected nothing.
       - name: Resolve the contract-diff base
-        working-directory: workspace/meridian-python
         run: |
           case "${{ github.event_name }}" in
             pull_request) base="${{ github.event.pull_request.base.sha }}" ;;
@@ -88,6 +73,5 @@ jobs:
           fi
           echo "CONTRACT_DIFF_BASE=$base" >> "$GITHUB_ENV"
 
-      - name: make ci-local
-        working-directory: workspace/meridian-python
-        run: make ci-local
+      - name: make ci-remote
+        run: make ci-remote
