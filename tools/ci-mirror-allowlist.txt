@@ -10,3 +10,4 @@
 
 claude-review	Runs the review passes in REVIEW.md against the diff by invoking a model. Not reproducible locally: it needs credentials and produces a judgement, not a verdict. Advisory only -- ci-local is the required status check, this is not.
 claude	The on-demand responder, triggered by an @claude mention on an issue or a review comment. Runs no checks and gates nothing; it exists so a human can ask for work in a thread. Nothing local corresponds to a mention.
+cla	Asks whether the author of a pull request has agreed to the contribution terms. Not reproducible locally by design: the answer depends on who opened the pull request and on GitHub's own view of whether they are inside this organisation, neither of which exists on a laptop. It gates a merge and nothing else.
