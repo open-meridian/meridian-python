@@ -13,7 +13,7 @@ requires-python = ">=3.11"
 # A range here would let a plugin build against types the runtime beside it does
 # not have, and the symptom would be a decode failure in a customer's cluster.
 dependencies = [
-  "meridian-pb @ git+https://github.com/open-meridian/meridian-schema.git@18870248cae167315021dbdbc385c5da396ca132#subdirectory=gen/python",
+  "meridian-pb @ git+https://github.com/open-meridian/meridian-schema.git@90182c69f1696af5509a0cc450ecbeb107366246#subdirectory=gen/python",
   "grpcio>=1.68,<2",
   "protobuf>=5.28,<7",
 ]
