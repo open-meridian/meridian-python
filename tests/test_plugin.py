@@ -54,15 +54,15 @@ async def test_registering_sends_no_identity(sidecar: tuple[FakeSidecar, str]) -
 async def test_identity_and_grants_come_back(sidecar: tuple[FakeSidecar, str]) -> None:
     """So a plugin can stop at startup when it is not what it expected to be."""
     service, address = sidecar
-    service.role = "dashboard"
-    service.tags = ("positions-reader",)
+    service.role = "admin"
+    service.tags = ("reporting",)
     service.publish_grants = ("platform.street.query.list-custodial-positions",)
 
     plugin = await meridian_sdk.connect(address, heartbeat=False)
     try:
-        assert plugin.identity.role == "dashboard"
+        assert plugin.identity.role == "admin"
         assert plugin.identity.instance_id == "custody-snaptrade-1"
-        assert plugin.identity.tags == ("positions-reader",)
+        assert plugin.identity.tags == ("reporting",)
         assert plugin.identity.deployment_id == "dep-local-1"
         assert plugin.grants.publish == ("platform.street.query.list-custodial-positions",)
     finally:
