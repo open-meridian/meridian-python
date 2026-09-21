@@ -139,10 +139,11 @@ async def test_the_same_statement_twice_is_recognised_not_duplicated(plugin) -> 
 
 
 async def test_an_unresolved_identifier_is_a_miss_not_an_error(plugin) -> None:
-    """The replica answers, and a miss is an answer.
+    """The instrument store answers, and a miss is an answer.
 
-    Nothing is loaded into the replica here, so the interesting part is that the
-    reply decodes and reports a reason rather than the call failing.
+    Nothing is loaded into the instrument store here, so the interesting part
+    is that the reply decodes and reports a reason rather than the call
+    failing.
     """
     reply = await plugin.call(
         RESOLVE_IDENTIFIER,
