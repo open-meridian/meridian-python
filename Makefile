@@ -49,16 +49,24 @@ PY_VERSION := 3.12
 DOCKER := DOCKER_BUILDKIT=1 docker
 DESIGN ?= ../meridian-design
 
+# The domain protos the tests encode payloads with. They live in meridian-core,
+# pinned here by commit as the schema is pinned in pyproject.toml. Core's own
+# interop gate overrides this with its working tree, so a change to both lands
+# without either waiting on the other's push.
+CORE_REV   := bed0fb38b2d87b5f047d7df5c1c5f29c7218e9a4
+CORE_PROTO ?= https://github.com/open-meridian/meridian-core.git\#$(CORE_REV):proto
+CONTEXTS   := --build-context core-proto=$(CORE_PROTO)
+
 build:
-	@$(DOCKER) build -f Dockerfile.python --target check . >/dev/null 2>&1 \
+	@$(DOCKER) build $(CONTEXTS) -f Dockerfile.python --target check . >/dev/null 2>&1 \
 		|| { echo "build FAILED; see it with:" >&2; \
-		     echo "  DOCKER_BUILDKIT=1 docker build -f Dockerfile.python --target check --progress=plain ." >&2; exit 1; }
+		     echo "  DOCKER_BUILDKIT=1 docker build $(CONTEXTS) -f Dockerfile.python --target check --progress=plain ." >&2; exit 1; }
 	@echo "build OK: the package installs and imports"
 
 test:
-	@$(DOCKER) build -f Dockerfile.python --target test . >/dev/null 2>&1 \
+	@$(DOCKER) build $(CONTEXTS) -f Dockerfile.python --target test . >/dev/null 2>&1 \
 		|| { echo "test FAILED; see it with:" >&2; \
-		     echo "  DOCKER_BUILDKIT=1 docker build -f Dockerfile.python --target test --progress=plain ." >&2; exit 1; }
+		     echo "  DOCKER_BUILDKIT=1 docker build $(CONTEXTS) -f Dockerfile.python --target test --progress=plain ." >&2; exit 1; }
 	@echo "test OK: the client's tests pass"
 
 # The fixtures are not in this repo. Mounted read-only from the design repo, so
@@ -67,7 +75,7 @@ test:
 conformance:
 	@test -d "$(DESIGN)/fixtures" \
 		|| { echo "no fixtures at $(DESIGN)/fixtures; set DESIGN=<path to meridian-design>" >&2; exit 1; }
-	@$(DOCKER) build -f Dockerfile.python --target conformance -t meridian-python-conformance . >/dev/null 2>&1 \
+	@$(DOCKER) build $(CONTEXTS) -f Dockerfile.python --target conformance -t meridian-python-conformance . >/dev/null 2>&1 \
 		|| { echo "conformance image FAILED to build" >&2; exit 1; }
 	@docker run --rm \
 		-v "$(abspath $(DESIGN))/fixtures":/fixtures:ro \
@@ -79,9 +87,9 @@ conformance:
 	@echo "conformance OK: this SDK decodes and re-encodes every pinned message"
 
 lint:
-	@$(DOCKER) build -f Dockerfile.python --target lint . >/dev/null 2>&1 \
+	@$(DOCKER) build $(CONTEXTS) -f Dockerfile.python --target lint . >/dev/null 2>&1 \
 		|| { echo "lint FAILED; see it with:" >&2; \
-		     echo "  DOCKER_BUILDKIT=1 docker build -f Dockerfile.python --target lint --progress=plain ." >&2; exit 1; }
+		     echo "  DOCKER_BUILDKIT=1 docker build $(CONTEXTS) -f Dockerfile.python --target lint --progress=plain ." >&2; exit 1; }
 	@echo "lint OK: ruff and mypy clean"
 
 # Applied in a container and written back, because the host has no toolchain.

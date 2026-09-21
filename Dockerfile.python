@@ -23,6 +23,16 @@ COPY pyproject.toml ./
 RUN mkdir -p src/meridian_sdk && touch src/meridian_sdk/__init__.py \
  && pip install -e ".[dev]"
 
+# The domain messages the tests encode payloads with. They are meridian-core's,
+# not this package's, and the package never ships them: the image generates
+# them beside the plugin-facing bindings from the proto/ it is handed as the
+# core-proto build context (see CORE_PROTO in the Makefile).
+COPY --from=core-proto . /core-proto/
+RUN site="$(python -c 'import meridian, pathlib; print(pathlib.Path(meridian.__file__).parents[1])')" \
+ && python -m grpc_tools.protoc -I /core-proto \
+      --python_out="$site" --pyi_out="$site" /core-proto/meridian/v1/*.proto \
+ && python -c "import meridian.v1.holdings_pb2, meridian.v1.envelope_pb2"
+
 COPY src/ src/
 COPY tests/ tests/
 
