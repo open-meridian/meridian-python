@@ -26,6 +26,7 @@ import pathlib
 # Importing the package registers every message in the default descriptor pool,
 # which is how a type named in a fixture is found by name.
 import meridian.v1.accounts_pb2  # noqa: F401
+import meridian.v1.config_pb2  # noqa: F401
 import meridian.v1.envelope_pb2  # noqa: F401
 import meridian.v1.holdings_pb2  # noqa: F401
 import meridian.v1.reference_pb2  # noqa: F401
