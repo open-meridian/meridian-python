@@ -30,12 +30,12 @@ from meridian_sdk import NotGranted
 # rather than imported, because the point is that two implementations agree
 # about these strings, and importing them from one side would be that side
 # agreeing with itself.
-RECORD_STATEMENT = "platform.kernel.command.record-statement"
-RECORD_HOLDING = "platform.kernel.command.record-holding"
+RECORD_STATEMENT = "platform.street.command.record-statement"
+RECORD_HOLDING = "platform.street.command.record-holding"
 RESOLVE_IDENTIFIER = "platform.reference.query.resolve-identifier"
 INSTRUMENT_MISSING = "platform.reference.event.instrument-missing"
 INSTRUMENT_APPLIED = "platform.reference.event.instrument-applied"
-STATEMENT_RECORDED = "platform.kernel.event.statement-recorded"
+STATEMENT_RECORDED = "platform.street.event.statement-recorded"
 
 NOW = 1_757_376_000_000_000_000
 
@@ -77,7 +77,7 @@ async def test_the_runtime_says_who_this_plugin_is(plugin) -> None:
     assert RECORD_HOLDING in plugin.grants.publish
 
 
-async def test_a_statement_and_a_row_reach_the_ledger(plugin) -> None:
+async def test_a_statement_and_a_row_reach_the_street_store(plugin) -> None:
     """Python to Rust to Postgres and back.
 
     The statement promises one row, one row arrives, and the position it moves
@@ -117,7 +117,7 @@ async def test_a_statement_and_a_row_reach_the_ledger(plugin) -> None:
 
 
 async def test_the_same_statement_twice_is_recognised_not_duplicated(plugin) -> None:
-    """Redelivery is a no-op, and the ledger says so rather than staying silent."""
+    """Redelivery is a no-op, and the street store says so rather than staying silent."""
     external_id = f"interop-{uuid.uuid4()}"
     request = holdings_pb2.RecordHoldingsStatementRequest(
         source="interop",
@@ -171,7 +171,7 @@ async def test_a_granted_publish_is_accepted(plugin) -> None:
 async def test_an_ungranted_publish_is_refused_by_the_real_grant_table(
     plugin,
 ) -> None:
-    """A connector states what it holds; it does not announce that the ledger
+    """A connector states what it holds; it does not announce that the street store
     moved. That is the kernel's to say, and the deployment's grant table is what
     enforces it.
     """
@@ -182,7 +182,7 @@ async def test_an_ungranted_publish_is_refused_by_the_real_grant_table(
 
 async def test_an_ungranted_subscription_is_refused(plugin) -> None:
     with pytest.raises(NotGranted):
-        [d async for d in plugin.subscribe("platform.kernel.**")]
+        [d async for d in plugin.subscribe("platform.street.**")]
 
 
 async def test_a_granted_subscription_opens(plugin) -> None:

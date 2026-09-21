@@ -56,7 +56,7 @@ async def test_identity_and_grants_come_back(sidecar: tuple[FakeSidecar, str]) -
     service, address = sidecar
     service.role = "dashboard"
     service.tags = ("positions-reader",)
-    service.publish_grants = ("platform.kernel.query.list-custodial-positions",)
+    service.publish_grants = ("platform.street.query.list-custodial-positions",)
 
     plugin = await meridian_sdk.connect(address, heartbeat=False)
     try:
@@ -64,7 +64,7 @@ async def test_identity_and_grants_come_back(sidecar: tuple[FakeSidecar, str]) -
         assert plugin.identity.instance_id == "custody-snaptrade-1"
         assert plugin.identity.tags == ("positions-reader",)
         assert plugin.identity.deployment_id == "dep-local-1"
-        assert plugin.grants.publish == ("platform.kernel.query.list-custodial-positions",)
+        assert plugin.grants.publish == ("platform.street.query.list-custodial-positions",)
     finally:
         await plugin.leave()
 
@@ -93,7 +93,7 @@ async def test_publish_sends_the_payload_type_and_not_the_identity(
             account_id="ACC-1", quantity_scaled_1e8=1_250_000_000
         )
         message_id = await plugin.publish(
-            "platform.kernel.command.record-holding", row, correlation_id="corr-1"
+            "platform.street.command.record-holding", row, correlation_id="corr-1"
         )
         assert message_id == "msg-1"
     finally:
@@ -112,19 +112,19 @@ async def test_a_refused_publish_names_the_topic_and_the_missing_grant(
 ) -> None:
     service, address = sidecar
     service.publish_accepted = False
-    service.publish_refusal = "no grant covers platform.kernel.command.record-holding"
+    service.publish_refusal = "no grant covers platform.street.command.record-holding"
 
     plugin = await meridian_sdk.connect(address, heartbeat=False)
     try:
         with pytest.raises(NotGranted) as raised:
             await plugin.publish(
-                "platform.kernel.command.record-holding",
+                "platform.street.command.record-holding",
                 holdings_pb2.RecordHoldingRequest(),
             )
     finally:
         await plugin.leave()
 
-    assert raised.value.topic == "platform.kernel.command.record-holding"
+    assert raised.value.topic == "platform.street.command.record-holding"
     assert "no grant" in raised.value.reason
 
 
@@ -175,7 +175,7 @@ async def test_an_ungranted_subscription_is_refused_not_silently_empty(
     plugin = await meridian_sdk.connect(address, heartbeat=False)
     try:
         with pytest.raises(NotGranted):
-            [d async for d in plugin.subscribe("platform.kernel.**")]
+            [d async for d in plugin.subscribe("platform.street.**")]
     finally:
         await plugin.leave()
 
@@ -194,7 +194,7 @@ async def test_call_returns_the_reply_parsed_into_the_caller_s_message(
     plugin = await meridian_sdk.connect(address, heartbeat=False)
     try:
         reply = await plugin.call(
-            "platform.kernel.command.record-statement",
+            "platform.street.command.record-statement",
             holdings_pb2.RecordHoldingsStatementRequest(expected_rows=1),
             holdings_pb2.RecordHoldingsStatementReply(),
             timeout_ms=1000,
@@ -233,7 +233,7 @@ async def test_call_failures_stay_distinguishable(
     try:
         with pytest.raises(CallFailed) as raised:
             await plugin.call(
-                "platform.kernel.query.list-custodial-positions",
+                "platform.street.query.list-custodial-positions",
                 holdings_pb2.ListCustodialPositionsRequest(),
                 holdings_pb2.ListCustodialPositionsReply(),
             )
@@ -273,7 +273,7 @@ async def test_leaving_says_why_and_closes_the_plugin(
     assert departure.reason == "stopping"
     with pytest.raises(NotRegistered):
         await plugin.publish(
-            "platform.kernel.command.record-holding", holdings_pb2.RecordHoldingRequest()
+            "platform.street.command.record-holding", holdings_pb2.RecordHoldingRequest()
         )
 
 

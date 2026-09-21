@@ -31,7 +31,7 @@ class FakeSidecar(sidecar_pb2_grpc.SidecarServiceServicer):
     instance_id: str = "custody-snaptrade-1"
     role: str = "custody"
     tags: tuple[str, ...] = ()
-    publish_grants: tuple[str, ...] = ("platform.kernel.command.record-holding",)
+    publish_grants: tuple[str, ...] = ("platform.street.command.record-holding",)
     subscribe_grants: tuple[str, ...] = ("platform.reference.event.instrument-applied",)
 
     publish_accepted: bool = True
