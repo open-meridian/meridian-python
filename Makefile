@@ -53,7 +53,7 @@ DESIGN ?= ../meridian-design
 # pinned here by commit as the schema is pinned in pyproject.toml. Core's own
 # interop gate overrides this with its working tree, so a change to both lands
 # without either waiting on the other's push.
-CORE_REV   := c27a40c44b42d6e724a7d155174f7e4898822021
+CORE_REV   := fa5c3ab30f29fd5c0a976baeefb388ca1bef2d60
 CORE_PROTO ?= https://github.com/open-meridian/meridian-core.git\#$(CORE_REV):proto
 CONTEXTS   := --build-context core-proto=$(CORE_PROTO)
 

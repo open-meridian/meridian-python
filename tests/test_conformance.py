@@ -28,6 +28,7 @@ import pathlib
 import meridian.v1.accounts_pb2  # noqa: F401
 import meridian.v1.config_pb2  # noqa: F401
 import meridian.v1.envelope_pb2  # noqa: F401
+import meridian.v1.first_run_pb2  # noqa: F401
 import meridian.v1.holdings_pb2  # noqa: F401
 import meridian.v1.reference_pb2  # noqa: F401
 import meridian.v1.sidecar_pb2  # noqa: F401
