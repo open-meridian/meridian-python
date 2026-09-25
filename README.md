@@ -7,10 +7,21 @@ from the kernel on start. See [CLAUDE.md](CLAUDE.md).
 
 Plugins themselves live in their own repositories. This one stays thin.
 
-```python
-import meridian_sdk
+Published to PyPI as `open-meridian`, imported as `meridian` (not yet
+published; see meridian-design's plans/a-person-reaches-a-plugin, step 0):
 
-async with await meridian_sdk.connect() as plugin:
+    pip install open-meridian==0.1.0
+
+The name `meridian-sdk` on PyPI is an unrelated company's. Do not install it.
+
+The package carries the wire bindings it speaks to the sidecar with, as
+`meridian.v1`, at the schema revision `SCHEMA_REV` in the Makefile names.
+`make vendor-schema` moves them; `make check-vendored` fails when they lag.
+
+```python
+import meridian
+
+async with await meridian.connect() as plugin:
     print(plugin.identity.role, plugin.grants.publish)
     await plugin.publish("platform.custody.acme-1.event.sync-status", event)
 ```

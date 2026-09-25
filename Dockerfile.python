@@ -18,26 +18,58 @@ WORKDIR /w
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_CACHE_DIR=1
 
 # Dependencies resolve before the source is copied, so editing the SDK does not
-# re-fetch the pinned schema revision on every run.
+# reinstall them on every run.
 COPY pyproject.toml ./
-RUN mkdir -p src/meridian_sdk && touch src/meridian_sdk/__init__.py \
+RUN mkdir -p src/meridian && touch src/meridian/__init__.py \
  && pip install -e ".[dev]"
+COPY src/ src/
 
 # The domain messages the tests encode payloads with. They are meridian-core's,
-# not this package's, and the package never ships them: the image generates
-# them beside the plugin-facing bindings from the proto/ it is handed as the
-# core-proto build context (see CORE_PROTO in the Makefile).
+# not this package's, and the package never ships them: they are generated
+# into this image's copy of meridian.v1, beside the wire bindings the package
+# does ship, from the proto/ handed in as the core-proto build context (see
+# CORE_PROTO in the Makefile). The wheel is built from the source alone, in
+# its own stage, and `installed` checks none of these reached it.
 COPY --from=core-proto . /core-proto/
-RUN site="$(python -c 'import meridian, pathlib; print(pathlib.Path(meridian.__file__).parents[1])')" \
- && python -m grpc_tools.protoc -I /core-proto \
-      --python_out="$site" --pyi_out="$site" /core-proto/meridian/v1/*.proto \
+RUN python -m grpc_tools.protoc -I /core-proto \
+      --python_out=src --pyi_out=src /core-proto/meridian/v1/*.proto \
  && python -c "import meridian.v1.holdings_pb2, meridian.v1.envelope_pb2"
 
-COPY src/ src/
 COPY tests/ tests/
 
 FROM base AS check
-RUN python -c "import meridian_sdk; print(meridian_sdk.SCHEMA_VERSION)"
+RUN python -c "import meridian; print(meridian.SCHEMA_VERSION)"
+
+# The package as PyPI will have it: built from the committed source and
+# nothing generated beside it.
+FROM python:${PYTHON_VERSION}-slim AS package
+WORKDIR /w
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_CACHE_DIR=1
+COPY pyproject.toml README.md LICENSE NOTICE ./
+COPY src/ src/
+RUN pip wheel --no-deps -w /dist .
+
+# Installed into a Python that has no git and no checkout, as a plugin author
+# installs it. It must depend on nothing by URL -- PyPI refuses that, and the
+# git pin it used to carry is why it could not be published -- must ship the
+# wire bindings, and must not ship meridian-core's domain messages.
+FROM python:${PYTHON_VERSION}-slim AS installed
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_CACHE_DIR=1
+COPY --from=package /dist /dist
+RUN pip install /dist/*.whl \
+ && python - <<'CHECK'
+import importlib.metadata as m, pathlib, meridian, meridian.v1.sidecar_pb2_grpc
+dist = m.distribution("open-meridian")
+urls = [r for r in (dist.requires or []) if "@" in r]
+assert not urls, f"depends on something by URL: {urls}"
+files = {str(f) for f in dist.files or []}
+assert "meridian/v1/sidecar_pb2.py" in files, "the wire bindings are not in the package"
+assert "meridian/py.typed" in files, "the package does not say it is typed"
+leaked = sorted(f for f in files if f.endswith(("holdings_pb2.py", "config_pb2.py")))
+assert not leaked, f"meridian-core's domain messages reached the package: {leaked}"
+assert callable(meridian.connect)
+print("installed:", dist.metadata["Name"], dist.version, "schema", meridian.SCHEMA_VERSION)
+CHECK
 
 # The conformance half needs the design repo's fixtures, which are not in this
 # repo and are not copied into the image: they are mounted at run time, because
@@ -58,4 +90,18 @@ FROM base AS conformance
 # The SDK against a real runtime. Needs one running and reachable, which is why
 # meridian-core owns the target that starts it: the sidecar binds loopback, so
 # this container joins the runtime's network namespace rather than its network.
-FROM base AS interop
+FROM python:${PYTHON_VERSION}-slim AS interop
+WORKDIR /w
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_CACHE_DIR=1
+COPY --from=package /dist /dist
+COPY pyproject.toml ./
+# The wheel, not the checkout: what core's interop gate drives is what a
+# plugin author installs. The test tools come from the dev extra's pins.
+RUN pip install /dist/*.whl \
+ && pip install "pytest>=8" "pytest-asyncio>=0.24" "grpcio-tools>=1.68,<2" "pyyaml>=6"
+COPY --from=core-proto . /core-proto/
+RUN site="$(python -c 'import meridian, pathlib; print(pathlib.Path(meridian.__file__).parents[1])')" \
+ && python -m grpc_tools.protoc -I /core-proto \
+      --python_out="$site" --pyi_out="$site" /core-proto/meridian/v1/*.proto \
+ && python -c "import meridian.v1.holdings_pb2, meridian.v1.envelope_pb2"
+COPY tests/ tests/

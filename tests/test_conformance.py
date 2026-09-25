@@ -23,6 +23,10 @@ import base64
 import os
 import pathlib
 
+import pytest
+import yaml
+from google.protobuf import descriptor_pool, json_format, message_factory
+
 # Importing the package registers every message in the default descriptor pool,
 # which is how a type named in a fixture is found by name.
 import meridian.v1.accounts_pb2  # noqa: F401
@@ -32,9 +36,6 @@ import meridian.v1.first_run_pb2  # noqa: F401
 import meridian.v1.holdings_pb2  # noqa: F401
 import meridian.v1.reference_pb2  # noqa: F401
 import meridian.v1.sidecar_pb2  # noqa: F401
-import pytest
-import yaml
-from google.protobuf import descriptor_pool, json_format, message_factory
 
 SECTIONS = ("request", "reply", "event")
 

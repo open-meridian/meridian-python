@@ -24,6 +24,7 @@ from types import TracebackType
 
 import grpc
 from google.protobuf.message import Message
+
 from meridian.v1 import envelope_pb2, sidecar_pb2, sidecar_pb2_grpc
 
 from .errors import CallFailed, NotGranted, NotRegistered, Refused

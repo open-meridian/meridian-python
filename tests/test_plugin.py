@@ -12,11 +12,11 @@ import asyncio
 
 import grpc
 import pytest
-from meridian.v1 import envelope_pb2, holdings_pb2, sidecar_pb2
 
-import meridian_sdk
+import meridian
 from conftest import FakeSidecar
-from meridian_sdk import CallFailed, NotGranted, NotRegistered, Refused
+from meridian import CallFailed, NotGranted, NotRegistered, Refused
+from meridian.v1 import envelope_pb2, holdings_pb2, sidecar_pb2
 
 
 def an_envelope(topic: str, payload: object = None) -> envelope_pb2.Envelope:
@@ -43,7 +43,7 @@ async def test_registering_sends_no_identity(sidecar: tuple[FakeSidecar, str]) -
     letting a plugin choose its own privileges.
     """
     service, address = sidecar
-    plugin = await meridian_sdk.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False)
     await plugin.leave()
 
     (sent,) = service.registered
@@ -58,7 +58,7 @@ async def test_identity_and_grants_come_back(sidecar: tuple[FakeSidecar, str]) -
     service.tags = ("reporting",)
     service.publish_grants = ("platform.street.query.list-custodial-positions",)
 
-    plugin = await meridian_sdk.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False)
     try:
         assert plugin.identity.role == "admin"
         assert plugin.identity.instance_id == "custody-snaptrade-1"
@@ -78,7 +78,7 @@ async def test_a_refusal_stops_the_plugin_and_says_why(
     service.refusal_reason = "access control not loaded"
 
     with pytest.raises(Refused) as raised:
-        await meridian_sdk.connect(address, heartbeat=False)
+        await meridian.connect(address, heartbeat=False)
     assert raised.value.reason == "access control not loaded"
     assert len(service.registered) == 1, "a refusal was retried"
 
@@ -87,7 +87,7 @@ async def test_publish_sends_the_payload_type_and_not_the_identity(
     sidecar: tuple[FakeSidecar, str],
 ) -> None:
     service, address = sidecar
-    plugin = await meridian_sdk.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False)
     try:
         row = holdings_pb2.RecordHoldingRequest(
             account_id="ACC-1", quantity_scaled_1e8=1_250_000_000
@@ -114,7 +114,7 @@ async def test_a_refused_publish_names_the_topic_and_the_missing_grant(
     service.publish_accepted = False
     service.publish_refusal = "no grant covers platform.street.command.record-holding"
 
-    plugin = await meridian_sdk.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False)
     try:
         with pytest.raises(NotGranted) as raised:
             await plugin.publish(
@@ -134,7 +134,7 @@ async def test_subscribe_yields_envelopes_with_the_sidecar_stamp(
     service, address = sidecar
     service.deliveries = [an_envelope("platform.reference.event.instrument-applied")]
 
-    plugin = await meridian_sdk.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False)
     try:
         received = [d async for d in plugin.subscribe("platform.reference.event.*")]
     finally:
@@ -157,7 +157,7 @@ async def test_unpacking_the_wrong_type_is_caught(
     service, address = sidecar
     service.deliveries = [an_envelope("platform.reference.event.instrument-applied")]
 
-    plugin = await meridian_sdk.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False)
     try:
         (one,) = [d async for d in plugin.subscribe("platform.reference.event.*")]
         with pytest.raises(ValueError, match="RecordHoldingsStatementRequest"):
@@ -172,7 +172,7 @@ async def test_an_ungranted_subscription_is_refused_not_silently_empty(
     service, address = sidecar
     service.subscribe_status = grpc.StatusCode.PERMISSION_DENIED
 
-    plugin = await meridian_sdk.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False)
     try:
         with pytest.raises(NotGranted):
             [d async for d in plugin.subscribe("platform.street.**")]
@@ -191,7 +191,7 @@ async def test_call_returns_the_reply_parsed_into_the_caller_s_message(
         payload=answer.SerializeToString(),
     )
 
-    plugin = await meridian_sdk.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False)
     try:
         reply = await plugin.call(
             "platform.street.command.record-statement",
@@ -229,7 +229,7 @@ async def test_call_failures_stay_distinguishable(
         ok=False, failure=failure, failure_detail="detail"
     )
 
-    plugin = await meridian_sdk.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False)
     try:
         with pytest.raises(CallFailed) as raised:
             await plugin.call(
@@ -249,9 +249,9 @@ async def test_the_client_heartbeats_without_being_asked(
 ) -> None:
     """A plugin author who has to remember this is one who will forget."""
     service, address = sidecar
-    monkeypatch.setattr(meridian_sdk.plugin, "HEARTBEAT_SECONDS", 0.01)
+    monkeypatch.setattr(meridian.plugin, "HEARTBEAT_SECONDS", 0.01)
 
-    plugin = await meridian_sdk.connect(address)
+    plugin = await meridian.connect(address)
     try:
         await asyncio.sleep(0.1)
         assert service.heartbeats, "no heartbeat was sent"
@@ -266,7 +266,7 @@ async def test_leaving_says_why_and_closes_the_plugin(
     """Saying so is what distinguishes a planned stop from a failure."""
     service, address = sidecar
 
-    async with await meridian_sdk.connect(address, heartbeat=False) as plugin:
+    async with await meridian.connect(address, heartbeat=False) as plugin:
         pass
 
     (departure,) = service.left
@@ -283,7 +283,7 @@ async def test_an_exception_leaves_with_the_reason(
     service, address = sidecar
 
     with pytest.raises(RuntimeError):
-        async with await meridian_sdk.connect(address, heartbeat=False):
+        async with await meridian.connect(address, heartbeat=False):
             raise RuntimeError("the brokerage went away")
 
     (departure,) = service.left

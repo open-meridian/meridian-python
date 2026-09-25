@@ -21,10 +21,10 @@ import os
 import uuid
 
 import pytest
-from meridian.v1 import holdings_pb2, reference_pb2
 
-import meridian_sdk
-from meridian_sdk import NotGranted
+import meridian
+from meridian import NotGranted
+from meridian.v1 import holdings_pb2, reference_pb2
 
 # The topics the shipped example grants admit for the custody role. Named here
 # rather than imported, because the point is that two implementations agree
@@ -58,7 +58,7 @@ def address() -> str:
 
 @pytest.fixture
 async def plugin():
-    connected = await meridian_sdk.connect(address(), heartbeat=False)
+    connected = await meridian.connect(address(), heartbeat=False)
     try:
         yield connected
     finally:

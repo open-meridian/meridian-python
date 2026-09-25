@@ -2,11 +2,13 @@ SHELL := /bin/bash
 PY    := python3
 
 .PHONY: help ci-local ci-remote ci-local-deep install-hooks ci-mirror-check contract-diff \
-        build test lint conformance fmt
+        build package test lint conformance fmt vendor-schema check-vendored
 
 help:
 	@echo "  make ci-local       run every gate (the pre-push gate, and what CI mirrors)"
 	@echo "  make build          install the package and prove it imports"
+	@echo "  make package        build the wheel and prove it installs alone"
+	@echo "  make vendor-schema  move the bundled wire bindings to SCHEMA_REV"
 	@echo "  make test           run the unit tests"
 	@echo "  make conformance    check this SDK against the contract's pinned bytes"
 	@echo "  make lint           ruff and mypy, warnings denied"
@@ -29,7 +31,7 @@ ci-local: ci-remote conformance
 # pre-push hook runs ci-local, so conformance passes before any push from a
 # workspace. The uncovered case is a commit made through GitHub's web interface,
 # which nothing in this repo can check and design's next run will.
-ci-remote: contract-diff ci-mirror-check build test lint
+ci-remote: contract-diff ci-mirror-check check-vendored build package test lint
 	@echo
 	@echo "ci-remote: GREEN (conformance not included; see this target's comment)"
 
@@ -44,6 +46,34 @@ ci-mirror-check:
 contract-diff:
 	@$(PY) tools/check_contract_diff.py --self-test
 	@$(PY) tools/check_contract_diff.py --repo-root .
+
+# The wire bindings this package ships as `meridian.v1`: the schema's generated
+# Python at one revision, copied into src/ and committed, so the package on
+# PyPI depends on nothing by URL (PyPI refuses that) and a plugin installs one
+# thing. `make vendor-schema` moves the copy to SCHEMA_REV; `check-vendored`
+# fails when the two disagree, as core's check-codegen does for its bindings.
+SCHEMA_REV  := df16a7a5f5c8bcff649297b12ade76226b7f5200
+SCHEMA_REPO := https://github.com/open-meridian/meridian-schema.git
+SCRATCH     := .schema-scratch
+
+define fetch_schema
+	rm -rf $(SCRATCH) && git init -q $(SCRATCH) \
+	&& git -C $(SCRATCH) fetch -q --depth 1 $(SCHEMA_REPO) $(SCHEMA_REV) \
+	&& git -C $(SCRATCH) checkout -q FETCH_HEAD -- gen/python/meridian/v1
+endef
+
+vendor-schema:
+	@$(fetch_schema)
+	@rm -rf src/meridian/v1 && cp -R $(SCRATCH)/gen/python/meridian/v1 src/meridian/v1 && rm -rf $(SCRATCH)
+	@echo "vendor-schema: src/meridian/v1 is meridian-schema at $(SCHEMA_REV)"
+
+check-vendored:
+	@$(fetch_schema) || { echo "check-vendored: could not fetch meridian-schema at $(SCHEMA_REV)" >&2; rm -rf $(SCRATCH); exit 1; }
+	@if diff -r -x __pycache__ $(SCRATCH)/gen/python/meridian/v1 src/meridian/v1 >/dev/null; then \
+		rm -rf $(SCRATCH); echo "check-vendored OK: meridian.v1 is meridian-schema at $(SCHEMA_REV)"; \
+	else \
+		rm -rf $(SCRATCH); echo "check-vendored FAILED: src/meridian/v1 is not meridian-schema at $(SCHEMA_REV). Run 'make vendor-schema'." >&2; exit 1; \
+	fi
 
 PY_VERSION := 3.12
 DOCKER := DOCKER_BUILDKIT=1 docker
@@ -62,6 +92,15 @@ build:
 		|| { echo "build FAILED; see it with:" >&2; \
 		     echo "  DOCKER_BUILDKIT=1 docker build $(CONTEXTS) -f Dockerfile.python --target check --progress=plain ." >&2; exit 1; }
 	@echo "build OK: the package installs and imports"
+
+# The package as a plugin author gets it: built from the source alone,
+# installed where there is no git, and checked for what it must and must not
+# carry (see the `installed` stage).
+package:
+	@$(DOCKER) build -f Dockerfile.python --target installed . >/dev/null 2>&1 \
+		|| { echo "package FAILED; see it with:" >&2; \
+		     echo "  DOCKER_BUILDKIT=1 docker build -f Dockerfile.python --target installed --progress=plain ." >&2; exit 1; }
+	@echo "package OK: open-meridian installs from its wheel alone, with the wire bindings and nothing by URL"
 
 test:
 	@$(DOCKER) build $(CONTEXTS) -f Dockerfile.python --target test . >/dev/null 2>&1 \
