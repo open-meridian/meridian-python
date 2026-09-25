@@ -23,6 +23,7 @@ COPY pyproject.toml ./
 RUN mkdir -p src/meridian && touch src/meridian/__init__.py \
  && pip install -e ".[dev]"
 COPY src/ src/
+COPY template/ template/
 
 # The domain messages the tests encode payloads with. They are meridian-core's,
 # not this package's, and the package never ships them: they are generated
@@ -82,8 +83,8 @@ FROM base AS test
 RUN python -m pytest -q --ignore=tests/test_conformance.py --ignore=tests/test_interop.py
 
 FROM base AS lint
-RUN python -m ruff check src tests \
- && python -m ruff format --check src tests \
+RUN python -m ruff check src tests template/src \
+ && python -m ruff format --check src tests template/src \
  && python -m mypy
 
 # Conformance against the contract's pinned bytes. The fixtures live in
@@ -100,12 +101,20 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_CACHE_DIR=1
 COPY --from=package /dist /dist
 COPY pyproject.toml ./
 # The wheel, not the checkout: what core's interop gate drives is what a
-# plugin author installs. The test tools come from the dev extra's pins.
+# plugin author installs. The test tools come from the dev extra's pins, and
+# in the same resolve as the wheel: installed after it, pip chose the newest
+# grpcio-tools, whose code generator targets a protobuf the SDK does not
+# allow, and every generated module refused to load.
 RUN pip install /dist/*.whl \
- && pip install "pytest>=8" "pytest-asyncio>=0.24" "grpcio-tools>=1.68,<2" "pyyaml>=6"
+      "pytest>=8" "pytest-asyncio>=0.24" "grpcio-tools>=1.68,<2" "pyyaml>=6"
 COPY --from=core-proto . /core-proto/
 RUN site="$(python -c 'import meridian, pathlib; print(pathlib.Path(meridian.__file__).parents[1])')" \
  && python -m grpc_tools.protoc -I /core-proto \
       --python_out="$site" --pyi_out="$site" /core-proto/meridian/v1/*.proto \
  && python -c "import meridian.v1.holdings_pb2, meridian.v1.envelope_pb2"
 COPY tests/ tests/
+# The scaffold `meridian plugin new` copies, installed from the SDK's wheel as
+# a plugin author installs theirs, so the interop suite runs it against the
+# real sidecar.
+COPY template/ template/
+RUN pip install --find-links /dist ./template

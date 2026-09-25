@@ -200,3 +200,43 @@ async def test_a_granted_subscription_opens(plugin) -> None:
         async with asyncio.timeout(2):
             await anext(stream)
     await stream.aclose()
+
+
+async def test_the_scaffold_registers_with_a_real_sidecar() -> None:
+    """What `meridian plugin new` writes, run the way its author runs it.
+
+    The template in this repository is the scaffold the CLI copies, so the
+    first plugin anybody makes is this one. It is installed from the SDK's
+    wheel beside it, started as its console script, and must register, say the
+    role and grants the sidecar launched it with, and stop cleanly when told.
+    """
+    import asyncio
+    import signal
+
+    started = await asyncio.create_subprocess_exec(
+        "reference-plugin",
+        env={**os.environ, "MERIDIAN_SIDECAR_ADDRESS": address()},
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT,
+    )
+    assert started.stdout is not None
+    said: list[str] = []
+
+    async def until(text: str) -> None:
+        while not any(text in line for line in said):
+            line = await started.stdout.readline()  # type: ignore[union-attr]
+            if not line:
+                raise AssertionError(f"the plugin exited before saying {text!r}: {said}")
+            said.append(line.decode().rstrip())
+
+    try:
+        await asyncio.wait_for(until("may publish"), timeout=20)
+    finally:
+        started.send_signal(signal.SIGTERM)
+        await asyncio.wait_for(until("stopping"), timeout=10)
+        code = await asyncio.wait_for(started.wait(), timeout=10)
+
+    registered = next(line for line in said if "registered as" in line)
+    assert "role custody" in registered, said
+    assert RECORD_STATEMENT in next(line for line in said if "may publish" in line), said
+    assert code == 0, said

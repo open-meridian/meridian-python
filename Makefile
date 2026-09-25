@@ -134,7 +134,7 @@ lint:
 # Applied in a container and written back, because the host has no toolchain.
 fmt:
 	@docker run --rm -v "$(CURDIR)":/w -w /w python:$(PY_VERSION)-slim \
-		sh -c 'pip install -q ruff >/dev/null 2>&1; python -m ruff check --fix src tests >/dev/null; python -m ruff format src tests'
+		sh -c 'pip install -q ruff >/dev/null 2>&1; python -m ruff check --fix src tests template/src >/dev/null; python -m ruff format src tests template/src'
 	@echo "fmt: applied"
 
 install-hooks:
