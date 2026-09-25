@@ -1,20 +1,33 @@
-# Publishing the SDK to PyPI as `open-meridian`.
+# Publishing the SDK as `open-meridian`.
 #
 # By hand only. A release is a decision somebody makes, and a trigger on tags
 # or on main would make it a side effect of something else.
 #
 # No token anywhere: PyPI's trusted publishing lets this one workflow, in this
-# one repository, prove who it is with GitHub's own identity, and PyPI admits
-# nothing else. Set up on PyPI by the product owner -- project `open-meridian`,
-# owner `open-meridian`, repository `meridian-python`, workflow `publish.yaml`.
+# one repository, prove who it is with GitHub's own identity, and the index
+# admits nothing else. Set up on each index by the product owner -- project
+# `open-meridian`, owner `open-meridian`, repository `meridian-python`,
+# workflow `publish.yaml`.
+#
+# TestPyPI first, and by default. PyPI never lets a version be used twice, so a
+# first real upload with a mistake in it spends that version for good; the test
+# index is the same handshake and the same wheel at no cost. A test upload is
+# versioned `<version>.dev<run>`, so it can run as often as it needs to and
+# never takes the number the real upload will have.
 #
 # The same checks the pre-push gate runs on the package, then the wheel those
-# checks passed. PyPI refuses a version it already has, so running this twice
-# for one version publishes once.
+# checks passed. An index refuses a version it already has, so running this
+# twice for one version publishes once.
 name: publish
 
 on:
   workflow_dispatch:
+    inputs:
+      index:
+        description: Where to publish
+        type: choice
+        options: [testpypi, pypi]
+        default: testpypi
 
 permissions:
   contents: read
@@ -31,6 +44,17 @@ jobs:
       - name: The bundled wire bindings are the pinned schema revision
         run: make check-vendored
 
+      # Before anything is built, so the checks below run on the wheel that is
+      # uploaded, version and all.
+      - name: A test upload is a development version
+        if: inputs.index == 'testpypi'
+        env:
+          RUN: ${{ github.run_number }}
+        run: |
+          set -euo pipefail
+          sed -i -E "s/^version = \"([^\"]+)\"/version = \"\1.dev${RUN}\"/" pyproject.toml
+          grep -E '^version = ".+\.dev[0-9]+"' pyproject.toml
+
       - name: The package installs alone, with nothing by URL
         run: make package
         env:
@@ -39,4 +63,12 @@ jobs:
       - name: The wheel that was checked
         run: DOCKER_BUILDKIT=1 docker build -f Dockerfile.python --target dist --output type=local,dest=dist .
 
-      - uses: pypa/gh-action-pypi-publish@release/v1
+      - name: To TestPyPI
+        if: inputs.index == 'testpypi'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+      - name: To PyPI
+        if: inputs.index == 'pypi'
+        uses: pypa/gh-action-pypi-publish@release/v1
