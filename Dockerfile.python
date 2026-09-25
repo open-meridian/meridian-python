@@ -49,6 +49,10 @@ COPY pyproject.toml README.md LICENSE NOTICE ./
 COPY src/ src/
 RUN pip wheel --no-deps -w /dist .
 
+# Just the wheel, for the publish workflow to hand PyPI.
+FROM scratch AS dist
+COPY --from=package /dist /
+
 # Installed into a Python that has no git and no checkout, as a plugin author
 # installs it. It must depend on nothing by URL -- PyPI refuses that, and the
 # git pin it used to carry is why it could not be published -- must ship the

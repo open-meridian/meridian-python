@@ -1,0 +1,42 @@
+# Publishing the SDK to PyPI as `open-meridian`.
+#
+# By hand only. A release is a decision somebody makes, and a trigger on tags
+# or on main would make it a side effect of something else.
+#
+# No token anywhere: PyPI's trusted publishing lets this one workflow, in this
+# one repository, prove who it is with GitHub's own identity, and PyPI admits
+# nothing else. Set up on PyPI by the product owner -- project `open-meridian`,
+# owner `open-meridian`, repository `meridian-python`, workflow `publish.yaml`.
+#
+# The same checks the pre-push gate runs on the package, then the wheel those
+# checks passed. PyPI refuses a version it already has, so running this twice
+# for one version publishes once.
+name: publish
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: The bundled wire bindings are the pinned schema revision
+        run: make check-vendored
+
+      - name: The package installs alone, with nothing by URL
+        run: make package
+        env:
+          DOCKER_BUILDKIT: "1"
+
+      - name: The wheel that was checked
+        run: DOCKER_BUILDKIT=1 docker build -f Dockerfile.python --target dist --output type=local,dest=dist .
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
