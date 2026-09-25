@@ -7,7 +7,7 @@
 # one repository, prove who it is with GitHub's own identity, and the index
 # admits nothing else. Set up on each index by the product owner -- project
 # `open-meridian`, owner `open-meridian`, repository `meridian-python`,
-# workflow `publish.yaml`.
+# workflow `publish.yaml`, and on PyPI environment `pypi`.
 #
 # TestPyPI first, and by default. PyPI never lets a version be used twice, so a
 # first real upload with a mistake in it spends that version for good; the test
@@ -35,6 +35,10 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    # PyPI's publisher names this environment and admits a token from no
+    # other, so a real upload can be held for approval in the repository's
+    # settings. A test upload runs in none: an empty name is no environment.
+    environment: ${{ inputs.index == 'pypi' && 'pypi' || '' }}
     permissions:
       contents: read
       id-token: write
