@@ -20,22 +20,25 @@ customer's deployment.
 from __future__ import annotations
 
 import base64
+import importlib
 import os
 import pathlib
+import pkgutil
 
 import pytest
 import yaml
 from google.protobuf import descriptor_pool, json_format, message_factory
 
-# Importing the package registers every message in the default descriptor pool,
-# which is how a type named in a fixture is found by name.
-import meridian.v1.accounts_pb2  # noqa: F401
-import meridian.v1.config_pb2  # noqa: F401
-import meridian.v1.envelope_pb2  # noqa: F401
-import meridian.v1.first_run_pb2  # noqa: F401
-import meridian.v1.holdings_pb2  # noqa: F401
-import meridian.v1.reference_pb2  # noqa: F401
-import meridian.v1.sidecar_pb2  # noqa: F401
+import meridian.v1
+
+# Importing a generated module registers its messages in the default
+# descriptor pool, which is how a type named in a fixture is found by name.
+# Every module found, rather than a list: a list was edited by hand each time
+# core added a proto file, and a file it missed read as a contract whose
+# messages did not exist (W8's did, on 2026-09-25).
+for _module in pkgutil.iter_modules(meridian.v1.__path__):
+    if _module.name.endswith("_pb2"):
+        importlib.import_module(f"meridian.v1.{_module.name}")
 
 SECTIONS = ("request", "reply", "event")
 
