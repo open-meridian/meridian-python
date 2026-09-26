@@ -204,20 +204,22 @@ class CallerAssertion(_message.Message):
     def __init__(self, claims: _Optional[bytes] = ..., signature: _Optional[bytes] = ..., key_id: _Optional[str] = ...) -> None: ...
 
 class CallerClaims(_message.Message):
-    __slots__ = ("subject", "display_name", "audience_instance_id", "access", "issued_at_ns", "expires_at_ns")
+    __slots__ = ("subject", "display_name", "audience_instance_id", "access", "issued_at_ns", "expires_at_ns", "assertion_id")
     SUBJECT_FIELD_NUMBER: _ClassVar[int]
     DISPLAY_NAME_FIELD_NUMBER: _ClassVar[int]
     AUDIENCE_INSTANCE_ID_FIELD_NUMBER: _ClassVar[int]
     ACCESS_FIELD_NUMBER: _ClassVar[int]
     ISSUED_AT_NS_FIELD_NUMBER: _ClassVar[int]
     EXPIRES_AT_NS_FIELD_NUMBER: _ClassVar[int]
+    ASSERTION_ID_FIELD_NUMBER: _ClassVar[int]
     subject: str
     display_name: str
     audience_instance_id: str
     access: _containers.RepeatedCompositeFieldContainer[TagAccess]
     issued_at_ns: int
     expires_at_ns: int
-    def __init__(self, subject: _Optional[str] = ..., display_name: _Optional[str] = ..., audience_instance_id: _Optional[str] = ..., access: _Optional[_Iterable[_Union[TagAccess, _Mapping]]] = ..., issued_at_ns: _Optional[int] = ..., expires_at_ns: _Optional[int] = ...) -> None: ...
+    assertion_id: str
+    def __init__(self, subject: _Optional[str] = ..., display_name: _Optional[str] = ..., audience_instance_id: _Optional[str] = ..., access: _Optional[_Iterable[_Union[TagAccess, _Mapping]]] = ..., issued_at_ns: _Optional[int] = ..., expires_at_ns: _Optional[int] = ..., assertion_id: _Optional[str] = ...) -> None: ...
 
 class TagAccess(_message.Message):
     __slots__ = ("tag", "read_account_ids", "write_account_ids")
