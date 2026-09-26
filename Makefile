@@ -55,25 +55,29 @@ contract-diff:
 # PyPI depends on nothing by URL (PyPI refuses that) and a plugin installs one
 # thing. `make vendor-schema` moves the copy to SCHEMA_REV; `check-vendored`
 # fails when the two disagree, as core's check-codegen does for its bindings.
-SCHEMA_REV  := b343d2322a04e6b379b605f205ab2f0d972cc70b
+SCHEMA_REV  := 430bfb0e3b8d6c0e07a8cdf8a3d8dc3d9510e34d
 SCHEMA_REPO := https://github.com/open-meridian/meridian-schema.git
 SCRATCH     := .schema-scratch
 
 define fetch_schema
 	rm -rf $(SCRATCH) && git init -q $(SCRATCH) \
 	&& git -C $(SCRATCH) fetch -q --depth 1 $(SCHEMA_REPO) $(SCHEMA_REV) \
-	&& git -C $(SCRATCH) checkout -q FETCH_HEAD -- gen/python/meridian/v1
+	&& git -C $(SCRATCH) checkout -q FETCH_HEAD -- gen/python/meridian/v1 gen/python/meridian/plugin
 endef
 
 vendor-schema:
 	@$(fetch_schema)
-	@rm -rf src/meridian/v1 && cp -R $(SCRATCH)/gen/python/meridian/v1 src/meridian/v1 && rm -rf $(SCRATCH)
-	@echo "vendor-schema: src/meridian/v1 is meridian-schema at $(SCHEMA_REV)"
+	@rm -rf src/meridian/v1 src/meridian/plugin \
+		&& cp -R $(SCRATCH)/gen/python/meridian/v1 src/meridian/v1 \
+		&& cp -R $(SCRATCH)/gen/python/meridian/plugin src/meridian/plugin \
+		&& rm -rf $(SCRATCH)
+	@echo "vendor-schema: src/meridian/v1 and src/meridian/plugin are meridian-schema at $(SCHEMA_REV)"
 
 check-vendored:
 	@$(fetch_schema) || { echo "check-vendored: could not fetch meridian-schema at $(SCHEMA_REV)" >&2; rm -rf $(SCRATCH); exit 1; }
-	@if diff -r -x __pycache__ $(SCRATCH)/gen/python/meridian/v1 src/meridian/v1 >/dev/null; then \
-		rm -rf $(SCRATCH); echo "check-vendored OK: meridian.v1 is meridian-schema at $(SCHEMA_REV)"; \
+	@if diff -r -x __pycache__ $(SCRATCH)/gen/python/meridian/v1 src/meridian/v1 >/dev/null \
+		&& diff -r -x __pycache__ $(SCRATCH)/gen/python/meridian/plugin src/meridian/plugin >/dev/null; then \
+		rm -rf $(SCRATCH); echo "check-vendored OK: meridian.v1 and meridian.plugin.v1 are meridian-schema at $(SCHEMA_REV)"; \
 	else \
 		rm -rf $(SCRATCH); echo "check-vendored FAILED: src/meridian/v1 is not meridian-schema at $(SCHEMA_REV). Run 'make vendor-schema'." >&2; exit 1; \
 	fi

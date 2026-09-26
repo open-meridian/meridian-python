@@ -18,16 +18,19 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import os
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
 from types import TracebackType
+from typing import Any, TypeVar
 
 import grpc
 from google.protobuf.message import Message
 
+from meridian.plugin.v1 import operations_pb2_grpc
 from meridian.v1 import envelope_pb2, sidecar_pb2, sidecar_pb2_grpc
 
 from .errors import CallFailed, NotGranted, NotRegistered, Refused
+from .operations import Operations
 
 #: The schema version this SDK was generated against. Sent at registration so a
 #: mismatch is refused at the door rather than found later in a decode failure.
@@ -48,6 +51,18 @@ _CALL_FAILURES = {
     sidecar_pb2.CALL_FAILURE_NO_HANDLER: "no handler",
     sidecar_pb2.CALL_FAILURE_HANDLER_ERROR: "handler error",
 }
+
+# A typed operation's refusal, by the status the sidecar chose for it
+# (spec/typed-sidecar-operations): each asks something different of the caller.
+_OPERATION_FAILURES = {
+    grpc.StatusCode.FAILED_PRECONDITION: "refused",
+    grpc.StatusCode.UNAVAILABLE: "no handler",
+    grpc.StatusCode.DEADLINE_EXCEEDED: "timeout",
+    grpc.StatusCode.ABORTED: "handler error",
+    grpc.StatusCode.INVALID_ARGUMENT: "invalid",
+}
+
+_Answer = TypeVar("_Answer")
 
 
 @dataclass(frozen=True)
@@ -117,17 +132,20 @@ class Delivery:
 
 
 @dataclass
-class Plugin:
+class Plugin(Operations):
     """A registered plugin.
 
     Built by `connect`, which registers before returning, so an instance of this
-    is always one that was admitted.
+    is always one that was admitted. Its typed operations -- `record_holding`,
+    `resolve_identifier` and the rest -- are generated from the contract into
+    `Operations`, one per workflow step its roles may take.
     """
 
     identity: Identity
     grants: Grants
     _channel: grpc.aio.Channel
     _stub: sidecar_pb2_grpc.SidecarServiceStub
+    _operations_stub: operations_pb2_grpc.PluginOperationsStub
     _heartbeat: asyncio.Task[None] | None = field(default=None, repr=False)
     _left: bool = field(default=False, repr=False)
 
@@ -254,6 +272,26 @@ class Plugin:
     ) -> None:
         await self.leave("stopping" if exc is None else f"{type(exc).__name__}")
 
+    def _operations(self) -> Any:
+        return self._operations_stub
+
+    async def _operate(
+        self, method: Callable[[Any], Awaitable[_Answer]], params: Any
+    ) -> _Answer:
+        """One typed operation, its refusal turned into this package's terms."""
+        self._check_open()
+        operation = type(params).__name__.removesuffix("Params")
+        try:
+            return await method(params)
+        except grpc.aio.AioRpcError as failed:
+            detail = failed.details() or ""
+            if failed.code() is grpc.StatusCode.PERMISSION_DENIED:
+                raise NotGranted(operation, detail) from failed
+            kind = _OPERATION_FAILURES.get(failed.code())
+            if kind is None:
+                raise
+            raise CallFailed(operation, kind, detail) from failed
+
     def _check_open(self) -> None:
         if self._left:
             raise NotRegistered("this plugin has left; nothing more may be done on it")
@@ -310,6 +348,7 @@ async def connect(
         ),
         _channel=channel,
         _stub=stub,
+        _operations_stub=operations_pb2_grpc.PluginOperationsStub(channel),
     )
     if heartbeat:
         plugin._heartbeat = asyncio.create_task(plugin._beat())

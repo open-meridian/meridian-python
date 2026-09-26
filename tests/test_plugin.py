@@ -249,7 +249,7 @@ async def test_the_client_heartbeats_without_being_asked(
 ) -> None:
     """A plugin author who has to remember this is one who will forget."""
     service, address = sidecar
-    monkeypatch.setattr(meridian.plugin, "HEARTBEAT_SECONDS", 0.01)
+    monkeypatch.setattr(meridian.client, "HEARTBEAT_SECONDS", 0.01)
 
     plugin = await meridian.connect(address)
     try:

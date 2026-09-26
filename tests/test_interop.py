@@ -19,11 +19,12 @@ from __future__ import annotations
 import asyncio
 import os
 import uuid
+from decimal import Decimal
 
 import pytest
 
 import meridian
-from meridian import NotGranted
+from meridian import CallFailed, NotGranted
 from meridian.v1 import holdings_pb2, reference_pb2
 
 # The topics the shipped example grants admit for the custody role. Named here
@@ -247,3 +248,58 @@ async def test_the_scaffold_registers_with_a_real_sidecar() -> None:
     assert "roles custody" in registered, said
     assert RECORD_STATEMENT in next(line for line in said if "may publish" in line), said
     assert code == 0, said
+
+
+# ── The typed operations (spec/typed-sidecar-operations) ────────────────────
+
+
+async def test_a_statement_is_opened_by_its_typed_operation(plugin) -> None:
+    """The same step as above, with no domain message on this side at all."""
+    opened = await plugin.record_holdings_statement(
+        source="interop",
+        external_statement_id=f"typed-{uuid.uuid4()}",
+        as_of_date="2026-09-26",
+        read_at_ns=NOW,
+        expected_rows=1,
+    )
+    assert opened.statement_id
+    assert not opened.already_recorded
+
+
+async def test_a_holding_for_an_unlinked_external_account_is_refused_as_such(plugin) -> None:
+    """The sidecar asks the conductor for this plugin's links, as this plugin.
+
+    Nobody has linked this external account, so the row is refused naming
+    that -- which it can only say having reached the conductor as the right
+    instance: asked as anything else, the answer would hold no links at all
+    and the refusal would read the same, which is why the account is unique.
+    """
+    opened = await plugin.record_holdings_statement(
+        source="interop",
+        external_statement_id=f"typed-{uuid.uuid4()}",
+        as_of_date="2026-09-26",
+        read_at_ns=NOW,
+        expected_rows=1,
+    )
+    with pytest.raises(CallFailed) as refused:
+        await plugin.record_holding(
+            statement_id=opened.statement_id,
+            instrument_id="INS-interop-1",
+            quantity=Decimal("12.5"),
+            market_value=Decimal("2812.5"),
+            currency="USD",
+            external_account_id=f"unlinked-{uuid.uuid4().hex[:8]}",
+        )
+    assert refused.value.kind == "refused"
+    assert "not linked" in refused.value.detail
+
+
+async def test_a_miss_is_reported_by_its_typed_operation(plugin) -> None:
+    published = await plugin.report_missing_instrument(
+        source="interop",
+        asset_class="equity",
+        identifiers=[meridian.Identifier(scheme="symbol", value="ZZZZ", source="interop")],
+        as_of_ns=NOW,
+        observed_at_ns=NOW,
+    )
+    assert published.message_id

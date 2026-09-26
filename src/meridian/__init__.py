@@ -7,11 +7,11 @@ another plugin.
 
     async with await connect() as plugin:
         print(plugin.identity.roles)
-        await plugin.publish("platform.custody.x.event.sync-status", event)
+        await plugin.report_sync_status(source="snaptrade", connection_healthy=True,
+                                        external_account_id="acct-1")
 """
 
-from .errors import CallFailed, MeridianError, NotGranted, NotRegistered, Refused
-from .plugin import (
+from .client import (
     DEFAULT_ADDRESS,
     SCHEMA_VERSION,
     Delivery,
@@ -20,6 +20,10 @@ from .plugin import (
     Plugin,
     connect,
 )
+from .errors import CallFailed, MeridianError, NotGranted, NotRegistered, Refused
+
+# The plugin-facing mirrors a typed operation takes, generated with it.
+from .plugin.v1.operations_pb2 import Identifier, MissReason
 
 __all__ = [
     "DEFAULT_ADDRESS",
@@ -27,8 +31,10 @@ __all__ = [
     "CallFailed",
     "Delivery",
     "Grants",
+    "Identifier",
     "Identity",
     "MeridianError",
+    "MissReason",
     "NotGranted",
     "NotRegistered",
     "Plugin",

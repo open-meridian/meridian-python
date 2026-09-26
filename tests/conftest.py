@@ -22,7 +22,46 @@ import grpc
 import pytest
 import pytest_asyncio
 
+from meridian.plugin.v1 import operations_pb2, operations_pb2_grpc
 from meridian.v1 import envelope_pb2, sidecar_pb2, sidecar_pb2_grpc
+
+
+@dataclass
+class FakeOperations(operations_pb2_grpc.PluginOperationsServicer):
+    """The typed operations, answering fixed results and keeping what was sent."""
+
+    refuse: tuple[grpc.StatusCode, str] | None = None
+    sent: list[object] = field(default_factory=list)
+
+    async def _answer(
+        self, params: object, answer: object, context: grpc.aio.ServicerContext
+    ) -> object:
+        self.sent.append(params)
+        if self.refuse is not None:
+            await context.abort(*self.refuse)
+        return answer
+
+    async def ReportSyncStatus(self, request, context):  # noqa: N802
+        return await self._answer(
+            request, operations_pb2.Published(message_id="msg-1"), context
+        )
+
+    async def RecordHoldingsStatement(self, request, context):  # noqa: N802
+        answer = operations_pb2.RecordHoldingsStatementResult(statement_id="S-1")
+        return await self._answer(request, answer, context)
+
+    async def RecordHolding(self, request, context):  # noqa: N802
+        answer = operations_pb2.RecordHoldingResult(holding_id="H-1", resolved=True)
+        return await self._answer(request, answer, context)
+
+    async def ResolveIdentifier(self, request, context):  # noqa: N802
+        answer = operations_pb2.ResolveIdentifierResult(found=True, instrument_id="INS-1")
+        return await self._answer(request, answer, context)
+
+    async def ReportMissingInstrument(self, request, context):  # noqa: N802
+        return await self._answer(
+            request, operations_pb2.Published(message_id="msg-2"), context
+        )
 
 
 @dataclass
@@ -48,6 +87,7 @@ class FakeSidecar(sidecar_pb2_grpc.SidecarServiceServicer):
     called: list[sidecar_pb2.CallRequest] = field(default_factory=list)
     heartbeats: list[sidecar_pb2.HeartbeatRequest] = field(default_factory=list)
     left: list[sidecar_pb2.LeaveRequest] = field(default_factory=list)
+    operations: FakeOperations = field(default_factory=FakeOperations)
 
     async def Register(  # noqa: N802 - the generated name
         self, request: sidecar_pb2.RegisterRequest, context: grpc.aio.ServicerContext
@@ -106,6 +146,7 @@ async def sidecar() -> AsyncIterator[tuple[FakeSidecar, str]]:
     service = FakeSidecar()
     server = grpc.aio.server()
     sidecar_pb2_grpc.add_SidecarServiceServicer_to_server(service, server)
+    operations_pb2_grpc.add_PluginOperationsServicer_to_server(service.operations, server)
     port = server.add_insecure_port("127.0.0.1:0")
     await server.start()
     try:
@@ -134,4 +175,4 @@ def anyio_backend() -> str:
     return "asyncio"
 
 
-__all__ = ["FakeSidecar", "asyncio", "sidecar"]
+__all__ = ["FakeOperations", "FakeSidecar", "asyncio", "sidecar"]
