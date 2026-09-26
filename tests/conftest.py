@@ -23,7 +23,7 @@ import pytest
 import pytest_asyncio
 
 from meridian.plugin.v1 import operations_pb2, operations_pb2_grpc
-from meridian.v1 import envelope_pb2, sidecar_pb2, sidecar_pb2_grpc
+from meridian.v1 import sidecar_pb2, sidecar_pb2_grpc
 
 
 @dataclass
@@ -74,17 +74,13 @@ class FakeSidecar(sidecar_pb2_grpc.SidecarServiceServicer):
     publish_grants: tuple[str, ...] = ("platform.street.command.record-holding",)
     subscribe_grants: tuple[str, ...] = ("platform.reference.event.instrument-applied",)
 
-    publish_accepted: bool = True
-    publish_refusal: str = ""
-    call_reply: sidecar_pb2.CallReply | None = None
-    deliveries: list[envelope_pb2.Envelope] = field(default_factory=list)
-    subscribe_status: grpc.StatusCode | None = None
+    # What the streams send, each item once and then the stream ends.
+    settings: list[sidecar_pb2.SettingsDelivery] = field(default_factory=list)
+    scopes: list[sidecar_pb2.AccountScopeDelivery] = field(default_factory=list)
 
     # What the client actually sent, so a test can assert the client did not
     # supply something it must not be able to supply.
     registered: list[sidecar_pb2.RegisterRequest] = field(default_factory=list)
-    published: list[sidecar_pb2.PublishRequest] = field(default_factory=list)
-    called: list[sidecar_pb2.CallRequest] = field(default_factory=list)
     heartbeats: list[sidecar_pb2.HeartbeatRequest] = field(default_factory=list)
     left: list[sidecar_pb2.LeaveRequest] = field(default_factory=list)
     operations: FakeOperations = field(default_factory=FakeOperations)
@@ -105,27 +101,24 @@ class FakeSidecar(sidecar_pb2_grpc.SidecarServiceServicer):
             subscribe_grants=list(self.subscribe_grants),
         )
 
-    async def Publish(  # noqa: N802
-        self, request: sidecar_pb2.PublishRequest, context: grpc.aio.ServicerContext
-    ) -> sidecar_pb2.PublishReply:
-        self.published.append(request)
-        if not self.publish_accepted:
-            return sidecar_pb2.PublishReply(accepted=False, refusal_reason=self.publish_refusal)
-        return sidecar_pb2.PublishReply(accepted=True, message_id="msg-1")
+    async def WatchSettings(  # noqa: N802
+        self, request: sidecar_pb2.WatchSettingsRequest, context: grpc.aio.ServicerContext
+    ) -> AsyncIterator[sidecar_pb2.SettingsDelivery]:
+        for delivered in self.settings:
+            yield delivered
 
-    async def Subscribe(  # noqa: N802
-        self, request: sidecar_pb2.SubscribeRequest, context: grpc.aio.ServicerContext
-    ) -> AsyncIterator[sidecar_pb2.Delivery]:
-        if self.subscribe_status is not None:
-            await context.abort(self.subscribe_status, "no grant covers that pattern")
-        for envelope in self.deliveries:
-            yield sidecar_pb2.Delivery(envelope=envelope)
+    async def WatchAccountScope(  # noqa: N802
+        self, request: sidecar_pb2.WatchAccountScopeRequest, context: grpc.aio.ServicerContext
+    ) -> AsyncIterator[sidecar_pb2.AccountScopeDelivery]:
+        for delivered in self.scopes:
+            yield delivered
 
-    async def Call(  # noqa: N802
-        self, request: sidecar_pb2.CallRequest, context: grpc.aio.ServicerContext
-    ) -> sidecar_pb2.CallReply:
-        self.called.append(request)
-        return self.call_reply or sidecar_pb2.CallReply(ok=True)
+    async def PluginAccess(  # noqa: N802
+        self, request: sidecar_pb2.PluginAccessRequest, context: grpc.aio.ServicerContext
+    ) -> sidecar_pb2.PluginAccessReply:
+        return sidecar_pb2.PluginAccessReply(
+            user_groups=[sidecar_pb2.UserGroupAccess(user_group_id="UG-1", name="Operations")]
+        )
 
     async def Heartbeat(  # noqa: N802
         self, request: sidecar_pb2.HeartbeatRequest, context: grpc.aio.ServicerContext

@@ -6,8 +6,9 @@ is stopped. Heartbeats are sent for it.
 
 Everything a plugin does goes through that sidecar. It holds no credential,
 knows no other address, and cannot choose its own identity or grants: those
-come from how the deployment launched it. Start from here -- subscribe to what
-you were granted, publish what you produce -- and keep it that way.
+come from how the deployment launched it. Start from here -- the typed
+operations on `plugin` are the steps its roles may take, and nothing else
+reaches the bus -- and keep it that way.
 """
 
 import asyncio

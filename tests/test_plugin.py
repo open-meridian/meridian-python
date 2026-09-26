@@ -9,30 +9,14 @@ author can act on.
 from __future__ import annotations
 
 import asyncio
+import base64
 
-import grpc
 import pytest
 
 import meridian
 from conftest import FakeSidecar
-from meridian import CallFailed, NotGranted, NotRegistered, Refused
-from meridian.v1 import envelope_pb2, holdings_pb2, sidecar_pb2
-
-
-def an_envelope(topic: str, payload: object = None) -> envelope_pb2.Envelope:
-    body = payload or holdings_pb2.RecordHoldingRequest(account_id="ACC-1")
-    return envelope_pb2.Envelope(
-        meta=envelope_pb2.MessageMeta(
-            message_id="msg-1",
-            correlation_id="corr-1",
-            publisher_instance_id="sidecar-custody-1",
-            topic=topic,
-            schema_version="v1",
-            published_at_ns=1_757_376_000_000_000_000,
-        ),
-        payload_type=body.DESCRIPTOR.full_name,
-        payload=body.SerializeToString(),
-    )
+from meridian import AccountScope, Caller, Interface, NotRegistered, Refused, Setting, Settings
+from meridian.v1 import sidecar_pb2
 
 
 async def test_registering_sends_no_identity(sidecar: tuple[FakeSidecar, str]) -> None:
@@ -47,7 +31,7 @@ async def test_registering_sends_no_identity(sidecar: tuple[FakeSidecar, str]) -
     await plugin.leave()
 
     (sent,) = service.registered
-    assert sent.schema_version == "v1"
+    assert sent.schema_version == "v2"
     assert not sent.ListFields() or [f.name for f, _ in sent.ListFields()] == ["schema_version"]
 
 
@@ -83,165 +67,127 @@ async def test_a_refusal_stops_the_plugin_and_says_why(
     assert len(service.registered) == 1, "a refusal was retried"
 
 
-async def test_publish_sends_the_payload_type_and_not_the_identity(
+async def test_a_page_and_settings_are_declared_at_registration(
     sidecar: tuple[FakeSidecar, str],
 ) -> None:
     service, address = sidecar
-    plugin = await meridian.connect(address, heartbeat=False)
-    try:
-        row = holdings_pb2.RecordHoldingRequest(
-            account_id="ACC-1", quantity_scaled_1e8=1_250_000_000
-        )
-        message_id = await plugin.publish(
-            "platform.street.command.record-holding", row, correlation_id="corr-1"
-        )
-        assert message_id == "msg-1"
-    finally:
-        await plugin.leave()
-
-    (sent,) = service.published
-    assert sent.payload_type == "meridian.v1.RecordHoldingRequest"
-    assert sent.correlation_id == "corr-1"
-    # There is nowhere on this message to put a timestamp or a publisher, and
-    # that is the design rather than an omission.
-    assert "publisher" not in {f.name for f, _ in sent.ListFields()}
-
-
-async def test_a_refused_publish_names_the_topic_and_the_missing_grant(
-    sidecar: tuple[FakeSidecar, str],
-) -> None:
-    service, address = sidecar
-    service.publish_accepted = False
-    service.publish_refusal = "no grant covers platform.street.command.record-holding"
-
-    plugin = await meridian.connect(address, heartbeat=False)
-    try:
-        with pytest.raises(NotGranted) as raised:
-            await plugin.publish(
-                "platform.street.command.record-holding",
-                holdings_pb2.RecordHoldingRequest(),
-            )
-    finally:
-        await plugin.leave()
-
-    assert raised.value.topic == "platform.street.command.record-holding"
-    assert "no grant" in raised.value.reason
-
-
-async def test_subscribe_yields_envelopes_with_the_sidecar_stamp(
-    sidecar: tuple[FakeSidecar, str],
-) -> None:
-    service, address = sidecar
-    service.deliveries = [an_envelope("platform.reference.event.instrument-applied")]
-
-    plugin = await meridian.connect(address, heartbeat=False)
-    try:
-        received = [d async for d in plugin.subscribe("platform.reference.event.*")]
-    finally:
-        await plugin.leave()
-
-    (one,) = received
-    assert one.topic == "platform.reference.event.instrument-applied"
-    # Stamped by the sidecar, not by whoever published.
-    assert one.meta.publisher_instance_id == "sidecar-custody-1"
-    row = one.unpack(holdings_pb2.RecordHoldingRequest())
-    assert row.account_id == "ACC-1"
-
-
-async def test_unpacking_the_wrong_type_is_caught(
-    sidecar: tuple[FakeSidecar, str],
-) -> None:
-    """Protobuf decodes mismatched bytes into an empty message rather than
-    failing, so an unchecked unpack turns a bug into a plausible-looking blank.
-    """
-    service, address = sidecar
-    service.deliveries = [an_envelope("platform.reference.event.instrument-applied")]
-
-    plugin = await meridian.connect(address, heartbeat=False)
-    try:
-        (one,) = [d async for d in plugin.subscribe("platform.reference.event.*")]
-        with pytest.raises(ValueError, match="RecordHoldingsStatementRequest"):
-            one.unpack(holdings_pb2.RecordHoldingsStatementRequest())
-    finally:
-        await plugin.leave()
-
-
-async def test_an_ungranted_subscription_is_refused_not_silently_empty(
-    sidecar: tuple[FakeSidecar, str],
-) -> None:
-    service, address = sidecar
-    service.subscribe_status = grpc.StatusCode.PERMISSION_DENIED
-
-    plugin = await meridian.connect(address, heartbeat=False)
-    try:
-        with pytest.raises(NotGranted):
-            [d async for d in plugin.subscribe("platform.street.**")]
-    finally:
-        await plugin.leave()
-
-
-async def test_call_returns_the_reply_parsed_into_the_caller_s_message(
-    sidecar: tuple[FakeSidecar, str],
-) -> None:
-    service, address = sidecar
-    answer = holdings_pb2.RecordHoldingsStatementReply(statement_id="st-1")
-    service.call_reply = sidecar_pb2.CallReply(
-        ok=True,
-        payload_type=answer.DESCRIPTOR.full_name,
-        payload=answer.SerializeToString(),
+    plugin = await meridian.connect(
+        address,
+        heartbeat=False,
+        interface=Interface(port=8000, title="Holdings"),
+        settings=[
+            Setting("api_key", required=True, secret=True, description="The rail's key"),
+            Setting("page_size", kind=int),
+        ],
+        reads_external_accounts=True,
     )
-
-    plugin = await meridian.connect(address, heartbeat=False)
-    try:
-        reply = await plugin.call(
-            "platform.street.command.record-statement",
-            holdings_pb2.RecordHoldingsStatementRequest(expected_rows=1),
-            holdings_pb2.RecordHoldingsStatementReply(),
-            timeout_ms=1000,
-        )
-        assert reply.statement_id == "st-1"
-    finally:
-        await plugin.leave()
-
-    (sent,) = service.called
-    assert sent.timeout_ms == 1000
+    await plugin.leave()
+    (sent,) = service.registered
+    assert sent.schema_version == "v2"
+    assert sent.interface.loopback_port == 8000 and sent.interface.title == "Holdings"
+    assert [(s.name, s.type, s.required, s.secret) for s in sent.settings] == [
+        ("api_key", sidecar_pb2.SETTING_TYPE_STRING, True, True),
+        ("page_size", sidecar_pb2.SETTING_TYPE_INTEGER, False, False),
+    ]
+    assert sent.reads_external_accounts
 
 
-@pytest.mark.parametrize(
-    ("failure", "kind"),
-    [
-        (sidecar_pb2.CALL_FAILURE_TIMEOUT, "timeout"),
-        (sidecar_pb2.CALL_FAILURE_REFUSED, "refused"),
-        (sidecar_pb2.CALL_FAILURE_NO_HANDLER, "no handler"),
-        (sidecar_pb2.CALL_FAILURE_HANDLER_ERROR, "handler error"),
-    ],
-)
-async def test_call_failures_stay_distinguishable(
-    sidecar: tuple[FakeSidecar, str], failure: int, kind: str
+def test_a_setting_of_a_kind_the_contract_does_not_carry_is_refused() -> None:
+    with pytest.raises(TypeError, match="str, int or bool"):
+        Setting("ratio", kind=float)._declared()
+
+
+async def test_settings_arrive_typed_by_what_was_declared(
+    sidecar: tuple[FakeSidecar, str],
 ) -> None:
-    """The caller's next move differs for each: retry, stop, or report.
-
-    Collapsing them is how a plugin ends up retrying something that will never
-    succeed.
-    """
     service, address = sidecar
-    service.call_reply = sidecar_pb2.CallReply(
-        ok=False, failure=failure, failure_detail="detail"
+    service.settings = [
+        sidecar_pb2.SettingsDelivery(missing_required=["api_key"]),
+        sidecar_pb2.SettingsDelivery(
+            values=[
+                sidecar_pb2.SettingValue(name="api_key", value="sk-123"),
+                sidecar_pb2.SettingValue(name="page_size", value="50"),
+                sidecar_pb2.SettingValue(name="live", value="true"),
+            ]
+        ),
+    ]
+    plugin = await meridian.connect(
+        address,
+        heartbeat=False,
+        settings=[
+            Setting("api_key", required=True),
+            Setting("page_size", kind=int),
+            Setting("live", kind=bool),
+        ],
     )
-
-    plugin = await meridian.connect(address, heartbeat=False)
     try:
-        with pytest.raises(CallFailed) as raised:
-            await plugin.call(
-                "platform.street.query.list-custodial-positions",
-                holdings_pb2.ListCustodialPositionsRequest(),
-                holdings_pb2.ListCustodialPositionsReply(),
-            )
+        seen = [settings async for settings in plugin.settings()]
+    finally:
+        await plugin.leave()
+    assert seen[0] == Settings(values={}, missing_required=("api_key",))
+    assert seen[1].values == {"api_key": "sk-123", "page_size": 50, "live": True}
+
+
+async def test_a_setting_that_does_not_parse_is_raised_not_guessed(
+    sidecar: tuple[FakeSidecar, str],
+) -> None:
+    service, address = sidecar
+    service.settings = [
+        sidecar_pb2.SettingsDelivery(
+            values=[sidecar_pb2.SettingValue(name="live", value="maybe")]
+        )
+    ]
+    plugin = await meridian.connect(
+        address, heartbeat=False, settings=[Setting("live", kind=bool)]
+    )
+    try:
+        with pytest.raises(ValueError, match="not a boolean"):
+            async for _ in plugin.settings():
+                pass
     finally:
         await plugin.leave()
 
-    assert raised.value.kind == kind
-    assert raised.value.detail == "detail"
+
+async def test_the_account_scope_and_the_access_table_arrive(
+    sidecar: tuple[FakeSidecar, str],
+) -> None:
+    service, address = sidecar
+    service.scopes = [
+        sidecar_pb2.AccountScopeDelivery(
+            read_account_ids=["ACC-1", "ACC-2"], write_account_ids=["ACC-1"]
+        )
+    ]
+    plugin = await meridian.connect(address, heartbeat=False)
+    try:
+        scopes = [scope async for scope in plugin.account_scope()]
+        table = await plugin.access()
+    finally:
+        await plugin.leave()
+    assert scopes == [
+        AccountScope(read=frozenset({"ACC-1", "ACC-2"}), write=frozenset({"ACC-1"}))
+    ]
+    assert table.user_groups[0].name == "Operations"
+
+
+def test_a_caller_is_read_from_the_header_its_sidecar_forwarded() -> None:
+    claims = sidecar_pb2.CallerClaims(
+        subject="local|ada",
+        display_name="Ada Park",
+        access=[
+            sidecar_pb2.TagAccess(
+                tag="custody", read_account_ids=["ACC-1", "ACC-2"], write_account_ids=["ACC-1"]
+            )
+        ],
+    )
+    assertion = sidecar_pb2.CallerAssertion(
+        claims=claims.SerializeToString(), signature=b"sig", key_id="k"
+    )
+    header = base64.urlsafe_b64encode(assertion.SerializeToString()).decode().rstrip("=")
+    caller = Caller.from_header(header)
+    assert caller.subject == "local|ada" and caller.display_name == "Ada Park"
+    assert caller.may_read("ACC-2") and not caller.may_write("ACC-2")
+    assert caller.may_write("ACC-1")
+    assert caller.header == header, "handed back unaltered as acting_for"
 
 
 async def test_the_client_heartbeats_without_being_asked(
@@ -272,9 +218,7 @@ async def test_leaving_says_why_and_closes_the_plugin(
     (departure,) = service.left
     assert departure.reason == "stopping"
     with pytest.raises(NotRegistered):
-        await plugin.publish(
-            "platform.street.command.record-holding", holdings_pb2.RecordHoldingRequest()
-        )
+        await plugin.record_holdings_statement(source="snaptrade", expected_rows=1)
 
 
 async def test_an_exception_leaves_with_the_reason(
