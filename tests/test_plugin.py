@@ -232,3 +232,48 @@ async def test_an_exception_leaves_with_the_reason(
 
     (departure,) = service.left
     assert departure.reason == "RuntimeError"
+
+
+async def test_a_sidecar_that_starts_after_the_plugin_is_waited_for() -> None:
+    """A plugin and its sidecar start together, in no promised order."""
+    import socket
+
+    import grpc
+
+    from conftest import FakeOperations
+    from meridian.plugin.v1 import operations_pb2_grpc
+    from meridian.v1 import sidecar_pb2_grpc
+
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    service = FakeSidecar()
+
+    async def start_late() -> grpc.aio.Server:
+        await asyncio.sleep(0.5)
+        server = grpc.aio.server()
+        sidecar_pb2_grpc.add_SidecarServiceServicer_to_server(service, server)
+        operations_pb2_grpc.add_PluginOperationsServicer_to_server(FakeOperations(), server)
+        server.add_insecure_port(f"127.0.0.1:{port}")
+        await server.start()
+        return server
+
+    starting = asyncio.create_task(start_late())
+    plugin = await meridian.connect(f"127.0.0.1:{port}", heartbeat=False, wait=10)
+    server = await starting
+    try:
+        assert plugin.identity.instance_id == "custody-snaptrade-1"
+    finally:
+        await plugin.leave()
+        await server.stop(grace=None)
+
+
+async def test_no_sidecar_at_all_is_said_so_once_the_wait_is_over() -> None:
+    import socket
+
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    with pytest.raises(meridian.NoSidecar) as raised:
+        await meridian.connect(f"127.0.0.1:{port}", heartbeat=False, wait=0.5)
+    assert f"127.0.0.1:{port}" in str(raised.value)

@@ -29,4 +29,4 @@ roles = []
 # Its own names for its parts, which people are granted at read or write.
 tags = []
 # Whether it serves a page through its sidecar.
-interface = false
+interface = true

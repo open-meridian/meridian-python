@@ -34,7 +34,7 @@ import grpc
 from meridian.plugin.v1 import operations_pb2_grpc
 from meridian.v1 import sidecar_pb2, sidecar_pb2_grpc
 
-from .errors import CallFailed, NotGranted, NotRegistered, Refused
+from .errors import CallFailed, NoSidecar, NotGranted, NotRegistered, Refused
 from .operations import Operations
 
 #: The schema version this SDK was generated against. Sent at registration so a
@@ -49,6 +49,12 @@ DEFAULT_ADDRESS = "127.0.0.1:9191"
 #: stopped sending these is the more informative signal, so this is deliberately
 #: frequent enough that silence means something within seconds.
 HEARTBEAT_SECONDS = 5.0
+
+#: How long `connect` waits for a sidecar that is not answering yet. A plugin
+#: and its sidecar start together in one pod, in no promised order, so the
+#: plugin's first attempt can meet nothing listening; failing there would have
+#: the orchestrator restart it with a growing backoff, for no fault of either.
+SIDECAR_WAIT_SECONDS = 60.0
 
 # A typed operation's refusal, by the status the sidecar chose for it
 # (spec/typed-sidecar-operations): each asks something different of the caller.
@@ -364,6 +370,7 @@ async def connect(
     address: str | None = None,
     *,
     heartbeat: bool = True,
+    wait: float = SIDECAR_WAIT_SECONDS,
     interface: Interface | None = None,
     settings: Sequence[Setting] = (),
     reads_external_accounts: bool = False,
@@ -375,6 +382,9 @@ async def connect(
     sidecar knows the deployment, the bus, the grants and who this plugin is.
     What the plugin declares is what it offers and needs: a page, its settings,
     and whether it reads accounts from an external source.
+
+    A sidecar not answering yet is waited for, up to `wait` seconds, since it
+    starts beside the plugin; `NoSidecar` when none answers by then.
 
     Raises `Refused` when the sidecar declines, carrying its reason. Refusals
     are not retried; every one of them is a statement about configuration, and
@@ -397,8 +407,17 @@ async def connect(
                 ),
                 settings=[setting._declared() for setting in settings],
                 reads_external_accounts=reads_external_accounts,
-            )
+            ),
+            # Held until the channel is ready rather than failed at once,
+            # within the deadline; an answer, refusal included, ends the wait.
+            wait_for_ready=True,
+            timeout=wait,
         )
+    except grpc.aio.AioRpcError as failed:
+        await channel.close(None)
+        if failed.code() in (grpc.StatusCode.DEADLINE_EXCEEDED, grpc.StatusCode.UNAVAILABLE):
+            raise NoSidecar(target, wait) from failed
+        raise
     except BaseException:
         await channel.close(None)
         raise

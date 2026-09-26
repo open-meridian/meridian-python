@@ -26,6 +26,21 @@ class Refused(MeridianError):
         self.reason = reason
 
 
+class NoSidecar(MeridianError):
+    """No sidecar answered in time.
+
+    Distinct from `Refused`: a sidecar that refused is running and has said
+    why, and asking again changes nothing; one that never answered may still
+    be starting, or may not be there at all, and the address is worth
+    checking. `connect` has already waited for it.
+    """
+
+    def __init__(self, address: str, waited_seconds: float) -> None:
+        super().__init__(f"no sidecar answered at {address} within {waited_seconds:g} seconds")
+        self.address = address
+        self.waited_seconds = waited_seconds
+
+
 class NotRegistered(MeridianError):
     """An operation was attempted before registering, or after leaving."""
 

@@ -11,6 +11,7 @@ another plugin.
                                         external_account_id="acct-1")
 """
 
+from .asgi import CallerMiddleware
 from .client import (
     DEFAULT_ADDRESS,
     SCHEMA_VERSION,
@@ -25,7 +26,7 @@ from .client import (
     TagAccess,
     connect,
 )
-from .errors import CallFailed, MeridianError, NotGranted, NotRegistered, Refused
+from .errors import CallFailed, MeridianError, NoSidecar, NotGranted, NotRegistered, Refused
 
 # The plugin-facing mirrors a typed operation takes, generated with it.
 from .plugin.v1.operations_pb2 import Identifier, MissReason
@@ -36,12 +37,14 @@ __all__ = [
     "AccountScope",
     "CallFailed",
     "Caller",
+    "CallerMiddleware",
     "Grants",
     "Identifier",
     "Identity",
     "Interface",
     "MeridianError",
     "MissReason",
+    "NoSidecar",
     "NotGranted",
     "NotRegistered",
     "Plugin",

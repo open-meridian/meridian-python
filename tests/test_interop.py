@@ -168,16 +168,60 @@ async def test_the_scaffold_registers_with_a_real_sidecar() -> None:
             said.append(line.decode().rstrip())
 
     try:
-        await asyncio.wait_for(until("may publish"), timeout=20)
+        await asyncio.wait_for(until("serving its page"), timeout=20)
+        page = await asyncio.to_thread(visit_the_scaffolds_page)
     finally:
         started.send_signal(signal.SIGTERM)
         await asyncio.wait_for(until("stopping"), timeout=10)
         code = await asyncio.wait_for(started.wait(), timeout=10)
 
+    assert page["without a caller"] == 401
+    assert page["as Ada"][0] == 200 and "Ada Park" in page["as Ada"][1]
+    # The page's one write goes to the sidecar for her; the sidecar holds no
+    # key that signed this assertion, so it refuses, and the page says so.
+    assert "Refused" in page["writing for Ada"], page["writing for Ada"]
+
     registered = next(line for line in said if "registered as" in line)
     assert "roles custody" in registered, said
     assert RECORD_STATEMENT in next(line for line in said if "may publish" in line), said
     assert code == 0, said
+
+
+def visit_the_scaffolds_page() -> dict[str, object]:
+    """The scaffold's page, asked as its sidecar's front door would ask it --
+    this suite shares the sidecar's network namespace -- with an assertion
+    no dashboard signed."""
+    import base64
+    import urllib.error
+    import urllib.request
+
+    from meridian.v1 import sidecar_pb2
+
+    claims = sidecar_pb2.CallerClaims(subject="local|ada", display_name="Ada Park")
+    assertion = sidecar_pb2.CallerAssertion(
+        claims=claims.SerializeToString(), signature=b"not-the-dashboards", key_id="nobody"
+    )
+    header = base64.urlsafe_b64encode(assertion.SerializeToString()).decode().rstrip("=")
+
+    def ask(method: str, path: str, caller: str | None) -> tuple[int, str]:
+        request = urllib.request.Request(
+            f"http://127.0.0.1:8000{path}",
+            method=method,
+            data=b"" if method == "POST" else None,
+        )
+        if caller:
+            request.add_header("Meridian-Caller", caller)
+        try:
+            with urllib.request.urlopen(request, timeout=20) as answer:
+                return answer.status, answer.read().decode()
+        except urllib.error.HTTPError as refused:
+            return refused.code, refused.read().decode()
+
+    return {
+        "without a caller": ask("GET", "/", None)[0],
+        "as Ada": ask("GET", "/", header),
+        "writing for Ada": ask("POST", "/statement", header)[1],
+    }
 
 
 # ── The typed operations (spec/typed-sidecar-operations) ────────────────────
