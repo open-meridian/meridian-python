@@ -2,12 +2,15 @@ SHELL := /bin/bash
 PY    := python3
 
 .PHONY: help ci-local ci-remote ci-local-deep install-hooks ci-mirror-check contract-diff \
-        build package test lint conformance fmt vendor-schema check-vendored
+        build package test lint conformance fmt vendor-schema check-vendored \
+        base-image check-scaffold
 
 help:
 	@echo "  make ci-local       run every gate (the pre-push gate, and what CI mirrors)"
 	@echo "  make build          install the package and prove it imports"
 	@echo "  make package        build the wheel and prove it installs alone"
+	@echo "  make base-image     the plugin base image, plugin-python, from that wheel"
+	@echo "  make check-scaffold the template, built on that base, holding only itself"
 	@echo "  make vendor-schema  move the bundled wire bindings to SCHEMA_REV"
 	@echo "  make test           run the unit tests"
 	@echo "  make conformance    check this SDK against the contract's pinned bytes"
@@ -31,7 +34,7 @@ ci-local: ci-remote conformance
 # pre-push hook runs ci-local, so conformance passes before any push from a
 # workspace. The uncovered case is a commit made through GitHub's web interface,
 # which nothing in this repo can check and design's next run will.
-ci-remote: contract-diff ci-mirror-check check-vendored build package test lint
+ci-remote: contract-diff ci-mirror-check check-vendored build package check-scaffold test lint
 	@echo
 	@echo "ci-remote: GREEN (conformance not included; see this target's comment)"
 
@@ -101,6 +104,44 @@ package:
 		|| { echo "package FAILED; see it with:" >&2; \
 		     echo "  DOCKER_BUILDKIT=1 docker build -f Dockerfile.python --target installed --progress=plain ." >&2; exit 1; }
 	@echo "package OK: open-meridian installs from its wheel alone, with the wire bindings and nothing by URL"
+
+# The plugin base image and the scaffold on it (spec/the-local-plugin-registry).
+# The version is pyproject.toml's, and the template's pin and its FROM line
+# must name the same one: a scaffold built on one SDK and pinning another
+# would install the second over the first, and send it with every upload.
+SDK_VERSION := $(shell sed -n 's/^version = "\(.*\)"$$/\1/p' pyproject.toml)
+BASE_IMAGE  ?= plugin-python:local
+
+base-image:
+	@$(DOCKER) build -f Dockerfile.python --target plugin-base --build-arg SDK_VERSION=$(SDK_VERSION) \
+		-t $(BASE_IMAGE) . >/dev/null 2>&1 \
+		|| { echo "base-image FAILED; see it with:" >&2; \
+		     echo "  DOCKER_BUILDKIT=1 docker build -f Dockerfile.python --target plugin-base --build-arg SDK_VERSION=$(SDK_VERSION) --progress=plain ." >&2; exit 1; }
+	@echo "base-image OK: $(BASE_IMAGE), Python and open-meridian $(SDK_VERSION)"
+
+# What a plugin author gets: the template built on the base, as its Dockerfile
+# says. It must hold the base's SDK rather than a second copy -- what it adds
+# on top is small, where the SDK and its gRPC are tens of megabytes -- carry
+# the base's label, run as 65532, and start.
+check-scaffold: base-image
+	@grep -q '^dependencies = \["open-meridian==$(SDK_VERSION)"\]' template/pyproject.toml \
+		|| { echo "check-scaffold FAILED: the template does not pin open-meridian==$(SDK_VERSION)" >&2; exit 1; }
+	@grep -q '^ARG BASE=ghcr.io/open-meridian/plugin-python:$(SDK_VERSION)$$' template/Dockerfile \
+		|| { echo "check-scaffold FAILED: the template's Dockerfile is not FROM plugin-python:$(SDK_VERSION)" >&2; exit 1; }
+	@$(DOCKER) build --build-arg BASE=$(BASE_IMAGE) -t reference-plugin:check template >/dev/null 2>&1 \
+		|| { echo "check-scaffold FAILED: the template does not build on the base; see it with:" >&2; \
+		     echo "  DOCKER_BUILDKIT=1 docker build --build-arg BASE=$(BASE_IMAGE) --progress=plain template" >&2; exit 1; }
+	@label="$$(docker inspect -f '{{index .Config.Labels "dev.meridian.sdk-version"}}' reference-plugin:check)"; \
+	[ "$$label" = "$(SDK_VERSION)" ] \
+		|| { echo "check-scaffold FAILED: the plugin's image says SDK $$label, not $(SDK_VERSION)" >&2; exit 1; }
+	@added=$$(( $$(docker inspect -f '{{.Size}}' reference-plugin:check) - $$(docker inspect -f '{{.Size}}' $(BASE_IMAGE)) )); \
+	[ "$$added" -lt 5000000 ] \
+		|| { echo "check-scaffold FAILED: the plugin adds $$added bytes over its base; it reinstalled the SDK rather than using the base's" >&2; exit 1; }
+	@[ "$$(docker inspect -f '{{.Config.User}}' reference-plugin:check)" = "65532" ] \
+		|| { echo "check-scaffold FAILED: the plugin does not run as 65532" >&2; exit 1; }
+	@docker run --rm --entrypoint python reference-plugin:check -c "import meridian, reference_plugin.__main__" \
+		|| { echo "check-scaffold FAILED: the plugin's image does not import the SDK and itself" >&2; exit 1; }
+	@echo "check-scaffold OK: the template builds on plugin-python:$(SDK_VERSION) and adds only itself"
 
 test:
 	@$(DOCKER) build $(CONTEXTS) -f Dockerfile.python --target test . >/dev/null 2>&1 \

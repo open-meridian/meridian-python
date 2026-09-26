@@ -76,3 +76,60 @@ jobs:
       - name: To PyPI
         if: inputs.index == 'pypi'
         uses: pypa/gh-action-pypi-publish@release/v1
+
+  # The plugin base image, `ghcr.io/open-meridian/plugin-python:<version>`, for
+  # a real release only and only once PyPI has the version: it installs
+  # open-meridian from PyPI, so the base holds exactly what PyPI serves
+  # (spec/the-local-plugin-registry). Both architectures, because a plugin is
+  # built on a developer's machine and run on a cluster's, and the two are
+  # often not the same.
+  #
+  # Never overwritten. A tag that exists already is a refusal, not a push:
+  # plugins built on a base keep that base's layers, and a moved tag would
+  # give two plugins that say the same SDK two different ones.
+  base-image:
+    needs: publish
+    if: inputs.index == 'pypi'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: The version, from pyproject.toml
+        id: version
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version = "\(.*\)"$/\1/p' pyproject.toml)"
+          test -n "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Refuse a tag that exists already
+        env:
+          IMAGE: ghcr.io/${{ github.repository_owner }}/plugin-python:${{ steps.version.outputs.version }}
+        run: |
+          if docker buildx imagetools inspect "$IMAGE" >/dev/null 2>&1; then
+            echo "::error::$IMAGE exists already; a base is never overwritten"
+            exit 1
+          fi
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.python
+          target: plugin-base
+          platforms: linux/amd64,linux/arm64
+          build-args: |
+            SDK_VERSION=${{ steps.version.outputs.version }}
+            SDK_INSTALL=open-meridian==${{ steps.version.outputs.version }}
+          tags: ghcr.io/${{ github.repository_owner }}/plugin-python:${{ steps.version.outputs.version }}
+          push: true

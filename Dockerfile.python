@@ -76,6 +76,38 @@ assert callable(meridian.connect)
 print("installed:", dist.metadata["Name"], dist.version, "schema", meridian.SCHEMA_VERSION)
 CHECK
 
+# The base image a plugin builds FROM: `plugin-python:<sdk-version>`, Python and
+# this SDK and nothing else (spec/the-local-plugin-registry, ruled 2026-09-25).
+# What a plugin's upload then sends is its own layers: the sidecar is the
+# deployment's, and the SDK is this image's, held once in a deployment's
+# registry for every plugin built on it.
+#
+# From the wheel the stage above checked, for every local build and check;
+# and in a release from PyPI itself, after the upload -- SDK_INSTALL names
+# `open-meridian==<version>` -- so a published base holds exactly what PyPI
+# serves. Versioned and never overwritten: a new SDK is a new base, and a
+# plugin moves to it when its author rebuilds. The label is what an upload
+# reads a plugin's SDK from, since every image built on this one carries it;
+# the build refuses a label that does not match what was installed.
+#
+# Left as root, because a plugin's own `pip install` runs on top of it; the
+# plugin's image drops to 65532 after.
+FROM python:${PYTHON_VERSION}-slim AS plugin-base
+ARG SDK_VERSION
+ARG SDK_INSTALL=/tmp/dist/*.whl
+LABEL org.opencontainers.image.source="https://github.com/open-meridian/meridian-python" \
+      org.opencontainers.image.description="Python and the open-meridian SDK, for a Meridian plugin to build on" \
+      org.opencontainers.image.licenses="Apache-2.0" \
+      dev.meridian.sdk-version="${SDK_VERSION}"
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_CACHE_DIR=1 \
+    PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+COPY --from=package /dist /tmp/dist
+RUN test -n "${SDK_VERSION}" || { echo "SDK_VERSION is required" >&2; exit 1; } \
+ && pip install ${SDK_INSTALL} \
+ && rm -rf /tmp/dist \
+ && python -c "import importlib.metadata as m, sys; v = m.version('open-meridian'); sys.exit(0 if v == '${SDK_VERSION}' else f'labelled ${SDK_VERSION}, installed {v}')"
+WORKDIR /plugin
+
 # The conformance half needs the design repo's fixtures, which are not in this
 # repo and are not copied into the image: they are mounted at run time, because
 # baking a copy in is the vendored-copy problem again.
