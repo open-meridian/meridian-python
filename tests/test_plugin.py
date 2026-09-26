@@ -38,7 +38,7 @@ def an_envelope(topic: str, payload: object = None) -> envelope_pb2.Envelope:
 async def test_registering_sends_no_identity(sidecar: tuple[FakeSidecar, str]) -> None:
     """The thing a plugin must not be able to do is the thing to assert.
 
-    Instance, role and tags moved to the sidecar's launch configuration, so
+    Instance, roles and tags moved to the sidecar's launch configuration, so
     there is no field here to fill in. A client that grew one back would be
     letting a plugin choose its own privileges.
     """
@@ -54,15 +54,15 @@ async def test_registering_sends_no_identity(sidecar: tuple[FakeSidecar, str]) -
 async def test_identity_and_grants_come_back(sidecar: tuple[FakeSidecar, str]) -> None:
     """So a plugin can stop at startup when it is not what it expected to be."""
     service, address = sidecar
-    service.role = "admin"
-    service.tags = ("reporting",)
+    service.roles = ("oms", "ems")
+    service.tags = ("routing",)
     service.publish_grants = ("platform.street.query.list-custodial-positions",)
 
     plugin = await meridian.connect(address, heartbeat=False)
     try:
-        assert plugin.identity.role == "admin"
+        assert plugin.identity.roles == ("oms", "ems")
         assert plugin.identity.instance_id == "custody-snaptrade-1"
-        assert plugin.identity.tags == ("reporting",)
+        assert plugin.identity.tags == ("routing",)
         assert plugin.identity.deployment_id == "dep-local-1"
         assert plugin.grants.publish == ("platform.street.query.list-custodial-positions",)
     finally:

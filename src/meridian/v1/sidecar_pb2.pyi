@@ -66,14 +66,14 @@ class SettingDeclaration(_message.Message):
     def __init__(self, name: _Optional[str] = ..., type: _Optional[_Union[SettingType, str]] = ..., required: bool = ..., secret: bool = ..., description: _Optional[str] = ...) -> None: ...
 
 class RegisterReply(_message.Message):
-    __slots__ = ("admitted", "deployment_id", "refusal_reason", "publish_grants", "subscribe_grants", "instance_id", "role", "tags")
+    __slots__ = ("admitted", "deployment_id", "refusal_reason", "publish_grants", "subscribe_grants", "instance_id", "roles", "tags")
     ADMITTED_FIELD_NUMBER: _ClassVar[int]
     DEPLOYMENT_ID_FIELD_NUMBER: _ClassVar[int]
     REFUSAL_REASON_FIELD_NUMBER: _ClassVar[int]
     PUBLISH_GRANTS_FIELD_NUMBER: _ClassVar[int]
     SUBSCRIBE_GRANTS_FIELD_NUMBER: _ClassVar[int]
     INSTANCE_ID_FIELD_NUMBER: _ClassVar[int]
-    ROLE_FIELD_NUMBER: _ClassVar[int]
+    ROLES_FIELD_NUMBER: _ClassVar[int]
     TAGS_FIELD_NUMBER: _ClassVar[int]
     admitted: bool
     deployment_id: str
@@ -81,9 +81,9 @@ class RegisterReply(_message.Message):
     publish_grants: _containers.RepeatedScalarFieldContainer[str]
     subscribe_grants: _containers.RepeatedScalarFieldContainer[str]
     instance_id: str
-    role: str
+    roles: _containers.RepeatedScalarFieldContainer[str]
     tags: _containers.RepeatedScalarFieldContainer[str]
-    def __init__(self, admitted: bool = ..., deployment_id: _Optional[str] = ..., refusal_reason: _Optional[str] = ..., publish_grants: _Optional[_Iterable[str]] = ..., subscribe_grants: _Optional[_Iterable[str]] = ..., instance_id: _Optional[str] = ..., role: _Optional[str] = ..., tags: _Optional[_Iterable[str]] = ...) -> None: ...
+    def __init__(self, admitted: bool = ..., deployment_id: _Optional[str] = ..., refusal_reason: _Optional[str] = ..., publish_grants: _Optional[_Iterable[str]] = ..., subscribe_grants: _Optional[_Iterable[str]] = ..., instance_id: _Optional[str] = ..., roles: _Optional[_Iterable[str]] = ..., tags: _Optional[_Iterable[str]] = ...) -> None: ...
 
 class PublishRequest(_message.Message):
     __slots__ = ("topic", "payload_type", "payload", "correlation_id", "causation_id")

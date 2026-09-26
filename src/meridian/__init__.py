@@ -6,7 +6,7 @@ learns the bus address, never holds a broker credential, and never discovers
 another plugin.
 
     async with await connect() as plugin:
-        print(plugin.identity.role)
+        print(plugin.identity.roles)
         await plugin.publish("platform.custody.x.event.sync-status", event)
 """
 

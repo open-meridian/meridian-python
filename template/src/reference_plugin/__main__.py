@@ -29,7 +29,11 @@ async def run() -> None:
         loop.add_signal_handler(stop, stopped.set)
 
     async with await meridian.connect() as plugin:
-        log.info("registered as %s, role %s", plugin.identity.instance_id, plugin.identity.role)
+        log.info(
+            "registered as %s, roles %s",
+            plugin.identity.instance_id,
+            ", ".join(plugin.identity.roles) or "none",
+        )
         log.info(
             "may publish %s; may subscribe %s",
             ", ".join(plugin.grants.publish) or "nothing",

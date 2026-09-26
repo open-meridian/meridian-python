@@ -22,7 +22,7 @@ The package carries the wire bindings it speaks to the sidecar with, as
 import meridian
 
 async with await meridian.connect() as plugin:
-    print(plugin.identity.role, plugin.grants.publish)
+    print(plugin.identity.roles, plugin.grants.publish)
     await plugin.publish("platform.custody.acme-1.event.sync-status", event)
 ```
 

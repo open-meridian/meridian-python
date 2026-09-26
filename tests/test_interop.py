@@ -34,7 +34,6 @@ RECORD_STATEMENT = "platform.street.command.record-statement"
 RECORD_HOLDING = "platform.street.command.record-holding"
 RESOLVE_IDENTIFIER = "platform.reference.query.resolve-identifier"
 INSTRUMENT_MISSING = "platform.reference.event.instrument-missing"
-INSTRUMENT_APPLIED = "platform.reference.event.instrument-applied"
 STATEMENT_RECORDED = "platform.street.event.statement-recorded"
 
 NOW = 1_757_376_000_000_000_000
@@ -71,7 +70,7 @@ async def test_the_runtime_says_who_this_plugin_is(plugin) -> None:
     The SDK sent nothing but a schema version, so everything asserted here was
     decided by the deployment.
     """
-    assert plugin.identity.role == "custody"
+    assert plugin.identity.roles == ("custody",)
     assert plugin.identity.instance_id
     assert plugin.identity.deployment_id
     assert RECORD_HOLDING in plugin.grants.publish
@@ -190,12 +189,20 @@ async def test_a_granted_subscription_opens(plugin) -> None:
     """Nothing publishes on this topic here, so the assertion is that the stream
     opens rather than being refused.
 
+    Whatever the contract grants this sidecar's roles to subscribe to
+    (decisions/020), rather than a topic named here: a grant this test assumed
+    is how the hand-written grants gave custody a subscription no workflow
+    asked for. The contract gives custody none today, so this waits for a
+    role that has one -- kernel/grants-generated-from-the-matrix says which.
+
     Bounded, because a subscription with nothing to deliver stays open forever,
     which is correct behaviour and would otherwise hang this suite. The timeout
     is the pass: it means the server accepted the pattern and is holding a
     stream. A refusal would raise before the wait.
     """
-    stream = plugin.subscribe(INSTRUMENT_APPLIED)
+    if not plugin.grants.subscribe:
+        pytest.skip("the contract grants this sidecar's roles no subscription yet")
+    stream = plugin.subscribe(plugin.grants.subscribe[0])
     with pytest.raises(TimeoutError):
         async with asyncio.timeout(2):
             await anext(stream)
@@ -208,7 +215,7 @@ async def test_the_scaffold_registers_with_a_real_sidecar() -> None:
     The template in this repository is the scaffold the CLI copies, so the
     first plugin anybody makes is this one. It is installed from the SDK's
     wheel beside it, started as its console script, and must register, say the
-    role and grants the sidecar launched it with, and stop cleanly when told.
+    roles and grants the sidecar launched it with, and stop cleanly when told.
     """
     import asyncio
     import signal
@@ -237,6 +244,6 @@ async def test_the_scaffold_registers_with_a_real_sidecar() -> None:
         code = await asyncio.wait_for(started.wait(), timeout=10)
 
     registered = next(line for line in said if "registered as" in line)
-    assert "role custody" in registered, said
+    assert "roles custody" in registered, said
     assert RECORD_STATEMENT in next(line for line in said if "may publish" in line), said
     assert code == 0, said

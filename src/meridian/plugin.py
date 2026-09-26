@@ -54,14 +54,16 @@ _CALL_FAILURES = {
 class Identity:
     """Who this plugin was launched to be.
 
-    Read from the registration reply, never sent. These decide the plugin's
-    topic access, so a plugin that could name them would be choosing its own
-    privileges. A plugin that cares can compare them against what it expected
-    and stop.
+    Read from the registration reply, never sent. The roles decide the
+    plugin's topic access -- one or more from the deployment's fixed list, the
+    union of their grants, or none, which is a plugin admitted with no topics
+    -- so a plugin that could name them would be choosing its own privileges.
+    The tags are its parts, for people, and grant nothing on the bus. A plugin
+    that cares can compare these against what it expected and stop.
     """
 
     instance_id: str
-    role: str
+    roles: tuple[str, ...] = ()
     tags: tuple[str, ...] = ()
     deployment_id: str = ""
 
@@ -298,7 +300,7 @@ async def connect(
     plugin = Plugin(
         identity=Identity(
             instance_id=reply.instance_id,
-            role=reply.role,
+            roles=tuple(reply.roles),
             tags=tuple(reply.tags),
             deployment_id=reply.deployment_id,
         ),
