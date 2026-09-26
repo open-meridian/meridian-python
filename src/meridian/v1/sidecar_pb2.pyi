@@ -1,4 +1,3 @@
-from meridian.v1 import envelope_pb2 as _envelope_pb2
 from google.protobuf.internal import containers as _containers
 from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
 from google.protobuf import descriptor as _descriptor
@@ -13,23 +12,10 @@ class SettingType(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     SETTING_TYPE_STRING: _ClassVar[SettingType]
     SETTING_TYPE_INTEGER: _ClassVar[SettingType]
     SETTING_TYPE_BOOLEAN: _ClassVar[SettingType]
-
-class CallFailure(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
-    __slots__ = ()
-    CALL_FAILURE_UNSPECIFIED: _ClassVar[CallFailure]
-    CALL_FAILURE_TIMEOUT: _ClassVar[CallFailure]
-    CALL_FAILURE_REFUSED: _ClassVar[CallFailure]
-    CALL_FAILURE_NO_HANDLER: _ClassVar[CallFailure]
-    CALL_FAILURE_HANDLER_ERROR: _ClassVar[CallFailure]
 SETTING_TYPE_UNSPECIFIED: SettingType
 SETTING_TYPE_STRING: SettingType
 SETTING_TYPE_INTEGER: SettingType
 SETTING_TYPE_BOOLEAN: SettingType
-CALL_FAILURE_UNSPECIFIED: CallFailure
-CALL_FAILURE_TIMEOUT: CallFailure
-CALL_FAILURE_REFUSED: CallFailure
-CALL_FAILURE_NO_HANDLER: CallFailure
-CALL_FAILURE_HANDLER_ERROR: CallFailure
 
 class RegisterRequest(_message.Message):
     __slots__ = ("schema_version", "interface", "settings", "reads_external_accounts")
@@ -84,72 +70,6 @@ class RegisterReply(_message.Message):
     roles: _containers.RepeatedScalarFieldContainer[str]
     tags: _containers.RepeatedScalarFieldContainer[str]
     def __init__(self, admitted: bool = ..., deployment_id: _Optional[str] = ..., refusal_reason: _Optional[str] = ..., publish_grants: _Optional[_Iterable[str]] = ..., subscribe_grants: _Optional[_Iterable[str]] = ..., instance_id: _Optional[str] = ..., roles: _Optional[_Iterable[str]] = ..., tags: _Optional[_Iterable[str]] = ...) -> None: ...
-
-class PublishRequest(_message.Message):
-    __slots__ = ("topic", "payload_type", "payload", "correlation_id", "causation_id")
-    TOPIC_FIELD_NUMBER: _ClassVar[int]
-    PAYLOAD_TYPE_FIELD_NUMBER: _ClassVar[int]
-    PAYLOAD_FIELD_NUMBER: _ClassVar[int]
-    CORRELATION_ID_FIELD_NUMBER: _ClassVar[int]
-    CAUSATION_ID_FIELD_NUMBER: _ClassVar[int]
-    topic: str
-    payload_type: str
-    payload: bytes
-    correlation_id: str
-    causation_id: str
-    def __init__(self, topic: _Optional[str] = ..., payload_type: _Optional[str] = ..., payload: _Optional[bytes] = ..., correlation_id: _Optional[str] = ..., causation_id: _Optional[str] = ...) -> None: ...
-
-class PublishReply(_message.Message):
-    __slots__ = ("accepted", "message_id", "refusal_reason")
-    ACCEPTED_FIELD_NUMBER: _ClassVar[int]
-    MESSAGE_ID_FIELD_NUMBER: _ClassVar[int]
-    REFUSAL_REASON_FIELD_NUMBER: _ClassVar[int]
-    accepted: bool
-    message_id: str
-    refusal_reason: str
-    def __init__(self, accepted: bool = ..., message_id: _Optional[str] = ..., refusal_reason: _Optional[str] = ...) -> None: ...
-
-class SubscribeRequest(_message.Message):
-    __slots__ = ("pattern",)
-    PATTERN_FIELD_NUMBER: _ClassVar[int]
-    pattern: str
-    def __init__(self, pattern: _Optional[str] = ...) -> None: ...
-
-class Delivery(_message.Message):
-    __slots__ = ("envelope",)
-    ENVELOPE_FIELD_NUMBER: _ClassVar[int]
-    envelope: _envelope_pb2.Envelope
-    def __init__(self, envelope: _Optional[_Union[_envelope_pb2.Envelope, _Mapping]] = ...) -> None: ...
-
-class CallRequest(_message.Message):
-    __slots__ = ("topic", "payload_type", "payload", "correlation_id", "timeout_ms", "acting_for")
-    TOPIC_FIELD_NUMBER: _ClassVar[int]
-    PAYLOAD_TYPE_FIELD_NUMBER: _ClassVar[int]
-    PAYLOAD_FIELD_NUMBER: _ClassVar[int]
-    CORRELATION_ID_FIELD_NUMBER: _ClassVar[int]
-    TIMEOUT_MS_FIELD_NUMBER: _ClassVar[int]
-    ACTING_FOR_FIELD_NUMBER: _ClassVar[int]
-    topic: str
-    payload_type: str
-    payload: bytes
-    correlation_id: str
-    timeout_ms: int
-    acting_for: CallerAssertion
-    def __init__(self, topic: _Optional[str] = ..., payload_type: _Optional[str] = ..., payload: _Optional[bytes] = ..., correlation_id: _Optional[str] = ..., timeout_ms: _Optional[int] = ..., acting_for: _Optional[_Union[CallerAssertion, _Mapping]] = ...) -> None: ...
-
-class CallReply(_message.Message):
-    __slots__ = ("ok", "payload_type", "payload", "failure", "failure_detail")
-    OK_FIELD_NUMBER: _ClassVar[int]
-    PAYLOAD_TYPE_FIELD_NUMBER: _ClassVar[int]
-    PAYLOAD_FIELD_NUMBER: _ClassVar[int]
-    FAILURE_FIELD_NUMBER: _ClassVar[int]
-    FAILURE_DETAIL_FIELD_NUMBER: _ClassVar[int]
-    ok: bool
-    payload_type: str
-    payload: bytes
-    failure: CallFailure
-    failure_detail: str
-    def __init__(self, ok: bool = ..., payload_type: _Optional[str] = ..., payload: _Optional[bytes] = ..., failure: _Optional[_Union[CallFailure, str]] = ..., failure_detail: _Optional[str] = ...) -> None: ...
 
 class HeartbeatRequest(_message.Message):
     __slots__ = ("healthy", "detail")

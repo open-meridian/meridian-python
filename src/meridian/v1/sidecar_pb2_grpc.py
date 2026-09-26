@@ -39,21 +39,6 @@ class SidecarServiceStub(object):
                 request_serializer=meridian_dot_v1_dot_sidecar__pb2.RegisterRequest.SerializeToString,
                 response_deserializer=meridian_dot_v1_dot_sidecar__pb2.RegisterReply.FromString,
                 _registered_method=True)
-        self.Publish = channel.unary_unary(
-                '/meridian.v1.SidecarService/Publish',
-                request_serializer=meridian_dot_v1_dot_sidecar__pb2.PublishRequest.SerializeToString,
-                response_deserializer=meridian_dot_v1_dot_sidecar__pb2.PublishReply.FromString,
-                _registered_method=True)
-        self.Subscribe = channel.unary_stream(
-                '/meridian.v1.SidecarService/Subscribe',
-                request_serializer=meridian_dot_v1_dot_sidecar__pb2.SubscribeRequest.SerializeToString,
-                response_deserializer=meridian_dot_v1_dot_sidecar__pb2.Delivery.FromString,
-                _registered_method=True)
-        self.Call = channel.unary_unary(
-                '/meridian.v1.SidecarService/Call',
-                request_serializer=meridian_dot_v1_dot_sidecar__pb2.CallRequest.SerializeToString,
-                response_deserializer=meridian_dot_v1_dot_sidecar__pb2.CallReply.FromString,
-                _registered_method=True)
         self.Heartbeat = channel.unary_unary(
                 '/meridian.v1.SidecarService/Heartbeat',
                 request_serializer=meridian_dot_v1_dot_sidecar__pb2.HeartbeatRequest.SerializeToString,
@@ -86,25 +71,6 @@ class SidecarServiceServicer(object):
 
     def Register(self, request, context):
         """Nothing else may be called until this succeeds.
-        """
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def Publish(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def Subscribe(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def Call(self, request, context):
-        """A question with an answer, bounded in time.
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -151,21 +117,6 @@ def add_SidecarServiceServicer_to_server(servicer, server):
                     servicer.Register,
                     request_deserializer=meridian_dot_v1_dot_sidecar__pb2.RegisterRequest.FromString,
                     response_serializer=meridian_dot_v1_dot_sidecar__pb2.RegisterReply.SerializeToString,
-            ),
-            'Publish': grpc.unary_unary_rpc_method_handler(
-                    servicer.Publish,
-                    request_deserializer=meridian_dot_v1_dot_sidecar__pb2.PublishRequest.FromString,
-                    response_serializer=meridian_dot_v1_dot_sidecar__pb2.PublishReply.SerializeToString,
-            ),
-            'Subscribe': grpc.unary_stream_rpc_method_handler(
-                    servicer.Subscribe,
-                    request_deserializer=meridian_dot_v1_dot_sidecar__pb2.SubscribeRequest.FromString,
-                    response_serializer=meridian_dot_v1_dot_sidecar__pb2.Delivery.SerializeToString,
-            ),
-            'Call': grpc.unary_unary_rpc_method_handler(
-                    servicer.Call,
-                    request_deserializer=meridian_dot_v1_dot_sidecar__pb2.CallRequest.FromString,
-                    response_serializer=meridian_dot_v1_dot_sidecar__pb2.CallReply.SerializeToString,
             ),
             'Heartbeat': grpc.unary_unary_rpc_method_handler(
                     servicer.Heartbeat,
@@ -220,87 +171,6 @@ class SidecarService(object):
             '/meridian.v1.SidecarService/Register',
             meridian_dot_v1_dot_sidecar__pb2.RegisterRequest.SerializeToString,
             meridian_dot_v1_dot_sidecar__pb2.RegisterReply.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True)
-
-    @staticmethod
-    def Publish(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            '/meridian.v1.SidecarService/Publish',
-            meridian_dot_v1_dot_sidecar__pb2.PublishRequest.SerializeToString,
-            meridian_dot_v1_dot_sidecar__pb2.PublishReply.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True)
-
-    @staticmethod
-    def Subscribe(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_stream(
-            request,
-            target,
-            '/meridian.v1.SidecarService/Subscribe',
-            meridian_dot_v1_dot_sidecar__pb2.SubscribeRequest.SerializeToString,
-            meridian_dot_v1_dot_sidecar__pb2.Delivery.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True)
-
-    @staticmethod
-    def Call(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            '/meridian.v1.SidecarService/Call',
-            meridian_dot_v1_dot_sidecar__pb2.CallRequest.SerializeToString,
-            meridian_dot_v1_dot_sidecar__pb2.CallReply.FromString,
             options,
             channel_credentials,
             insecure,
