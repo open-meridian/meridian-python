@@ -1,6 +1,14 @@
 SHELL := /bin/bash
 PY    := python3
 
+# A pre-push hook runs with GIT_DIR naming this repository, absolutely when
+# pushed from a worktree, and fetch_schema's `git init`, `fetch` and
+# `checkout` in .schema-scratch would then act on this repository instead:
+# marking this clone bare and shallow, and staging meridian-schema's
+# bindings here.
+unexport GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR \
+         GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_PREFIX
+
 .PHONY: help ci-local ci-remote ci-local-deep install-hooks ci-mirror-check contract-diff \
         build package test lint conformance fmt vendor-schema check-vendored \
         base-image check-scaffold
