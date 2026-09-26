@@ -121,3 +121,41 @@ async def test_a_refusal_is_raised_in_this_packages_terms(
     assert "RecordHoldingsStatement" in str(caught.value)
     if kind is not None:
         assert caught.value.kind == kind  # type: ignore[attr-defined]
+
+
+async def test_a_command_carries_the_person_it_is_sent_for_as_it_was_handed_over(
+    sidecar,
+) -> None:
+    """W4.9: the Meridian-Caller header the plugin received, handed back as the
+    assertion it encodes. Verified by the sidecar, not here."""
+    import base64
+
+    from meridian.v1 import sidecar_pb2
+
+    handed = sidecar_pb2.CallerAssertion(
+        claims=b"claims", signature=b"sig", key_id="dashboard-1"
+    )
+    header = base64.urlsafe_b64encode(handed.SerializeToString()).decode().rstrip("=")
+    service, _ = sidecar
+    plugin = await connected(sidecar)
+    try:
+        holding = {
+            "statement_id": "S-1",
+            "quantity": Decimal(1),
+            "market_value": Decimal(1),
+            "external_account_id": "ext-1",
+        }
+        await plugin.record_holding(**holding, acting_for=header)
+        await plugin.record_holding(**holding)
+    finally:
+        await plugin.leave()
+    for_ada, as_itself = service.operations.sent
+    assert for_ada.acting_for == handed
+    assert not as_itself.HasField("acting_for"), "unset, the plugin acts as itself"
+
+
+def test_only_commands_are_sent_for_a_person() -> None:
+    """Reads carry no person (decisions/014): a plugin reads as itself."""
+    assert "acting_for" in inspect.signature(meridian.Plugin.record_holding).parameters
+    assert "acting_for" not in inspect.signature(meridian.Plugin.resolve_identifier).parameters
+    assert "acting_for" not in inspect.signature(meridian.Plugin.report_sync_status).parameters

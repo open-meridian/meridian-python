@@ -1,3 +1,4 @@
+from meridian.v1 import sidecar_pb2 as _sidecar_pb2
 from google.protobuf.internal import containers as _containers
 from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
 from google.protobuf import descriptor as _descriptor
@@ -38,18 +39,20 @@ class ReportSyncStatusParams(_message.Message):
     def __init__(self, source: _Optional[str] = ..., last_synced_at_ns: _Optional[int] = ..., connection_healthy: bool = ..., status_detail: _Optional[str] = ..., observed_at_ns: _Optional[int] = ..., external_account_id: _Optional[str] = ...) -> None: ...
 
 class RecordHoldingsStatementParams(_message.Message):
-    __slots__ = ("source", "external_statement_id", "as_of_date", "read_at_ns", "expected_rows")
+    __slots__ = ("source", "external_statement_id", "as_of_date", "read_at_ns", "expected_rows", "acting_for")
     SOURCE_FIELD_NUMBER: _ClassVar[int]
     EXTERNAL_STATEMENT_ID_FIELD_NUMBER: _ClassVar[int]
     AS_OF_DATE_FIELD_NUMBER: _ClassVar[int]
     READ_AT_NS_FIELD_NUMBER: _ClassVar[int]
     EXPECTED_ROWS_FIELD_NUMBER: _ClassVar[int]
+    ACTING_FOR_FIELD_NUMBER: _ClassVar[int]
     source: str
     external_statement_id: str
     as_of_date: str
     read_at_ns: int
     expected_rows: int
-    def __init__(self, source: _Optional[str] = ..., external_statement_id: _Optional[str] = ..., as_of_date: _Optional[str] = ..., read_at_ns: _Optional[int] = ..., expected_rows: _Optional[int] = ...) -> None: ...
+    acting_for: _sidecar_pb2.CallerAssertion
+    def __init__(self, source: _Optional[str] = ..., external_statement_id: _Optional[str] = ..., as_of_date: _Optional[str] = ..., read_at_ns: _Optional[int] = ..., expected_rows: _Optional[int] = ..., acting_for: _Optional[_Union[_sidecar_pb2.CallerAssertion, _Mapping]] = ...) -> None: ...
 
 class RecordHoldingsStatementResult(_message.Message):
     __slots__ = ("statement_id", "already_recorded")
@@ -60,7 +63,7 @@ class RecordHoldingsStatementResult(_message.Message):
     def __init__(self, statement_id: _Optional[str] = ..., already_recorded: bool = ...) -> None: ...
 
 class RecordHoldingParams(_message.Message):
-    __slots__ = ("statement_id", "instrument_id", "unresolved_identifiers", "quantity_scaled_1e8", "market_value_scaled_1e8", "currency", "external_account_id")
+    __slots__ = ("statement_id", "instrument_id", "unresolved_identifiers", "quantity_scaled_1e8", "market_value_scaled_1e8", "currency", "external_account_id", "acting_for")
     STATEMENT_ID_FIELD_NUMBER: _ClassVar[int]
     INSTRUMENT_ID_FIELD_NUMBER: _ClassVar[int]
     UNRESOLVED_IDENTIFIERS_FIELD_NUMBER: _ClassVar[int]
@@ -68,6 +71,7 @@ class RecordHoldingParams(_message.Message):
     MARKET_VALUE_SCALED_1E8_FIELD_NUMBER: _ClassVar[int]
     CURRENCY_FIELD_NUMBER: _ClassVar[int]
     EXTERNAL_ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
+    ACTING_FOR_FIELD_NUMBER: _ClassVar[int]
     statement_id: str
     instrument_id: str
     unresolved_identifiers: _containers.RepeatedCompositeFieldContainer[Identifier]
@@ -75,7 +79,8 @@ class RecordHoldingParams(_message.Message):
     market_value_scaled_1e8: int
     currency: str
     external_account_id: str
-    def __init__(self, statement_id: _Optional[str] = ..., instrument_id: _Optional[str] = ..., unresolved_identifiers: _Optional[_Iterable[_Union[Identifier, _Mapping]]] = ..., quantity_scaled_1e8: _Optional[int] = ..., market_value_scaled_1e8: _Optional[int] = ..., currency: _Optional[str] = ..., external_account_id: _Optional[str] = ...) -> None: ...
+    acting_for: _sidecar_pb2.CallerAssertion
+    def __init__(self, statement_id: _Optional[str] = ..., instrument_id: _Optional[str] = ..., unresolved_identifiers: _Optional[_Iterable[_Union[Identifier, _Mapping]]] = ..., quantity_scaled_1e8: _Optional[int] = ..., market_value_scaled_1e8: _Optional[int] = ..., currency: _Optional[str] = ..., external_account_id: _Optional[str] = ..., acting_for: _Optional[_Union[_sidecar_pb2.CallerAssertion, _Mapping]] = ...) -> None: ...
 
 class RecordHoldingResult(_message.Message):
     __slots__ = ("holding_id", "resolved")

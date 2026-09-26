@@ -7,11 +7,13 @@ converted once, in this file, and refused rather than rounded.
 
 from __future__ import annotations
 
+import base64
 from collections.abc import Awaitable, Callable, Sequence
 from decimal import Decimal
 from typing import Any, TypeVar
 
 from meridian.plugin.v1 import operations_pb2 as ops
+from meridian.v1 import sidecar_pb2
 
 _Answer = TypeVar("_Answer")
 
@@ -32,6 +34,16 @@ def _scaled(amount: Decimal, name: str) -> int:
     if not -_INT64 - 1 <= whole <= _INT64:
         raise ValueError(f"{name} is too large to carry")
     return whole
+
+
+def _assertion(header: str | None) -> sidecar_pb2.CallerAssertion | None:
+    """The person a command is sent for, from the Meridian-Caller header as the
+    plugin received it: base64url, unpadded. Handed back to the sidecar, which
+    verifies it; nothing here does (W4.9)."""
+    if header is None:
+        return None
+    padded = header + "=" * (-len(header) % 4)
+    return sidecar_pb2.CallerAssertion.FromString(base64.urlsafe_b64decode(padded))
 
 
 class Operations:
@@ -74,6 +86,7 @@ class Operations:
         as_of_date: str = "",
         read_at_ns: int = 0,
         expected_rows: int = 0,
+        acting_for: str | None = None,
     ) -> ops.RecordHoldingsStatementResult:
         """W2.2: Open one statement: one read of one rail, at one moment."""
         params = ops.RecordHoldingsStatementParams(
@@ -82,6 +95,7 @@ class Operations:
             as_of_date=as_of_date,
             read_at_ns=read_at_ns,
             expected_rows=expected_rows,
+            acting_for=_assertion(acting_for),
         )
         return await self._operate(self._operations().RecordHoldingsStatement, params)
 
@@ -95,6 +109,7 @@ class Operations:
         market_value: Decimal,
         currency: str = "",
         external_account_id: str = "",
+        acting_for: str | None = None,
     ) -> ops.RecordHoldingResult:
         """W2.3: One holding, for one account, at one instrument."""
         params = ops.RecordHoldingParams(
@@ -105,6 +120,7 @@ class Operations:
             market_value_scaled_1e8=_scaled(market_value, "market_value"),
             currency=currency,
             external_account_id=external_account_id,
+            acting_for=_assertion(acting_for),
         )
         return await self._operate(self._operations().RecordHolding, params)
 
