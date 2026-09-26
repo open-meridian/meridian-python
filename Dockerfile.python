@@ -32,7 +32,11 @@ COPY template/ template/
 # CORE_PROTO in the Makefile). The wheel is built from the source alone, in
 # its own stage, and `installed` checks none of these reached it.
 COPY --from=core-proto . /core-proto/
-RUN python -m grpc_tools.protoc -I /core-proto \
+# meridian-schema's protos, which core's import (its bus envelope carries the
+# plugin-facing MessageMeta): on the include path only, since this package
+# already ships their bindings.
+COPY --from=schema-proto . /schema-proto/
+RUN python -m grpc_tools.protoc -I /core-proto -I /schema-proto \
       --python_out=src --pyi_out=src /core-proto/meridian/v1/*.proto \
  && python -c "import meridian.v1.holdings_pb2, meridian.v1.envelope_pb2"
 
@@ -140,8 +144,9 @@ COPY pyproject.toml ./
 RUN pip install /dist/*.whl \
       "pytest>=8" "pytest-asyncio>=0.24" "grpcio-tools>=1.68,<2" "pyyaml>=6"
 COPY --from=core-proto . /core-proto/
+COPY --from=schema-proto . /schema-proto/
 RUN site="$(python -c 'import meridian, pathlib; print(pathlib.Path(meridian.__file__).parents[1])')" \
- && python -m grpc_tools.protoc -I /core-proto \
+ && python -m grpc_tools.protoc -I /core-proto -I /schema-proto \
       --python_out="$site" --pyi_out="$site" /core-proto/meridian/v1/*.proto \
  && python -c "import meridian.v1.holdings_pb2, meridian.v1.envelope_pb2"
 COPY tests/ tests/

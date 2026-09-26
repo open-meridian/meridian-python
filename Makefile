@@ -92,7 +92,9 @@ DESIGN ?= ../meridian-design
 # without either waiting on the other's push.
 CORE_REV   := c9d710e0af9d68775ade5a678a8c686aec9619f4
 CORE_PROTO ?= https://github.com/open-meridian/meridian-core.git\#$(CORE_REV):proto
-CONTEXTS   := --build-context core-proto=$(CORE_PROTO)
+# And meridian-schema's, which core's import, at the revision vendored here.
+SCHEMA_PROTO ?= https://github.com/open-meridian/meridian-schema.git\#$(SCHEMA_REV):proto
+CONTEXTS   := --build-context core-proto=$(CORE_PROTO) --build-context schema-proto=$(SCHEMA_PROTO)
 
 build:
 	@$(DOCKER) build $(CONTEXTS) -f Dockerfile.python --target check . >/dev/null 2>&1 \
