@@ -444,4 +444,9 @@ async def connect(
     )
     if heartbeat:
         plugin._heartbeat = asyncio.create_task(plugin._beat())
+    # Under `meridian-dev run`, on a development deployment: this revision
+    # is running, which is what `ready` means (spec/live-plugin-development).
+    from .dev import report_ready
+
+    report_ready()
     return plugin

@@ -33,6 +33,12 @@ dev = [
   "pyyaml>=6",
 ]
 
+# The live shape's process on a development deployment: runs the plugin's own
+# entry point from its live folder and restarts it on each change
+# (spec/live-plugin-development). In every base image, since it is the SDK's.
+[project.scripts]
+meridian-dev = "meridian.dev:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
