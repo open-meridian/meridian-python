@@ -155,9 +155,9 @@ check-scaffold: base-image
 		|| { echo "check-scaffold FAILED: the plugin does not run as 65532" >&2; exit 1; }
 	@docker run --rm --entrypoint python reference-plugin:check -c "import meridian, reference_plugin.__main__" \
 		|| { echo "check-scaffold FAILED: the plugin's image does not import the SDK and itself" >&2; exit 1; }
-	@docker run --rm --entrypoint sh reference-plugin:check -c "test ! -e /plugin/CLAUDE.md && test ! -e /plugin/.claude" \
-		|| { echo "check-scaffold FAILED: the plugin's image holds the Claude files, which .dockerignore keeps out" >&2; exit 1; }
-	@echo "check-scaffold OK: the template builds on plugin-python:$(SDK_VERSION) and adds only itself, without the Claude files"
+	@docker run --rm --entrypoint sh reference-plugin:check -c "test ! -e /plugin/AGENTS.md && test ! -e /plugin/CLAUDE.md && test ! -e /plugin/.claude" \
+		|| { echo "check-scaffold FAILED: the plugin's image holds the agents' files, which .dockerignore keeps out" >&2; exit 1; }
+	@echo "check-scaffold OK: the template builds on plugin-python:$(SDK_VERSION) and adds only itself, without the agents' files"
 
 test:
 	@$(DOCKER) build $(CONTEXTS) -f Dockerfile.python --target test . >/dev/null 2>&1 \

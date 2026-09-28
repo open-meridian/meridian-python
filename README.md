@@ -7,10 +7,9 @@ from the kernel on start. See [CLAUDE.md](CLAUDE.md).
 
 Plugins themselves live in their own repositories. This one stays thin.
 
-Published to PyPI as `open-meridian`, imported as `meridian` (not yet
-published; see meridian-design's plans/a-person-reaches-a-plugin, step 0):
+Published to PyPI as `open-meridian`, imported as `meridian`:
 
-    pip install open-meridian==0.1.0
+    pip install open-meridian
 
 The name `meridian-sdk` on PyPI is an unrelated company's. Do not install it.
 
@@ -22,8 +21,8 @@ The package carries the wire bindings it speaks to the sidecar with, as
 import meridian
 
 async with await meridian.connect() as plugin:
-    print(plugin.identity.roles, plugin.grants.publish)
-    await plugin.publish("platform.custody.acme-1.event.sync-status", event)
+    print(plugin.identity.instance_id, plugin.identity.roles, plugin.grants.publish)
+    await plugin.report(healthy=True, detail="started")
 ```
 
     make ci-local
