@@ -92,19 +92,24 @@ async def test_the_same_statement_twice_is_recognised_not_duplicated(plugin) -> 
     assert second.statement_id == first.statement_id
 
 
-async def test_an_unresolved_identifier_is_a_miss_not_an_error(plugin) -> None:
-    """The instrument store answers, and a miss is an answer.
+async def test_a_set_nothing_matches_is_answered_with_a_placeholder(plugin) -> None:
+    """The instrument store answers, and nothing matching is still an answer.
 
-    Nothing is loaded into the instrument store here, so the interesting part
-    is that the reply decodes and reports a reason rather than the call
-    failing.
+    Nothing is loaded into the instrument store here, so it answers the
+    deployment's LCL- placeholder for the set (W3.7), which a holding can be
+    recorded against until the platform's INS- ID replaces it; and the same
+    one when asked again.
     """
-    reply = await plugin.resolve_identifier(
-        identifiers=[meridian.Identifier(scheme="isin", value="US0000000000")],
-        as_of_ns=NOW,
-    )
-    assert not reply.found
-    assert reply.miss_reason != meridian.MissReason.Value("MISS_REASON_UNSPECIFIED")
+    asked = {
+        "identifiers": [meridian.Identifier(scheme="isin", value="US0000000000")],
+        "as_of_ns": NOW,
+    }
+    reply = await plugin.resolve_identifier(**asked)
+    assert reply.found
+    assert reply.placeholder
+    assert reply.instrument_id.startswith("LCL-")
+    again = await plugin.resolve_identifier(**asked)
+    assert again.instrument_id == reply.instrument_id
 
 
 async def test_there_is_no_path_onto_the_bus_but_a_typed_operation(plugin) -> None:
