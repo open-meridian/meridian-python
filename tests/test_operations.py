@@ -1,7 +1,7 @@
 """The typed operations, from the plugin's side (spec/typed-sidecar-operations).
 
 Against the fake sidecar: what these hold is the client's half -- the params
-each operation sends, amounts scaled exactly or refused, the sidecar's fields
+each operation sends, numbers carried exactly or refused, the sidecar's fields
 never offered, and a refusal turned into this package's terms. What the
 sidecar does with them is meridian-core's to test, and the interop suite's.
 """
@@ -16,7 +16,7 @@ import pytest
 
 import meridian
 from conftest import FakeSidecar
-from meridian import CallFailed, Identifier, NotGranted
+from meridian import CallFailed, Identifier, Money, NotGranted
 from meridian.plugin.v1 import operations_pb2
 
 
@@ -25,15 +25,18 @@ async def connected(sidecar: tuple[FakeSidecar, str]) -> meridian.Plugin:
     return await meridian.connect(address, heartbeat=False)
 
 
-async def test_an_amount_crosses_as_a_scaled_integer_exactly(sidecar) -> None:
+def integer_and_scale(sent: operations_pb2.Decimal) -> tuple[int, int]:
+    return (sent.high << 64) | sent.low, sent.scale
+
+
+async def test_a_number_crosses_as_its_integer_and_its_own_scale(sidecar) -> None:
     service, _ = sidecar
     plugin = await connected(sidecar)
     try:
         result = await plugin.record_holding(
             statement_id="S-1",
             quantity=Decimal("12.5"),
-            market_value=Decimal("20000.00000001"),
-            currency="USD",
+            market_value=Money(Decimal("2812.50"), "USD"),
             external_account_id="ext-1",
         )
     finally:
@@ -41,22 +44,60 @@ async def test_an_amount_crosses_as_a_scaled_integer_exactly(sidecar) -> None:
     assert result.holding_id == "H-1"
     (sent,) = service.operations.sent
     assert isinstance(sent, operations_pb2.RecordHoldingParams)
-    assert sent.quantity_scaled_1e8 == 1_250_000_000
-    assert sent.market_value_scaled_1e8 == 2_000_000_000_001
+    assert integer_and_scale(sent.quantity) == (125, 1)
+    # The scale is the Decimal's own: 2812.50 is not normalised to 2812.5.
+    assert integer_and_scale(sent.market_value.amount) == (281_250, 2)
+    assert sent.market_value.currency_code == "USD"
     assert sent.external_account_id == "ext-1"
+    assert meridian.as_decimal(sent.quantity) == Decimal("12.5")
+    assert str(meridian.as_money(sent.market_value).amount) == "2812.50"
+
+
+@pytest.mark.parametrize(
+    "quantity",
+    [
+        # spec/quantities-carry-their-own-scale, requirement 7: Alpaca's ninth
+        # decimal, a hundred billion units, and those at eighteen decimals.
+        Decimal("0.000000001"),
+        Decimal("100000000000"),
+        Decimal("100000000000.000000000000000001"),
+        100_000_000_000,
+        Decimal("-5"),
+        Decimal("0"),
+        Decimal("99999999999999999999.999999999999999999"),
+    ],
+)
+async def test_a_number_reads_back_exactly_as_it_was_sent(sidecar, quantity: Decimal) -> None:
+    service, _ = sidecar
+    plugin = await connected(sidecar)
+    try:
+        await plugin.record_holding(
+            quantity=quantity, market_value=Money(Decimal("0.00"), "USD")
+        )
+    finally:
+        await plugin.leave()
+    (sent,) = service.operations.sent
+    back = meridian.as_decimal(sent.quantity)
+    assert back == quantity
+    assert str(back) == str(quantity)
+    # Presence survives a zero, so a zero is sent rather than left unset.
+    assert sent.HasField("quantity") and sent.HasField("market_value")
 
 
 @pytest.mark.parametrize(
     ("quantity", "refusal", "says"),
     [
-        (Decimal("0.123456789"), ValueError, "eight decimal places"),
-        (Decimal("NaN"), ValueError, "not a finite amount"),
-        (Decimal("Infinity"), ValueError, "not a finite amount"),
-        (Decimal("1e20"), ValueError, "too large"),
-        (0.1, TypeError, "is a Decimal"),
+        (Decimal("0.0000000000000000001"), ValueError, "quantity has 19 decimal places"),
+        (Decimal("1" * 39), ValueError, "quantity has more than 38 digits"),
+        (Decimal("1E+38"), ValueError, "quantity has more than 38 digits"),
+        (Decimal("NaN"), ValueError, "quantity is not a finite number"),
+        (Decimal("Infinity"), ValueError, "quantity is not a finite number"),
+        (0.1, TypeError, "quantity is a Decimal or an int, not float"),
+        (True, TypeError, "quantity is a Decimal or an int, not bool"),
+        ("1.5", TypeError, "quantity is a Decimal or an int, not str"),
     ],
 )
-async def test_an_amount_that_cannot_cross_exactly_is_refused_before_anything_is_sent(
+async def test_a_number_that_cannot_cross_exactly_is_refused_before_anything_is_sent(
     sidecar, quantity: object, refusal: type[Exception], says: str
 ) -> None:
     service, _ = sidecar
@@ -65,11 +106,36 @@ async def test_an_amount_that_cannot_cross_exactly_is_refused_before_anything_is
         with pytest.raises(refusal, match=says):
             await plugin.record_holding(
                 quantity=quantity,  # type: ignore[arg-type]
-                market_value=Decimal(0),
+                market_value=Money(Decimal(0), "USD"),
             )
     finally:
         await plugin.leave()
-    assert service.operations.sent == [], "nothing is sent for a refused amount"
+    assert service.operations.sent == [], "nothing is sent for a refused number"
+
+
+@pytest.mark.parametrize(
+    ("market_value", "refusal", "says"),
+    [
+        (Money(0.1, "USD"), TypeError, "market_value is a Decimal or an int, not float"),
+        (Money(Decimal("1e-19"), "USD"), ValueError, "market_value has 19 decimal places"),
+        (Decimal("2812.50"), TypeError, "market_value is a meridian.Money, not Decimal"),
+        ((Decimal(1), "USD"), TypeError, "market_value is a meridian.Money, not tuple"),
+    ],
+)
+async def test_an_amount_is_a_money_and_refused_like_any_number(
+    sidecar, market_value: object, refusal: type[Exception], says: str
+) -> None:
+    service, _ = sidecar
+    plugin = await connected(sidecar)
+    try:
+        with pytest.raises(refusal, match=says):
+            await plugin.record_holding(
+                quantity=Decimal(1),
+                market_value=market_value,  # type: ignore[arg-type]
+            )
+    finally:
+        await plugin.leave()
+    assert service.operations.sent == []
 
 
 def test_the_sidecars_own_fields_are_not_offered() -> None:
@@ -142,7 +208,7 @@ async def test_a_command_carries_the_person_it_is_sent_for_as_it_was_handed_over
         holding = {
             "statement_id": "S-1",
             "quantity": Decimal(1),
-            "market_value": Decimal(1),
+            "market_value": Money(Decimal(1), "USD"),
             "external_account_id": "ext-1",
         }
         await plugin.record_holding(**holding, acting_for=header)

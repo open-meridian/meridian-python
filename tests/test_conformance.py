@@ -15,6 +15,12 @@ revision; the design repo's pins are generated from whatever revision it reads.
 If those diverge, a plugin is building against types the contract no longer
 describes, and the first symptom would otherwise be a decode failure inside a
 customer's deployment.
+
+A fixture writes a number as a person reads one, `quantity: "12.5"`
+(decisions/023). It is put on the wire here by this SDK's own conversion, the
+one every typed operation uses, so the pin checks that conversion too: a
+scale this SDK chose differently from the contract's fixture tooling would
+be bytes that do not match.
 """
 
 from __future__ import annotations
@@ -24,12 +30,15 @@ import importlib
 import os
 import pathlib
 import pkgutil
+from decimal import Decimal
+from typing import Any
 
 import pytest
 import yaml
 from google.protobuf import descriptor_pool, json_format, message_factory
 
 import meridian.v1
+from meridian.operations import _decimal
 
 # Importing a generated module registers its messages in the default
 # descriptor pool, which is how a type named in a fixture is found by name.
@@ -41,6 +50,35 @@ for _module in pkgutil.iter_modules(meridian.v1.__path__):
         importlib.import_module(f"meridian.v1.{_module.name}")
 
 SECTIONS = ("request", "reply", "event")
+
+# The domain's Decimal and its plugin-facing mirror, which are one shape.
+DECIMALS = {"meridian.v1.Decimal", "meridian.plugin.v1.Decimal"}
+
+
+def on_the_wire(descriptor: Any, fields: Any, where: str) -> Any:
+    """The fixture's fields with every Decimal in them as the wire carries it,
+    found by the schema wherever it sits: inside a Money, inside a position."""
+    if not isinstance(fields, dict):
+        return fields
+    out = {}
+    for key, value in fields.items():
+        field = descriptor.fields_by_name.get(key)
+        target = field.message_type if field is not None else None
+        if target is None or target.GetOptions().map_entry:
+            out[key] = value
+        elif isinstance(value, list):
+            out[key] = [one(target, item, f"{where}.{key}") for item in value]
+        else:
+            out[key] = one(target, value, f"{where}.{key}")
+    return out
+
+
+def one(descriptor: Any, value: Any, where: str) -> Any:
+    if descriptor.full_name not in DECIMALS:
+        return on_the_wire(descriptor, value, where)
+    assert isinstance(value, str), f"{where} is written {value!r}, not as a quoted decimal"
+    wire = _decimal(Decimal(value), where)
+    return {"high": str(wire.high), "low": str(wire.low), "scale": wire.scale}
 
 
 def fixtures_root() -> pathlib.Path:
@@ -107,7 +145,9 @@ def test_the_pinned_bytes_decode_and_re_encode_identically(
     # And the decoded message carries what the fixture says it carries, so a pin
     # that is self-consistent but wrong is still caught.
     expected = klass()
-    json_format.ParseDict(body.get("fields") or {}, expected)
+    json_format.ParseDict(
+        on_the_wire(klass.DESCRIPTOR, body.get("fields") or {}, "fields"), expected
+    )
     assert decoded == expected
 
 

@@ -42,9 +42,41 @@ async with await meridian.connect() as plugin:
 
 The steps a plugin's roles may take are typed methods on the same `plugin`,
 generated from the contract: `report_sync_status`, `record_holdings_statement`,
-`record_holding`, `resolve_identifier` and `report_missing_instrument`. Amounts
-are `Decimal`, and cross the wire as exact scaled integers, refused rather than
-rounded.
+`record_holding`, `resolve_identifier` and `report_missing_instrument`.
+
+### Quantities and money
+
+A quantity is a Python `Decimal` (or an `int`), and an amount of currency is a
+`meridian.Money`, a `Decimal` and its ISO 4217 code:
+
+```python
+from decimal import Decimal
+import meridian
+
+await plugin.record_holding(
+    statement_id=opened.statement_id,
+    instrument_id=instrument_id,
+    quantity=Decimal("12.5"),
+    market_value=meridian.Money(Decimal("2812.50"), "USD"),
+    external_account_id="acct-1",
+)
+```
+
+Each crosses the wire as an integer and the scale it was stated with, so
+`Decimal("2812.50")` is sent as 281250 at two places and reads back as
+`Decimal("2812.50")` (`meridian.as_decimal`, `meridian.as_money`). Nothing is
+rounded: a `float`, more than 18 decimal places, or more than 38 digits is
+refused before anything is sent, naming the parameter.
+
+**The plugin that speaks to a venue converts; nothing after it does.** Keep
+what the venue, broker or data vendor sent, as it sent it, in your own logs.
+Put only the platform's convention on the bus: amounts in the currency's major
+unit (dollars, not cents), quantities in the instrument's own units (shares,
+not lots), at the instrument's precision. Whoever reads your messages next
+cannot know which venue's convention they were in. A value the venue sent as a
+float becomes `Decimal(repr(value))`, its shortest round-trip form, and never
+`Decimal(value)`, which is its binary expansion: `Decimal(0.1)` is
+0.1000000000000000055511151231257827021181583404541015625.
 
 ## Working on it
 

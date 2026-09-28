@@ -63,24 +63,22 @@ class RecordHoldingsStatementResult(_message.Message):
     def __init__(self, statement_id: _Optional[str] = ..., already_recorded: bool = ...) -> None: ...
 
 class RecordHoldingParams(_message.Message):
-    __slots__ = ("statement_id", "instrument_id", "unresolved_identifiers", "quantity_scaled_1e8", "market_value_scaled_1e8", "currency", "external_account_id", "acting_for")
+    __slots__ = ("statement_id", "instrument_id", "unresolved_identifiers", "quantity", "market_value", "external_account_id", "acting_for")
     STATEMENT_ID_FIELD_NUMBER: _ClassVar[int]
     INSTRUMENT_ID_FIELD_NUMBER: _ClassVar[int]
     UNRESOLVED_IDENTIFIERS_FIELD_NUMBER: _ClassVar[int]
-    QUANTITY_SCALED_1E8_FIELD_NUMBER: _ClassVar[int]
-    MARKET_VALUE_SCALED_1E8_FIELD_NUMBER: _ClassVar[int]
-    CURRENCY_FIELD_NUMBER: _ClassVar[int]
+    QUANTITY_FIELD_NUMBER: _ClassVar[int]
+    MARKET_VALUE_FIELD_NUMBER: _ClassVar[int]
     EXTERNAL_ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
     ACTING_FOR_FIELD_NUMBER: _ClassVar[int]
     statement_id: str
     instrument_id: str
     unresolved_identifiers: _containers.RepeatedCompositeFieldContainer[Identifier]
-    quantity_scaled_1e8: int
-    market_value_scaled_1e8: int
-    currency: str
+    quantity: Decimal
+    market_value: Money
     external_account_id: str
     acting_for: _sidecar_pb2.CallerAssertion
-    def __init__(self, statement_id: _Optional[str] = ..., instrument_id: _Optional[str] = ..., unresolved_identifiers: _Optional[_Iterable[_Union[Identifier, _Mapping]]] = ..., quantity_scaled_1e8: _Optional[int] = ..., market_value_scaled_1e8: _Optional[int] = ..., currency: _Optional[str] = ..., external_account_id: _Optional[str] = ..., acting_for: _Optional[_Union[_sidecar_pb2.CallerAssertion, _Mapping]] = ...) -> None: ...
+    def __init__(self, statement_id: _Optional[str] = ..., instrument_id: _Optional[str] = ..., unresolved_identifiers: _Optional[_Iterable[_Union[Identifier, _Mapping]]] = ..., quantity: _Optional[_Union[Decimal, _Mapping]] = ..., market_value: _Optional[_Union[Money, _Mapping]] = ..., external_account_id: _Optional[str] = ..., acting_for: _Optional[_Union[_sidecar_pb2.CallerAssertion, _Mapping]] = ...) -> None: ...
 
 class RecordHoldingResult(_message.Message):
     __slots__ = ("holding_id", "resolved")
@@ -139,3 +137,21 @@ class Identifier(_message.Message):
     value: str
     source: str
     def __init__(self, scheme: _Optional[str] = ..., value: _Optional[str] = ..., source: _Optional[str] = ...) -> None: ...
+
+class Decimal(_message.Message):
+    __slots__ = ("high", "low", "scale")
+    HIGH_FIELD_NUMBER: _ClassVar[int]
+    LOW_FIELD_NUMBER: _ClassVar[int]
+    SCALE_FIELD_NUMBER: _ClassVar[int]
+    high: int
+    low: int
+    scale: int
+    def __init__(self, high: _Optional[int] = ..., low: _Optional[int] = ..., scale: _Optional[int] = ...) -> None: ...
+
+class Money(_message.Message):
+    __slots__ = ("amount", "currency_code")
+    AMOUNT_FIELD_NUMBER: _ClassVar[int]
+    CURRENCY_CODE_FIELD_NUMBER: _ClassVar[int]
+    amount: Decimal
+    currency_code: str
+    def __init__(self, amount: _Optional[_Union[Decimal, _Mapping]] = ..., currency_code: _Optional[str] = ...) -> None: ...

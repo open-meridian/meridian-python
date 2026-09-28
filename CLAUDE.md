@@ -30,9 +30,10 @@ row. It does not block, does not retry in a loop, and could not create the
 instrument if it wanted to. Something with the authority to mint subscribes and
 reacts.
 
-**Quantities and money are integers scaled by 1e8.** Never a float, at any
-layer, including the adapter that reads a third-party API. Convert at the
-boundary, on the way in, once.
+**A quantity is a `Decimal`, and money is a `Money`.** On the wire, an integer
+with its own scale (decisions/023). Never a float, at any layer, including the
+adapter that reads a third-party API. Convert at the boundary, on the way in,
+once, to the platform's convention; a venue's float is `Decimal(repr(value))`.
 
 **Credentials come from the environment.** Never a literal, never a fixture,
 never a committed configuration file outside sandbox placeholders.

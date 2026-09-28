@@ -28,6 +28,10 @@ from .client import (
 )
 from .errors import CallFailed, MeridianError, NoSidecar, NotGranted, NotRegistered, Refused
 
+# An amount of currency as a typed operation takes one, and the two readers of
+# a number off the wire, generated with the operations (decisions/023).
+from .operations import Money, as_decimal, as_money
+
 # The plugin-facing mirrors a typed operation takes, generated with it.
 from .plugin.v1.operations_pb2 import Identifier, MissReason
 
@@ -44,6 +48,7 @@ __all__ = [
     "Interface",
     "MeridianError",
     "MissReason",
+    "Money",
     "NoSidecar",
     "NotGranted",
     "NotRegistered",
@@ -52,5 +57,7 @@ __all__ = [
     "Setting",
     "Settings",
     "TagAccess",
+    "as_decimal",
+    "as_money",
     "connect",
 ]

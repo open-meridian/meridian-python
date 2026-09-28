@@ -21,10 +21,12 @@ import os
 import uuid
 from decimal import Decimal
 
+import grpc
 import pytest
 
 import meridian
-from meridian import CallFailed
+from meridian import CallFailed, Money
+from meridian.plugin.v1 import operations_pb2, operations_pb2_grpc
 
 # A topic the custody role's grants hold. Named here rather than imported,
 # because the point is that two implementations agree about these strings, and
@@ -32,6 +34,12 @@ from meridian import CallFailed
 RECORD_STATEMENT = "platform.street.command.record-statement"
 
 NOW = 1_757_376_000_000_000_000
+
+# The external account core's `make interop` links to an account this plugin
+# may write, as a deployment admin would through the dashboard: the only way a
+# row reaches the street store, and the store is where these values are
+# checked after the suite (the target reads them back from Postgres).
+LINKED = "ext-interop"
 
 
 # Read at import, which is before any fixture runs. conftest clears this
@@ -134,15 +142,17 @@ async def test_a_required_setting_the_deployment_holds_nothing_for_is_named() ->
 
 
 async def test_the_account_scope_and_access_table_come_from_the_conductor(plugin) -> None:
-    """W4.10 and W4.11: nobody holds access to this plugin here, so both are
-    empty -- and answered, which is what crossing the bus as this plugin shows."""
+    """W4.10 and W4.11: exactly what core's `make interop` configured -- one
+    account, written through this plugin by one user group -- answered by the
+    conductor, which is what crossing the bus as this plugin shows."""
     stream = plugin.account_scope()
     async with asyncio.timeout(10):
         scope = await anext(stream)
     await stream.aclose()
-    assert scope == meridian.AccountScope()
+    held = frozenset({"ACC-INTEROP"})
+    assert scope == meridian.AccountScope(read=held, write=held)
     table = await plugin.access()
-    assert list(table.user_groups) == []
+    assert [group.user_group_id for group in table.user_groups] == ["ug-interop"]
 
 
 async def test_the_scaffold_registers_with_a_real_sidecar() -> None:
@@ -252,8 +262,7 @@ async def test_a_holding_for_an_unlinked_external_account_is_refused_as_such(plu
             statement_id=opened.statement_id,
             instrument_id="INS-interop-1",
             quantity=Decimal("12.5"),
-            market_value=Decimal("2812.5"),
-            currency="USD",
+            market_value=Money(Decimal("2812.5"), "USD"),
             external_account_id=f"unlinked-{uuid.uuid4().hex[:8]}",
         )
     assert refused.value.kind == "refused"
@@ -269,3 +278,91 @@ async def test_a_miss_is_reported_by_its_typed_operation(plugin) -> None:
         observed_at_ns=NOW,
     )
     assert published.message_id
+
+
+# ── A quantity carries its own scale (spec/quantities-carry-their-own-scale) ──
+
+# Requirement 7's three: Alpaca's ninth decimal, a hundred billion units, and
+# those at eighteen decimals. Each on an instrument of its own, so each is a
+# position the street store keeps; core's `make interop` reads them back from
+# its Postgres after this suite and compares them with these, character for
+# character.
+ROUND_TRIPS = {
+    "INS-interop-ninth-decimal": Decimal("0.000000001"),
+    "INS-interop-hundred-billion": Decimal("100000000000"),
+    "INS-interop-eighteen-decimals": Decimal("100000000000.000000000000000001"),
+}
+
+
+async def test_the_smallest_and_largest_holdings_reach_the_street_store(plugin) -> None:
+    """Through the SDK, the sidecar and the street store, for an account linked
+    and writable. The street store says each row resolved; what it kept is read
+    back by the target that ran this suite."""
+    opened = await plugin.record_holdings_statement(
+        source="interop",
+        external_statement_id=f"scale-{uuid.uuid4()}",
+        as_of_date="2026-09-28",
+        read_at_ns=NOW,
+        expected_rows=len(ROUND_TRIPS),
+    )
+    for instrument_id, quantity in ROUND_TRIPS.items():
+        recorded = await plugin.record_holding(
+            statement_id=opened.statement_id,
+            instrument_id=instrument_id,
+            quantity=quantity,
+            market_value=Money(Decimal("41230.50"), "USD"),
+            external_account_id=LINKED,
+        )
+        assert recorded.resolved, instrument_id
+
+
+async def test_a_float_is_refused_by_the_sdk_naming_the_field(plugin) -> None:
+    with pytest.raises(TypeError, match="quantity is a Decimal or an int, not float"):
+        await plugin.record_holding(
+            statement_id="unused",
+            quantity=0.1,  # type: ignore[arg-type]
+            market_value=Money(Decimal(0), "USD"),
+            external_account_id=LINKED,
+        )
+
+
+@pytest.mark.parametrize(
+    ("quantity", "says"),
+    [
+        (Decimal("0.0000000000000000001"), "quantity has 19 decimal places"),
+        (Decimal("1" * 39), "quantity has more than 38 digits"),
+    ],
+)
+async def test_a_number_past_the_wire_is_refused_by_the_sdk(
+    plugin, quantity: Decimal, says: str
+) -> None:
+    with pytest.raises(ValueError, match=says):
+        await plugin.record_holding(
+            statement_id="unused",
+            quantity=quantity,
+            market_value=Money(Decimal(0), "USD"),
+            external_account_id=LINKED,
+        )
+
+
+async def test_a_nineteenth_decimal_sent_raw_is_refused_by_the_sidecar(plugin) -> None:
+    """Past the SDK, as a plugin in another language that skipped the check
+    would send it: the sidecar refuses it naming the field, before it asks
+    about the link or reaches the street store."""
+    async with grpc.aio.insecure_channel(address()) as channel:
+        raw = operations_pb2_grpc.PluginOperationsStub(channel)
+        with pytest.raises(grpc.aio.AioRpcError) as refused:
+            await raw.RecordHolding(
+                operations_pb2.RecordHoldingParams(
+                    statement_id="unused",
+                    instrument_id="INS-interop-raw",
+                    quantity=operations_pb2.Decimal(low=1, scale=19),
+                    market_value=operations_pb2.Money(
+                        amount=operations_pb2.Decimal(), currency_code="USD"
+                    ),
+                    external_account_id=LINKED,
+                ),
+                timeout=10,
+            )
+    assert refused.value.code() == grpc.StatusCode.INVALID_ARGUMENT
+    assert (refused.value.details() or "").startswith("quantity has 19 decimal places")
