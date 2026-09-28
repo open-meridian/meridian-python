@@ -41,6 +41,11 @@ class FakeOperations(operations_pb2_grpc.PluginOperationsServicer):
             await context.abort(*self.refuse)
         return answer
 
+    async def ReportExternalAccounts(self, request, context):  # noqa: N802
+        return await self._answer(
+            request, operations_pb2.Published(message_id="msg-0"), context
+        )
+
     async def ReportSyncStatus(self, request, context):  # noqa: N802
         return await self._answer(
             request, operations_pb2.Published(message_id="msg-1"), context

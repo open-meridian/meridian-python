@@ -41,8 +41,9 @@ async with await meridian.connect() as plugin:
 ```
 
 The steps a plugin's roles may take are typed methods on the same `plugin`,
-generated from the contract: `report_sync_status`, `record_holdings_statement`,
-`record_holding`, `resolve_identifier` and `report_missing_instrument`.
+generated from the contract: `report_external_accounts`, `report_sync_status`,
+`record_holdings_statement`, `record_holding`, `resolve_identifier` and
+`report_missing_instrument`.
 
 ### Quantities and money
 
@@ -56,6 +57,7 @@ import meridian
 await plugin.record_holding(
     statement_id=opened.statement_id,
     instrument_id=instrument_id,
+    side=meridian.HoldingSide.HOLDING_SIDE_LONG,
     quantity=Decimal("12.5"),
     market_value=meridian.Money(Decimal("2812.50"), "USD"),
     external_account_id="acct-1",
@@ -67,6 +69,15 @@ Each crosses the wire as an integer and the scale it was stated with, so
 `Decimal("2812.50")` (`meridian.as_decimal`, `meridian.as_money`). Nothing is
 rounded: a `float`, more than 18 decimal places, or more than 38 digits is
 refused before anything is sent, naming the parameter.
+
+**Say only what the venue said.** A holding states its side, and its quantity
+is signed to match, negative short; a venue reporting an account's long and
+short of one instrument apart is two calls, one on each side. A market value, a
+settle-date quantity, and a statement's buying power and margin figures are
+optional: leave one out where the venue reports none, which is not zero. Where
+the venue states no currency and you assume one, pass `currency_assumed=True`.
+Cash is a holding of the currency's cash instrument, which the security master
+names by `iso4217` (`meridian.Identifier(scheme="iso4217", value="USD")`).
 
 **The plugin that speaks to a venue converts; nothing after it does.** Keep
 what the venue, broker or data vendor sent, as it sent it, in your own logs.

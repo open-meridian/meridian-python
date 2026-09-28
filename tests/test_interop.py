@@ -309,6 +309,7 @@ async def test_the_smallest_and_largest_holdings_reach_the_street_store(plugin) 
         recorded = await plugin.record_holding(
             statement_id=opened.statement_id,
             instrument_id=instrument_id,
+            side=meridian.HoldingSide.HOLDING_SIDE_LONG,
             quantity=quantity,
             market_value=Money(Decimal("41230.50"), "USD"),
             external_account_id=LINKED,
@@ -366,3 +367,213 @@ async def test_a_nineteenth_decimal_sent_raw_is_refused_by_the_sidecar(plugin) -
             )
     assert refused.value.code() == grpc.StatusCode.INVALID_ARGUMENT
     assert (refused.value.details() or "").startswith("quantity has 19 decimal places")
+
+
+# ── The account side fits every venue (spec/the-account-side-fits-every-venue) ─
+
+# Each venue's shape, from reference/broker-apis.md, recorded through the SDK,
+# the sidecar and the street store into the one linked account, each on an
+# instrument of its own. Core's `make interop` reads the positions, the rows
+# whose currency was assumed and each statement's figures back from Postgres
+# after this suite, and holds them to e2e/interop/positions.expected character
+# for character: that is where "without loss" is checked, since nothing a
+# plugin can ask reads a statement's figures back.
+LONG = meridian.HoldingSide.HOLDING_SIDE_LONG
+SHORT = meridian.HoldingSide.HOLDING_SIDE_SHORT
+
+
+async def statement(plugin, source: str, rows: int, **figures) -> str:
+    """The connector's snapshot of the linked account: its identifier made
+    from the account and the time it read, as no venue has one of its own."""
+    opened = await plugin.record_holdings_statement(
+        source=source,
+        external_statement_id=f"{LINKED}/{NOW}/{uuid.uuid4().hex[:8]}",
+        as_of_date="2026-09-28",
+        read_at_ns=NOW,
+        expected_rows=rows,
+        **figures,
+    )
+    return opened.statement_id
+
+
+async def test_a_snaptrade_shaped_account_records_holdings_with_no_value_and_cash(
+    plugin,
+) -> None:
+    """SnapTrade reports no market value, and cash per currency with its
+    settled part: cash is a holding of the currency's cash instrument, which
+    the security master holds under {scheme: iso4217}; this suite has none
+    loaded, so the rows name the instruments it would have resolved to. A
+    money-market fund SnapTrade counts in cash is also a position, recorded as
+    reported and marked, so the book counts it once."""
+    opened = await statement(
+        plugin, "interop-snaptrade", 4, buying_power=Money(Decimal("25000.00"), "USD")
+    )
+    for instrument_id, quantity, settled in [
+        ("INS-interop-snaptrade-vti", Decimal("12.5"), Decimal("10")),
+        ("INS-interop-cash-usd", Decimal("1520.35"), Decimal("1020.35")),
+        ("INS-interop-cash-cad", Decimal("250.00"), None),
+    ]:
+        recorded = await plugin.record_holding(
+            statement_id=opened,
+            instrument_id=instrument_id,
+            side=LONG,
+            quantity=quantity,
+            settle_date_quantity=settled,
+            external_account_id=LINKED,
+        )
+        assert recorded.resolved, instrument_id
+    fund = await plugin.record_holding(
+        statement_id=opened,
+        instrument_id="INS-interop-snaptrade-spaxx",
+        side=LONG,
+        quantity=Decimal("500"),
+        market_value=Money(Decimal("500.00"), "USD"),
+        also_counted_in_cash=True,
+        external_account_id=LINKED,
+    )
+    assert fund.resolved
+
+
+async def test_cash_is_named_by_its_currency_under_iso4217(plugin) -> None:
+    """The scheme reaches the instrument store like any global one; with no
+    security master data here, it answers the deployment's placeholder."""
+    reply = await plugin.resolve_identifier(
+        identifiers=[meridian.Identifier(scheme="iso4217", value="USD")], as_of_ns=NOW
+    )
+    assert reply.found
+    assert reply.instrument_id.startswith(("INS-", "LCL-"))
+
+
+async def test_an_etrade_shaped_account_records_a_signed_short_and_its_figures(plugin) -> None:
+    """E*TRADE signs a short negative and states no currency, for a position
+    or a balance: the connector assumes USD and says so, and its margin
+    figures are carried as reported."""
+    opened = await statement(
+        plugin,
+        "interop-etrade",
+        1,
+        buying_power=Money(Decimal("41250.00"), "USD"),
+        margin_requirement=Money(Decimal("18250.00"), "USD"),
+        maintenance_excess=Money(Decimal("23000.00"), "USD"),
+        currency_assumed=True,
+    )
+    recorded = await plugin.record_holding(
+        statement_id=opened,
+        instrument_id="INS-interop-etrade-tsla",
+        side=SHORT,
+        quantity=Decimal("-100"),
+        market_value=Money(Decimal("-18250.00"), "USD"),
+        currency_assumed=True,
+        external_account_id=LINKED,
+    )
+    assert recorded.resolved
+
+
+async def test_a_kalshi_shaped_no_position_is_a_short_row_of_its_one_contract(plugin) -> None:
+    opened = await statement(plugin, "interop-kalshi", 1)
+    recorded = await plugin.record_holding(
+        statement_id=opened,
+        instrument_id="INS-interop-kalshi-rain",
+        side=SHORT,
+        quantity=Decimal("-15.25"),
+        external_account_id=LINKED,
+    )
+    assert recorded.resolved
+
+
+async def test_a_schwab_shaped_long_and_short_of_one_instrument_are_two_rows(plugin) -> None:
+    opened = await statement(plugin, "interop-schwab", 2)
+    for side, quantity, value in [
+        (LONG, Decimal("200"), Decimal("84000.00")),
+        (SHORT, Decimal("-50"), Decimal("-21000.00")),
+    ]:
+        recorded = await plugin.record_holding(
+            statement_id=opened,
+            instrument_id="INS-interop-schwab-msft",
+            side=side,
+            quantity=quantity,
+            settle_date_quantity=quantity,
+            market_value=Money(value, "USD"),
+            external_account_id=LINKED,
+        )
+        assert recorded.resolved
+
+
+@pytest.mark.parametrize(
+    ("side", "quantity", "says"),
+    [
+        (None, Decimal("1"), "neither long nor short"),
+        (SHORT, Decimal("1"), "short side states a quantity of 1"),
+        (LONG, Decimal("-1"), "long side states a quantity of -1"),
+    ],
+)
+async def test_a_side_missing_or_contradicted_is_refused_by_the_street_store(
+    plugin, side, quantity: Decimal, says: str
+) -> None:
+    opened = await statement(plugin, "interop", 1)
+    with pytest.raises(CallFailed) as refused:
+        await plugin.record_holding(
+            statement_id=opened,
+            instrument_id="INS-interop-refused",
+            side=side,
+            quantity=quantity,
+            external_account_id=LINKED,
+        )
+    assert says in refused.value.detail
+
+
+async def test_a_connector_reports_the_accounts_it_reaches_linked_or_not(plugin) -> None:
+    """Published before anything is recorded, so an account nobody has linked
+    is reported rather than refused."""
+    published = await plugin.report_external_accounts(
+        accounts=[
+            meridian.ExternalAccount(
+                external_account_id=LINKED, name="Interop", venue_account_type="Individual"
+            ),
+            meridian.ExternalAccount(
+                external_account_id=f"unlinked-{uuid.uuid4().hex[:8]}",
+                name="Roth IRA 5678",
+                venue_account_type="Roth IRA",
+            ),
+        ]
+    )
+    assert published.message_id
+
+
+async def test_an_unlinked_accounts_sync_status_is_published_and_its_holding_refused(
+    plugin,
+) -> None:
+    """Ruled 2026-09-28: a sync status describes the connection, so it is not
+    refused for want of a link; a holding from the same account still is."""
+    unlinked = f"unlinked-{uuid.uuid4().hex[:8]}"
+    published = await plugin.report_sync_status(
+        source="interop",
+        external_account_id=unlinked,
+        state=meridian.SyncState.SYNC_STATE_HOLDINGS_UNAVAILABLE,
+        observed_at_ns=NOW,
+    )
+    assert published.message_id
+    opened = await statement(plugin, "interop", 1)
+    with pytest.raises(CallFailed) as refused:
+        await plugin.record_holding(
+            statement_id=opened,
+            instrument_id="INS-interop-unlinked",
+            side=LONG,
+            quantity=Decimal("1"),
+            external_account_id=unlinked,
+        )
+    assert "not linked" in refused.value.detail
+
+
+@pytest.mark.parametrize("state", list(meridian.SyncState.values()))
+async def test_every_sync_state_is_published_with_its_freshness(plugin, state) -> None:
+    published = await plugin.report_sync_status(
+        source="interop",
+        external_account_id=LINKED,
+        connection_healthy=state == meridian.SyncState.SYNC_STATE_CURRENT,
+        state=state,
+        holdings_as_of_ns=NOW,
+        history_as_of_ns=NOW - 86_400_000_000_000,
+        observed_at_ns=NOW,
+    )
+    assert published.message_id

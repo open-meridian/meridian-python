@@ -119,6 +119,17 @@ class Operations:
     def _operations(self) -> Any:  # pragma: no cover - Plugin's
         raise NotImplementedError
 
+    async def report_external_accounts(
+        self,
+        *,
+        accounts: Sequence[ops.ExternalAccount] = (),
+    ) -> ops.Published:
+        """W2.8: Every external account a connection reaches, as the connector sees it now."""
+        params = ops.ReportExternalAccountsParams(
+            accounts=list(accounts),
+        )
+        return await self._operate(self._operations().ReportExternalAccounts, params)
+
     async def report_sync_status(
         self,
         *,
@@ -128,6 +139,9 @@ class Operations:
         status_detail: str = "",
         observed_at_ns: int = 0,
         external_account_id: str = "",
+        state: ops.SyncState | None = None,
+        holdings_as_of_ns: int = 0,
+        history_as_of_ns: int = 0,
     ) -> ops.Published:
         """W2.1: How fresh a connected account's data is, as reported by the rail."""
         params = ops.ReportSyncStatusParams(
@@ -137,6 +151,9 @@ class Operations:
             status_detail=status_detail,
             observed_at_ns=observed_at_ns,
             external_account_id=external_account_id,
+            state=state,
+            holdings_as_of_ns=holdings_as_of_ns,
+            history_as_of_ns=history_as_of_ns,
         )
         return await self._operate(self._operations().ReportSyncStatus, params)
 
@@ -148,15 +165,23 @@ class Operations:
         as_of_date: str = "",
         read_at_ns: int = 0,
         expected_rows: int = 0,
+        buying_power: Money | None = None,
+        margin_requirement: Money | None = None,
+        maintenance_excess: Money | None = None,
+        currency_assumed: bool = False,
         acting_for: str | None = None,
     ) -> ops.RecordHoldingsStatementResult:
-        """W2.2: Open one statement: one read of one rail, at one moment."""
+        """W2.2: Open one statement: the connector's snapshot of one account, at one moment."""
         params = ops.RecordHoldingsStatementParams(
             source=source,
             external_statement_id=external_statement_id,
             as_of_date=as_of_date,
             read_at_ns=read_at_ns,
             expected_rows=expected_rows,
+            buying_power=None if buying_power is None else _money(buying_power, "buying_power"),
+            margin_requirement=None if margin_requirement is None else _money(margin_requirement, "margin_requirement"),
+            maintenance_excess=None if maintenance_excess is None else _money(maintenance_excess, "maintenance_excess"),
+            currency_assumed=currency_assumed,
             acting_for=_assertion(acting_for),
         )
         return await self._operate(self._operations().RecordHoldingsStatement, params)
@@ -168,18 +193,26 @@ class Operations:
         instrument_id: str = "",
         unresolved_identifiers: Sequence[ops.Identifier] = (),
         quantity: Decimal | int,
-        market_value: Money,
+        market_value: Money | None = None,
         external_account_id: str = "",
+        side: ops.HoldingSide | None = None,
+        settle_date_quantity: Decimal | int | None = None,
+        currency_assumed: bool = False,
+        also_counted_in_cash: bool = False,
         acting_for: str | None = None,
     ) -> ops.RecordHoldingResult:
-        """W2.3: One holding, for one account, at one instrument."""
+        """W2.3: One holding, for one account, at one instrument, on one side."""
         params = ops.RecordHoldingParams(
             statement_id=statement_id,
             instrument_id=instrument_id,
             unresolved_identifiers=list(unresolved_identifiers),
             quantity=_decimal(quantity, "quantity"),
-            market_value=_money(market_value, "market_value"),
+            market_value=None if market_value is None else _money(market_value, "market_value"),
             external_account_id=external_account_id,
+            side=side,
+            settle_date_quantity=None if settle_date_quantity is None else _decimal(settle_date_quantity, "settle_date_quantity"),
+            currency_assumed=currency_assumed,
+            also_counted_in_cash=also_counted_in_cash,
             acting_for=_assertion(acting_for),
         )
         return await self._operate(self._operations().RecordHolding, params)

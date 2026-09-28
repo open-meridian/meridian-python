@@ -225,3 +225,143 @@ def test_only_commands_are_sent_for_a_person() -> None:
     assert "acting_for" in inspect.signature(meridian.Plugin.record_holding).parameters
     assert "acting_for" not in inspect.signature(meridian.Plugin.resolve_identifier).parameters
     assert "acting_for" not in inspect.signature(meridian.Plugin.report_sync_status).parameters
+
+
+# ── The account side (spec/the-account-side-fits-every-venue) ───────────────
+
+
+async def test_what_the_venue_did_not_report_is_sent_unset_and_never_as_zero(
+    sidecar,
+) -> None:
+    """A market value and a settle-date quantity are optional: SnapTrade and
+    Kalshi report no value, and most venues no settle-date quantity."""
+    service, _ = sidecar
+    plugin = await connected(sidecar)
+    try:
+        await plugin.record_holding(
+            quantity=Decimal("12.5"), side=meridian.HoldingSide.HOLDING_SIDE_LONG
+        )
+        await plugin.record_holding(
+            quantity=Decimal("12.5"),
+            side=meridian.HoldingSide.HOLDING_SIDE_LONG,
+            settle_date_quantity=Decimal("0"),
+            market_value=Money(Decimal("0"), "USD"),
+        )
+    finally:
+        await plugin.leave()
+    unreported, zero = service.operations.sent
+    assert not unreported.HasField("market_value")
+    assert not unreported.HasField("settle_date_quantity")
+    # A zero the venue did say is sent, and is not the same thing.
+    assert zero.HasField("market_value") and zero.HasField("settle_date_quantity")
+
+
+async def test_a_holding_carries_its_side_its_settled_quantity_and_an_assumed_currency(
+    sidecar,
+) -> None:
+    """E*TRADE's shape: a signed short with a value in a currency the venue
+    did not state, so the connector says it assumed it."""
+    service, _ = sidecar
+    plugin = await connected(sidecar)
+    try:
+        await plugin.record_holding(
+            instrument_id="INS-TSLA",
+            side=meridian.HoldingSide.HOLDING_SIDE_SHORT,
+            quantity=Decimal("-100"),
+            settle_date_quantity=Decimal("-60"),
+            market_value=Money(Decimal("-18250.00"), "USD"),
+            currency_assumed=True,
+            external_account_id="84001234",
+        )
+    finally:
+        await plugin.leave()
+    (sent,) = service.operations.sent
+    assert sent.side == meridian.HoldingSide.HOLDING_SIDE_SHORT
+    assert meridian.as_decimal(sent.quantity) == Decimal("-100")
+    assert str(meridian.as_decimal(sent.settle_date_quantity)) == "-60"
+    assert sent.currency_assumed
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "refusal", "says"),
+    [
+        ("settle_date_quantity", 0.5, TypeError, "settle_date_quantity is a Decimal or an int"),
+        ("settle_date_quantity", Decimal("1e-19"), ValueError, "settle_date_quantity has 19"),
+        ("market_value", Money(0.5, "USD"), TypeError, "market_value is a Decimal or an int"),
+    ],
+)
+async def test_an_optional_number_is_refused_like_any_other_when_it_is_given(
+    sidecar, field: str, value: object, refusal: type[Exception], says: str
+) -> None:
+    service, _ = sidecar
+    plugin = await connected(sidecar)
+    try:
+        with pytest.raises(refusal, match=says):
+            await plugin.record_holding(quantity=Decimal(1), **{field: value})
+    finally:
+        await plugin.leave()
+    assert service.operations.sent == []
+
+
+async def test_a_statement_carries_the_venues_figures_as_reported(sidecar) -> None:
+    service, _ = sidecar
+    plugin = await connected(sidecar)
+    try:
+        await plugin.record_holdings_statement(
+            source="etrade",
+            external_statement_id="84001234/1757376000000000000",
+            expected_rows=1,
+            buying_power=Money(Decimal("41250.00"), "USD"),
+            margin_requirement=Money(Decimal("18250.00"), "USD"),
+            currency_assumed=True,
+        )
+        with pytest.raises(TypeError, match="maintenance_excess is a meridian.Money"):
+            await plugin.record_holdings_statement(
+                source="etrade",
+                maintenance_excess=Decimal("1"),
+            )
+    finally:
+        await plugin.leave()
+    (sent,) = service.operations.sent
+    assert str(meridian.as_money(sent.buying_power).amount) == "41250.00"
+    assert sent.HasField("margin_requirement")
+    assert not sent.HasField("maintenance_excess"), "not reported, so unset"
+    assert sent.currency_assumed
+
+
+async def test_a_connector_reports_the_accounts_it_reaches(sidecar) -> None:
+    service, _ = sidecar
+    plugin = await connected(sidecar)
+    try:
+        published = await plugin.report_external_accounts(
+            accounts=[
+                meridian.ExternalAccount(
+                    external_account_id="SNAP-ACC-1",
+                    name="Individual Brokerage 1234",
+                    venue_account_type="Individual",
+                )
+            ]
+        )
+    finally:
+        await plugin.leave()
+    assert published.message_id == "msg-0"
+    (sent,) = service.operations.sent
+    assert [a.venue_account_type for a in sent.accounts] == ["Individual"]
+
+
+async def test_a_sync_status_says_why_and_how_fresh(sidecar) -> None:
+    service, _ = sidecar
+    plugin = await connected(sidecar)
+    try:
+        await plugin.report_sync_status(
+            source="etrade",
+            external_account_id="84001234",
+            state=meridian.SyncState.SYNC_STATE_NEEDS_SIGN_IN,
+            holdings_as_of_ns=1_757_289_600_000_000_000,
+            history_as_of_ns=1_757_203_200_000_000_000,
+        )
+    finally:
+        await plugin.leave()
+    (sent,) = service.operations.sent
+    assert sent.state == meridian.SyncState.SYNC_STATE_NEEDS_SIGN_IN
+    assert sent.holdings_as_of_ns > sent.history_as_of_ns

@@ -25,39 +25,47 @@ _sym_db = _symbol_database.Default()
 from meridian.v1 import sidecar_pb2 as meridian_dot_v1_dot_sidecar__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n#meridian/plugin/v1/operations.proto\x12\x12meridian.plugin.v1\x1a\x19meridian/v1/sidecar.proto\"\x1f\n\tPublished\x12\x12\n\nmessage_id\x18\x01 \x01(\t\"\xbd\x01\n\x16ReportSyncStatusParams\x12\x0e\n\x06source\x18\x01 \x01(\t\x12\x19\n\x11last_synced_at_ns\x18\x03 \x01(\x03\x12\x1a\n\x12\x63onnection_healthy\x18\x04 \x01(\x08\x12\x15\n\rstatus_detail\x18\x05 \x01(\t\x12\x16\n\x0eobserved_at_ns\x18\x06 \x01(\x03\x12\x1b\n\x13\x65xternal_account_id\x18\x07 \x01(\tJ\x04\x08\x02\x10\x03R\naccount_id\"\xc0\x01\n\x1dRecordHoldingsStatementParams\x12\x0e\n\x06source\x18\x01 \x01(\t\x12\x1d\n\x15\x65xternal_statement_id\x18\x02 \x01(\t\x12\x12\n\nas_of_date\x18\x03 \x01(\t\x12\x12\n\nread_at_ns\x18\x04 \x01(\x03\x12\x15\n\rexpected_rows\x18\x05 \x01(\x05\x12\x31\n\nacting_for\x18\xe8\x07 \x01(\x0b\x32\x1c.meridian.v1.CallerAssertion\"O\n\x1dRecordHoldingsStatementResult\x12\x14\n\x0cstatement_id\x18\x01 \x01(\t\x12\x18\n\x10\x61lready_recorded\x18\x02 \x01(\x08\"\x8e\x03\n\x13RecordHoldingParams\x12\x14\n\x0cstatement_id\x18\x01 \x01(\t\x12\x15\n\rinstrument_id\x18\x03 \x01(\t\x12>\n\x16unresolved_identifiers\x18\x04 \x03(\x0b\x32\x1e.meridian.plugin.v1.Identifier\x12-\n\x08quantity\x18\t \x01(\x0b\x32\x1b.meridian.plugin.v1.Decimal\x12/\n\x0cmarket_value\x18\n \x01(\x0b\x32\x19.meridian.plugin.v1.Money\x12\x1b\n\x13\x65xternal_account_id\x18\x08 \x01(\t\x12\x31\n\nacting_for\x18\xe8\x07 \x01(\x0b\x32\x1c.meridian.v1.CallerAssertionJ\x04\x08\x02\x10\x03J\x04\x08\x05\x10\x06J\x04\x08\x06\x10\x07J\x04\x08\x07\x10\x08R\naccount_idR\x13quantity_scaled_1e8R\x17market_value_scaled_1e8R\x08\x63urrency\";\n\x13RecordHoldingResult\x12\x12\n\nholding_id\x18\x01 \x01(\t\x12\x10\n\x08resolved\x18\x02 \x01(\x08\"\x88\x01\n\x17ResolveIdentifierParams\x12\x33\n\x0bidentifiers\x18\x01 \x03(\x0b\x32\x1e.meridian.plugin.v1.Identifier\x12\x10\n\x08\x61s_of_ns\x18\x02 \x01(\x03\x12\x14\n\x0c\x65xchange_mic\x18\x03 \x01(\t\x12\x10\n\x08\x63urrency\x18\x04 \x01(\t\"\x89\x01\n\x17ResolveIdentifierResult\x12\r\n\x05\x66ound\x18\x01 \x01(\x08\x12\x15\n\rinstrument_id\x18\x02 \x01(\t\x12\x33\n\x0bmiss_reason\x18\x03 \x01(\x0e\x32\x1e.meridian.plugin.v1.MissReason\x12\x13\n\x0bplaceholder\x18\x04 \x01(\x08\"\x91\x02\n\x1dReportMissingInstrumentParams\x12\x0e\n\x06source\x18\x01 \x01(\t\x12\x13\n\x0b\x61sset_class\x18\x02 \x01(\t\x12\x33\n\x0bidentifiers\x18\x03 \x03(\x0b\x32\x1e.meridian.plugin.v1.Identifier\x12\x10\n\x08\x61s_of_ns\x18\x04 \x01(\x03\x12.\n\x06reason\x18\x06 \x01(\x0e\x32\x1e.meridian.plugin.v1.MissReason\x12\x16\n\x0eobserved_at_ns\x18\x07 \x01(\x03J\x04\x08\x05\x10\x06J\x04\x08\x08\x10\tR\x15publisher_instance_idR\x19placeholder_instrument_id\";\n\nIdentifier\x12\x0e\n\x06scheme\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t\x12\x0e\n\x06source\x18\x03 \x01(\t\"3\n\x07\x44\x65\x63imal\x12\x0c\n\x04high\x18\x01 \x01(\x10\x12\x0b\n\x03low\x18\x02 \x01(\x06\x12\r\n\x05scale\x18\x03 \x01(\r\"K\n\x05Money\x12+\n\x06\x61mount\x18\x01 \x01(\x0b\x32\x1b.meridian.plugin.v1.Decimal\x12\x15\n\rcurrency_code\x18\x02 \x01(\t*_\n\nMissReason\x12\x1b\n\x17MISS_REASON_UNSPECIFIED\x10\x00\x12\x19\n\x15MISS_REASON_NOT_FOUND\x10\x01\x12\x19\n\x15MISS_REASON_AMBIGUOUS\x10\x02\x32\xb1\x04\n\x10PluginOperations\x12]\n\x10ReportSyncStatus\x12*.meridian.plugin.v1.ReportSyncStatusParams\x1a\x1d.meridian.plugin.v1.Published\x12\x7f\n\x17RecordHoldingsStatement\x12\x31.meridian.plugin.v1.RecordHoldingsStatementParams\x1a\x31.meridian.plugin.v1.RecordHoldingsStatementResult\x12\x61\n\rRecordHolding\x12\'.meridian.plugin.v1.RecordHoldingParams\x1a\'.meridian.plugin.v1.RecordHoldingResult\x12m\n\x11ResolveIdentifier\x12+.meridian.plugin.v1.ResolveIdentifierParams\x1a+.meridian.plugin.v1.ResolveIdentifierResult\x12k\n\x17ReportMissingInstrument\x12\x31.meridian.plugin.v1.ReportMissingInstrumentParams\x1a\x1d.meridian.plugin.v1.Publishedb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n#meridian/plugin/v1/operations.proto\x12\x12meridian.plugin.v1\x1a\x19meridian/v1/sidecar.proto\"\x1f\n\tPublished\x12\x12\n\nmessage_id\x18\x01 \x01(\t\"U\n\x1cReportExternalAccountsParams\x12\x35\n\x08\x61\x63\x63ounts\x18\x01 \x03(\x0b\x32#.meridian.plugin.v1.ExternalAccount\"\xa0\x02\n\x16ReportSyncStatusParams\x12\x0e\n\x06source\x18\x01 \x01(\t\x12\x19\n\x11last_synced_at_ns\x18\x03 \x01(\x03\x12\x1a\n\x12\x63onnection_healthy\x18\x04 \x01(\x08\x12\x15\n\rstatus_detail\x18\x05 \x01(\t\x12\x16\n\x0eobserved_at_ns\x18\x06 \x01(\x03\x12\x1b\n\x13\x65xternal_account_id\x18\x07 \x01(\t\x12,\n\x05state\x18\x08 \x01(\x0e\x32\x1d.meridian.plugin.v1.SyncState\x12\x19\n\x11holdings_as_of_ns\x18\t \x01(\x03\x12\x18\n\x10history_as_of_ns\x18\n \x01(\x03J\x04\x08\x02\x10\x03R\naccount_id\"\xc7\x03\n\x1dRecordHoldingsStatementParams\x12\x0e\n\x06source\x18\x01 \x01(\t\x12\x1d\n\x15\x65xternal_statement_id\x18\x02 \x01(\t\x12\x12\n\nas_of_date\x18\x03 \x01(\t\x12\x12\n\nread_at_ns\x18\x04 \x01(\x03\x12\x15\n\rexpected_rows\x18\x05 \x01(\x05\x12\x34\n\x0c\x62uying_power\x18\x06 \x01(\x0b\x32\x19.meridian.plugin.v1.MoneyH\x00\x88\x01\x01\x12:\n\x12margin_requirement\x18\x07 \x01(\x0b\x32\x19.meridian.plugin.v1.MoneyH\x01\x88\x01\x01\x12:\n\x12maintenance_excess\x18\x08 \x01(\x0b\x32\x19.meridian.plugin.v1.MoneyH\x02\x88\x01\x01\x12\x18\n\x10\x63urrency_assumed\x18\t \x01(\x08\x12\x31\n\nacting_for\x18\xe8\x07 \x01(\x0b\x32\x1c.meridian.v1.CallerAssertionB\x0f\n\r_buying_powerB\x15\n\x13_margin_requirementB\x15\n\x13_maintenance_excess\"O\n\x1dRecordHoldingsStatementResult\x12\x14\n\x0cstatement_id\x18\x01 \x01(\t\x12\x18\n\x10\x61lready_recorded\x18\x02 \x01(\x08\"\xe4\x04\n\x13RecordHoldingParams\x12\x14\n\x0cstatement_id\x18\x01 \x01(\t\x12\x15\n\rinstrument_id\x18\x03 \x01(\t\x12>\n\x16unresolved_identifiers\x18\x04 \x03(\x0b\x32\x1e.meridian.plugin.v1.Identifier\x12-\n\x08quantity\x18\t \x01(\x0b\x32\x1b.meridian.plugin.v1.Decimal\x12\x34\n\x0cmarket_value\x18\n \x01(\x0b\x32\x19.meridian.plugin.v1.MoneyH\x00\x88\x01\x01\x12\x1b\n\x13\x65xternal_account_id\x18\x08 \x01(\t\x12-\n\x04side\x18\x0b \x01(\x0e\x32\x1f.meridian.plugin.v1.HoldingSide\x12>\n\x14settle_date_quantity\x18\x0c \x01(\x0b\x32\x1b.meridian.plugin.v1.DecimalH\x01\x88\x01\x01\x12\x18\n\x10\x63urrency_assumed\x18\r \x01(\x08\x12\x1c\n\x14\x61lso_counted_in_cash\x18\x0e \x01(\x08\x12\x31\n\nacting_for\x18\xe8\x07 \x01(\x0b\x32\x1c.meridian.v1.CallerAssertionB\x0f\n\r_market_valueB\x17\n\x15_settle_date_quantityJ\x04\x08\x02\x10\x03J\x04\x08\x05\x10\x06J\x04\x08\x06\x10\x07J\x04\x08\x07\x10\x08R\naccount_idR\x13quantity_scaled_1e8R\x17market_value_scaled_1e8R\x08\x63urrency\";\n\x13RecordHoldingResult\x12\x12\n\nholding_id\x18\x01 \x01(\t\x12\x10\n\x08resolved\x18\x02 \x01(\x08\"\x88\x01\n\x17ResolveIdentifierParams\x12\x33\n\x0bidentifiers\x18\x01 \x03(\x0b\x32\x1e.meridian.plugin.v1.Identifier\x12\x10\n\x08\x61s_of_ns\x18\x02 \x01(\x03\x12\x14\n\x0c\x65xchange_mic\x18\x03 \x01(\t\x12\x10\n\x08\x63urrency\x18\x04 \x01(\t\"\x89\x01\n\x17ResolveIdentifierResult\x12\r\n\x05\x66ound\x18\x01 \x01(\x08\x12\x15\n\rinstrument_id\x18\x02 \x01(\t\x12\x33\n\x0bmiss_reason\x18\x03 \x01(\x0e\x32\x1e.meridian.plugin.v1.MissReason\x12\x13\n\x0bplaceholder\x18\x04 \x01(\x08\"\x91\x02\n\x1dReportMissingInstrumentParams\x12\x0e\n\x06source\x18\x01 \x01(\t\x12\x13\n\x0b\x61sset_class\x18\x02 \x01(\t\x12\x33\n\x0bidentifiers\x18\x03 \x03(\x0b\x32\x1e.meridian.plugin.v1.Identifier\x12\x10\n\x08\x61s_of_ns\x18\x04 \x01(\x03\x12.\n\x06reason\x18\x06 \x01(\x0e\x32\x1e.meridian.plugin.v1.MissReason\x12\x16\n\x0eobserved_at_ns\x18\x07 \x01(\x03J\x04\x08\x05\x10\x06J\x04\x08\x08\x10\tR\x15publisher_instance_idR\x19placeholder_instrument_id\"X\n\x0f\x45xternalAccount\x12\x1b\n\x13\x65xternal_account_id\x18\x01 \x01(\t\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x1a\n\x12venue_account_type\x18\x03 \x01(\t\"K\n\x05Money\x12+\n\x06\x61mount\x18\x01 \x01(\x0b\x32\x1b.meridian.plugin.v1.Decimal\x12\x15\n\rcurrency_code\x18\x02 \x01(\t\"3\n\x07\x44\x65\x63imal\x12\x0c\n\x04high\x18\x01 \x01(\x10\x12\x0b\n\x03low\x18\x02 \x01(\x06\x12\r\n\x05scale\x18\x03 \x01(\r\";\n\nIdentifier\x12\x0e\n\x06scheme\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t\x12\x0e\n\x06source\x18\x03 \x01(\t*\xd3\x01\n\tSyncState\x12\x1a\n\x16SYNC_STATE_UNSPECIFIED\x10\x00\x12\x16\n\x12SYNC_STATE_CURRENT\x10\x01\x12\x14\n\x10SYNC_STATE_STALE\x10\x02\x12\x1c\n\x18SYNC_STATE_NEEDS_SIGN_IN\x10\x03\x12\x17\n\x13SYNC_STATE_DISABLED\x10\x04\x12 \n\x1cSYNC_STATE_DELAYED_BY_DESIGN\x10\x05\x12#\n\x1fSYNC_STATE_HOLDINGS_UNAVAILABLE\x10\x06*Z\n\x0bHoldingSide\x12\x1c\n\x18HOLDING_SIDE_UNSPECIFIED\x10\x00\x12\x15\n\x11HOLDING_SIDE_LONG\x10\x01\x12\x16\n\x12HOLDING_SIDE_SHORT\x10\x02*_\n\nMissReason\x12\x1b\n\x17MISS_REASON_UNSPECIFIED\x10\x00\x12\x19\n\x15MISS_REASON_NOT_FOUND\x10\x01\x12\x19\n\x15MISS_REASON_AMBIGUOUS\x10\x02\x32\x9c\x05\n\x10PluginOperations\x12i\n\x16ReportExternalAccounts\x12\x30.meridian.plugin.v1.ReportExternalAccountsParams\x1a\x1d.meridian.plugin.v1.Published\x12]\n\x10ReportSyncStatus\x12*.meridian.plugin.v1.ReportSyncStatusParams\x1a\x1d.meridian.plugin.v1.Published\x12\x7f\n\x17RecordHoldingsStatement\x12\x31.meridian.plugin.v1.RecordHoldingsStatementParams\x1a\x31.meridian.plugin.v1.RecordHoldingsStatementResult\x12\x61\n\rRecordHolding\x12\'.meridian.plugin.v1.RecordHoldingParams\x1a\'.meridian.plugin.v1.RecordHoldingResult\x12m\n\x11ResolveIdentifier\x12+.meridian.plugin.v1.ResolveIdentifierParams\x1a+.meridian.plugin.v1.ResolveIdentifierResult\x12k\n\x17ReportMissingInstrument\x12\x31.meridian.plugin.v1.ReportMissingInstrumentParams\x1a\x1d.meridian.plugin.v1.Publishedb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'meridian.plugin.v1.operations_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
-  _globals['_MISSREASON']._serialized_start=1795
-  _globals['_MISSREASON']._serialized_end=1890
+  _globals['_SYNCSTATE']._serialized_start=2549
+  _globals['_SYNCSTATE']._serialized_end=2760
+  _globals['_HOLDINGSIDE']._serialized_start=2762
+  _globals['_HOLDINGSIDE']._serialized_end=2852
+  _globals['_MISSREASON']._serialized_start=2854
+  _globals['_MISSREASON']._serialized_end=2949
   _globals['_PUBLISHED']._serialized_start=86
   _globals['_PUBLISHED']._serialized_end=117
-  _globals['_REPORTSYNCSTATUSPARAMS']._serialized_start=120
-  _globals['_REPORTSYNCSTATUSPARAMS']._serialized_end=309
-  _globals['_RECORDHOLDINGSSTATEMENTPARAMS']._serialized_start=312
-  _globals['_RECORDHOLDINGSSTATEMENTPARAMS']._serialized_end=504
-  _globals['_RECORDHOLDINGSSTATEMENTRESULT']._serialized_start=506
-  _globals['_RECORDHOLDINGSSTATEMENTRESULT']._serialized_end=585
-  _globals['_RECORDHOLDINGPARAMS']._serialized_start=588
-  _globals['_RECORDHOLDINGPARAMS']._serialized_end=986
-  _globals['_RECORDHOLDINGRESULT']._serialized_start=988
-  _globals['_RECORDHOLDINGRESULT']._serialized_end=1047
-  _globals['_RESOLVEIDENTIFIERPARAMS']._serialized_start=1050
-  _globals['_RESOLVEIDENTIFIERPARAMS']._serialized_end=1186
-  _globals['_RESOLVEIDENTIFIERRESULT']._serialized_start=1189
-  _globals['_RESOLVEIDENTIFIERRESULT']._serialized_end=1326
-  _globals['_REPORTMISSINGINSTRUMENTPARAMS']._serialized_start=1329
-  _globals['_REPORTMISSINGINSTRUMENTPARAMS']._serialized_end=1602
-  _globals['_IDENTIFIER']._serialized_start=1604
-  _globals['_IDENTIFIER']._serialized_end=1663
-  _globals['_DECIMAL']._serialized_start=1665
-  _globals['_DECIMAL']._serialized_end=1716
-  _globals['_MONEY']._serialized_start=1718
-  _globals['_MONEY']._serialized_end=1793
-  _globals['_PLUGINOPERATIONS']._serialized_start=1893
-  _globals['_PLUGINOPERATIONS']._serialized_end=2454
+  _globals['_REPORTEXTERNALACCOUNTSPARAMS']._serialized_start=119
+  _globals['_REPORTEXTERNALACCOUNTSPARAMS']._serialized_end=204
+  _globals['_REPORTSYNCSTATUSPARAMS']._serialized_start=207
+  _globals['_REPORTSYNCSTATUSPARAMS']._serialized_end=495
+  _globals['_RECORDHOLDINGSSTATEMENTPARAMS']._serialized_start=498
+  _globals['_RECORDHOLDINGSSTATEMENTPARAMS']._serialized_end=953
+  _globals['_RECORDHOLDINGSSTATEMENTRESULT']._serialized_start=955
+  _globals['_RECORDHOLDINGSSTATEMENTRESULT']._serialized_end=1034
+  _globals['_RECORDHOLDINGPARAMS']._serialized_start=1037
+  _globals['_RECORDHOLDINGPARAMS']._serialized_end=1649
+  _globals['_RECORDHOLDINGRESULT']._serialized_start=1651
+  _globals['_RECORDHOLDINGRESULT']._serialized_end=1710
+  _globals['_RESOLVEIDENTIFIERPARAMS']._serialized_start=1713
+  _globals['_RESOLVEIDENTIFIERPARAMS']._serialized_end=1849
+  _globals['_RESOLVEIDENTIFIERRESULT']._serialized_start=1852
+  _globals['_RESOLVEIDENTIFIERRESULT']._serialized_end=1989
+  _globals['_REPORTMISSINGINSTRUMENTPARAMS']._serialized_start=1992
+  _globals['_REPORTMISSINGINSTRUMENTPARAMS']._serialized_end=2265
+  _globals['_EXTERNALACCOUNT']._serialized_start=2267
+  _globals['_EXTERNALACCOUNT']._serialized_end=2355
+  _globals['_MONEY']._serialized_start=2357
+  _globals['_MONEY']._serialized_end=2432
+  _globals['_DECIMAL']._serialized_start=2434
+  _globals['_DECIMAL']._serialized_end=2485
+  _globals['_IDENTIFIER']._serialized_start=2487
+  _globals['_IDENTIFIER']._serialized_end=2546
+  _globals['_PLUGINOPERATIONS']._serialized_start=2952
+  _globals['_PLUGINOPERATIONS']._serialized_end=3620
 # @@protoc_insertion_point(module_scope)

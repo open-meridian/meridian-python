@@ -33,7 +33,13 @@ from .errors import CallFailed, MeridianError, NoSidecar, NotGranted, NotRegiste
 from .operations import Money, as_decimal, as_money
 
 # The plugin-facing mirrors a typed operation takes, generated with it.
-from .plugin.v1.operations_pb2 import Identifier, MissReason
+from .plugin.v1.operations_pb2 import (
+    ExternalAccount,
+    HoldingSide,
+    Identifier,
+    MissReason,
+    SyncState,
+)
 
 __all__ = [
     "DEFAULT_ADDRESS",
@@ -42,7 +48,9 @@ __all__ = [
     "CallFailed",
     "Caller",
     "CallerMiddleware",
+    "ExternalAccount",
     "Grants",
+    "HoldingSide",
     "Identifier",
     "Identity",
     "Interface",
@@ -56,6 +64,7 @@ __all__ = [
     "Refused",
     "Setting",
     "Settings",
+    "SyncState",
     "TagAccess",
     "as_decimal",
     "as_money",

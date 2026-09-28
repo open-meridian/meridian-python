@@ -34,6 +34,11 @@ class PluginOperationsStub(object):
         Args:
             channel: A grpc.Channel.
         """
+        self.ReportExternalAccounts = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ReportExternalAccounts',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReportExternalAccountsParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.Published.FromString,
+                _registered_method=True)
         self.ReportSyncStatus = channel.unary_unary(
                 '/meridian.plugin.v1.PluginOperations/ReportSyncStatus',
                 request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReportSyncStatusParams.SerializeToString,
@@ -63,6 +68,13 @@ class PluginOperationsStub(object):
 
 class PluginOperationsServicer(object):
     """Missing associated documentation comment in .proto file."""
+
+    def ReportExternalAccounts(self, request, context):
+        """W2.8: platform.custody.{instance}.event.external-accounts (event).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
 
     def ReportSyncStatus(self, request, context):
         """W2.1: platform.custody.{instance}.event.sync-status (event).
@@ -102,6 +114,11 @@ class PluginOperationsServicer(object):
 
 def add_PluginOperationsServicer_to_server(servicer, server):
     rpc_method_handlers = {
+            'ReportExternalAccounts': grpc.unary_unary_rpc_method_handler(
+                    servicer.ReportExternalAccounts,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReportExternalAccountsParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.Published.SerializeToString,
+            ),
             'ReportSyncStatus': grpc.unary_unary_rpc_method_handler(
                     servicer.ReportSyncStatus,
                     request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReportSyncStatusParams.FromString,
@@ -137,6 +154,33 @@ def add_PluginOperationsServicer_to_server(servicer, server):
  # This class is part of an EXPERIMENTAL API.
 class PluginOperations(object):
     """Missing associated documentation comment in .proto file."""
+
+    @staticmethod
+    def ReportExternalAccounts(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ReportExternalAccounts',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ReportExternalAccountsParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.Published.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
 
     @staticmethod
     def ReportSyncStatus(request,
