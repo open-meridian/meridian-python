@@ -103,14 +103,16 @@ class ResolveIdentifierParams(_message.Message):
     def __init__(self, identifiers: _Optional[_Iterable[_Union[Identifier, _Mapping]]] = ..., as_of_ns: _Optional[int] = ..., exchange_mic: _Optional[str] = ..., currency: _Optional[str] = ...) -> None: ...
 
 class ResolveIdentifierResult(_message.Message):
-    __slots__ = ("found", "instrument_id", "miss_reason")
+    __slots__ = ("found", "instrument_id", "miss_reason", "placeholder")
     FOUND_FIELD_NUMBER: _ClassVar[int]
     INSTRUMENT_ID_FIELD_NUMBER: _ClassVar[int]
     MISS_REASON_FIELD_NUMBER: _ClassVar[int]
+    PLACEHOLDER_FIELD_NUMBER: _ClassVar[int]
     found: bool
     instrument_id: str
     miss_reason: MissReason
-    def __init__(self, found: bool = ..., instrument_id: _Optional[str] = ..., miss_reason: _Optional[_Union[MissReason, str]] = ...) -> None: ...
+    placeholder: bool
+    def __init__(self, found: bool = ..., instrument_id: _Optional[str] = ..., miss_reason: _Optional[_Union[MissReason, str]] = ..., placeholder: bool = ...) -> None: ...
 
 class ReportMissingInstrumentParams(_message.Message):
     __slots__ = ("source", "asset_class", "identifiers", "as_of_ns", "reason", "observed_at_ns")
