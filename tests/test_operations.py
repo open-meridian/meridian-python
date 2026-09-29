@@ -220,11 +220,80 @@ async def test_a_command_carries_the_person_it_is_sent_for_as_it_was_handed_over
     assert not as_itself.HasField("acting_for"), "unset, the plugin acts as itself"
 
 
-def test_only_commands_are_sent_for_a_person() -> None:
-    """Reads carry no person (decisions/014): a plugin reads as itself."""
-    assert "acting_for" in inspect.signature(meridian.Plugin.record_holding).parameters
+def test_commands_and_the_deployments_accounts_are_sent_for_a_person() -> None:
+    """Reads carry no person (decisions/014): a plugin reads as itself. The one
+    exception is the deployment's configuration, which a plugin reads only
+    acting for a deployment admin (W4.9, W6.4)."""
+    for sent_for in ("record_holding", "link_external_account", "read_accounts_for_linking"):
+        assert "acting_for" in inspect.signature(getattr(meridian.Plugin, sent_for)).parameters
     assert "acting_for" not in inspect.signature(meridian.Plugin.resolve_identifier).parameters
     assert "acting_for" not in inspect.signature(meridian.Plugin.report_sync_status).parameters
+
+
+def _header() -> tuple[object, str]:
+    """An assertion as the plugin was handed it, and as its header."""
+    import base64
+
+    from meridian.v1 import sidecar_pb2
+
+    handed = sidecar_pb2.CallerAssertion(
+        claims=b"claims", signature=b"sig", key_id="dashboard-1"
+    )
+    return handed, base64.urlsafe_b64encode(handed.SerializeToString()).decode().rstrip("=")
+
+
+async def test_a_link_names_an_account_a_new_one_or_neither_for_the_admin(sidecar) -> None:
+    """W6.4: from the plugin's own admin page, for the deployment admin viewing
+    it. Whether they are one, whether the plugin reported the account, and
+    that a link names one account or the other, are the sidecar's and the
+    conductor's to hold; this is what the SDK sends."""
+    handed, header = _header()
+    service, _ = sidecar
+    plugin = await connected(sidecar)
+    try:
+        existing = await plugin.link_external_account(
+            external_account_id="st-acct-4471", account_id="ACC-1", acting_for=header
+        )
+        created = await plugin.link_external_account(
+            external_account_id="st-acct-4471",
+            new_account_name="Fidelity Brokerage",
+            acting_for=header,
+        )
+        removed = await plugin.link_external_account(
+            external_account_id="st-acct-4471", acting_for=header
+        )
+    finally:
+        await plugin.leave()
+    assert (existing.account_id, created.account_id, removed.account_id) == (
+        "ACC-1",
+        "ACC-NEW",
+        "",
+    )
+    to_existing, to_new, unlink = service.operations.sent
+    assert isinstance(to_existing, operations_pb2.LinkExternalAccountParams)
+    assert (to_existing.account_id, to_existing.new_account_name) == ("ACC-1", "")
+    assert (to_new.account_id, to_new.new_account_name) == ("", "Fidelity Brokerage")
+    assert (unlink.account_id, unlink.new_account_name) == ("", "")
+    assert all(sent.acting_for == handed for sent in (to_existing, to_new, unlink))
+    # The sidecar stamps the plugin; the plugin cannot name another.
+    offered = operations_pb2.LinkExternalAccountParams.DESCRIPTOR.fields_by_name
+    assert "plugin_instance_id" not in offered
+
+
+async def test_the_deployments_accounts_are_read_for_the_admin(sidecar) -> None:
+    """W6.4: names, identifiers and states, to offer beside each external
+    account the plugin reached."""
+    handed, header = _header()
+    service, _ = sidecar
+    plugin = await connected(sidecar)
+    try:
+        read = await plugin.read_accounts_for_linking(acting_for=header)
+    finally:
+        await plugin.leave()
+    assert [(a.account_id, a.name) for a in read.accounts] == [("ACC-1", "Growth")]
+    assert read.accounts[0].state == operations_pb2.ACCOUNT_STATE_OPEN
+    (sent,) = service.operations.sent
+    assert sent.acting_for == handed
 
 
 # ── The account side (spec/the-account-side-fits-every-venue) ───────────────

@@ -254,3 +254,31 @@ class Operations:
             observed_at_ns=observed_at_ns,
         )
         return await self._operate(self._operations().ReportMissingInstrument, params)
+
+    async def link_external_account(
+        self,
+        *,
+        external_account_id: str = "",
+        account_id: str = "",
+        new_account_name: str = "",
+        acting_for: str | None = None,
+    ) -> ops.LinkExternalAccountResult:
+        """W6.4: Links an external account a plugin reported, or removes its link."""
+        params = ops.LinkExternalAccountParams(
+            external_account_id=external_account_id,
+            account_id=account_id,
+            new_account_name=new_account_name,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().LinkExternalAccount, params)
+
+    async def read_accounts_for_linking(
+        self,
+        *,
+        acting_for: str | None = None,
+    ) -> ops.ReadAccountsForLinkingResult:
+        """W6.4: The deployment's accounts, read by a plugin acting for a deployment admin."""
+        params = ops.ReadAccountsForLinkingParams(
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().ReadAccountsForLinking, params)

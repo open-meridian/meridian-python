@@ -28,6 +28,12 @@ class MissReason(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     MISS_REASON_UNSPECIFIED: _ClassVar[MissReason]
     MISS_REASON_NOT_FOUND: _ClassVar[MissReason]
     MISS_REASON_AMBIGUOUS: _ClassVar[MissReason]
+
+class AccountState(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    ACCOUNT_STATE_UNSPECIFIED: _ClassVar[AccountState]
+    ACCOUNT_STATE_OPEN: _ClassVar[AccountState]
+    ACCOUNT_STATE_CLOSED: _ClassVar[AccountState]
 SYNC_STATE_UNSPECIFIED: SyncState
 SYNC_STATE_CURRENT: SyncState
 SYNC_STATE_STALE: SyncState
@@ -41,6 +47,9 @@ HOLDING_SIDE_SHORT: HoldingSide
 MISS_REASON_UNSPECIFIED: MissReason
 MISS_REASON_NOT_FOUND: MissReason
 MISS_REASON_AMBIGUOUS: MissReason
+ACCOUNT_STATE_UNSPECIFIED: AccountState
+ACCOUNT_STATE_OPEN: AccountState
+ACCOUNT_STATE_CLOSED: AccountState
 
 class Published(_message.Message):
     __slots__ = ("message_id",)
@@ -182,6 +191,40 @@ class ReportMissingInstrumentParams(_message.Message):
     observed_at_ns: int
     def __init__(self, source: _Optional[str] = ..., asset_class: _Optional[str] = ..., identifiers: _Optional[_Iterable[_Union[Identifier, _Mapping]]] = ..., as_of_ns: _Optional[int] = ..., reason: _Optional[_Union[MissReason, str]] = ..., observed_at_ns: _Optional[int] = ...) -> None: ...
 
+class LinkExternalAccountParams(_message.Message):
+    __slots__ = ("external_account_id", "account_id", "new_account_name", "acting_for")
+    EXTERNAL_ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
+    ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
+    NEW_ACCOUNT_NAME_FIELD_NUMBER: _ClassVar[int]
+    ACTING_FOR_FIELD_NUMBER: _ClassVar[int]
+    external_account_id: str
+    account_id: str
+    new_account_name: str
+    acting_for: _sidecar_pb2.CallerAssertion
+    def __init__(self, external_account_id: _Optional[str] = ..., account_id: _Optional[str] = ..., new_account_name: _Optional[str] = ..., acting_for: _Optional[_Union[_sidecar_pb2.CallerAssertion, _Mapping]] = ...) -> None: ...
+
+class LinkExternalAccountResult(_message.Message):
+    __slots__ = ("plugin_instance_id", "external_account_id", "account_id")
+    PLUGIN_INSTANCE_ID_FIELD_NUMBER: _ClassVar[int]
+    EXTERNAL_ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
+    ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
+    plugin_instance_id: str
+    external_account_id: str
+    account_id: str
+    def __init__(self, plugin_instance_id: _Optional[str] = ..., external_account_id: _Optional[str] = ..., account_id: _Optional[str] = ...) -> None: ...
+
+class ReadAccountsForLinkingParams(_message.Message):
+    __slots__ = ("acting_for",)
+    ACTING_FOR_FIELD_NUMBER: _ClassVar[int]
+    acting_for: _sidecar_pb2.CallerAssertion
+    def __init__(self, acting_for: _Optional[_Union[_sidecar_pb2.CallerAssertion, _Mapping]] = ...) -> None: ...
+
+class ReadAccountsForLinkingResult(_message.Message):
+    __slots__ = ("accounts",)
+    ACCOUNTS_FIELD_NUMBER: _ClassVar[int]
+    accounts: _containers.RepeatedCompositeFieldContainer[AccountRecord]
+    def __init__(self, accounts: _Optional[_Iterable[_Union[AccountRecord, _Mapping]]] = ...) -> None: ...
+
 class ExternalAccount(_message.Message):
     __slots__ = ("external_account_id", "name", "venue_account_type")
     EXTERNAL_ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
@@ -219,3 +262,15 @@ class Identifier(_message.Message):
     value: str
     source: str
     def __init__(self, scheme: _Optional[str] = ..., value: _Optional[str] = ..., source: _Optional[str] = ...) -> None: ...
+
+class AccountRecord(_message.Message):
+    __slots__ = ("account_id", "name", "state", "created_at_ns")
+    ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    STATE_FIELD_NUMBER: _ClassVar[int]
+    CREATED_AT_NS_FIELD_NUMBER: _ClassVar[int]
+    account_id: str
+    name: str
+    state: AccountState
+    created_at_ns: int
+    def __init__(self, account_id: _Optional[str] = ..., name: _Optional[str] = ..., state: _Optional[_Union[AccountState, str]] = ..., created_at_ns: _Optional[int] = ...) -> None: ...

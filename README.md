@@ -44,8 +44,28 @@ async with await meridian.connect() as plugin:
 
 The steps a plugin's roles may take are typed methods on the same `plugin`,
 generated from the contract: `report_external_accounts`, `report_sync_status`,
-`record_holdings_statement`, `record_holding`, `resolve_identifier` and
-`report_missing_instrument`.
+`record_holdings_statement`, `record_holding`, `resolve_identifier`,
+`report_missing_instrument`, `read_accounts_for_linking` and
+`link_external_account`.
+
+### Linking external accounts
+
+A custody plugin links the external accounts it reported on its own admin
+page, for the deployment admin viewing it: pass the `Meridian-Caller` header
+the page request carried as `acting_for`. The sidecar refuses both without an
+assertion saying the person is a deployment admin, and a link for an account
+the plugin did not report.
+
+```python
+accounts = await plugin.read_accounts_for_linking(acting_for=header)
+await plugin.link_external_account(
+    external_account_id="acct-1", account_id="ACC-1", acting_for=header
+)
+# Or a new account, created and linked in one step; or neither, to unlink.
+await plugin.link_external_account(
+    external_account_id="acct-2", new_account_name="Roth IRA", acting_for=header
+)
+```
 
 ### Quantities and money
 

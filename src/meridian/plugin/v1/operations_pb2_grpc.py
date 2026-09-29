@@ -64,6 +64,16 @@ class PluginOperationsStub(object):
                 request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReportMissingInstrumentParams.SerializeToString,
                 response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.Published.FromString,
                 _registered_method=True)
+        self.LinkExternalAccount = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/LinkExternalAccount',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.LinkExternalAccountParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.LinkExternalAccountResult.FromString,
+                _registered_method=True)
+        self.ReadAccountsForLinking = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ReadAccountsForLinking',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadAccountsForLinkingParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadAccountsForLinkingResult.FromString,
+                _registered_method=True)
 
 
 class PluginOperationsServicer(object):
@@ -111,6 +121,20 @@ class PluginOperationsServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def LinkExternalAccount(self, request, context):
+        """W6.4: platform.config.command.link-external-account (command).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ReadAccountsForLinking(self, request, context):
+        """W6.4: platform.config.query.accounts (query).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_PluginOperationsServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -143,6 +167,16 @@ def add_PluginOperationsServicer_to_server(servicer, server):
                     servicer.ReportMissingInstrument,
                     request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReportMissingInstrumentParams.FromString,
                     response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.Published.SerializeToString,
+            ),
+            'LinkExternalAccount': grpc.unary_unary_rpc_method_handler(
+                    servicer.LinkExternalAccount,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.LinkExternalAccountParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.LinkExternalAccountResult.SerializeToString,
+            ),
+            'ReadAccountsForLinking': grpc.unary_unary_rpc_method_handler(
+                    servicer.ReadAccountsForLinking,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadAccountsForLinkingParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadAccountsForLinkingResult.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -307,6 +341,60 @@ class PluginOperations(object):
             '/meridian.plugin.v1.PluginOperations/ReportMissingInstrument',
             meridian_dot_plugin_dot_v1_dot_operations__pb2.ReportMissingInstrumentParams.SerializeToString,
             meridian_dot_plugin_dot_v1_dot_operations__pb2.Published.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def LinkExternalAccount(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/LinkExternalAccount',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.LinkExternalAccountParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.LinkExternalAccountResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ReadAccountsForLinking(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ReadAccountsForLinking',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadAccountsForLinkingParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadAccountsForLinkingResult.FromString,
             options,
             channel_credentials,
             insecure,

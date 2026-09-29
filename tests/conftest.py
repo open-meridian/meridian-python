@@ -68,6 +68,29 @@ class FakeOperations(operations_pb2_grpc.PluginOperationsServicer):
             request, operations_pb2.Published(message_id="msg-2"), context
         )
 
+    async def LinkExternalAccount(self, request, context):  # noqa: N802
+        # What the conductor answers: the link, naming the account made for
+        # a new account's name, or none for an unlink.
+        account = request.account_id or ("ACC-NEW" if request.new_account_name else "")
+        answer = operations_pb2.LinkExternalAccountResult(
+            plugin_instance_id="snaptrade-1",
+            external_account_id=request.external_account_id,
+            account_id=account,
+        )
+        return await self._answer(request, answer, context)
+
+    async def ReadAccountsForLinking(self, request, context):  # noqa: N802
+        answer = operations_pb2.ReadAccountsForLinkingResult(
+            accounts=[
+                operations_pb2.AccountRecord(
+                    account_id="ACC-1",
+                    name="Growth",
+                    state=operations_pb2.ACCOUNT_STATE_OPEN,
+                )
+            ]
+        )
+        return await self._answer(request, answer, context)
+
 
 @dataclass
 class FakeSidecar(sidecar_pb2_grpc.SidecarServiceServicer):
