@@ -138,6 +138,8 @@ def test_a_declaration_says_what_the_form_needs() -> None:
     )
     assert not declared.HasField("applies_when")
     assert Setting("live", kind=bool, default=False)._declared().default_value == "false"
+    synthetic = Setting("synthetic", kind=bool, default=False, developer=True)._declared()
+    assert synthetic.developer and not poll.developer
 
 
 def test_a_declaration_that_cannot_be_rendered_honestly_is_refused() -> None:

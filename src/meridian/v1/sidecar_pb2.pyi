@@ -40,7 +40,7 @@ class InterfaceDeclaration(_message.Message):
     def __init__(self, loopback_port: _Optional[int] = ..., title: _Optional[str] = ...) -> None: ...
 
 class SettingDeclaration(_message.Message):
-    __slots__ = ("name", "type", "required", "secret", "description", "label", "default_value", "unit", "choices", "applies_when")
+    __slots__ = ("name", "type", "required", "secret", "description", "label", "default_value", "unit", "choices", "applies_when", "developer")
     NAME_FIELD_NUMBER: _ClassVar[int]
     TYPE_FIELD_NUMBER: _ClassVar[int]
     REQUIRED_FIELD_NUMBER: _ClassVar[int]
@@ -51,6 +51,7 @@ class SettingDeclaration(_message.Message):
     UNIT_FIELD_NUMBER: _ClassVar[int]
     CHOICES_FIELD_NUMBER: _ClassVar[int]
     APPLIES_WHEN_FIELD_NUMBER: _ClassVar[int]
+    DEVELOPER_FIELD_NUMBER: _ClassVar[int]
     name: str
     type: SettingType
     required: bool
@@ -61,7 +62,8 @@ class SettingDeclaration(_message.Message):
     unit: str
     choices: _containers.RepeatedCompositeFieldContainer[SettingChoice]
     applies_when: SettingCondition
-    def __init__(self, name: _Optional[str] = ..., type: _Optional[_Union[SettingType, str]] = ..., required: bool = ..., secret: bool = ..., description: _Optional[str] = ..., label: _Optional[str] = ..., default_value: _Optional[str] = ..., unit: _Optional[str] = ..., choices: _Optional[_Iterable[_Union[SettingChoice, _Mapping]]] = ..., applies_when: _Optional[_Union[SettingCondition, _Mapping]] = ...) -> None: ...
+    developer: bool
+    def __init__(self, name: _Optional[str] = ..., type: _Optional[_Union[SettingType, str]] = ..., required: bool = ..., secret: bool = ..., description: _Optional[str] = ..., label: _Optional[str] = ..., default_value: _Optional[str] = ..., unit: _Optional[str] = ..., choices: _Optional[_Iterable[_Union[SettingChoice, _Mapping]]] = ..., applies_when: _Optional[_Union[SettingCondition, _Mapping]] = ..., developer: bool = ...) -> None: ...
 
 class SettingChoice(_message.Message):
     __slots__ = ("value", "label", "description")

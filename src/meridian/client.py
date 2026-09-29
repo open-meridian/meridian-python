@@ -150,7 +150,8 @@ class Setting:
     What the dashboard's form shows (W6.11): `label` as the field's name,
     `default` greyed in the empty field, `unit` beside a number. While a
     setting with a `default` is unset, `Settings.values` holds the default, so
-    the plugin uses what the form showed.
+    the plugin uses what the form showed. A `developer` setting is shown only
+    on a development deployment.
     """
 
     name: str
@@ -163,6 +164,7 @@ class Setting:
     unit: str = ""
     choices: tuple[Choice, ...] = ()
     applies_when: AppliesWhen | None = None
+    developer: bool = False
 
     def _declared(self) -> sidecar_pb2.SettingDeclaration:
         if self.kind not in _SETTING_TYPES:
@@ -200,6 +202,7 @@ class Setting:
                     setting=self.applies_when.setting, one_of=list(self.applies_when.one_of)
                 )
             ),
+            developer=self.developer,
         )
 
     def _parsed(self, text: str) -> str | int | bool:
