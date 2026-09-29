@@ -12,8 +12,10 @@ Start a plugin with the command line, not from this repository:
     meridian plugin dev --instance my-plugin   # on a deployment installed with --development
 
 `plugin new` writes this repository's `template/`, the reference plugin: its
-code and page, a `Dockerfile`, and `AGENTS.md`, which teaches any coding agent
-the live loop (`CLAUDE.md` and a Claude Code skill lead to it). See
+code and its page, built on the plugin UI kit (open-meridian/meridian-ui), a
+`Dockerfile`, and `AGENTS.md`, which teaches any coding agent to build pages
+with the kit and the live loop (`CLAUDE.md` and a Claude Code skill lead to
+it). See
 [meridian-cli](https://github.com/open-meridian/meridian-cli).
 
 ## The SDK
