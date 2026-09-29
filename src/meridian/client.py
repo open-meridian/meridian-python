@@ -27,7 +27,7 @@ import os
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 from types import TracebackType
-from typing import Any, TypeVar
+from typing import Any, NoReturn, TypeVar
 
 import grpc
 
@@ -44,6 +44,16 @@ SCHEMA_VERSION = "v2"
 #: Where a sidecar listens. Loopback, always: a sidecar reachable from another
 #: host is a way around the boundary it exists to enforce.
 DEFAULT_ADDRESS = "127.0.0.1:9191"
+
+#: What a plugin written against an earlier SDK meets where it reached for a
+#: person's access tag by tag: a plugin declares no tags, and a person's access
+#: to it is read or write, the same for every plugin (decisions/026).
+_RETIRED_BY_026 = (
+    "access tag by tag was retired with tags (decisions/026): a person's access "
+    "to a plugin is read or write, the same for every plugin. Read Caller.read "
+    "and Caller.write, the accounts this person may read and write through the "
+    "plugin, or ask Caller.may_read and Caller.may_write"
+)
 
 #: How often liveness is reported. The sidecar's own view of a plugin that has
 #: stopped sending these is the more informative signal, so this is deliberately
@@ -84,13 +94,13 @@ class Identity:
     plugin's topic access -- one or more from the deployment's fixed list, the
     union of their grants, or none, which is a plugin admitted with no topics
     -- so a plugin that could name them would be choosing its own privileges.
-    The tags are its parts, for people, and grant nothing on the bus. A plugin
-    that cares can compare these against what it expected and stop.
+    A plugin has no tags: a person's access to it is read or write, the same
+    for every plugin (decisions/026). A plugin that cares can compare these
+    against what it expected and stop.
     """
 
     instance_id: str
     roles: tuple[str, ...] = ()
-    tags: tuple[str, ...] = ()
     deployment_id: str = ""
 
 
@@ -278,15 +288,6 @@ class AccountScope:
 
 
 @dataclass(frozen=True)
-class TagAccess:
-    """What a person may do through one tag of this plugin."""
-
-    tag: str
-    read: frozenset[str] = frozenset()
-    write: frozenset[str] = frozenset()
-
-
-@dataclass(frozen=True)
 class Caller:
     """Who a request for the plugin's page came from, as the dashboard vouched
     and the sidecar verified before forwarding it (W6.9).
@@ -294,12 +295,18 @@ class Caller:
     Read, not verified: only the sidecar can reach the page, and it removed
     every other claim the request arrived with. Hand `header` back as
     `acting_for` on a command to send it for this person (W4.9).
+
+    Their access is this plugin's, whole: `read`, the accounts the plugin may
+    show them, and `write`, the accounts it may act on for them, which are
+    also in `read`. A person's access to a plugin is read or write, the same
+    for every plugin, and a plugin names no parts of itself (decisions/026).
     """
 
     subject: str
     display_name: str
-    access: tuple[TagAccess, ...]
     header: str
+    read: frozenset[str] = frozenset()
+    write: frozenset[str] = frozenset()
     # Whether the person is a deployment admin; a plugin serves its admin page
     # to them and to nobody else (W6.9).
     deployment_admin: bool = False
@@ -312,23 +319,21 @@ class Caller:
         return cls(
             subject=claims.subject,
             display_name=claims.display_name,
-            access=tuple(
-                TagAccess(
-                    tag=held.tag,
-                    read=frozenset(held.read_account_ids),
-                    write=frozenset(held.write_account_ids),
-                )
-                for held in claims.access
-            ),
             header=header,
+            read=frozenset(claims.read_account_ids),
+            write=frozenset(claims.write_account_ids),
             deployment_admin=claims.deployment_admin,
         )
 
     def may_read(self, account_id: str) -> bool:
-        return any(account_id in held.read for held in self.access)
+        return account_id in self.read
 
     def may_write(self, account_id: str) -> bool:
-        return any(account_id in held.write for held in self.access)
+        return account_id in self.write
+
+    @property
+    def access(self) -> NoReturn:
+        raise AttributeError(_RETIRED_BY_026)
 
 
 @dataclass
@@ -530,7 +535,6 @@ async def connect(
         identity=Identity(
             instance_id=reply.instance_id,
             roles=tuple(reply.roles),
-            tags=tuple(reply.tags),
             deployment_id=reply.deployment_id,
         ),
         grants=Grants(
@@ -550,3 +554,10 @@ async def connect(
 
     report_ready()
     return plugin
+
+
+def __getattr__(name: str) -> Any:
+    """A name this module no longer has, said plainly rather than as a typo."""
+    if name == "TagAccess":
+        raise AttributeError(_RETIRED_BY_026)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

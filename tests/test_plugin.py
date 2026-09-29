@@ -33,7 +33,7 @@ from meridian.v1 import sidecar_pb2
 async def test_registering_sends_no_identity(sidecar: tuple[FakeSidecar, str]) -> None:
     """The thing a plugin must not be able to do is the thing to assert.
 
-    Instance, roles and tags moved to the sidecar's launch configuration, so
+    Instance and roles moved to the sidecar's launch configuration, so
     there is no field here to fill in. A client that grew one back would be
     letting a plugin choose its own privileges.
     """
@@ -50,14 +50,12 @@ async def test_identity_and_grants_come_back(sidecar: tuple[FakeSidecar, str]) -
     """So a plugin can stop at startup when it is not what it expected to be."""
     service, address = sidecar
     service.roles = ("oms", "ems")
-    service.tags = ("routing",)
     service.publish_grants = ("platform.street.query.list-custodial-positions",)
 
     plugin = await meridian.connect(address, heartbeat=False)
     try:
         assert plugin.identity.roles == ("oms", "ems")
         assert plugin.identity.instance_id == "custody-snaptrade-1"
-        assert plugin.identity.tags == ("routing",)
         assert plugin.identity.deployment_id == "dep-local-1"
         assert plugin.grants.publish == ("platform.street.query.list-custodial-positions",)
     finally:
@@ -283,11 +281,8 @@ def test_a_caller_is_read_from_the_header_its_sidecar_forwarded() -> None:
     claims = sidecar_pb2.CallerClaims(
         subject="local|ada",
         display_name="Ada Park",
-        access=[
-            sidecar_pb2.TagAccess(
-                tag="custody", read_account_ids=["ACC-1", "ACC-2"], write_account_ids=["ACC-1"]
-            )
-        ],
+        read_account_ids=["ACC-1", "ACC-2"],
+        write_account_ids=["ACC-1"],
     )
     assertion = sidecar_pb2.CallerAssertion(
         claims=claims.SerializeToString(), signature=b"sig", key_id="k"
@@ -297,8 +292,28 @@ def test_a_caller_is_read_from_the_header_its_sidecar_forwarded() -> None:
     assert caller.subject == "local|ada" and caller.display_name == "Ada Park"
     assert caller.may_read("ACC-2") and not caller.may_write("ACC-2")
     assert caller.may_write("ACC-1")
+    assert not caller.may_read("ACC-3")
+    assert caller.read == {"ACC-1", "ACC-2"} and caller.write == {"ACC-1"}
     assert caller.header == header, "handed back unaltered as acting_for"
     assert not caller.deployment_admin, "absent means not"
+
+
+def test_access_tag_by_tag_is_gone_and_says_why() -> None:
+    """decisions/026: a plugin declares no tags, so a plugin written against
+    the SDK that had them fails with the reason and what to read instead,
+    rather than with a bare missing name."""
+    with pytest.raises(ImportError, match="decisions/026"):
+        from meridian import TagAccess  # noqa: F401
+    with pytest.raises(ImportError, match=r"Caller\.read"):
+        _ = meridian.TagAccess
+    with pytest.raises(AttributeError, match="decisions/026"):
+        _ = meridian.client.TagAccess
+    caller = Caller(subject="s", display_name="d", header="h")
+    with pytest.raises(AttributeError, match="read or write"):
+        _ = caller.access
+    assert not hasattr(caller, "access")
+    assert not hasattr(sidecar_pb2, "TagAccess")
+    assert "access" not in sidecar_pb2.CallerClaims.DESCRIPTOR.fields_by_name
 
 
 def test_a_caller_says_whether_they_are_a_deployment_admin() -> None:

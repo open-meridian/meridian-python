@@ -94,7 +94,7 @@ class SettingCondition(_message.Message):
     def __init__(self, setting: _Optional[str] = ..., one_of: _Optional[_Iterable[str]] = ...) -> None: ...
 
 class RegisterReply(_message.Message):
-    __slots__ = ("admitted", "deployment_id", "refusal_reason", "publish_grants", "subscribe_grants", "instance_id", "roles", "tags")
+    __slots__ = ("admitted", "deployment_id", "refusal_reason", "publish_grants", "subscribe_grants", "instance_id", "roles")
     ADMITTED_FIELD_NUMBER: _ClassVar[int]
     DEPLOYMENT_ID_FIELD_NUMBER: _ClassVar[int]
     REFUSAL_REASON_FIELD_NUMBER: _ClassVar[int]
@@ -102,7 +102,6 @@ class RegisterReply(_message.Message):
     SUBSCRIBE_GRANTS_FIELD_NUMBER: _ClassVar[int]
     INSTANCE_ID_FIELD_NUMBER: _ClassVar[int]
     ROLES_FIELD_NUMBER: _ClassVar[int]
-    TAGS_FIELD_NUMBER: _ClassVar[int]
     admitted: bool
     deployment_id: str
     refusal_reason: str
@@ -110,8 +109,7 @@ class RegisterReply(_message.Message):
     subscribe_grants: _containers.RepeatedScalarFieldContainer[str]
     instance_id: str
     roles: _containers.RepeatedScalarFieldContainer[str]
-    tags: _containers.RepeatedScalarFieldContainer[str]
-    def __init__(self, admitted: bool = ..., deployment_id: _Optional[str] = ..., refusal_reason: _Optional[str] = ..., publish_grants: _Optional[_Iterable[str]] = ..., subscribe_grants: _Optional[_Iterable[str]] = ..., instance_id: _Optional[str] = ..., roles: _Optional[_Iterable[str]] = ..., tags: _Optional[_Iterable[str]] = ...) -> None: ...
+    def __init__(self, admitted: bool = ..., deployment_id: _Optional[str] = ..., refusal_reason: _Optional[str] = ..., publish_grants: _Optional[_Iterable[str]] = ..., subscribe_grants: _Optional[_Iterable[str]] = ..., instance_id: _Optional[str] = ..., roles: _Optional[_Iterable[str]] = ...) -> None: ...
 
 class HeartbeatRequest(_message.Message):
     __slots__ = ("healthy", "detail")
@@ -166,11 +164,12 @@ class CallerAssertion(_message.Message):
     def __init__(self, claims: _Optional[bytes] = ..., signature: _Optional[bytes] = ..., key_id: _Optional[str] = ...) -> None: ...
 
 class CallerClaims(_message.Message):
-    __slots__ = ("subject", "display_name", "audience_instance_id", "access", "issued_at_ns", "expires_at_ns", "assertion_id", "deployment_admin")
+    __slots__ = ("subject", "display_name", "audience_instance_id", "read_account_ids", "write_account_ids", "issued_at_ns", "expires_at_ns", "assertion_id", "deployment_admin")
     SUBJECT_FIELD_NUMBER: _ClassVar[int]
     DISPLAY_NAME_FIELD_NUMBER: _ClassVar[int]
     AUDIENCE_INSTANCE_ID_FIELD_NUMBER: _ClassVar[int]
-    ACCESS_FIELD_NUMBER: _ClassVar[int]
+    READ_ACCOUNT_IDS_FIELD_NUMBER: _ClassVar[int]
+    WRITE_ACCOUNT_IDS_FIELD_NUMBER: _ClassVar[int]
     ISSUED_AT_NS_FIELD_NUMBER: _ClassVar[int]
     EXPIRES_AT_NS_FIELD_NUMBER: _ClassVar[int]
     ASSERTION_ID_FIELD_NUMBER: _ClassVar[int]
@@ -178,22 +177,13 @@ class CallerClaims(_message.Message):
     subject: str
     display_name: str
     audience_instance_id: str
-    access: _containers.RepeatedCompositeFieldContainer[TagAccess]
+    read_account_ids: _containers.RepeatedScalarFieldContainer[str]
+    write_account_ids: _containers.RepeatedScalarFieldContainer[str]
     issued_at_ns: int
     expires_at_ns: int
     assertion_id: str
     deployment_admin: bool
-    def __init__(self, subject: _Optional[str] = ..., display_name: _Optional[str] = ..., audience_instance_id: _Optional[str] = ..., access: _Optional[_Iterable[_Union[TagAccess, _Mapping]]] = ..., issued_at_ns: _Optional[int] = ..., expires_at_ns: _Optional[int] = ..., assertion_id: _Optional[str] = ..., deployment_admin: bool = ...) -> None: ...
-
-class TagAccess(_message.Message):
-    __slots__ = ("tag", "read_account_ids", "write_account_ids")
-    TAG_FIELD_NUMBER: _ClassVar[int]
-    READ_ACCOUNT_IDS_FIELD_NUMBER: _ClassVar[int]
-    WRITE_ACCOUNT_IDS_FIELD_NUMBER: _ClassVar[int]
-    tag: str
-    read_account_ids: _containers.RepeatedScalarFieldContainer[str]
-    write_account_ids: _containers.RepeatedScalarFieldContainer[str]
-    def __init__(self, tag: _Optional[str] = ..., read_account_ids: _Optional[_Iterable[str]] = ..., write_account_ids: _Optional[_Iterable[str]] = ...) -> None: ...
+    def __init__(self, subject: _Optional[str] = ..., display_name: _Optional[str] = ..., audience_instance_id: _Optional[str] = ..., read_account_ids: _Optional[_Iterable[str]] = ..., write_account_ids: _Optional[_Iterable[str]] = ..., issued_at_ns: _Optional[int] = ..., expires_at_ns: _Optional[int] = ..., assertion_id: _Optional[str] = ..., deployment_admin: bool = ...) -> None: ...
 
 class PluginAccessRequest(_message.Message):
     __slots__ = ()
@@ -208,28 +198,32 @@ class PluginAccessReply(_message.Message):
     def __init__(self, user_groups: _Optional[_Iterable[_Union[UserGroupAccess, _Mapping]]] = ..., people: _Optional[_Iterable[_Union[PersonAccess, _Mapping]]] = ...) -> None: ...
 
 class UserGroupAccess(_message.Message):
-    __slots__ = ("user_group_id", "name", "access")
+    __slots__ = ("user_group_id", "name", "read_account_ids", "write_account_ids")
     USER_GROUP_ID_FIELD_NUMBER: _ClassVar[int]
     NAME_FIELD_NUMBER: _ClassVar[int]
-    ACCESS_FIELD_NUMBER: _ClassVar[int]
+    READ_ACCOUNT_IDS_FIELD_NUMBER: _ClassVar[int]
+    WRITE_ACCOUNT_IDS_FIELD_NUMBER: _ClassVar[int]
     user_group_id: str
     name: str
-    access: _containers.RepeatedCompositeFieldContainer[TagAccess]
-    def __init__(self, user_group_id: _Optional[str] = ..., name: _Optional[str] = ..., access: _Optional[_Iterable[_Union[TagAccess, _Mapping]]] = ...) -> None: ...
+    read_account_ids: _containers.RepeatedScalarFieldContainer[str]
+    write_account_ids: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, user_group_id: _Optional[str] = ..., name: _Optional[str] = ..., read_account_ids: _Optional[_Iterable[str]] = ..., write_account_ids: _Optional[_Iterable[str]] = ...) -> None: ...
 
 class PersonAccess(_message.Message):
-    __slots__ = ("subject", "display_name", "user_group_ids", "last_signed_in_at_ns", "access")
+    __slots__ = ("subject", "display_name", "user_group_ids", "last_signed_in_at_ns", "read_account_ids", "write_account_ids")
     SUBJECT_FIELD_NUMBER: _ClassVar[int]
     DISPLAY_NAME_FIELD_NUMBER: _ClassVar[int]
     USER_GROUP_IDS_FIELD_NUMBER: _ClassVar[int]
     LAST_SIGNED_IN_AT_NS_FIELD_NUMBER: _ClassVar[int]
-    ACCESS_FIELD_NUMBER: _ClassVar[int]
+    READ_ACCOUNT_IDS_FIELD_NUMBER: _ClassVar[int]
+    WRITE_ACCOUNT_IDS_FIELD_NUMBER: _ClassVar[int]
     subject: str
     display_name: str
     user_group_ids: _containers.RepeatedScalarFieldContainer[str]
     last_signed_in_at_ns: int
-    access: _containers.RepeatedCompositeFieldContainer[TagAccess]
-    def __init__(self, subject: _Optional[str] = ..., display_name: _Optional[str] = ..., user_group_ids: _Optional[_Iterable[str]] = ..., last_signed_in_at_ns: _Optional[int] = ..., access: _Optional[_Iterable[_Union[TagAccess, _Mapping]]] = ...) -> None: ...
+    read_account_ids: _containers.RepeatedScalarFieldContainer[str]
+    write_account_ids: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, subject: _Optional[str] = ..., display_name: _Optional[str] = ..., user_group_ids: _Optional[_Iterable[str]] = ..., last_signed_in_at_ns: _Optional[int] = ..., read_account_ids: _Optional[_Iterable[str]] = ..., write_account_ids: _Optional[_Iterable[str]] = ...) -> None: ...
 
 class WatchAccountScopeRequest(_message.Message):
     __slots__ = ()

@@ -34,11 +34,9 @@ def load_page() -> ModuleType:
 ADA = meridian.Caller(
     subject="local|ada",
     display_name="Ada <Park>",
-    access=(
-        meridian.TagAccess(tag="brokerage", read=frozenset({"ACC-2", "ACC-1"})),
-        meridian.TagAccess(tag="</script><b>x", write=frozenset({"ACC-3"})),
-    ),
     header="h",
+    read=frozenset({"ACC-2", "ACC-1", "</script><b>x"}),
+    write=frozenset({"</script><b>x"}),
 )
 
 
@@ -87,7 +85,7 @@ def test_the_page_is_built_from_the_kits_classes_and_components() -> None:
     classes = {c for _, a in parsed.tags for c in (a.get("class") or "").split()}
     assert {"page", "page-head", "actions", "panel", "panel-body", "primary"} <= classes
     grids = [a for t, a in parsed.tags if t == "om-grid"]
-    assert len(grids) == 1 and grids[0]["id"] == "access" and grids[0]["row-key"] == "tag"
+    assert len(grids) == 1 and grids[0]["id"] == "access" and grids[0]["row-key"] == "account"
 
 
 def test_the_page_carries_no_colour_and_no_style_of_its_own() -> None:
@@ -118,8 +116,9 @@ def test_what_the_caller_sent_is_escaped_in_the_table_and_in_the_data() -> None:
     assert "</" not in data, "nothing in the data can close its script element"
     rows = json.loads(data)
     assert rows == [
-        {"tag": "brokerage", "read": "ACC-1, ACC-2", "write": "none"},
-        {"tag": "</script><b>x", "read": "none", "write": "ACC-3"},
+        {"account": "</script><b>x", "may": "read and write"},
+        {"account": "ACC-1", "may": "read"},
+        {"account": "ACC-2", "may": "read"},
     ]
 
 
@@ -128,5 +127,5 @@ def test_a_notice_says_which_it_is() -> None:
     assert '<div class="notice good" role="status">Opened' in page.render(ADA, "Opened it.")
     assert '<div class="notice bad" role="status">Refused' in page.render(ADA, "Refused.", True)
     assert "Nothing is granted to you here." in page.render(
-        meridian.Caller(subject="s", display_name="Nobody", access=(), header="h")
+        meridian.Caller(subject="s", display_name="Nobody", header="h")
     )

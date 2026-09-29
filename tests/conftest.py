@@ -98,7 +98,6 @@ class FakeSidecar(sidecar_pb2_grpc.SidecarServiceServicer):
     refusal_reason: str = ""
     instance_id: str = "custody-snaptrade-1"
     roles: tuple[str, ...] = ("custody",)
-    tags: tuple[str, ...] = ()
     publish_grants: tuple[str, ...] = ("platform.street.command.record-holding",)
     subscribe_grants: tuple[str, ...] = ("platform.reference.event.instrument-applied",)
 
@@ -124,7 +123,6 @@ class FakeSidecar(sidecar_pb2_grpc.SidecarServiceServicer):
             deployment_id="dep-local-1",
             instance_id=self.instance_id,
             roles=list(self.roles),
-            tags=list(self.tags),
             publish_grants=list(self.publish_grants),
             subscribe_grants=list(self.subscribe_grants),
         )

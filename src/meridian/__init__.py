@@ -13,6 +13,7 @@ another plugin.
 
 from .asgi import CallerMiddleware
 from .client import (
+    _RETIRED_BY_026,
     DEFAULT_ADDRESS,
     SCHEMA_VERSION,
     AccountScope,
@@ -26,7 +27,6 @@ from .client import (
     Plugin,
     Setting,
     Settings,
-    TagAccess,
     connect,
 )
 from .errors import CallFailed, MeridianError, NoSidecar, NotGranted, NotRegistered, Refused
@@ -71,8 +71,18 @@ __all__ = [
     "Setting",
     "Settings",
     "SyncState",
-    "TagAccess",
     "as_decimal",
     "as_money",
     "connect",
 ]
+
+
+def __getattr__(name: str) -> object:
+    """A name this package no longer has, said plainly rather than as a typo.
+
+    An ImportError, because `from meridian import TagAccess` is how a plugin
+    reaches for it, and an import replaces an AttributeError's words with its
+    own generic ones."""
+    if name == "TagAccess":
+        raise ImportError(_RETIRED_BY_026, name=__name__)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

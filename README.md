@@ -48,6 +48,28 @@ generated from the contract: `report_external_accounts`, `report_sync_status`,
 `report_missing_instrument`, `read_accounts_for_linking` and
 `link_external_account`.
 
+### Who is asking, and what they may do
+
+A request for the plugin's page arrives with one `Meridian-Caller` header,
+which its sidecar verified before forwarding. `meridian.Caller` reads it: who
+the person is, whether they are a deployment admin, and their access on this
+plugin, as two sets of accounts. A person's access to a plugin is `read` or
+`write`, the same for every plugin, and a plugin declares no parts of itself
+for access (decisions/026): `read` is what the plugin may show them, and
+`write`, which includes it, is what the plugin may do for them.
+
+```python
+caller = meridian.Caller.from_header(header)
+shown = sorted(caller.read)  # every account the page may show them
+if caller.may_write("ACC-1"):
+    await plugin.record_holdings_statement(..., acting_for=caller.header)
+```
+
+`caller.read` and `caller.write` are the sets themselves. The sidecar checks
+every command sent for the person again, whatever the plugin believes.
+`meridian.TagAccess` and `Caller.access`, the same access tag by tag, are
+gone, and say so when reached for.
+
 ### Linking external accounts
 
 A custody plugin links the external accounts it reported on its own admin
