@@ -12,10 +12,12 @@ class SettingType(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     SETTING_TYPE_STRING: _ClassVar[SettingType]
     SETTING_TYPE_INTEGER: _ClassVar[SettingType]
     SETTING_TYPE_BOOLEAN: _ClassVar[SettingType]
+    SETTING_TYPE_CHOICE: _ClassVar[SettingType]
 SETTING_TYPE_UNSPECIFIED: SettingType
 SETTING_TYPE_STRING: SettingType
 SETTING_TYPE_INTEGER: SettingType
 SETTING_TYPE_BOOLEAN: SettingType
+SETTING_TYPE_CHOICE: SettingType
 
 class RegisterRequest(_message.Message):
     __slots__ = ("schema_version", "interface", "settings", "reads_external_accounts")
@@ -38,18 +40,46 @@ class InterfaceDeclaration(_message.Message):
     def __init__(self, loopback_port: _Optional[int] = ..., title: _Optional[str] = ...) -> None: ...
 
 class SettingDeclaration(_message.Message):
-    __slots__ = ("name", "type", "required", "secret", "description")
+    __slots__ = ("name", "type", "required", "secret", "description", "label", "default_value", "unit", "choices", "applies_when")
     NAME_FIELD_NUMBER: _ClassVar[int]
     TYPE_FIELD_NUMBER: _ClassVar[int]
     REQUIRED_FIELD_NUMBER: _ClassVar[int]
     SECRET_FIELD_NUMBER: _ClassVar[int]
     DESCRIPTION_FIELD_NUMBER: _ClassVar[int]
+    LABEL_FIELD_NUMBER: _ClassVar[int]
+    DEFAULT_VALUE_FIELD_NUMBER: _ClassVar[int]
+    UNIT_FIELD_NUMBER: _ClassVar[int]
+    CHOICES_FIELD_NUMBER: _ClassVar[int]
+    APPLIES_WHEN_FIELD_NUMBER: _ClassVar[int]
     name: str
     type: SettingType
     required: bool
     secret: bool
     description: str
-    def __init__(self, name: _Optional[str] = ..., type: _Optional[_Union[SettingType, str]] = ..., required: bool = ..., secret: bool = ..., description: _Optional[str] = ...) -> None: ...
+    label: str
+    default_value: str
+    unit: str
+    choices: _containers.RepeatedCompositeFieldContainer[SettingChoice]
+    applies_when: SettingCondition
+    def __init__(self, name: _Optional[str] = ..., type: _Optional[_Union[SettingType, str]] = ..., required: bool = ..., secret: bool = ..., description: _Optional[str] = ..., label: _Optional[str] = ..., default_value: _Optional[str] = ..., unit: _Optional[str] = ..., choices: _Optional[_Iterable[_Union[SettingChoice, _Mapping]]] = ..., applies_when: _Optional[_Union[SettingCondition, _Mapping]] = ...) -> None: ...
+
+class SettingChoice(_message.Message):
+    __slots__ = ("value", "label", "description")
+    VALUE_FIELD_NUMBER: _ClassVar[int]
+    LABEL_FIELD_NUMBER: _ClassVar[int]
+    DESCRIPTION_FIELD_NUMBER: _ClassVar[int]
+    value: str
+    label: str
+    description: str
+    def __init__(self, value: _Optional[str] = ..., label: _Optional[str] = ..., description: _Optional[str] = ...) -> None: ...
+
+class SettingCondition(_message.Message):
+    __slots__ = ("setting", "one_of")
+    SETTING_FIELD_NUMBER: _ClassVar[int]
+    ONE_OF_FIELD_NUMBER: _ClassVar[int]
+    setting: str
+    one_of: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, setting: _Optional[str] = ..., one_of: _Optional[_Iterable[str]] = ...) -> None: ...
 
 class RegisterReply(_message.Message):
     __slots__ = ("admitted", "deployment_id", "refusal_reason", "publish_grants", "subscribe_grants", "instance_id", "roles", "tags")
@@ -124,7 +154,7 @@ class CallerAssertion(_message.Message):
     def __init__(self, claims: _Optional[bytes] = ..., signature: _Optional[bytes] = ..., key_id: _Optional[str] = ...) -> None: ...
 
 class CallerClaims(_message.Message):
-    __slots__ = ("subject", "display_name", "audience_instance_id", "access", "issued_at_ns", "expires_at_ns", "assertion_id")
+    __slots__ = ("subject", "display_name", "audience_instance_id", "access", "issued_at_ns", "expires_at_ns", "assertion_id", "deployment_admin")
     SUBJECT_FIELD_NUMBER: _ClassVar[int]
     DISPLAY_NAME_FIELD_NUMBER: _ClassVar[int]
     AUDIENCE_INSTANCE_ID_FIELD_NUMBER: _ClassVar[int]
@@ -132,6 +162,7 @@ class CallerClaims(_message.Message):
     ISSUED_AT_NS_FIELD_NUMBER: _ClassVar[int]
     EXPIRES_AT_NS_FIELD_NUMBER: _ClassVar[int]
     ASSERTION_ID_FIELD_NUMBER: _ClassVar[int]
+    DEPLOYMENT_ADMIN_FIELD_NUMBER: _ClassVar[int]
     subject: str
     display_name: str
     audience_instance_id: str
@@ -139,7 +170,8 @@ class CallerClaims(_message.Message):
     issued_at_ns: int
     expires_at_ns: int
     assertion_id: str
-    def __init__(self, subject: _Optional[str] = ..., display_name: _Optional[str] = ..., audience_instance_id: _Optional[str] = ..., access: _Optional[_Iterable[_Union[TagAccess, _Mapping]]] = ..., issued_at_ns: _Optional[int] = ..., expires_at_ns: _Optional[int] = ..., assertion_id: _Optional[str] = ...) -> None: ...
+    deployment_admin: bool
+    def __init__(self, subject: _Optional[str] = ..., display_name: _Optional[str] = ..., audience_instance_id: _Optional[str] = ..., access: _Optional[_Iterable[_Union[TagAccess, _Mapping]]] = ..., issued_at_ns: _Optional[int] = ..., expires_at_ns: _Optional[int] = ..., assertion_id: _Optional[str] = ..., deployment_admin: bool = ...) -> None: ...
 
 class TagAccess(_message.Message):
     __slots__ = ("tag", "read_account_ids", "write_account_ids")

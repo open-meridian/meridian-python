@@ -121,12 +121,36 @@ class Interface:
 
 
 @dataclass(frozen=True)
+class Choice:
+    """One option of a setting that is a choice, shown as a radio button."""
+
+    value: str
+    label: str = ""
+    description: str = ""
+
+
+@dataclass(frozen=True)
+class AppliesWhen:
+    """A setting applies only while another, declared before it, holds one of
+    these values: the form shows it, and asks for it when required, only then."""
+
+    setting: str
+    one_of: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class Setting:
     """One setting the plugin needs, declared at registration (W4.7).
 
-    `kind` is str, int or bool. A secret is set through the dashboard and never
-    read back, displayed, logged, reported or bundled; the plugin receives it
-    in `Settings` and nowhere else.
+    `kind` is str, int or bool; a str with `choices` is a choice, one of them.
+    A secret is set through the dashboard and never read back, displayed,
+    logged, reported or bundled; the plugin receives it in `Settings` and
+    nowhere else.
+
+    What the dashboard's form shows (W6.11): `label` as the field's name,
+    `default` greyed in the empty field, `unit` beside a number. While a
+    setting with a `default` is unset, `Settings.values` holds the default, so
+    the plugin uses what the form showed.
     """
 
     name: str
@@ -134,16 +158,48 @@ class Setting:
     required: bool = False
     secret: bool = False
     description: str = ""
+    label: str = ""
+    default: str | int | bool | None = None
+    unit: str = ""
+    choices: tuple[Choice, ...] = ()
+    applies_when: AppliesWhen | None = None
 
     def _declared(self) -> sidecar_pb2.SettingDeclaration:
         if self.kind not in _SETTING_TYPES:
             raise TypeError(f"setting {self.name} is a {self.kind.__name__}; str, int or bool")
+        if self.choices and self.kind is not str:
+            raise TypeError(f"setting {self.name} has choices, so its kind is str")
+        if self.secret and self.default is not None:
+            raise ValueError(f"setting {self.name} is secret, so it declares no default")
+        if self.default is not None and not isinstance(self.default, self.kind):
+            raise TypeError(f"setting {self.name}'s default is not a {self.kind.__name__}")
+        values = {choice.value for choice in self.choices}
+        if self.choices and self.default is not None and self.default not in values:
+            raise ValueError(f"setting {self.name}'s default is not one of its choices")
         return sidecar_pb2.SettingDeclaration(
             name=self.name,
-            type=_SETTING_TYPES[self.kind],
+            type=(
+                sidecar_pb2.SETTING_TYPE_CHOICE if self.choices else _SETTING_TYPES[self.kind]
+            ),
             required=self.required,
             secret=self.secret,
             description=self.description,
+            label=self.label,
+            default_value="" if self.default is None else _written(self.default),
+            unit=self.unit,
+            choices=[
+                sidecar_pb2.SettingChoice(
+                    value=choice.value, label=choice.label, description=choice.description
+                )
+                for choice in self.choices
+            ],
+            applies_when=(
+                None
+                if self.applies_when is None
+                else sidecar_pb2.SettingCondition(
+                    setting=self.applies_when.setting, one_of=list(self.applies_when.one_of)
+                )
+            ),
         )
 
     def _parsed(self, text: str) -> str | int | bool:
@@ -155,7 +211,16 @@ class Setting:
             raise ValueError(f"setting {self.name} is not a boolean: {text!r}")
         if self.kind is int:
             return int(text)
+        if self.choices and text not in {choice.value for choice in self.choices}:
+            raise ValueError(f"setting {self.name} is not one of its choices: {text!r}")
         return text
+
+
+def _written(value: str | int | bool) -> str:
+    """A value as the form would take it, and as `_parsed` reads it back."""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return str(value)
 
 
 @dataclass(frozen=True)
@@ -204,6 +269,9 @@ class Caller:
     display_name: str
     access: tuple[TagAccess, ...]
     header: str
+    # Whether the person is a deployment admin; a plugin serves its admin page
+    # to them and to nobody else (W6.9).
+    deployment_admin: bool = False
 
     @classmethod
     def from_header(cls, header: str) -> Caller:
@@ -222,6 +290,7 @@ class Caller:
                 for held in claims.access
             ),
             header=header,
+            deployment_admin=claims.deployment_admin,
         )
 
     def may_read(self, account_id: str) -> bool:
@@ -259,9 +328,15 @@ class Plugin(Operations):
         """
         self._check_open()
         by_name = {setting.name: setting for setting in self._declared}
+        defaults = {
+            setting.name: setting.default
+            for setting in self._declared
+            if setting.default is not None
+        }
         async for delivered in self._stub.WatchSettings(sidecar_pb2.WatchSettingsRequest()):
             yield Settings(
-                values={
+                values=defaults
+                | {
                     held.name: by_name[held.name]._parsed(held.value)
                     for held in delivered.values
                     if held.name in by_name

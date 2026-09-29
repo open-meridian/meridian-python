@@ -15,7 +15,17 @@ import pytest
 
 import meridian
 from conftest import FakeSidecar
-from meridian import AccountScope, Caller, Interface, NotRegistered, Refused, Setting, Settings
+from meridian import (
+    AccountScope,
+    AppliesWhen,
+    Caller,
+    Choice,
+    Interface,
+    NotRegistered,
+    Refused,
+    Setting,
+    Settings,
+)
 from meridian.v1 import sidecar_pb2
 
 
@@ -97,6 +107,50 @@ def test_a_setting_of_a_kind_the_contract_does_not_carry_is_refused() -> None:
         Setting("ratio", kind=float)._declared()
 
 
+def test_a_declaration_says_what_the_form_needs() -> None:
+    key = Setting(
+        "key_type",
+        required=True,
+        label="Key",
+        default="personal",
+        choices=(
+            Choice("personal", "Personal key", "Belongs to one user."),
+            Choice("commercial"),
+        ),
+    )._declared()
+    assert key.type == sidecar_pb2.SETTING_TYPE_CHOICE and key.default_value == "personal"
+    assert [choice.value for choice in key.choices] == ["personal", "commercial"]
+    assert key.choices[0].label == "Personal key"
+    secret = Setting(
+        "user_secret",
+        required=True,
+        secret=True,
+        applies_when=AppliesWhen("key_type", ("commercial",)),
+    )._declared()
+    assert secret.applies_when.setting == "key_type"
+    assert list(secret.applies_when.one_of) == ["commercial"]
+    poll = Setting("poll_seconds", kind=int, label="Read every", default=300, unit="seconds")
+    declared = poll._declared()
+    assert (declared.label, declared.default_value, declared.unit) == (
+        "Read every",
+        "300",
+        "seconds",
+    )
+    assert not declared.HasField("applies_when")
+    assert Setting("live", kind=bool, default=False)._declared().default_value == "false"
+
+
+def test_a_declaration_that_cannot_be_rendered_honestly_is_refused() -> None:
+    with pytest.raises(ValueError, match="secret"):
+        Setting("key", secret=True, default="x")._declared()
+    with pytest.raises(TypeError, match="default is not a int"):
+        Setting("n", kind=int, default="5")._declared()
+    with pytest.raises(ValueError, match="not one of its choices"):
+        Setting("k", choices=(Choice("a"),), default="b")._declared()
+    with pytest.raises(TypeError, match="its kind is str"):
+        Setting("k", kind=int, choices=(Choice("1"),))._declared()
+
+
 async def test_settings_arrive_typed_by_what_was_declared(
     sidecar: tuple[FakeSidecar, str],
 ) -> None:
@@ -126,6 +180,42 @@ async def test_settings_arrive_typed_by_what_was_declared(
         await plugin.leave()
     assert seen[0] == Settings(values={}, missing_required=("api_key",))
     assert seen[1].values == {"api_key": "sk-123", "page_size": 50, "live": True}
+
+
+async def test_an_unset_setting_holds_its_default_and_a_choice_outside_its_options_is_raised(
+    sidecar: tuple[FakeSidecar, str],
+) -> None:
+    service, address = sidecar
+    service.settings = [
+        sidecar_pb2.SettingsDelivery(),
+        sidecar_pb2.SettingsDelivery(
+            values=[sidecar_pb2.SettingValue(name="poll_seconds", value="60")]
+        ),
+        sidecar_pb2.SettingsDelivery(
+            values=[sidecar_pb2.SettingValue(name="key_type", value="trial")]
+        ),
+    ]
+    plugin = await meridian.connect(
+        address,
+        heartbeat=False,
+        settings=[
+            Setting(
+                "key_type",
+                default="personal",
+                choices=(Choice("personal"), Choice("commercial")),
+            ),
+            Setting("poll_seconds", kind=int, default=300, unit="seconds"),
+        ],
+    )
+    seen: list[Settings] = []
+    try:
+        with pytest.raises(ValueError, match="not one of its choices"):
+            async for settings in plugin.settings():
+                seen.append(settings)
+    finally:
+        await plugin.leave()
+    assert seen[0].values == {"key_type": "personal", "poll_seconds": 300}
+    assert seen[1].values == {"key_type": "personal", "poll_seconds": 60}
 
 
 async def test_a_setting_that_does_not_parse_is_raised_not_guessed(
@@ -188,6 +278,14 @@ def test_a_caller_is_read_from_the_header_its_sidecar_forwarded() -> None:
     assert caller.may_read("ACC-2") and not caller.may_write("ACC-2")
     assert caller.may_write("ACC-1")
     assert caller.header == header, "handed back unaltered as acting_for"
+    assert not caller.deployment_admin, "absent means not"
+
+
+def test_a_caller_says_whether_they_are_a_deployment_admin() -> None:
+    claims = sidecar_pb2.CallerClaims(subject="local|ada", deployment_admin=True)
+    assertion = sidecar_pb2.CallerAssertion(claims=claims.SerializeToString())
+    header = base64.urlsafe_b64encode(assertion.SerializeToString()).decode().rstrip("=")
+    assert Caller.from_header(header).deployment_admin
 
 
 async def test_the_client_heartbeats_without_being_asked(
