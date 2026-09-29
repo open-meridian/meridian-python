@@ -63,11 +63,15 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 # there and another way everywhere else.
 [tool.ruff.lint.isort]
 known-first-party = ["meridian"]
+# The template's package, sorted apart from the SDK, as it is in a plugin made
+# from the template: there `meridian` is somebody else's and the plugin's own
+# package is first-party, so the template's test sorts the same both ways.
+known-local-folder = ["reference_plugin"]
 
 [tool.mypy]
 python_version = "3.11"
 strict = true
-files = ["src", "template/src"]
+files = ["src", "template/src", "template/tests"]
 exclude = ["src/meridian/v1/", "src/meridian/plugin/"]
 # The bindings ship .pyi for the messages, so those are type-checked where the
 # SDK uses them. The gRPC stubs have none -- grpcio-tools does not emit them --

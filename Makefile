@@ -163,7 +163,7 @@ test:
 	@$(DOCKER) build $(CONTEXTS) -f Dockerfile.python --target test . >/dev/null 2>&1 \
 		|| { echo "test FAILED; see it with:" >&2; \
 		     echo "  DOCKER_BUILDKIT=1 docker build $(CONTEXTS) -f Dockerfile.python --target test --progress=plain ." >&2; exit 1; }
-	@echo "test OK: the client's tests pass"
+	@echo "test OK: the client's tests pass, and the template's own"
 
 # The fixtures are not in this repo. Mounted read-only from the design repo, so
 # this SDK and the Rust runtime assert against the same pinned bytes rather than
@@ -191,7 +191,7 @@ lint:
 # Applied in a container and written back, because the host has no toolchain.
 fmt:
 	@docker run --rm -v "$(CURDIR)":/w -w /w python:$(PY_VERSION)-slim \
-		sh -c 'pip install -q ruff >/dev/null 2>&1; python -m ruff check --fix src tests template/src >/dev/null; python -m ruff format src tests template/src'
+		sh -c 'pip install -q ruff >/dev/null 2>&1; python -m ruff check --fix src tests template/src template/tests >/dev/null; python -m ruff format src tests template/src template/tests'
 	@echo "fmt: applied"
 
 install-hooks:
