@@ -108,16 +108,44 @@ class Grants:
 
 
 @dataclass(frozen=True)
+class Page:
+    """One of the plugin's pages, at a path on its own host."""
+
+    path: str
+    title: str
+
+
+@dataclass(frozen=True)
 class Interface:
     """A page the plugin serves to people, on loopback (W6.9).
 
     Only the plugin's sidecar reaches it, forwarding requests the dashboard
     vouched for; who is asking is in the `Meridian-Caller` header, which
     `Caller.from_header` reads.
+
+    `admin_pages` are shown as tabs in the dashboard's admin view of the
+    instance, in order, each framing its path; serve them to a caller whose
+    `deployment_admin` is true and to nobody else.
     """
 
     port: int
     title: str
+    admin_pages: tuple[Page, ...] = ()
+
+    def _declared(self) -> sidecar_pb2.InterfaceDeclaration:
+        for page in self.admin_pages:
+            if not page.path.startswith("/"):
+                raise ValueError(
+                    f"admin page {page.title!r} has path {page.path!r}; begin it with /"
+                )
+        return sidecar_pb2.InterfaceDeclaration(
+            loopback_port=self.port,
+            title=self.title,
+            admin_pages=[
+                sidecar_pb2.PageDeclaration(path=page.path, title=page.title)
+                for page in self.admin_pages
+            ],
+        )
 
 
 @dataclass(frozen=True)
@@ -476,13 +504,7 @@ async def connect(
         reply = await stub.Register(
             sidecar_pb2.RegisterRequest(
                 schema_version=SCHEMA_VERSION,
-                interface=(
-                    sidecar_pb2.InterfaceDeclaration(
-                        loopback_port=interface.port, title=interface.title
-                    )
-                    if interface is not None
-                    else None
-                ),
+                interface=interface._declared() if interface is not None else None,
                 settings=[setting._declared() for setting in settings],
                 reads_external_accounts=reads_external_accounts,
             ),

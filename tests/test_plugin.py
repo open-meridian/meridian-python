@@ -22,6 +22,7 @@ from meridian import (
     Choice,
     Interface,
     NotRegistered,
+    Page,
     Refused,
     Setting,
     Settings,
@@ -105,6 +106,23 @@ async def test_a_page_and_settings_are_declared_at_registration(
 def test_a_setting_of_a_kind_the_contract_does_not_carry_is_refused() -> None:
     with pytest.raises(TypeError, match="str, int or bool"):
         Setting("ratio", kind=float)._declared()
+
+
+def test_admin_pages_are_declared_in_order_as_tabs() -> None:
+    declared = Interface(
+        8000,
+        "SnapTrade",
+        admin_pages=(
+            Page("/admin/connections", "Connections"),
+            Page("/admin/accounts", "Accounts"),
+        ),
+    )._declared()
+    assert [(page.path, page.title) for page in declared.admin_pages] == [
+        ("/admin/connections", "Connections"),
+        ("/admin/accounts", "Accounts"),
+    ]
+    with pytest.raises(ValueError, match="begin it with /"):
+        Interface(8000, "x", admin_pages=(Page("admin", "Admin"),))._declared()
 
 
 def test_a_declaration_says_what_the_form_needs() -> None:

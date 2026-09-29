@@ -32,12 +32,22 @@ class RegisterRequest(_message.Message):
     def __init__(self, schema_version: _Optional[str] = ..., interface: _Optional[_Union[InterfaceDeclaration, _Mapping]] = ..., settings: _Optional[_Iterable[_Union[SettingDeclaration, _Mapping]]] = ..., reads_external_accounts: bool = ...) -> None: ...
 
 class InterfaceDeclaration(_message.Message):
-    __slots__ = ("loopback_port", "title")
+    __slots__ = ("loopback_port", "title", "admin_pages")
     LOOPBACK_PORT_FIELD_NUMBER: _ClassVar[int]
     TITLE_FIELD_NUMBER: _ClassVar[int]
+    ADMIN_PAGES_FIELD_NUMBER: _ClassVar[int]
     loopback_port: int
     title: str
-    def __init__(self, loopback_port: _Optional[int] = ..., title: _Optional[str] = ...) -> None: ...
+    admin_pages: _containers.RepeatedCompositeFieldContainer[PageDeclaration]
+    def __init__(self, loopback_port: _Optional[int] = ..., title: _Optional[str] = ..., admin_pages: _Optional[_Iterable[_Union[PageDeclaration, _Mapping]]] = ...) -> None: ...
+
+class PageDeclaration(_message.Message):
+    __slots__ = ("path", "title")
+    PATH_FIELD_NUMBER: _ClassVar[int]
+    TITLE_FIELD_NUMBER: _ClassVar[int]
+    path: str
+    title: str
+    def __init__(self, path: _Optional[str] = ..., title: _Optional[str] = ...) -> None: ...
 
 class SettingDeclaration(_message.Message):
     __slots__ = ("name", "type", "required", "secret", "description", "label", "default_value", "unit", "choices", "applies_when", "developer")
