@@ -86,6 +86,10 @@ class FakeOperations(operations_pb2_grpc.PluginOperationsServicer):
                     account_id="ACC-1",
                     name="Growth",
                     state=operations_pb2.ACCOUNT_STATE_OPEN,
+                    custodian="Fidelity",
+                    account_type="Roth IRA",
+                    owner="Fund I",
+                    note="Rollover, 2026.",
                 )
             ]
         )

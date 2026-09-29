@@ -261,6 +261,10 @@ class Operations:
         external_account_id: str = "",
         account_id: str = "",
         new_account_name: str = "",
+        new_account_custodian: str = "",
+        new_account_type: str = "",
+        new_account_owner: str = "",
+        new_account_note: str = "",
         acting_for: str | None = None,
     ) -> ops.LinkExternalAccountResult:
         """W6.4: Links an external account a plugin reported, or removes its link."""
@@ -268,6 +272,10 @@ class Operations:
             external_account_id=external_account_id,
             account_id=account_id,
             new_account_name=new_account_name,
+            new_account_custodian=new_account_custodian,
+            new_account_type=new_account_type,
+            new_account_owner=new_account_owner,
+            new_account_note=new_account_note,
             acting_for=_assertion(acting_for),
         )
         return await self._operate(self._operations().LinkExternalAccount, params)

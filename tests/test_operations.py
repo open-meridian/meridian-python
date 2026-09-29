@@ -257,6 +257,10 @@ async def test_a_link_names_an_account_a_new_one_or_neither_for_the_admin(sideca
         created = await plugin.link_external_account(
             external_account_id="st-acct-4471",
             new_account_name="Fidelity Brokerage",
+            new_account_custodian="Fidelity",
+            new_account_type="Roth IRA",
+            new_account_owner="Fund I",
+            new_account_note="Linked from SnapTrade.",
             acting_for=header,
         )
         removed = await plugin.link_external_account(
@@ -273,6 +277,15 @@ async def test_a_link_names_an_account_a_new_one_or_neither_for_the_admin(sideca
     assert isinstance(to_existing, operations_pb2.LinkExternalAccountParams)
     assert (to_existing.account_id, to_existing.new_account_name) == ("ACC-1", "")
     assert (to_new.account_id, to_new.new_account_name) == ("", "Fidelity Brokerage")
+    # A new account's custodian, type, owner and note (W6.3), as the plugin
+    # pre-filled them from the venue; sent only when asked.
+    assert (
+        to_new.new_account_custodian,
+        to_new.new_account_type,
+        to_new.new_account_owner,
+        to_new.new_account_note,
+    ) == ("Fidelity", "Roth IRA", "Fund I", "Linked from SnapTrade.")
+    assert (to_existing.new_account_custodian, to_existing.new_account_type) == ("", "")
     assert (unlink.account_id, unlink.new_account_name) == ("", "")
     assert all(sent.acting_for == handed for sent in (to_existing, to_new, unlink))
     # The sidecar stamps the plugin; the plugin cannot name another.
@@ -281,8 +294,8 @@ async def test_a_link_names_an_account_a_new_one_or_neither_for_the_admin(sideca
 
 
 async def test_the_deployments_accounts_are_read_for_the_admin(sidecar) -> None:
-    """W6.4: names, identifiers and states, to offer beside each external
-    account the plugin reached."""
+    """W6.4: each account's identifier, name, state, custodian, type, owner
+    and note, to offer beside each external account the plugin reached."""
     handed, header = _header()
     service, _ = sidecar
     plugin = await connected(sidecar)
@@ -292,6 +305,13 @@ async def test_the_deployments_accounts_are_read_for_the_admin(sidecar) -> None:
         await plugin.leave()
     assert [(a.account_id, a.name) for a in read.accounts] == [("ACC-1", "Growth")]
     assert read.accounts[0].state == operations_pb2.ACCOUNT_STATE_OPEN
+    growth = read.accounts[0]
+    assert (growth.custodian, growth.account_type, growth.owner, growth.note) == (
+        "Fidelity",
+        "Roth IRA",
+        "Fund I",
+        "Rollover, 2026.",
+    )
     (sent,) = service.operations.sent
     assert sent.acting_for == handed
 

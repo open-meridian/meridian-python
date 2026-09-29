@@ -192,16 +192,24 @@ class ReportMissingInstrumentParams(_message.Message):
     def __init__(self, source: _Optional[str] = ..., asset_class: _Optional[str] = ..., identifiers: _Optional[_Iterable[_Union[Identifier, _Mapping]]] = ..., as_of_ns: _Optional[int] = ..., reason: _Optional[_Union[MissReason, str]] = ..., observed_at_ns: _Optional[int] = ...) -> None: ...
 
 class LinkExternalAccountParams(_message.Message):
-    __slots__ = ("external_account_id", "account_id", "new_account_name", "acting_for")
+    __slots__ = ("external_account_id", "account_id", "new_account_name", "new_account_custodian", "new_account_type", "new_account_owner", "new_account_note", "acting_for")
     EXTERNAL_ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
     ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
     NEW_ACCOUNT_NAME_FIELD_NUMBER: _ClassVar[int]
+    NEW_ACCOUNT_CUSTODIAN_FIELD_NUMBER: _ClassVar[int]
+    NEW_ACCOUNT_TYPE_FIELD_NUMBER: _ClassVar[int]
+    NEW_ACCOUNT_OWNER_FIELD_NUMBER: _ClassVar[int]
+    NEW_ACCOUNT_NOTE_FIELD_NUMBER: _ClassVar[int]
     ACTING_FOR_FIELD_NUMBER: _ClassVar[int]
     external_account_id: str
     account_id: str
     new_account_name: str
+    new_account_custodian: str
+    new_account_type: str
+    new_account_owner: str
+    new_account_note: str
     acting_for: _sidecar_pb2.CallerAssertion
-    def __init__(self, external_account_id: _Optional[str] = ..., account_id: _Optional[str] = ..., new_account_name: _Optional[str] = ..., acting_for: _Optional[_Union[_sidecar_pb2.CallerAssertion, _Mapping]] = ...) -> None: ...
+    def __init__(self, external_account_id: _Optional[str] = ..., account_id: _Optional[str] = ..., new_account_name: _Optional[str] = ..., new_account_custodian: _Optional[str] = ..., new_account_type: _Optional[str] = ..., new_account_owner: _Optional[str] = ..., new_account_note: _Optional[str] = ..., acting_for: _Optional[_Union[_sidecar_pb2.CallerAssertion, _Mapping]] = ...) -> None: ...
 
 class LinkExternalAccountResult(_message.Message):
     __slots__ = ("plugin_instance_id", "external_account_id", "account_id")
@@ -264,13 +272,21 @@ class Identifier(_message.Message):
     def __init__(self, scheme: _Optional[str] = ..., value: _Optional[str] = ..., source: _Optional[str] = ...) -> None: ...
 
 class AccountRecord(_message.Message):
-    __slots__ = ("account_id", "name", "state", "created_at_ns")
+    __slots__ = ("account_id", "name", "state", "created_at_ns", "custodian", "account_type", "owner", "note")
     ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
     NAME_FIELD_NUMBER: _ClassVar[int]
     STATE_FIELD_NUMBER: _ClassVar[int]
     CREATED_AT_NS_FIELD_NUMBER: _ClassVar[int]
+    CUSTODIAN_FIELD_NUMBER: _ClassVar[int]
+    ACCOUNT_TYPE_FIELD_NUMBER: _ClassVar[int]
+    OWNER_FIELD_NUMBER: _ClassVar[int]
+    NOTE_FIELD_NUMBER: _ClassVar[int]
     account_id: str
     name: str
     state: AccountState
     created_at_ns: int
-    def __init__(self, account_id: _Optional[str] = ..., name: _Optional[str] = ..., state: _Optional[_Union[AccountState, str]] = ..., created_at_ns: _Optional[int] = ...) -> None: ...
+    custodian: str
+    account_type: str
+    owner: str
+    note: str
+    def __init__(self, account_id: _Optional[str] = ..., name: _Optional[str] = ..., state: _Optional[_Union[AccountState, str]] = ..., created_at_ns: _Optional[int] = ..., custodian: _Optional[str] = ..., account_type: _Optional[str] = ..., owner: _Optional[str] = ..., note: _Optional[str] = ...) -> None: ...

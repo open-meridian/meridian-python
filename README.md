@@ -85,9 +85,22 @@ await plugin.link_external_account(
 )
 # Or a new account, created and linked in one step; or neither, to unlink.
 await plugin.link_external_account(
-    external_account_id="acct-2", new_account_name="Roth IRA", acting_for=header
+    external_account_id="acct-2",
+    new_account_name="Fidelity Roth",
+    # Optional, free text, and ignored when linking to an existing account:
+    # pre-fill what the venue reported, for the admin to change.
+    new_account_custodian="Fidelity",
+    new_account_type="Roth IRA",
+    new_account_owner="Fund I",
+    new_account_note="Linked from the Accounts tab.",
+    acting_for=header,
 )
 ```
+
+Each account read carries its `custodian`, `account_type`, `owner` and `note`
+beside its name and state, any of them empty, so a page can tell two accounts
+of the same name apart. The conductor refuses more than 200 characters in the
+first three, or 2,000 in the note, naming the field.
 
 ### Quantities and money
 
