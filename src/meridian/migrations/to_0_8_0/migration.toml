@@ -1,0 +1,12 @@
+# open-meridian 0.7.1 to 0.8.0: the SDK declares contract v3. Nothing a plugin
+# calls changed, so only the pins move.
+from = "0.7.1"
+to = "0.8.0"
+summary = """
+The SDK declares contract v3 (meridian.SCHEMA_VERSION). A plugin built on it
+is refused at registration by a sidecar that accepts only v2, naming both,
+instead of running without what it was built for; relaunch it on a
+deployment whose sidecar accepts v3. Nothing a plugin calls changed, so only
+the pins move.
+"""
+breaking = false
