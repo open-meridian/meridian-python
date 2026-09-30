@@ -6,6 +6,13 @@ from typing import ClassVar as _ClassVar, Iterable as _Iterable, Mapping as _Map
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
+class AccessLevel(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    ACCESS_LEVEL_UNSPECIFIED: _ClassVar[AccessLevel]
+    ACCESS_LEVEL_READ: _ClassVar[AccessLevel]
+    ACCESS_LEVEL_WRITE: _ClassVar[AccessLevel]
+    ACCESS_LEVEL_ADMIN: _ClassVar[AccessLevel]
+
 class SettingType(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
     SETTING_TYPE_UNSPECIFIED: _ClassVar[SettingType]
@@ -18,6 +25,10 @@ class RefusalReason(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
     REFUSAL_REASON_UNSPECIFIED: _ClassVar[RefusalReason]
     REFUSAL_REASON_EXTERNAL_ACCOUNT_NOT_LINKED: _ClassVar[RefusalReason]
+ACCESS_LEVEL_UNSPECIFIED: AccessLevel
+ACCESS_LEVEL_READ: AccessLevel
+ACCESS_LEVEL_WRITE: AccessLevel
+ACCESS_LEVEL_ADMIN: AccessLevel
 SETTING_TYPE_UNSPECIFIED: SettingType
 SETTING_TYPE_STRING: SettingType
 SETTING_TYPE_INTEGER: SettingType
@@ -39,22 +50,24 @@ class RegisterRequest(_message.Message):
     def __init__(self, schema_version: _Optional[str] = ..., interface: _Optional[_Union[InterfaceDeclaration, _Mapping]] = ..., settings: _Optional[_Iterable[_Union[SettingDeclaration, _Mapping]]] = ..., reads_external_accounts: bool = ...) -> None: ...
 
 class InterfaceDeclaration(_message.Message):
-    __slots__ = ("loopback_port", "title", "admin_pages")
+    __slots__ = ("loopback_port", "title", "pages")
     LOOPBACK_PORT_FIELD_NUMBER: _ClassVar[int]
     TITLE_FIELD_NUMBER: _ClassVar[int]
-    ADMIN_PAGES_FIELD_NUMBER: _ClassVar[int]
+    PAGES_FIELD_NUMBER: _ClassVar[int]
     loopback_port: int
     title: str
-    admin_pages: _containers.RepeatedCompositeFieldContainer[PageDeclaration]
-    def __init__(self, loopback_port: _Optional[int] = ..., title: _Optional[str] = ..., admin_pages: _Optional[_Iterable[_Union[PageDeclaration, _Mapping]]] = ...) -> None: ...
+    pages: _containers.RepeatedCompositeFieldContainer[PageDeclaration]
+    def __init__(self, loopback_port: _Optional[int] = ..., title: _Optional[str] = ..., pages: _Optional[_Iterable[_Union[PageDeclaration, _Mapping]]] = ...) -> None: ...
 
 class PageDeclaration(_message.Message):
-    __slots__ = ("path", "title")
+    __slots__ = ("path", "title", "levels")
     PATH_FIELD_NUMBER: _ClassVar[int]
     TITLE_FIELD_NUMBER: _ClassVar[int]
+    LEVELS_FIELD_NUMBER: _ClassVar[int]
     path: str
     title: str
-    def __init__(self, path: _Optional[str] = ..., title: _Optional[str] = ...) -> None: ...
+    levels: _containers.RepeatedScalarFieldContainer[AccessLevel]
+    def __init__(self, path: _Optional[str] = ..., title: _Optional[str] = ..., levels: _Optional[_Iterable[_Union[AccessLevel, str]]] = ...) -> None: ...
 
 class SettingDeclaration(_message.Message):
     __slots__ = ("name", "type", "required", "secret", "description", "label", "default_value", "unit", "choices", "applies_when", "developer")
@@ -171,10 +184,11 @@ class CallerAssertion(_message.Message):
     def __init__(self, claims: _Optional[bytes] = ..., signature: _Optional[bytes] = ..., key_id: _Optional[str] = ...) -> None: ...
 
 class CallerClaims(_message.Message):
-    __slots__ = ("subject", "display_name", "audience_instance_id", "read_account_ids", "write_account_ids", "issued_at_ns", "expires_at_ns", "assertion_id", "deployment_admin")
+    __slots__ = ("subject", "display_name", "audience_instance_id", "level", "read_account_ids", "write_account_ids", "issued_at_ns", "expires_at_ns", "assertion_id", "deployment_admin")
     SUBJECT_FIELD_NUMBER: _ClassVar[int]
     DISPLAY_NAME_FIELD_NUMBER: _ClassVar[int]
     AUDIENCE_INSTANCE_ID_FIELD_NUMBER: _ClassVar[int]
+    LEVEL_FIELD_NUMBER: _ClassVar[int]
     READ_ACCOUNT_IDS_FIELD_NUMBER: _ClassVar[int]
     WRITE_ACCOUNT_IDS_FIELD_NUMBER: _ClassVar[int]
     ISSUED_AT_NS_FIELD_NUMBER: _ClassVar[int]
@@ -184,13 +198,14 @@ class CallerClaims(_message.Message):
     subject: str
     display_name: str
     audience_instance_id: str
+    level: AccessLevel
     read_account_ids: _containers.RepeatedScalarFieldContainer[str]
     write_account_ids: _containers.RepeatedScalarFieldContainer[str]
     issued_at_ns: int
     expires_at_ns: int
     assertion_id: str
     deployment_admin: bool
-    def __init__(self, subject: _Optional[str] = ..., display_name: _Optional[str] = ..., audience_instance_id: _Optional[str] = ..., read_account_ids: _Optional[_Iterable[str]] = ..., write_account_ids: _Optional[_Iterable[str]] = ..., issued_at_ns: _Optional[int] = ..., expires_at_ns: _Optional[int] = ..., assertion_id: _Optional[str] = ..., deployment_admin: bool = ...) -> None: ...
+    def __init__(self, subject: _Optional[str] = ..., display_name: _Optional[str] = ..., audience_instance_id: _Optional[str] = ..., level: _Optional[_Union[AccessLevel, str]] = ..., read_account_ids: _Optional[_Iterable[str]] = ..., write_account_ids: _Optional[_Iterable[str]] = ..., issued_at_ns: _Optional[int] = ..., expires_at_ns: _Optional[int] = ..., assertion_id: _Optional[str] = ..., deployment_admin: bool = ...) -> None: ...
 
 class PluginAccessRequest(_message.Message):
     __slots__ = ()

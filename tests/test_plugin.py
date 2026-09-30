@@ -50,21 +50,20 @@ async def test_registering_sends_no_identity(sidecar: tuple[FakeSidecar, str]) -
 async def test_the_sdk_declares_the_contract_it_was_built_for(
     sidecar: tuple[FakeSidecar, str],
 ) -> None:
-    """v4: the asset class is an enum on a reported miss
-    (sdk-contract/asset-class-is-an-enum), after v3's links on the
-    account-scope stream and the refusal code.
+    """v5: one list of pages, each with the levels it serves, and the level a
+    session was opened at in the claims (sdk-contract/a-plugin-has-admins),
+    after v4's asset class as an enum and v3's links and refusal code.
 
-    A sidecar from before it, still at v3, reads the free-text field the enum
-    replaced and would drop the class, so it refuses the plugin at
-    registration, naming both.
+    A sidecar from before it, still at v4, reads no page's levels and no
+    session's level, so it refuses the plugin at registration, naming both.
     """
     service, address = sidecar
     plugin = await meridian.connect(address, heartbeat=False)
     await plugin.leave()
 
     (sent,) = service.registered
-    assert meridian.SCHEMA_VERSION == "v4"
-    assert sent.schema_version == "v4"
+    assert meridian.SCHEMA_VERSION == "v5"
+    assert sent.schema_version == "v5"
 
 
 async def test_identity_and_grants_come_back(sidecar: tuple[FakeSidecar, str]) -> None:
@@ -127,21 +126,63 @@ def test_a_setting_of_a_kind_the_contract_does_not_carry_is_refused() -> None:
         Setting("ratio", kind=float)._declared()
 
 
-def test_admin_pages_are_declared_in_order_as_tabs() -> None:
+ADMIN = sidecar_pb2.ACCESS_LEVEL_ADMIN
+WRITE = sidecar_pb2.ACCESS_LEVEL_WRITE
+READ = sidecar_pb2.ACCESS_LEVEL_READ
+
+
+def test_pages_are_declared_in_order_each_with_the_levels_it_serves() -> None:
     declared = Interface(
         8000,
         "SnapTrade",
-        admin_pages=(
-            Page("/admin/connections", "Connections"),
-            Page("/admin/accounts", "Accounts"),
+        pages=(
+            Page("/", "Statements", levels=["write", "read"]),
+            Page("/admin/connections", "Connections", levels="admin"),
+            Page(
+                "/both",
+                "Both",
+                levels=(meridian.AccessLevel.ACCESS_LEVEL_ADMIN, "ACCESS_LEVEL_READ"),
+            ),
         ),
     )._declared()
-    assert [(page.path, page.title) for page in declared.admin_pages] == [
-        ("/admin/connections", "Connections"),
-        ("/admin/accounts", "Accounts"),
+    assert [(page.path, page.title, list(page.levels)) for page in declared.pages] == [
+        ("/", "Statements", [WRITE, READ]),
+        ("/admin/connections", "Connections", [ADMIN]),
+        ("/both", "Both", [ADMIN, READ]),
     ]
+    assert "admin_pages" not in sidecar_pb2.InterfaceDeclaration.DESCRIPTOR.fields_by_name
+
+
+def test_a_page_naming_no_level_or_one_outside_the_three_is_refused() -> None:
+    # W4.8: refused at registration by the sidecar; here, before it is sent.
+    with pytest.raises(ValueError, match="names no level"):
+        Interface(8000, "x", pages=(Page("/", "Home"),))._declared()
+    with pytest.raises(ValueError, match="AccessLevel does not define"):
+        Page("/", "Home", levels=["owner"])
+    with pytest.raises(ValueError, match="which is no level"):
+        Page("/", "Home", levels=["unspecified"])
     with pytest.raises(ValueError, match="begin it with /"):
-        Interface(8000, "x", admin_pages=(Page("admin", "Admin"),))._declared()
+        Interface(8000, "x", pages=(Page("admin", "Admin", levels="admin"),))._declared()
+
+
+def test_the_retired_admin_pages_are_still_taken_as_pages_at_admin() -> None:
+    """For one release: `meridian plugin migrate` rewrites them into pages."""
+    with pytest.warns(DeprecationWarning, match="admin_pages"):
+        interface = Interface(
+            8000,
+            "SnapTrade",
+            admin_pages=(
+                Page("/admin/connections", "Connections"),
+                Page("/admin/accounts", "Accounts"),
+            ),
+            pages=(Page("/", "Statements", levels=["write", "read"]),),
+        )
+    declared = interface._declared()
+    assert [(page.path, list(page.levels)) for page in declared.pages] == [
+        ("/", [WRITE, READ]),
+        ("/admin/connections", [ADMIN]),
+        ("/admin/accounts", [ADMIN]),
+    ]
 
 
 def test_a_declaration_says_what_the_form_needs() -> None:
@@ -352,6 +393,22 @@ def test_a_caller_is_read_from_the_header_its_sidecar_forwarded() -> None:
     assert caller.read == {"ACC-1", "ACC-2"} and caller.write == {"ACC-1"}
     assert caller.header == header, "handed back unaltered as acting_for"
     assert not caller.deployment_admin, "absent means not"
+    assert caller.level == sidecar_pb2.ACCESS_LEVEL_UNSPECIFIED, "absent means none"
+    assert not caller.admin
+
+
+def test_a_caller_says_the_level_their_session_was_opened_at() -> None:
+    """W6.9: Manage opens a session at admin, Open at write, View at read."""
+    for level, admin in ((ADMIN, True), (WRITE, False), (READ, False)):
+        claims = sidecar_pb2.CallerClaims(subject="local|ada", level=level)
+        assertion = sidecar_pb2.CallerAssertion(claims=claims.SerializeToString())
+        header = base64.urlsafe_b64encode(assertion.SerializeToString()).decode().rstrip("=")
+        caller = Caller.from_header(header)
+        assert caller.level == level and caller.admin is admin
+        assert Page("/", "Home", levels=[level]).serves(caller)
+        assert not Page(
+            "/", "Home", levels=[x for x in (ADMIN, WRITE, READ) if x != level]
+        ).serves(caller)
 
 
 def test_access_tag_by_tag_is_gone_and_says_why() -> None:

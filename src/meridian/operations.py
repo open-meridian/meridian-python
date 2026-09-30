@@ -309,7 +309,7 @@ class Operations:
         *,
         acting_for: str | None = None,
     ) -> ops.ReadAccountsForLinkingResult:
-        """W6.4: The deployment's accounts, read by a plugin acting for a deployment admin."""
+        """W6.4: The deployment's accounts, read by a plugin acting for its admin."""
         params = ops.ReadAccountsForLinkingParams(
             acting_for=_assertion(acting_for),
         )

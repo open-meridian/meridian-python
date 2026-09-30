@@ -1,0 +1,60 @@
+# open-meridian 0.9.0 to 0.10.0: the SDK declares contract v5; a plugin's pages
+# are one list, each with the levels it serves, and a session carries the
+# level it was opened at (sdk-contract/a-plugin-has-admins).
+from = "0.9.0"
+to = "0.10.0"
+summary = """
+The SDK declares contract v5 (meridian.SCHEMA_VERSION). A person may hold admin
+on a plugin beside read or write, and opens it by the dashboard's Manage (admin),
+Open (write) or View (read); Caller.level is the level the session was opened at,
+Caller.admin whether that is Manage, and the claims' accounts are cut to it, none
+under Manage. A plugin's pages are one list, each with the levels it serves:
+Interface(pages=...) takes a meridian.Pages registry, whose @pages.page and
+@pages.route declare a page where its view is and refuse a session at any other
+level, or Page(path, title, levels=[...]); pages.render renders a page's Jinja2
+template on the kit's base template, meridian/base.html (jinja2 is a new
+dependency, in the plugin base image), and a Pages route refuses any request
+but GET and HEAD without the page's CSRF token ({{ csrf_input }} in a form).
+Interface(admin_pages=...) is still
+taken on 0.10.0, as pages at admin, with a DeprecationWarning; this step rewrites
+it. Caller.deployment_admin no longer opens a plugin's admin pages. A plugin built
+on 0.10.0 is refused at registration by a sidecar that accepts only v4, naming
+both.
+"""
+# admin_pages= and Page(path, title) still work on 0.10.0, read as pages at
+# admin, so a plugin that is not migrated still registers and serves its pages.
+breaking = false
+rewrite = "rewrite.py"
+
+[[rewrites]]
+rule = "admin-pages-keyword"
+what = """an Interface call's admin_pages= became pages=, its pages taken at admin \
+(the page-at-admin rewrite gives each its level)"""
+
+[[rewrites]]
+rule = "page-at-admin"
+what = """a Page(path, title) naming no levels, which on 0.9.0 could only be an \
+admin page, became Page(path, title, levels=["admin"])"""
+
+[[by_hand]]
+rule = "deployment-admin-gate"
+what = """caller.deployment_admin read in the plugin's code, which on 0.9.0 decided \
+who was served its admin pages and since contract v5 opens no page: a deployment \
+admin holds on a plugin what their grants give, and a plugin admin need not be one"""
+instead = """serve a page at admin by the session's level: declare it with \
+@pages.page(path, title, levels=["admin"]), which refuses any other session, or ask \
+page.serves(caller) or caller.admin. Read deployment_admin only to offer a new \
+account when linking, which only a deployment admin may name (W6.4)"""
+
+[[by_hand]]
+rule = "admin-pages-read"
+what = """admin_pages read as an attribute (interface.admin_pages, or the declaration's, \
+which contract v5 reserved)"""
+instead = """read pages: every page with its levels, a page at admin being one whose \
+levels include meridian.AccessLevel.ACCESS_LEVEL_ADMIN"""
+
+[[by_hand]]
+rule = "admin-pages-positional"
+what = """an Interface call given its admin pages as its third argument, still taken \
+on 0.10.0 as pages at admin, with a DeprecationWarning"""
+instead = """pass them as pages=, each Page with levels=["admin"]"""

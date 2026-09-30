@@ -24,10 +24,11 @@ import asyncio
 import base64
 import contextlib
 import os
+import warnings
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 from types import TracebackType
-from typing import Any, NoReturn, TypeVar
+from typing import TYPE_CHECKING, Any, NoReturn, TypeVar, cast
 
 import grpc
 
@@ -35,16 +36,20 @@ from meridian.plugin.v1 import operations_pb2_grpc
 from meridian.v1 import sidecar_pb2, sidecar_pb2_grpc
 
 from .errors import CallFailed, NoSidecar, NotGranted, NotLinked, NotRegistered, Refused
-from .operations import Operations
+from .operations import Operations, _enum
+
+if TYPE_CHECKING:
+    from .pages import Pages
 
 #: The contract version this SDK was built for, sent at registration (W4.1). A
 #: sidecar older than this refuses the plugin at the door, naming both versions,
 #: rather than admitting it to run without what the SDK reads -- its links on
 #: the account-scope stream, the refusal code beside a refusal, the asset class
-#: as an enum on a miss it reports -- and a newer sidecar still admits it.
-#: Raised with every contract revision that adds something a plugin can depend
-#: on.
-SCHEMA_VERSION = "v4"
+#: as an enum on a miss it reports, its pages each declared with the levels it
+#: serves, and the level a session was opened at -- and a newer sidecar still
+#: admits it. Raised with every contract revision that adds something a plugin
+#: can depend on.
+SCHEMA_VERSION = "v5"
 
 #: Where a sidecar listens. Loopback, always: a sidecar reachable from another
 #: host is a way around the boundary it exists to enforce.
@@ -126,12 +131,74 @@ class Grants:
     subscribe: tuple[str, ...] = ()
 
 
+#: A person's level on a plugin, the same three for every plugin (W6.7): the
+#: level a session was opened at -- Manage `admin`, Open `write`, View `read`
+#: -- and the levels a page serves (W4.8).
+AccessLevel = sidecar_pb2.AccessLevel
+
+#: The home's button for each level (W6.9).
+BUTTONS: dict[int, str] = {
+    sidecar_pb2.ACCESS_LEVEL_ADMIN: "Manage",
+    sidecar_pb2.ACCESS_LEVEL_WRITE: "Open",
+    sidecar_pb2.ACCESS_LEVEL_READ: "View",
+}
+
+
+def _levels(given: Sequence[str | int] | str | int, where: str) -> tuple[int, ...]:
+    """Levels as the wire carries them, each an `AccessLevel`, its name
+    (ACCESS_LEVEL_ADMIN) or its ruled spelling (admin, write, read); one given
+    alone is taken as one. Anything else is refused, naming where."""
+    if isinstance(given, (str, int)):
+        given = (given,)
+    levels: list[int] = []
+    for each in given:
+        level = _enum(AccessLevel, each, where)
+        if level is None or level == sidecar_pb2.ACCESS_LEVEL_UNSPECIFIED:
+            raise ValueError(f"{where} names {each!r}, which is no level: admin, write or read")
+        if level not in levels:
+            levels.append(level)
+    return tuple(levels)
+
+
 @dataclass(frozen=True)
 class Page:
-    """One of the plugin's pages, at a path on its own host."""
+    """One of the plugin's pages, at a path on its own host, and the levels it
+    serves (W4.8): its tab shows under the home's button for each -- Manage
+    `admin`, Open `write`, View `read` -- and one path may serve several,
+    adapting by the session's level.
+
+    `levels` takes `AccessLevel` values, their names or the ruled spelling:
+    `Page("/statements", "Statements", levels=["write", "read"])`. A page in
+    `Interface.pages` names at least one. `Pages` declares a page where its
+    view is and refuses a session at a level it does not serve; a plugin on
+    another framework asks `page.serves(caller)` itself.
+    """
 
     path: str
     title: str
+    levels: Sequence[str | int] = ()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "levels", _levels(self.levels, f"page {self.title!r}"))
+
+    def serves(self, caller: Caller) -> bool:
+        """Whether this page is served in the caller's session: its level is
+        one the page declares. A session at no level is served nothing."""
+        return caller.level in self.levels
+
+    def _declared(self) -> sidecar_pb2.PageDeclaration:
+        if not self.path.startswith("/"):
+            raise ValueError(f"page {self.title!r} has path {self.path!r}; begin it with /")
+        if not self.levels:
+            raise ValueError(
+                f"page {self.title!r} names no level: give levels=, one or several of "
+                "admin, write and read"
+            )
+        return sidecar_pb2.PageDeclaration(
+            path=self.path,
+            title=self.title,
+            levels=cast(Any, list(self.levels)),
+        )
 
 
 @dataclass(frozen=True)
@@ -142,28 +209,44 @@ class Interface:
     vouched for; who is asking is in the `Meridian-Caller` header, which
     `Caller.from_header` reads.
 
-    `admin_pages` are shown as tabs in the dashboard's admin view of the
-    instance, in order, each framing its path; serve them to a caller whose
-    `deployment_admin` is true and to nobody else.
+    `pages` are the plugin's pages, one list in the order shown (W4.8): a
+    `Pages` registry, which declares each page where its view is and refuses
+    a session at a level the page does not serve, or `Page`s, each with its
+    levels. The plugin's area on the dashboard shows under each button the
+    pages whose levels include its level, framing each at its path.
+
+    `admin_pages`, the list contract v5 retired, is still taken for this
+    release, as pages at `admin` after `pages`, with a DeprecationWarning;
+    `meridian plugin migrate` rewrites it into `pages`.
     """
 
     port: int
     title: str
-    admin_pages: tuple[Page, ...] = ()
+    admin_pages: Sequence[Page] = ()
+    pages: Pages | Sequence[Page] = field(default=(), kw_only=True)
+
+    def __post_init__(self) -> None:
+        if self.admin_pages:
+            warnings.warn(
+                "Interface(admin_pages=...) is retired by contract v5: declare "
+                'pages=, a page at admin with levels=["admin"]. `meridian plugin '
+                "migrate` rewrites it",
+                DeprecationWarning,
+                stacklevel=3,
+            )
 
     def _declared(self) -> sidecar_pb2.InterfaceDeclaration:
-        for page in self.admin_pages:
-            if not page.path.startswith("/"):
-                raise ValueError(
-                    f"admin page {page.title!r} has path {page.path!r}; begin it with /"
-                )
+        from .pages import Pages
+
+        pages = self.pages.declared if isinstance(self.pages, Pages) else tuple(self.pages)
+        retired = tuple(
+            Page(page.path, page.title, levels=(sidecar_pb2.ACCESS_LEVEL_ADMIN,))
+            for page in self.admin_pages
+        )
         return sidecar_pb2.InterfaceDeclaration(
             loopback_port=self.port,
             title=self.title,
-            admin_pages=[
-                sidecar_pb2.PageDeclaration(path=page.path, title=page.title)
-                for page in self.admin_pages
-            ],
+            pages=[page._declared() for page in (*pages, *retired)],
         )
 
 
@@ -286,7 +369,7 @@ class Settings:
 @dataclass(frozen=True)
 class LinkedExternalAccount:
     """One of this plugin's external accounts, linked to one of the
-    deployment's accounts by a deployment admin (W6.4)."""
+    deployment's accounts by an admin of the plugin (W6.4)."""
 
     external_account_id: str
     account_id: str
@@ -332,10 +415,15 @@ class Caller:
     every other claim the request arrived with. Hand `header` back as
     `acting_for` on a command to send it for this person (W4.9).
 
-    Their access is this plugin's, whole: `read`, the accounts the plugin may
-    show them, and `write`, the accounts it may act on for them, which are
-    also in `read`. A person's access to a plugin is read or write, the same
-    for every plugin, and a plugin names no parts of itself (decisions/026).
+    `level` is the level the session was opened at, one the person holds on
+    this plugin: `AccessLevel.ACCESS_LEVEL_ADMIN` by the home's Manage,
+    `ACCESS_LEVEL_WRITE` by Open, `ACCESS_LEVEL_READ` by View (W6.9); unset,
+    the session holds nothing. The accounts are cut to it: `read`, the
+    accounts the plugin may show them, and `write`, the accounts it may act on
+    for them, which are also in `read` -- both under Open, `read` alone under
+    View, and neither under Manage, which sees no account's data. The levels
+    are the same for every plugin, and a plugin names no parts of itself
+    (decisions/026, 027).
     """
 
     subject: str
@@ -343,9 +431,11 @@ class Caller:
     header: str
     read: frozenset[str] = frozenset()
     write: frozenset[str] = frozenset()
-    # Whether the person is a deployment admin; a plugin serves its admin page
-    # to them and to nobody else (W6.9).
+    # Whether the person is a deployment admin. It opens no page and reaches
+    # no account: it says only that, linking an external account under
+    # Manage, they may name a new account rather than an existing one (W6.4).
     deployment_admin: bool = False
+    level: int = sidecar_pb2.ACCESS_LEVEL_UNSPECIFIED
 
     @classmethod
     def from_header(cls, header: str) -> Caller:
@@ -359,7 +449,14 @@ class Caller:
             read=frozenset(claims.read_account_ids),
             write=frozenset(claims.write_account_ids),
             deployment_admin=claims.deployment_admin,
+            level=claims.level,
         )
+
+    @property
+    def admin(self) -> bool:
+        """Whether the session was opened by Manage: the plugin's pages at
+        `admin`, configuration only, and no account's data (W6.9)."""
+        return self.level == sidecar_pb2.ACCESS_LEVEL_ADMIN
 
     def may_read(self, account_id: str) -> bool:
         return account_id in self.read

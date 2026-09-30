@@ -82,6 +82,10 @@ assert "meridian/migrations/to_0_6_1/migration.toml" in files, "the migrations' 
 assert "meridian/migrations/to_0_7_0/rewrite.py" in files, "the migrations' code is not in the package"
 runtime = [r for r in (dist.requires or []) if "extra ==" not in r]
 assert not [r for r in runtime if r.startswith("libcst")], f"libcst is a runtime dependency: {runtime}"
+# A plugin's pages are rendered with Jinja2 (meridian.pages), so every plugin
+# has it from the base image.
+assert [r for r in runtime if r.startswith("jinja2")], f"jinja2 is not a runtime dependency: {runtime}"
+import meridian.pages
 assert callable(meridian.connect)
 print("installed:", dist.metadata["Name"], dist.version, "schema", meridian.SCHEMA_VERSION)
 CHECK

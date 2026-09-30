@@ -9,6 +9,9 @@ another plugin.
         print(plugin.identity.roles)
         await plugin.report_sync_status(source="snaptrade", connection_healthy=True,
                                         external_account_id="acct-1")
+
+A plugin's pages are declared where their views are, each with the levels it
+serves, and refused to a session at any other (`Pages`, in `meridian.pages`).
 """
 
 from .asgi import CallerMiddleware
@@ -16,6 +19,7 @@ from .client import (
     _RETIRED_BY_026,
     DEFAULT_ADDRESS,
     SCHEMA_VERSION,
+    AccessLevel,
     AccountScope,
     AppliesWhen,
     Caller,
@@ -43,6 +47,7 @@ from .errors import (
 # An amount of currency as a typed operation takes one, and the two readers of
 # a number off the wire, generated with the operations (decisions/023).
 from .operations import Money, as_decimal, as_money
+from .pages import Pages, Request, Response
 
 # The plugin-facing mirrors a typed operation takes, generated with it.
 from .plugin.v1.operations_pb2 import (
@@ -57,6 +62,7 @@ from .plugin.v1.operations_pb2 import (
 __all__ = [
     "DEFAULT_ADDRESS",
     "SCHEMA_VERSION",
+    "AccessLevel",
     "AccountScope",
     "AppliesWhen",
     "AssetClass",
@@ -79,8 +85,11 @@ __all__ = [
     "NotLinked",
     "NotRegistered",
     "Page",
+    "Pages",
     "Plugin",
     "Refused",
+    "Request",
+    "Response",
     "Setting",
     "Settings",
     "SyncState",

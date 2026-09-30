@@ -95,9 +95,12 @@ def test_every_release_since_the_first_recorded_has_its_step() -> None:
         ("0.6.0", "0.6.1"),
         ("0.6.1", "0.7.0"),
     ]
-    assert (steps[-1].source, steps[-1].target) == ("0.8.0", "0.9.0")
-    # A release that moves the version records its step, if only the pins.
-    assert steps[-1].target == SDK
+    assert (steps[-1].source, steps[-1].target) == ("0.9.0", "0.10.0")
+    # A release that moves the version records its step, if only the pins. The
+    # step to the release being prepared is recorded before the release moves
+    # the version, and is then the one step past it.
+    after = [m for m in steps if migrations.version(m.target) > migrations.version(SDK)]
+    assert steps[-1].target == SDK or (after == [steps[-1]] and steps[-2].target == SDK)
 
 
 def test_every_rule_the_code_names_is_in_its_record() -> None:
@@ -423,6 +426,109 @@ def test_an_asset_class_outside_a_report_or_the_sdk_is_not_touched() -> None:
         "0.9.0",
     )
     assert unused.files == {} and left_by_hand(unused) == []
+
+
+def test_admin_pages_become_pages_at_admin() -> None:
+    result = one(
+        """\
+        import meridian
+        from meridian import Interface, Page
+
+        TABS = (
+            meridian.Page("/admin/connections", "Connections"),
+            Page(
+                '/admin/accounts',
+                'Account links',
+            ),
+            Page("/admin/x", "X", levels=["admin", "write"]),
+        )
+
+        def interface(port: int) -> Interface:
+            return meridian.Interface(port=port, title="SnapTrade", admin_pages=TABS)
+        """,
+        "0.9.0",
+        "0.10.0",
+    )
+    text = result.files["src/p/x.py"]
+    assert 'meridian.Page("/admin/connections", "Connections", levels=["admin"]),' in text
+    assert (
+        "    Page(\n"
+        "        '/admin/accounts',\n"
+        "        'Account links',\n"
+        "        levels=['admin'],\n"
+        "    ),\n"
+    ) in text
+    assert 'Page("/admin/x", "X", levels=["admin", "write"])' in text, "already levelled"
+    assert 'meridian.Interface(port=port, title="SnapTrade", pages=TABS)' in text
+    (step,) = result.steps
+    assert step.rewrote == {"src/p/x.py": {"page-at-admin": 2, "admin-pages-keyword": 1}}
+    assert left_by_hand(result) == []
+
+
+def test_who_was_served_the_admin_pages_is_left_by_hand() -> None:
+    # SnapTrade's shape at 0.9.0: its pages served to a deployment admin, and
+    # a test reading the declaration's admin pages.
+    result = migrate(
+        {
+            "src/p/page.py": textwrap.dedent(
+                """\
+                import meridian
+
+                PAGES = (meridian.Page("/admin", "Setup"),)
+
+                def is_administrator(caller: meridian.Caller) -> bool:
+                    return caller.deployment_admin is True
+                """
+            ),
+            "src/p/__main__.py": textwrap.dedent(
+                """\
+                import meridian
+                from .page import PAGES
+
+                def interface() -> meridian.Interface:
+                    return meridian.Interface(8000, "P", PAGES)
+                """
+            ),
+            "tests/test_page.py": textwrap.dedent(
+                """\
+                import meridian
+                from p.page import PAGES
+
+                def test_declared() -> None:
+                    declared = meridian.Interface(8000, "P", admin_pages=PAGES)._declared()
+                    assert len(declared.admin_pages) == 1
+                    assert meridian.Caller("s", "d", "h", deployment_admin=True)
+                """
+            ),
+        },
+        "0.9.0",
+        "0.10.0",
+    )
+    assert left_by_hand(result) == [
+        ("admin-pages-positional", "src/p/__main__.py", 5),
+        ("deployment-admin-gate", "src/p/page.py", 6),
+        ("admin-pages-read", "tests/test_page.py", 6),
+    ]
+    assert 'meridian.Page("/admin", "Setup", levels=["admin"])' in result.files["src/p/page.py"]
+    assert "pages=PAGES" in result.files["tests/test_page.py"]
+
+
+def test_a_page_outside_the_sdk_is_not_touched() -> None:
+    result = one(
+        """\
+        import meridian
+        from http.server import BaseHTTPRequestHandler
+
+        class Page(BaseHTTPRequestHandler):
+            pass
+
+        def make(path: str, title: str) -> Page:
+            return Page(path, title)
+        """,
+        "0.9.0",
+        "0.10.0",
+    )
+    assert result.files == {} and left_by_hand(result) == []
 
 
 def test_the_runner_reads_stdin_and_writes_what_changed() -> None:

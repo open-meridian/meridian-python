@@ -55,11 +55,16 @@ generated from the contract: `report_external_accounts`, `report_sync_status`,
 
 A request for the plugin's page arrives with one `Meridian-Caller` header,
 which its sidecar verified before forwarding. `meridian.Caller` reads it: who
-the person is, whether they are a deployment admin, and their access on this
-plugin, as two sets of accounts. A person's access to a plugin is `read` or
-`write`, the same for every plugin, and a plugin declares no parts of itself
-for access (decisions/026): `read` is what the plugin may show them, and
-`write`, which includes it, is what the plugin may do for them.
+the person is, the level their session was opened at, and the accounts that
+level reaches through this plugin. A person may hold `admin` on a plugin and,
+beside it, `read` or `write`, the same three for every plugin (decisions/026,
+027), and opens it from the dashboard's home by a button per level held:
+**Manage** at `admin`, **Open** at `write`, **View** at `read`. A session
+carries only the level chosen, `caller.level`, a `meridian.AccessLevel`, and
+its accounts are cut to it: under Open, `read`, what the plugin may show
+them, and `write`, which it includes, what the plugin may do for them; under
+View, `read` alone; under Manage (`caller.admin`), neither, since admin
+configures a plugin and sees no account's data.
 
 ```python
 caller = meridian.Caller.from_header(header)
@@ -69,17 +74,95 @@ if caller.may_write("ACC-1"):
 ```
 
 `caller.read` and `caller.write` are the sets themselves. The sidecar checks
-every command sent for the person again, whatever the plugin believes.
+every command sent for the person again, whatever the plugin believes: it
+admits one only in a session at `write`. `caller.deployment_admin` opens no
+page; it says only that the person may name a new account when linking.
 `meridian.TagAccess` and `Caller.access`, the same access tag by tag, are
 gone, and say so when reached for.
 
+### Pages, declared and enforced in one place
+
+A plugin's pages are one list, each a path, a title and the levels it
+serves; the dashboard shows under each button the pages whose levels include
+its level, and one path may serve several, adapting by the session's level.
+`meridian.Pages` declares a page where its view function is, sends the list
+at registration, and answers 403 to a session at any other level before the
+view runs:
+
+```python
+pages = meridian.Pages("Statements", templates=Path(__file__).parent / "templates")
+
+@pages.page("/connections", "Connections", levels=["admin"])
+async def connections(request: meridian.Request) -> str:
+    return pages.render("connections.html", linked=...)  # no account's data
+
+@pages.page("/", "Statements", levels=["write", "read"])
+async def statements(request: meridian.Request) -> str:
+    rows = [...]  # cut to request.caller.read
+    return pages.render("statements.html", rows=rows)
+
+@pages.route("/sync", levels=["write"], methods=["POST"])  # not a tab
+async def sync(request: meridian.Request) -> str: ...
+
+async with await meridian.connect(
+    interface=meridian.Interface(port=8000, title="Statements", pages=pages)
+) as plugin:
+    pages.serve(plugin, 8000)  # the standard library's server; or pages.app(plugin), ASGI
+```
+
+`pages.render` renders a [Jinja2](https://jinja.palletsprojects.com)
+template, autoescaped, with `caller` and `level` (admin, write or read)
+always in its context. A page's template extends the kit's base template,
+which links the kit the dashboard serves and draws the page's heading and the
+tab row of the session's level (the kit drops both when the dashboard frames
+the page):
+
+```html+jinja
+{% extends "meridian/base.html" %}
+{% block status %}<om-status data-om-header state="ok" label="Synced"></om-status>{% endblock %}
+{% block head_actions %}{% if level == "write" %}
+  <form class="inline" method="post" action="/sync"><button data-om-action="sync">Sync</button></form>
+{% endif %}{% endblock %}
+{% block content %}
+  <om-grid row-key="id"><script type="application/json">{{ grid | tojson }}</script></om-grid>
+{% endblock %}
+```
+
+`status` and `head_actions` hand the frame the page's status dot and its
+buttons, which the dashboard draws in its own header; `tojson` writes a kit
+component's data safely inside its `<script>`; `{% include %}` and macros
+compose a page from pieces.
+`Page(path, title, levels=[...])` in `Interface(pages=...)` declares a page
+served some other way, and `page.serves(caller)` checks it there.
+
+**A request that changes something carries this plugin's CSRF token.** The
+plugin's host keeps the person's session in a cookie, and every plugin's host
+is the same site as the dashboard, so SameSite does not stop another plugin's
+page from posting here as the person, and the plugin never sees the host it is
+reached at to check an `Origin` against. So `Pages` refuses every request but
+GET and HEAD, with 403 before the view runs, unless it carries back the token
+only this plugin's page could have read: `{{ csrf_input }}` inside a form, or
+the `X-CSRF-Token` header from a script (`request.csrf_token`). It is an HMAC
+of the person and the session's level under a secret the process makes at
+start, so a restart makes an open page's form stale until it is reloaded. A
+GET changes nothing.
+
+`meridian.testing.PageClient` asks the pages in a plugin's tests as the
+sidecar would, at each level: `every_page()` renders each under Manage, Open
+and View, and `assert_no_account_data(...)` fails when a page at `admin`
+shows anything the plugin holds for an account.
+
+`Interface(admin_pages=...)`, retired by contract v5, is still taken in this
+release, as pages at `admin`, with a DeprecationWarning.
+
 ### Linking external accounts
 
-A custody plugin links the external accounts it reported on its own admin
-page, for the deployment admin viewing it: pass the `Meridian-Caller` header
-the page request carried as `acting_for`. The sidecar refuses both without an
-assertion saying the person is a deployment admin, and a link for an account
-the plugin did not report.
+A custody plugin links the external accounts it reported on one of its pages
+at `admin`, for the admin of the plugin viewing it under Manage: pass the
+`Meridian-Caller` header the page request carried as `acting_for`. The sidecar
+refuses both outside a session at `admin`, answers every account's identity
+and never its holdings, and refuses a link for an account the plugin did not
+report; only a deployment admin may name a new account.
 
 ```python
 accounts = await plugin.read_accounts_for_linking(acting_for=header)
@@ -220,6 +303,7 @@ carries libcst.
 | 0.7.0 to 0.7.1: the SDK carries its migrations | only the pins move | |
 | 0.7.1 to 0.8.0: the SDK declares contract v3 | only the pins move | |
 | 0.8.0 to 0.9.0: the SDK declares contract v4; `asset_class` is an enum | `report_missing_instrument`'s `asset_class`, a string naming one of the seven classes in another case or with its prefix (`"EQUITY"`, `"asset_class_fund"`), into the class's spelling (`"equity"`, `"fund"`) | an `asset_class` string naming no class (`"etf"`, `"stock"`); one the migration cannot read, such as a variable, which must come to a class, an `AssetClass`, or `None` |
+| 0.9.0 to 0.10.0: the SDK declares contract v5; pages carry their levels | `Interface(admin_pages=...)` into `pages=`, and a `Page(path, title)` naming no levels into `Page(path, title, levels=["admin"])` | `caller.deployment_admin` read to decide who is served, which opens no page since v5: declare the page at `admin` or ask `caller.admin`; `admin_pages` read as an attribute; admin pages passed as `Interface`'s third argument |
 
 `tests/migrations/` holds the plugins the migrations are recorded for, as
 written and as their migration leaves them, and `make check-migrations` holds

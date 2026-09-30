@@ -202,6 +202,7 @@ async def test_the_scaffold_registers_with_a_real_sidecar() -> None:
     # The page's one write goes to the sidecar for her; the sidecar holds no
     # key that signed this assertion, so it refuses, and the page says so.
     assert "Refused" in page["writing for Ada"], page["writing for Ada"]
+    assert page["writing without the token"] == 403
 
     registered = next(line for line in said if "registered as" in line)
     assert "roles custody" in registered, said
@@ -219,17 +220,21 @@ def visit_the_scaffolds_page() -> dict[str, object]:
 
     from meridian.v1 import sidecar_pb2
 
-    claims = sidecar_pb2.CallerClaims(subject="local|ada", display_name="Ada Park")
+    # A session opened by Open, at write: the level the scaffold's accounts
+    # page and its one action serve (W6.9).
+    claims = sidecar_pb2.CallerClaims(
+        subject="local|ada", display_name="Ada Park", level=sidecar_pb2.ACCESS_LEVEL_WRITE
+    )
     assertion = sidecar_pb2.CallerAssertion(
         claims=claims.SerializeToString(), signature=b"not-the-dashboards", key_id="nobody"
     )
     header = base64.urlsafe_b64encode(assertion.SerializeToString()).decode().rstrip("=")
 
-    def ask(method: str, path: str, caller: str | None) -> tuple[int, str]:
+    def ask(method: str, path: str, caller: str | None, body: bytes = b"") -> tuple[int, str]:
         request = urllib.request.Request(
             f"http://127.0.0.1:8000{path}",
             method=method,
-            data=b"" if method == "POST" else None,
+            data=body if method == "POST" else None,
         )
         if caller:
             request.add_header("Meridian-Caller", caller)
@@ -239,10 +244,18 @@ def visit_the_scaffolds_page() -> dict[str, object]:
         except urllib.error.HTTPError as refused:
             return refused.code, refused.read().decode()
 
+    import re
+
+    page = ask("GET", "/", header)
+    # The page's form carries its CSRF token; a post without it is refused
+    # before anything reaches the sidecar.
+    found = re.search(r'name="csrf" value="([0-9a-f]+)"', page[1])
+    token = found.group(1) if found else ""
     return {
         "without a caller": ask("GET", "/", None)[0],
-        "as Ada": ask("GET", "/", header),
-        "writing for Ada": ask("POST", "/statement", header)[1],
+        "as Ada": page,
+        "writing for Ada": ask("POST", "/statement", header, f"csrf={token}".encode())[1],
+        "writing without the token": ask("POST", "/statement", header)[0],
     }
 
 

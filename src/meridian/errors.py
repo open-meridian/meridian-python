@@ -85,7 +85,7 @@ class NotLinked(CallFailed):
     Raised by the refusal's code, REFUSAL_REASON_EXTERNAL_ACCOUNT_NOT_LINKED,
     never by its words, which a plugin should not match. A `CallFailed` whose
     `kind` is "refused", as this refusal always was, so a plugin that caught
-    that still does. Not retried: the next statement after a deployment admin
+    that still does. Not retried: the next statement after an admin of the plugin
     links the account records it, and which accounts are linked is on
     `Plugin.account_scope()`, in `AccountScope.links`.
     """

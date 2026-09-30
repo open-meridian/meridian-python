@@ -18,6 +18,10 @@ reference-plugin = "reference_plugin.__main__:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+# The pages' templates, installed beside the code that renders them.
+[tool.setuptools.package-data]
+reference_plugin = ["templates/*.html"]
+
 # What this plugin says about itself, which `meridian plugin upload` sends and
 # a deployment admin approves before it runs (W8). Declarations, not grants.
 [tool.meridian]

@@ -65,7 +65,7 @@ contract-diff:
 # PyPI depends on nothing by URL (PyPI refuses that) and a plugin installs one
 # thing. `make vendor-schema` moves the copy to SCHEMA_REV; `check-vendored`
 # fails when the two disagree, as core's check-codegen does for its bindings.
-SCHEMA_REV  := f76ea7448745b728971cb2248f760b5cc148db24
+SCHEMA_REV  := 960e922575a1f5af307295e0c05ad292d6aeeecc
 SCHEMA_REPO := https://github.com/open-meridian/meridian-schema.git
 SCRATCH     := .schema-scratch
 
@@ -100,7 +100,7 @@ DESIGN ?= ../meridian-design
 # pinned here by commit as the schema is pinned in pyproject.toml. Core's own
 # interop gate overrides this with its working tree, so a change to both lands
 # without either waiting on the other's push.
-CORE_REV   := f831b845e12ed8c0a0cfef3c1a879551c4ee89e7
+CORE_REV   := e8853377da84645096d0ecceb9b1088bc93dcfc0
 CORE_PROTO ?= https://github.com/open-meridian/meridian-core.git\#$(CORE_REV):proto
 # And meridian-schema's, which core's import, at the revision vendored here.
 SCHEMA_PROTO ?= https://github.com/open-meridian/meridian-schema.git\#$(SCHEMA_REV):proto

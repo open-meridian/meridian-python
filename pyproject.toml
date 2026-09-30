@@ -19,6 +19,9 @@ requires-python = ">=3.11"
 dependencies = [
   "grpcio>=1.68,<2",
   "protobuf>=5.28,<7",
+  # What a plugin's pages are rendered with (meridian.pages), on the kit's
+  # one base template.
+  "jinja2>=3.1,<4",
 ]
 
 [project.optional-dependencies]
