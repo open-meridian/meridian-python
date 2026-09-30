@@ -95,6 +95,7 @@ def test_every_release_since_the_first_recorded_has_its_step() -> None:
         ("0.6.0", "0.6.1"),
         ("0.6.1", "0.7.0"),
     ]
+    assert (steps[-1].source, steps[-1].target) == ("0.8.0", "0.9.0")
     # A release that moves the version records its step, if only the pins.
     assert steps[-1].target == SDK
 
@@ -177,6 +178,14 @@ def test_snaptrade_tells_the_unlinked_refusal_apart_by_its_code(tmp_path: Path) 
 def test_snaptrade_passes_its_own_tests_once_migrated(tmp_path: Path) -> None:
     migrated("snaptrade-0.6.1", "0.6.1", "0.7.0", tmp_path)
     own_tests_pass(tmp_path)
+
+
+@pytest.mark.parametrize("fixture", ["desk-0.7.0", "snaptrade-0.7.0"])
+def test_the_recorded_plugins_are_as_the_later_steps_leave_them(fixture: str) -> None:
+    # Neither reports an asset class, so from 0.7.0 on only their pins move.
+    result = migrate(plugin_files(FIXTURES / fixture), "0.7.0", SDK)
+    assert result.files == {}
+    assert left_by_hand(result) == []
 
 
 # ── Held to the framework's rules ────────────────────────────────────────
@@ -294,6 +303,126 @@ def test_a_tag_still_named_is_left_by_hand() -> None:
     )
     assert result.files == {}
     assert {rule for rule, _, _ in left_by_hand(result)} == {"tag-access"}
+
+
+def test_an_asset_class_in_another_case_becomes_its_ruled_spelling() -> None:
+    result = one(
+        """\
+        import meridian
+
+        async def miss(plugin: meridian.Plugin) -> None:
+            await plugin.report_missing_instrument(source="s", asset_class="EQUITY")
+            await plugin.report_missing_instrument(source="s", asset_class='Crypto_Asset')
+            await plugin.report_missing_instrument(source="s", asset_class="asset_class_fund")
+            await plugin.report_missing_instrument(source="s", asset_class="equity")
+            await plugin.report_missing_instrument(source="s", asset_class="ASSET_CLASS_CASH")
+        """,
+        "0.8.0",
+        "0.9.0",
+    )
+    text = result.files["src/p/x.py"]
+    assert 'asset_class="equity")' in text
+    assert "asset_class='crypto_asset')" in text
+    assert 'asset_class="fund")' in text
+    assert 'asset_class="ASSET_CLASS_CASH")' in text  # already the enum's name
+    (step,) = result.steps
+    assert step.rewrote == {"src/p/x.py": {"asset-class-spelling": 3}}
+    assert left_by_hand(result) == []
+
+
+def test_no_asset_class_is_left_as_it_is() -> None:
+    result = one(
+        """\
+        import meridian
+
+        async def miss(plugin: meridian.Plugin) -> None:
+            await plugin.report_missing_instrument(source="s", asset_class="")
+            await plugin.report_missing_instrument(source="s", asset_class=None)
+            await plugin.report_missing_instrument(
+                source="s", asset_class=meridian.AssetClass.ASSET_CLASS_FUND
+            )
+        """,
+        "0.8.0",
+        "0.9.0",
+    )
+    assert result.files == {}
+    assert left_by_hand(result) == []
+
+
+def test_an_asset_class_that_names_no_class_is_left_by_hand() -> None:
+    # An ETF is a type within fund, and which class a vendor's kind is in is
+    # the person's to say: nothing is guessed.
+    result = one(
+        """\
+        import meridian
+
+        async def miss(plugin: meridian.Plugin) -> None:
+            await plugin.report_missing_instrument(source="s", asset_class="etf")
+            await plugin.report_missing_instrument(
+                source="s",
+                asset_class="Bond",
+            )
+        """,
+        "0.8.0",
+        "0.9.0",
+    )
+    assert result.files == {}
+    assert left_by_hand(result) == [
+        ("asset-class-unknown", "src/p/x.py", 4),
+        ("asset-class-unknown", "src/p/x.py", 7),
+    ]
+    assert result.by_hand[0][1].found == (
+        'await plugin.report_missing_instrument(source="s", asset_class="etf")'
+    )
+
+
+def test_an_asset_class_the_migration_cannot_read_is_left_by_hand() -> None:
+    result = one(
+        """\
+        import meridian
+
+        KINDS = {"ETF": "fund"}
+
+        async def miss(plugin: meridian.Plugin, kind: str) -> None:
+            await plugin.report_missing_instrument(source="s", asset_class=kind)
+            await plugin.report_missing_instrument(source="s", asset_class=KINDS[kind])
+        """,
+        "0.8.0",
+        "0.9.0",
+    )
+    assert result.files == {}
+    assert left_by_hand(result) == [
+        ("asset-class-computed", "src/p/x.py", 6),
+        ("asset-class-computed", "src/p/x.py", 7),
+    ]
+
+
+def test_an_asset_class_outside_a_report_or_the_sdk_is_not_touched() -> None:
+    # Another call's asset_class is somebody else's field.
+    elsewhere = one(
+        """\
+        import meridian
+
+        def record(book, kind: str) -> None:
+            book.define(asset_class="EQUITY")
+            book.define(asset_class="etf")
+            book.define(asset_class=kind)
+        """,
+        "0.8.0",
+        "0.9.0",
+    )
+    assert elsewhere.files == {} and left_by_hand(elsewhere) == []
+    # A file that does not use the SDK is not read.
+    unused = one(
+        """\
+        async def miss(plugin, kind: str) -> None:
+            await plugin.report_missing_instrument(asset_class="EQUITY")
+            await plugin.report_missing_instrument(asset_class=kind)
+        """,
+        "0.8.0",
+        "0.9.0",
+    )
+    assert unused.files == {} and left_by_hand(unused) == []
 
 
 def test_the_runner_reads_stdin_and_writes_what_changed() -> None:

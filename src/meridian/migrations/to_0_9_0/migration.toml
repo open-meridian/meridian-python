@@ -1,0 +1,46 @@
+# open-meridian 0.8.0 to 0.9.0: the SDK declares contract v4, and the asset
+# class a plugin reports with a miss is an enum (sdk-contract/asset-class-is-an-enum).
+from = "0.8.0"
+to = "0.9.0"
+summary = """
+The SDK declares contract v4 (meridian.SCHEMA_VERSION), and the asset class a
+plugin reports with a miss is an enum, meridian.AssetClass. report_missing_instrument
+takes asset_class as an AssetClass, its name (ASSET_CLASS_EQUITY) or the ruled
+spelling: equity, debt, fund, derivative, crypto_asset, event_contract or cash.
+None or "" sends no class. Anything else raises ValueError, naming the field,
+before anything is sent. side= and reason= take the ruled spelling of their
+enums too. A plugin built on 0.9.0 is refused at registration by a sidecar
+that accepts only v3, naming both.
+"""
+# On 0.8.0 asset_class was free text, sent as given, so a plugin could pass a
+# vendor's spelling ("EQUITY", "ETF", "Stock"); on 0.9.0 the same call raises
+# ValueError, and the miss is never reported.
+breaking = true
+rewrite = "rewrite.py"
+
+[[rewrites]]
+rule = "asset-class-spelling"
+what = """a report_missing_instrument call's asset_class, a string literal naming one \
+of the seven classes in another case or with the ASSET_CLASS_ prefix in another case \
+("EQUITY", "Fund", "asset_class_cash"), became the class's ruled spelling ("equity", \
+"fund", "cash"), in the same quotes"""
+
+[[by_hand]]
+rule = "asset-class-unknown"
+what = """a report_missing_instrument call's asset_class, a string literal that names \
+none of the seven classes ("etf", "stock", "Bond"), which raises ValueError on 0.9.0"""
+instead = """pass the class the instrument is: equity, debt, fund, derivative, \
+crypto_asset, event_contract or cash, or leave asset_class unset if it is not known. \
+A kind within a class (an ETF within fund, an option within derivative) is an \
+instrument type, which the contract does not carry yet: pass its class"""
+
+[[by_hand]]
+rule = "asset-class-computed"
+what = """a report_missing_instrument call's asset_class given a value this migration \
+cannot read (a variable, a lookup, a call), which raises ValueError on 0.9.0 if it \
+names no class"""
+instead = """make sure it is one of equity, debt, fund, derivative, crypto_asset, \
+event_contract or cash, an ASSET_CLASS_ name or a meridian.AssetClass value, or None \
+or "" for no class: anything else raises ValueError at the call. A vendor's own \
+spelling needs mapping to one of those, and a kind within a class (an ETF within \
+fund) is its class"""

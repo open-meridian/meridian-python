@@ -2,7 +2,7 @@
 
 The Python SDK for building [Open Meridian](https://open-meridian.com) plugins:
 the tools a trader has an AI agent build, and the bots and analytics a
-developer writes. Python 3.11 or newer. This is release 0.8.0; its reference
+developer writes. Python 3.11 or newer. This is release 0.9.0; its reference
 is at [open-meridian.dev](https://open-meridian.dev/api/python-sdk/).
 
 ## Start here
@@ -219,6 +219,7 @@ carries libcst.
 | 0.6.1 to 0.7.0: the unlinked refusal is `meridian.NotLinked` | a meridian error's words tested for "not linked" into `isinstance(err, meridian.NotLinked)`, and such a handler into `except meridian.NotLinked`; a test's `CallFailed(topic, "refused", "... is not linked ...")` into `NotLinked(topic, "...")` | the words matched anywhere else |
 | 0.7.0 to 0.7.1: the SDK carries its migrations | only the pins move | |
 | 0.7.1 to 0.8.0: the SDK declares contract v3 | only the pins move | |
+| 0.8.0 to 0.9.0: the SDK declares contract v4; `asset_class` is an enum | `report_missing_instrument`'s `asset_class`, a string naming one of the seven classes in another case or with its prefix (`"EQUITY"`, `"asset_class_fund"`), into the class's spelling (`"equity"`, `"fund"`) | an `asset_class` string naming no class (`"etf"`, `"stock"`); one the migration cannot read, such as a variable, which must come to a class, an `AssetClass`, or `None` |
 
 `tests/migrations/` holds the plugins the migrations are recorded for, as
 written and as their migration leaves them, and `make check-migrations` holds
