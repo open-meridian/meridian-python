@@ -12,7 +12,7 @@ is allowed would not be, and is not offered even though the grants are right
 there in `Plugin.grants`: those are for failing early with a good message, and
 the sidecar refuses independently whatever this client believes.
 
-Contract v2 (decisions/013): a plugin reaches the bus through its typed
+Since contract v2 (decisions/013) a plugin reaches the bus through its typed
 operations and nothing else. What it learns from the deployment -- its
 settings, its account scope, who may use it -- it learns here, and who is
 asking for its page it reads from the one header its sidecar forwards.
@@ -37,9 +37,13 @@ from meridian.v1 import sidecar_pb2, sidecar_pb2_grpc
 from .errors import CallFailed, NoSidecar, NotGranted, NotLinked, NotRegistered, Refused
 from .operations import Operations
 
-#: The schema version this SDK was generated against. Sent at registration so a
-#: mismatch is refused at the door rather than found later in a decode failure.
-SCHEMA_VERSION = "v2"
+#: The contract version this SDK was built for, sent at registration (W4.1). A
+#: sidecar older than this refuses the plugin at the door, naming both versions,
+#: rather than admitting it to run without what the SDK reads -- its links on
+#: the account-scope stream, the refusal code beside a refusal -- and a newer
+#: sidecar still admits it. Raised with every contract revision that adds
+#: something a plugin can depend on.
+SCHEMA_VERSION = "v3"
 
 #: Where a sidecar listens. Loopback, always: a sidecar reachable from another
 #: host is a way around the boundary it exists to enforce.

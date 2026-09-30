@@ -43,8 +43,25 @@ async def test_registering_sends_no_identity(sidecar: tuple[FakeSidecar, str]) -
     await plugin.leave()
 
     (sent,) = service.registered
-    assert sent.schema_version == "v2"
+    assert sent.schema_version == meridian.SCHEMA_VERSION
     assert not sent.ListFields() or [f.name for f, _ in sent.ListFields()] == ["schema_version"]
+
+
+async def test_the_sdk_declares_the_contract_it_was_built_for(
+    sidecar: tuple[FakeSidecar, str],
+) -> None:
+    """v3: links on the account-scope stream and the refusal code are in it.
+
+    A sidecar from before them, still at v2, refuses the plugin at
+    registration, naming both, rather than admitting it to read no links.
+    """
+    service, address = sidecar
+    plugin = await meridian.connect(address, heartbeat=False)
+    await plugin.leave()
+
+    (sent,) = service.registered
+    assert meridian.SCHEMA_VERSION == "v3"
+    assert sent.schema_version == "v3"
 
 
 async def test_identity_and_grants_come_back(sidecar: tuple[FakeSidecar, str]) -> None:
@@ -93,7 +110,7 @@ async def test_a_page_and_settings_are_declared_at_registration(
     )
     await plugin.leave()
     (sent,) = service.registered
-    assert sent.schema_version == "v2"
+    assert sent.schema_version == meridian.SCHEMA_VERSION
     assert sent.interface.loopback_port == 8000 and sent.interface.title == "Holdings"
     assert [(s.name, s.type, s.required, s.secret) for s in sent.settings] == [
         ("api_key", sidecar_pb2.SETTING_TYPE_STRING, True, True),
