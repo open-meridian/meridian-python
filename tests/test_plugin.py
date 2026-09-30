@@ -21,6 +21,7 @@ from meridian import (
     Caller,
     Choice,
     Interface,
+    LinkedExternalAccount,
     NotRegistered,
     Page,
     Refused,
@@ -275,6 +276,41 @@ async def test_the_account_scope_and_the_access_table_arrive(
         AccountScope(read=frozenset({"ACC-1", "ACC-2"}), write=frozenset({"ACC-1"}))
     ]
     assert table.user_groups[0].name == "Operations"
+
+
+async def test_the_plugins_links_arrive_beside_its_scope_named_and_on_every_change(
+    sidecar: tuple[FakeSidecar, str],
+) -> None:
+    # W4.11: the first delivery at once, so a plugin just started names every
+    # link and its account; then each change, a link made here.
+    service, address = sidecar
+    brokerage = sidecar_pb2.LinkedExternalAccount(
+        external_account_id="st-acct-4471", account_id="ACC-1", account_name="Brokerage"
+    )
+    roth = sidecar_pb2.LinkedExternalAccount(
+        external_account_id="st-acct-9902", account_id="ACC-3", account_name="Roth IRA"
+    )
+    service.scopes = [
+        sidecar_pb2.AccountScopeDelivery(
+            read_account_ids=["ACC-1"], write_account_ids=["ACC-1"], links=[brokerage]
+        ),
+        sidecar_pb2.AccountScopeDelivery(
+            read_account_ids=["ACC-1", "ACC-3"],
+            write_account_ids=["ACC-1", "ACC-3"],
+            links=[brokerage, roth],
+        ),
+    ]
+    plugin = await meridian.connect(address, heartbeat=False)
+    try:
+        first, changed = [scope async for scope in plugin.account_scope()]
+    finally:
+        await plugin.leave()
+    assert first.links == (LinkedExternalAccount("st-acct-4471", "ACC-1", "Brokerage"),)
+    assert first.link_of("st-acct-9902") is None, "unlinked until a link names it"
+    assert changed.link_of("st-acct-9902") == LinkedExternalAccount(
+        "st-acct-9902", "ACC-3", "Roth IRA"
+    )
+    assert changed.write == frozenset({"ACC-1", "ACC-3"})
 
 
 def test_a_caller_is_read_from_the_header_its_sidecar_forwarded() -> None:

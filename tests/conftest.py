@@ -31,6 +31,8 @@ class FakeOperations(operations_pb2_grpc.PluginOperationsServicer):
     """The typed operations, answering fixed results and keeping what was sent."""
 
     refuse: tuple[grpc.StatusCode, str] | None = None
+    # Sent beside the refusal, as the sidecar sends a refusal's code.
+    refuse_metadata: tuple[tuple[str, bytes], ...] = ()
     sent: list[object] = field(default_factory=list)
 
     async def _answer(
@@ -38,7 +40,7 @@ class FakeOperations(operations_pb2_grpc.PluginOperationsServicer):
     ) -> object:
         self.sent.append(params)
         if self.refuse is not None:
-            await context.abort(*self.refuse)
+            await context.abort(*self.refuse, trailing_metadata=self.refuse_metadata)
         return answer
 
     async def ReportExternalAccounts(self, request, context):  # noqa: N802

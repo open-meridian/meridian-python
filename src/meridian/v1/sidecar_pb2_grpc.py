@@ -104,7 +104,8 @@ class SidecarServiceServicer(object):
         raise NotImplementedError('Method not implemented!')
 
     def WatchAccountScope(self, request, context):
-        """W4.11. The accounts anybody may read or write through this plugin.
+        """W4.11. The accounts anybody may read or write through this plugin, and
+        the plugin's own links beside them.
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')

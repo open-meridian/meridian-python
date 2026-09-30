@@ -1,8 +1,11 @@
 """What goes wrong, in terms a plugin author can act on.
 
-Every one of these carries the sidecar's own words rather than a code. A plugin
-author reading a log line should be able to tell whether the fix is theirs, the
-operator's, or nobody's, and a bare status does not say.
+Every one of these carries the sidecar's own words. A plugin author reading a
+log line should be able to tell whether the fix is theirs, the operator's, or
+nobody's, and a bare status does not say. Where a plugin must act on which
+refusal it met, the class says so, chosen by the refusal's code
+(spec/typed-sidecar-operations, section 7) and never by its words, which may
+be reworded at any release.
 """
 
 from __future__ import annotations
@@ -73,3 +76,19 @@ class CallFailed(MeridianError):
         self.topic = topic
         self.kind = kind
         self.detail = detail
+
+
+class NotLinked(CallFailed):
+    """A row named an external account nobody has linked to one of the
+    deployment's accounts (W6.4), so nothing was recorded for it.
+
+    Raised by the refusal's code, REFUSAL_REASON_EXTERNAL_ACCOUNT_NOT_LINKED,
+    never by its words, which a plugin should not match. A `CallFailed` whose
+    `kind` is "refused", as this refusal always was, so a plugin that caught
+    that still does. Not retried: the next statement after a deployment admin
+    links the account records it, and which accounts are linked is on
+    `Plugin.account_scope()`, in `AccountScope.links`.
+    """
+
+    def __init__(self, topic: str, detail: str) -> None:
+        super().__init__(topic, "refused", detail)

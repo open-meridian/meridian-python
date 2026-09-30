@@ -34,7 +34,7 @@ import grpc
 from meridian.plugin.v1 import operations_pb2_grpc
 from meridian.v1 import sidecar_pb2, sidecar_pb2_grpc
 
-from .errors import CallFailed, NoSidecar, NotGranted, NotRegistered, Refused
+from .errors import CallFailed, NoSidecar, NotGranted, NotLinked, NotRegistered, Refused
 from .operations import Operations
 
 #: The schema version this SDK was generated against. Sent at registration so a
@@ -76,6 +76,10 @@ _OPERATION_FAILURES = {
     grpc.StatusCode.INVALID_ARGUMENT: "invalid",
     grpc.StatusCode.UNAUTHENTICATED: "not vouched for",
 }
+
+#: Where the sidecar sends a refusal's code, beside its status: a `Refusal`,
+#: encoded (spec/typed-sidecar-operations, section 7).
+REFUSAL_METADATA = "meridian-refusal-bin"
 
 _SETTING_TYPES = {
     str: sidecar_pb2.SETTING_TYPE_STRING,
@@ -275,16 +279,43 @@ class Settings:
 
 
 @dataclass(frozen=True)
+class LinkedExternalAccount:
+    """One of this plugin's external accounts, linked to one of the
+    deployment's accounts by a deployment admin (W6.4)."""
+
+    external_account_id: str
+    account_id: str
+    # The account's name as the deployment holds it now (W6.3).
+    account_name: str = ""
+
+
+@dataclass(frozen=True)
 class AccountScope:
-    """Every account anybody may read, or write, through this plugin (W4.11).
+    """Every account anybody may read, or write, through this plugin, and the
+    plugin's own links beside them (W4.11).
 
     A plugin reads its whole read scope as itself and serves each person only
     what their access allows; a write outside `write` is refused by the
     sidecar whoever it is for.
+
+    `links` are this plugin's, each external account it links with the account
+    that is and that account's name; a link puts its account in both scopes
+    while it stands, a closed one in `read` alone. An external account the
+    plugin reported and no link names is unlinked, and a row for it raises
+    `NotLinked`. Delivered on every start and every change, so a plugin holds
+    them from here and never keeps them itself.
     """
 
     read: frozenset[str] = frozenset()
     write: frozenset[str] = frozenset()
+    links: tuple[LinkedExternalAccount, ...] = ()
+
+    def link_of(self, external_account_id: str) -> LinkedExternalAccount | None:
+        """The link naming this external account, or None while it is unlinked."""
+        return next(
+            (link for link in self.links if link.external_account_id == external_account_id),
+            None,
+        )
 
 
 @dataclass(frozen=True)
@@ -381,7 +412,8 @@ class Plugin(Operations):
             )
 
     async def account_scope(self) -> AsyncIterator[AccountScope]:
-        """Its account scope, now and again on every change (W4.11)."""
+        """Its account scope and its links, now and again on every change
+        (W4.11): the first at once, so a plugin just started has its links."""
         self._check_open()
         async for delivered in self._stub.WatchAccountScope(
             sidecar_pb2.WatchAccountScopeRequest()
@@ -389,6 +421,14 @@ class Plugin(Operations):
             yield AccountScope(
                 read=frozenset(delivered.read_account_ids),
                 write=frozenset(delivered.write_account_ids),
+                links=tuple(
+                    LinkedExternalAccount(
+                        external_account_id=link.external_account_id,
+                        account_id=link.account_id,
+                        account_name=link.account_name,
+                    )
+                    for link in delivered.links
+                ),
             )
 
     async def access(self) -> sidecar_pb2.PluginAccessReply:
@@ -458,6 +498,8 @@ class Plugin(Operations):
             detail = failed.details() or ""
             if failed.code() is grpc.StatusCode.PERMISSION_DENIED:
                 raise NotGranted(operation, detail) from failed
+            if _reason(failed) == sidecar_pb2.REFUSAL_REASON_EXTERNAL_ACCOUNT_NOT_LINKED:
+                raise NotLinked(operation, detail) from failed
             kind = _OPERATION_FAILURES.get(failed.code())
             if kind is None:
                 raise
@@ -475,6 +517,16 @@ class Plugin(Operations):
             # would raise from a background task nobody awaited.
             with contextlib.suppress(grpc.aio.AioRpcError):
                 await self._stub.Heartbeat(sidecar_pb2.HeartbeatRequest(healthy=True))
+
+
+def _reason(failed: grpc.aio.AioRpcError) -> int:
+    """The code a refusal carries beside its status, or unspecified when it
+    carries none: by it, and never by the words, is a refusal told apart."""
+    for key, value in (*(failed.trailing_metadata() or ()), *(failed.initial_metadata() or ())):
+        if key == REFUSAL_METADATA and isinstance(value, bytes):
+            reason: int = sidecar_pb2.Refusal.FromString(value).reason
+            return reason
+    return sidecar_pb2.REFUSAL_REASON_UNSPECIFIED
 
 
 async def connect(

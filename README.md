@@ -102,6 +102,31 @@ beside its name and state, any of them empty, so a page can tell two accounts
 of the same name apart. The conductor refuses more than 200 characters in the
 first three, or 2,000 in the note, naming the field.
 
+Which of its external accounts are linked, and to what, the plugin reads
+beside its account scope, acting for nobody: the first delivery comes at once,
+so a plugin just started has every link, and another comes whenever one is
+made or removed or a linked account is renamed or closed. Hold the latest; a
+plugin keeps nothing of its own across a restart.
+
+```python
+async for scope in plugin.account_scope():
+    for link in scope.links:
+        print(link.external_account_id, "->", link.account_id, link.account_name)
+    scope.link_of("acct-3")  # None: not linked
+```
+
+A holding for an external account nothing links is refused, and raises
+`meridian.NotLinked`, chosen by the code the sidecar sends beside the
+refusal, never by its words. It is a `CallFailed` whose `kind` is
+`"refused"`; the next statement after the account is linked records it.
+
+```python
+try:
+    await plugin.record_holding(..., external_account_id="acct-3")
+except meridian.NotLinked:
+    ...  # offer it for linking; stop this statement
+```
+
 ### Quantities and money
 
 A quantity is a Python `Decimal` (or an `int`), and an amount of currency is a

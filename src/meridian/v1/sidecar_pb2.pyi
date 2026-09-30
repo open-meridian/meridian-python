@@ -13,11 +13,18 @@ class SettingType(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     SETTING_TYPE_INTEGER: _ClassVar[SettingType]
     SETTING_TYPE_BOOLEAN: _ClassVar[SettingType]
     SETTING_TYPE_CHOICE: _ClassVar[SettingType]
+
+class RefusalReason(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    REFUSAL_REASON_UNSPECIFIED: _ClassVar[RefusalReason]
+    REFUSAL_REASON_EXTERNAL_ACCOUNT_NOT_LINKED: _ClassVar[RefusalReason]
 SETTING_TYPE_UNSPECIFIED: SettingType
 SETTING_TYPE_STRING: SettingType
 SETTING_TYPE_INTEGER: SettingType
 SETTING_TYPE_BOOLEAN: SettingType
 SETTING_TYPE_CHOICE: SettingType
+REFUSAL_REASON_UNSPECIFIED: RefusalReason
+REFUSAL_REASON_EXTERNAL_ACCOUNT_NOT_LINKED: RefusalReason
 
 class RegisterRequest(_message.Message):
     __slots__ = ("schema_version", "interface", "settings", "reads_external_accounts")
@@ -230,9 +237,27 @@ class WatchAccountScopeRequest(_message.Message):
     def __init__(self) -> None: ...
 
 class AccountScopeDelivery(_message.Message):
-    __slots__ = ("read_account_ids", "write_account_ids")
+    __slots__ = ("read_account_ids", "write_account_ids", "links")
     READ_ACCOUNT_IDS_FIELD_NUMBER: _ClassVar[int]
     WRITE_ACCOUNT_IDS_FIELD_NUMBER: _ClassVar[int]
+    LINKS_FIELD_NUMBER: _ClassVar[int]
     read_account_ids: _containers.RepeatedScalarFieldContainer[str]
     write_account_ids: _containers.RepeatedScalarFieldContainer[str]
-    def __init__(self, read_account_ids: _Optional[_Iterable[str]] = ..., write_account_ids: _Optional[_Iterable[str]] = ...) -> None: ...
+    links: _containers.RepeatedCompositeFieldContainer[LinkedExternalAccount]
+    def __init__(self, read_account_ids: _Optional[_Iterable[str]] = ..., write_account_ids: _Optional[_Iterable[str]] = ..., links: _Optional[_Iterable[_Union[LinkedExternalAccount, _Mapping]]] = ...) -> None: ...
+
+class LinkedExternalAccount(_message.Message):
+    __slots__ = ("external_account_id", "account_id", "account_name")
+    EXTERNAL_ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
+    ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
+    ACCOUNT_NAME_FIELD_NUMBER: _ClassVar[int]
+    external_account_id: str
+    account_id: str
+    account_name: str
+    def __init__(self, external_account_id: _Optional[str] = ..., account_id: _Optional[str] = ..., account_name: _Optional[str] = ...) -> None: ...
+
+class Refusal(_message.Message):
+    __slots__ = ("reason",)
+    REASON_FIELD_NUMBER: _ClassVar[int]
+    reason: RefusalReason
+    def __init__(self, reason: _Optional[_Union[RefusalReason, str]] = ...) -> None: ...

@@ -23,13 +23,22 @@ from .client import (
     Grants,
     Identity,
     Interface,
+    LinkedExternalAccount,
     Page,
     Plugin,
     Setting,
     Settings,
     connect,
 )
-from .errors import CallFailed, MeridianError, NoSidecar, NotGranted, NotRegistered, Refused
+from .errors import (
+    CallFailed,
+    MeridianError,
+    NoSidecar,
+    NotGranted,
+    NotLinked,
+    NotRegistered,
+    Refused,
+)
 
 # An amount of currency as a typed operation takes one, and the two readers of
 # a number off the wire, generated with the operations (decisions/023).
@@ -59,11 +68,13 @@ __all__ = [
     "Identifier",
     "Identity",
     "Interface",
+    "LinkedExternalAccount",
     "MeridianError",
     "MissReason",
     "Money",
     "NoSidecar",
     "NotGranted",
+    "NotLinked",
     "NotRegistered",
     "Page",
     "Plugin",

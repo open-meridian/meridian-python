@@ -25,7 +25,7 @@ import grpc
 import pytest
 
 import meridian
-from meridian import CallFailed, Money
+from meridian import CallFailed, Money, NotLinked
 from meridian.plugin.v1 import operations_pb2, operations_pb2_grpc
 
 # A topic the custody role's grants hold. Named here rather than imported,
@@ -150,7 +150,14 @@ async def test_the_account_scope_and_access_table_come_from_the_conductor(plugin
         scope = await anext(stream)
     await stream.aclose()
     held = frozenset({"ACC-INTEROP"})
-    assert scope == meridian.AccountScope(read=held, write=held)
+    # And the link beside the scope it grants, named as the conductor holds
+    # the account (e2e/interop/a-linked-account.sql): what a plugin just
+    # started reads, rather than guessing from what it last recorded.
+    assert scope == meridian.AccountScope(
+        read=held,
+        write=held,
+        links=(meridian.LinkedExternalAccount(LINKED, "ACC-INTEROP", "Interop"),),
+    )
     table = await plugin.access()
     assert [group.user_group_id for group in table.user_groups] == ["ug-interop"]
 
@@ -245,10 +252,12 @@ def visit_the_scaffolds_page() -> dict[str, object]:
 async def test_a_holding_for_an_unlinked_external_account_is_refused_as_such(plugin) -> None:
     """The sidecar asks the conductor for this plugin's links, as this plugin.
 
-    Nobody has linked this external account, so the row is refused naming
-    that -- which it can only say having reached the conductor as the right
-    instance: asked as anything else, the answer would hold no links at all
-    and the refusal would read the same, which is why the account is unique.
+    Nobody has linked this external account, so the row is refused with
+    that code -- which it can only say having reached the conductor as the
+    right instance: asked as anything else, the answer would hold no links at
+    all and the refusal would read the same, which is why the account is
+    unique. Told by the code the sidecar sends beside the status, not by its
+    words (spec/typed-sidecar-operations, section 7).
     """
     opened = await plugin.record_holdings_statement(
         source="interop",
@@ -257,7 +266,7 @@ async def test_a_holding_for_an_unlinked_external_account_is_refused_as_such(plu
         read_at_ns=NOW,
         expected_rows=1,
     )
-    with pytest.raises(CallFailed) as refused:
+    with pytest.raises(NotLinked) as refused:
         await plugin.record_holding(
             statement_id=opened.statement_id,
             instrument_id="INS-interop-1",
@@ -266,7 +275,6 @@ async def test_a_holding_for_an_unlinked_external_account_is_refused_as_such(plu
             external_account_id=f"unlinked-{uuid.uuid4().hex[:8]}",
         )
     assert refused.value.kind == "refused"
-    assert "not linked" in refused.value.detail
 
 
 async def test_a_miss_is_reported_by_its_typed_operation(plugin) -> None:
@@ -554,7 +562,7 @@ async def test_an_unlinked_accounts_sync_status_is_published_and_its_holding_ref
     )
     assert published.message_id
     opened = await statement(plugin, "interop", 1)
-    with pytest.raises(CallFailed) as refused:
+    with pytest.raises(NotLinked):
         await plugin.record_holding(
             statement_id=opened,
             instrument_id="INS-interop-unlinked",
@@ -562,7 +570,6 @@ async def test_an_unlinked_accounts_sync_status_is_published_and_its_holding_ref
             quantity=Decimal("1"),
             external_account_id=unlinked,
         )
-    assert "not linked" in refused.value.detail
 
 
 @pytest.mark.parametrize("state", list(meridian.SyncState.values()))

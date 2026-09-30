@@ -16,8 +16,9 @@ import pytest
 
 import meridian
 from conftest import FakeSidecar
-from meridian import CallFailed, Identifier, Money, NotGranted
+from meridian import CallFailed, Identifier, Money, NotGranted, NotLinked
 from meridian.plugin.v1 import operations_pb2
+from meridian.v1 import sidecar_pb2
 
 
 async def connected(sidecar: tuple[FakeSidecar, str]) -> meridian.Plugin:
@@ -187,6 +188,56 @@ async def test_a_refusal_is_raised_in_this_packages_terms(
     assert "RecordHoldingsStatement" in str(caught.value)
     if kind is not None:
         assert caught.value.kind == kind  # type: ignore[attr-defined]
+
+
+def _coded(reason: int) -> tuple[tuple[str, bytes], ...]:
+    """What the sidecar sends beside a refusal to say which it is."""
+    return (("meridian-refusal-bin", sidecar_pb2.Refusal(reason=reason).SerializeToString()),)
+
+
+async def test_an_unlinked_external_account_is_told_by_its_code(sidecar) -> None:
+    service, _ = sidecar
+    service.operations.refuse = (
+        grpc.StatusCode.FAILED_PRECONDITION,
+        "worded any way at all",
+    )
+    service.operations.refuse_metadata = _coded(
+        sidecar_pb2.REFUSAL_REASON_EXTERNAL_ACCOUNT_NOT_LINKED
+    )
+    plugin = await connected(sidecar)
+    try:
+        with pytest.raises(NotLinked) as caught:
+            await plugin.record_holding(quantity=1, external_account_id="st-acct-9902")
+    finally:
+        await plugin.leave()
+    # Still what a plugin catching a refusal caught before the code.
+    assert isinstance(caught.value, CallFailed)
+    assert caught.value.kind == "refused"
+    assert caught.value.detail == "worded any way at all"
+    assert "RecordHolding" in str(caught.value)
+
+
+@pytest.mark.parametrize(
+    "metadata",
+    [(), _coded(sidecar_pb2.REFUSAL_REASON_UNSPECIFIED)],
+    ids=["no code", "unspecified"],
+)
+async def test_the_words_alone_never_make_a_refusal_not_linked(sidecar, metadata) -> None:
+    # Not registered is the same status, and a refusal is told by its code.
+    service, _ = sidecar
+    service.operations.refuse = (
+        grpc.StatusCode.FAILED_PRECONDITION,
+        "external account st-acct-9902 is not linked to an account",
+    )
+    service.operations.refuse_metadata = metadata
+    plugin = await connected(sidecar)
+    try:
+        with pytest.raises(CallFailed) as caught:
+            await plugin.record_holding(quantity=1, external_account_id="st-acct-9902")
+    finally:
+        await plugin.leave()
+    assert not isinstance(caught.value, NotLinked)
+    assert caught.value.kind == "refused"
 
 
 async def test_a_command_carries_the_person_it_is_sent_for_as_it_was_handed_over(
