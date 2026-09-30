@@ -1,0 +1,3 @@
+# snaptrade
+
+@AGENTS.md

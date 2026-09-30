@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "desk"
+version = "0.1.0"
+description = "A desk's accounts, and a statement filed for them"
+requires-python = ">=3.11"
+dependencies = ["open-meridian==0.5.0"]
+
+[project.scripts]
+desk = "desk.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.meridian]
+# Roles from the deployment's fixed list; none is a plugin with no topics.
+roles = []
+# Its own names for its parts, which people are granted at read or write.
+tags = ["statements"]
+# Whether it serves a page through its sidecar.
+interface = true

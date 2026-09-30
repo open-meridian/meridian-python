@@ -171,6 +171,54 @@ float becomes `Decimal(repr(value))`, its shortest round-trip form, and never
 `Decimal(value)`, which is its binary expansion: `Decimal(0.1)` is
 0.1000000000000000055511151231257827021181583404541015625.
 
+## Moving a plugin to a new release
+
+    meridian plugin migrate            # to the latest release
+    meridian plugin migrate --to 0.7.0
+
+Every release that changes what a plugin calls carries a migration from the
+release before it, and every other release one that only moves the pins, so
+the steps from any recorded release to the newest exist and run in order
+(decisions/025). `meridian plugin migrate` moves the plugin's two pins
+(`open-meridian==<version>` in `pyproject.toml`, and the Dockerfile's
+`plugin-python:<version>`), runs each step over its code, runs `meridian
+plugin check`, and says what is left for a person or an agent to do, with the
+file and line. The first recorded step is from 0.5.0.
+
+The migrations live in this package, in `src/meridian/migrations/`, one
+directory per step, released with the version they lead to:
+
+- `migration.toml`, the record: `from` and `to`, a `summary`, whether a plugin
+  that is not migrated `breaking`ly fails on the new release, what it
+  `rewrites` and what it leaves `by_hand`, each a `rule` with `what` it covers
+  and, for one left by hand, what to write `instead`. The record is data, so
+  another SDK carries its own in the same shape.
+- the rewrite code it names in `rewrite`, beside it, and none where only the
+  pins move: a module with `rewrite(path, text)`, which returns the file
+  rewritten and the rules that rewrote it, and `left(path, text)`, which
+  returns what is still to do in the file once every step has run. It reads
+  Python with [libcst](https://libcst.readthedocs.io), keeping the file's
+  formatting and comments wherever it rewrites nothing, and names only rules
+  its record has.
+
+`python -m meridian.migrations --from 0.5.0 --to 0.7.0` runs the steps between
+over the files it is given on stdin, as `{"files": {"<path>": "<text>"}}`,
+and writes the steps, the new text of each file that changed, and what is
+left by hand, as one JSON object; it writes no file. `--list` writes the
+records. It needs the `migrate` extra (`pip install "open-meridian[migrate]"`),
+which only the migration's own image installs: a plugin's runtime never
+carries libcst.
+
+| Step | Rewrites | Leaves by hand |
+|---|---|---|
+| 0.5.0 to 0.6.0: access is read or write, and a plugin declares no tags (decisions/026) | `tags` in `[tool.meridian]`; access gathered over the tags into `caller.read` or `caller.write`, `any(a in held.read for held in caller.access)` into `a in caller.read`; `Caller(access=(TagAccess(...), ...))` into `Caller(read=..., write=...)`; an unused import of `TagAccess` | access read by a tag's own name; `TagAccess` still named; `plugin.identity.tags`; declared tags, whose holders a deployment admin gives read or write |
+| 0.6.0 to 0.6.1 | only the pins move | |
+| 0.6.1 to 0.7.0: the unlinked refusal is `meridian.NotLinked` | a meridian error's words tested for "not linked" into `isinstance(err, meridian.NotLinked)`, and such a handler into `except meridian.NotLinked`; a test's `CallFailed(topic, "refused", "... is not linked ...")` into `NotLinked(topic, "...")` | the words matched anywhere else |
+
+`tests/migrations/` holds the plugins the migrations are recorded for, as
+written and as their migration leaves them, and `make check-migrations` holds
+each result to `meridian plugin check --run-tests`.
+
 ## Working on it
 
     make ci-local

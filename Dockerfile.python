@@ -21,7 +21,7 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_CACHE_DIR=1
 # reinstall them on every run.
 COPY pyproject.toml ./
 RUN mkdir -p src/meridian && touch src/meridian/__init__.py \
- && pip install -e ".[dev]"
+ && pip install -e ".[dev,migrate]"
 COPY src/ src/
 COPY template/ template/
 
@@ -76,6 +76,12 @@ assert "meridian/v1/sidecar_pb2.py" in files, "the wire bindings are not in the 
 assert "meridian/py.typed" in files, "the package does not say it is typed"
 leaked = sorted(f for f in files if f.endswith(("holdings_pb2.py", "config_pb2.py")))
 assert not leaked, f"meridian-core's domain messages reached the package: {leaked}"
+# The migrations ship with the release they lead to, records and code; what
+# runs them is the `migrate` extra, never something every plugin installs.
+assert "meridian/migrations/to_0_6_1/migration.toml" in files, "the migrations' records are not in the package"
+assert "meridian/migrations/to_0_7_0/rewrite.py" in files, "the migrations' code is not in the package"
+runtime = [r for r in (dist.requires or []) if "extra ==" not in r]
+assert not [r for r in runtime if r.startswith("libcst")], f"libcst is a runtime dependency: {runtime}"
 assert callable(meridian.connect)
 print("installed:", dist.metadata["Name"], dist.version, "schema", meridian.SCHEMA_VERSION)
 CHECK
@@ -121,6 +127,27 @@ WORKDIR /plugin
 FROM base AS test
 RUN python -m pytest -q --ignore=tests/test_conformance.py --ignore=tests/test_interop.py \
  && PYTHONPATH=template/src python -m pytest -q -p no:cacheprovider template/tests
+
+# meridian, the command line, as a plugin's own CI installs it: its installer
+# from the release's tag, which checks the binary against the checksum
+# published beside it. For `check-migrations`: what each migration leaves
+# must pass the check `meridian plugin migrate` runs after it.
+FROM python:${PYTHON_VERSION}-slim AS meridian-cli
+ARG MERIDIAN_CLI_VERSION
+RUN test -n "${MERIDIAN_CLI_VERSION}" \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends curl ca-certificates \
+ && rm -rf /var/lib/apt/lists/* \
+ && curl -fsSL "https://raw.githubusercontent.com/open-meridian/meridian-cli/v${MERIDIAN_CLI_VERSION}/install.sh" \
+    | MERIDIAN_VERSION="${MERIDIAN_CLI_VERSION}" MERIDIAN_INSTALL_DIR=/usr/local/bin sh \
+ && /usr/local/bin/meridian --version
+
+# Each plugin the migrations are recorded for, migrated, held to `meridian
+# plugin check --run-tests` against this SDK.
+FROM base AS migrations
+COPY --from=meridian-cli /usr/local/bin/meridian /usr/local/bin/meridian
+RUN MERIDIAN_PLUGIN_CHECK=required python -m pytest -q -p no:cacheprovider \
+      tests/test_migrations.py -k passes_plugin_check
 
 FROM base AS lint
 RUN python -m ruff check src tests template/src template/tests \

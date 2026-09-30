@@ -1,0 +1,10 @@
+# open-meridian 0.6.0 to 0.6.1: nothing a plugin calls changed, so only the
+# pins move.
+from = "0.6.0"
+to = "0.6.1"
+summary = """
+A new account created by a link carries its custodian, type, owner and note:
+link_external_account takes four more optional arguments. Nothing a plugin
+already calls changed, so only the pins move.
+"""
+breaking = false

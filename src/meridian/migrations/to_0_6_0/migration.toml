@@ -1,0 +1,67 @@
+# open-meridian 0.5.0 to 0.6.0: access to a plugin is read or write, and a
+# plugin declares no tags (decisions/026, sdk-contract/access-is-read-or-write).
+from = "0.5.0"
+to = "0.6.0"
+summary = """
+Access to a plugin is read or write, the same for every plugin, and a plugin
+declares no tags (decisions/026). Caller.access and TagAccess are gone:
+Caller.read and Caller.write are the accounts the person may read and write
+through the plugin, and may_read and may_write ask about one.
+"""
+# Caller.access and TagAccess raise on 0.6.0, and upload refuses tags.
+breaking = true
+rewrite = "rewrite.py"
+
+[[rewrites]]
+rule = "tags-undeclared"
+what = "the `tags` line in [tool.meridian], and the comment directly above it, removed"
+
+[[rewrites]]
+rule = "access-any"
+what = """any(a in held.read for held in caller.access) became a in caller.read, and \
+the same for write; any(held.read for held in caller.access) became bool(caller.read)"""
+
+[[rewrites]]
+rule = "access-union"
+what = """every account read or written through caller.access, tag by tag, gathered \
+into one set, became caller.read or caller.write"""
+
+[[rewrites]]
+rule = "caller-read-write"
+what = """Caller(..., access=(TagAccess(tag, read, write), ...)) became \
+Caller(..., read=..., write=...), each the union over the tags"""
+
+[[rewrites]]
+rule = "tag-access-import"
+what = "an import of TagAccess nothing uses any more, removed"
+
+[[by_hand]]
+rule = "access-tag-by-tag"
+what = "Caller.access read in a way that keeps its tags apart, which 0.6.0 does not have"
+instead = """read caller.read and caller.write, the accounts the person may read and \
+write through the plugin, or ask caller.may_read(account) and caller.may_write(account). \
+A tag's name is gone: decide whether what it guarded is showing (read) or doing (write)"""
+
+[[by_hand]]
+rule = "tag-access"
+what = "TagAccess, which 0.6.0 does not have, still named"
+instead = """build a Caller with read= and write=, the frozensets of account IDs the \
+person may read and write (write included in read), in place of access="""
+
+[[by_hand]]
+rule = "identity-tags"
+what = "the plugin's registered tags read from its identity, which 0.6.0 does not have"
+instead = """remove it: a plugin has no tags. What it registered as is \
+plugin.identity.roles, and who may use it is the deployment's access groups"""
+
+[[by_hand]]
+rule = "tags-granted"
+what = "tags the plugin declared, whose holders' access came from them"
+instead = """a deployment admin gives the people who held those tags read or write on \
+the plugin in the deployment's access groups: read to see, write to act for them"""
+
+[[by_hand]]
+rule = "tags-declared"
+what = "a `tags` declaration in [tool.meridian] this migration could not remove"
+instead = """remove it: a plugin declares none, and `meridian plugin upload` refuses a \
+pyproject.toml that names them"""

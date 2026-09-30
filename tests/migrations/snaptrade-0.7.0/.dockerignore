@@ -1,0 +1,10 @@
+.git
+__pycache__
+*.pyc
+.venv
+AGENTS.md
+.claude
+CLAUDE.md
+CLAUDE.local.md
+.meridian
+tests

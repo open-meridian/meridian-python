@@ -11,7 +11,7 @@ unexport GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR \
 
 .PHONY: help ci-local ci-remote ci-local-deep install-hooks ci-mirror-check contract-diff \
         build package test lint conformance fmt vendor-schema check-vendored \
-        base-image check-scaffold
+        base-image check-scaffold check-migrations
 
 help:
 	@echo "  make ci-local       run every gate (the pre-push gate, and what CI mirrors)"
@@ -19,6 +19,7 @@ help:
 	@echo "  make package        build the wheel and prove it installs alone"
 	@echo "  make base-image     the plugin base image, plugin-python, from that wheel"
 	@echo "  make check-scaffold the template, built on that base, holding only itself"
+	@echo "  make check-migrations each recorded migration's plugin, migrated, passes plugin check"
 	@echo "  make vendor-schema  move the bundled wire bindings to SCHEMA_REV"
 	@echo "  make test           run the unit tests"
 	@echo "  make conformance    check this SDK against the contract's pinned bytes"
@@ -42,7 +43,8 @@ ci-local: ci-remote conformance
 # pre-push hook runs ci-local, so conformance passes before any push from a
 # workspace. The uncovered case is a commit made through GitHub's web interface,
 # which nothing in this repo can check and design's next run will.
-ci-remote: contract-diff ci-mirror-check check-vendored build package check-scaffold test lint
+ci-remote: contract-diff ci-mirror-check check-vendored build package check-scaffold test \
+           check-migrations lint
 	@echo
 	@echo "ci-remote: GREEN (conformance not included; see this target's comment)"
 
@@ -164,6 +166,20 @@ test:
 		|| { echo "test FAILED; see it with:" >&2; \
 		     echo "  DOCKER_BUILDKIT=1 docker build $(CONTEXTS) -f Dockerfile.python --target test --progress=plain ." >&2; exit 1; }
 	@echo "test OK: the client's tests pass, and the template's own"
+
+# The plugins the migrations are recorded for (tests/migrations), migrated as
+# `meridian plugin migrate` does it and held to what it runs next: `meridian
+# plugin check --run-tests`, from the released command line named here, as a
+# plugin's own CI installs it. `make test` checks what each migration writes
+# and runs each plugin's own tests; this adds the framework's rules.
+MERIDIAN_CLI := 0.1.17
+
+check-migrations:
+	@$(DOCKER) build $(CONTEXTS) -f Dockerfile.python --target migrations \
+		--build-arg MERIDIAN_CLI_VERSION=$(MERIDIAN_CLI) . >/dev/null 2>&1 \
+		|| { echo "check-migrations FAILED; see it with:" >&2; \
+		     echo "  DOCKER_BUILDKIT=1 docker build $(CONTEXTS) -f Dockerfile.python --target migrations --build-arg MERIDIAN_CLI_VERSION=$(MERIDIAN_CLI) --progress=plain ." >&2; exit 1; }
+	@echo "check-migrations OK: every recorded migration's plugin passes meridian $(MERIDIAN_CLI)'s plugin check --run-tests"
 
 # The fixtures are not in this repo. Mounted read-only from the design repo, so
 # this SDK and the Rust runtime assert against the same pinned bytes rather than

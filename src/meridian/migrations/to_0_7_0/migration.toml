@@ -1,0 +1,39 @@
+# open-meridian 0.6.1 to 0.7.0: the unlinked refusal is told apart by its
+# code, as meridian.NotLinked, never by its words.
+from = "0.6.1"
+to = "0.7.0"
+summary = """
+A row refused because its external account is not linked raises
+meridian.NotLinked, chosen by the refusal's code and never by its words, which
+may be reworded at any release. It is a CallFailed whose kind is "refused", so
+code that caught that still does. Nothing else a plugin already calls changed:
+AccountScope.links and link_of, a plugin's own links, are new.
+"""
+# The words still say "is not linked" on 0.7.0; they are no longer promised.
+breaking = false
+rewrite = "rewrite.py"
+
+[[rewrites]]
+rule = "not-linked-isinstance"
+what = """a test of a meridian error's words for "not linked" ("is not linked" in \
+str(err), or in err.detail) became isinstance(err, meridian.NotLinked), and the \
+isinstance(err, CallFailed) and err.kind == "refused" beside it, which NotLinked \
+implies, were removed"""
+
+[[rewrites]]
+rule = "not-linked-except"
+what = """except meridian.CallFailed as err: if <that test>: ... else: raise became \
+except meridian.NotLinked: ..., where it is the try's last handler"""
+
+[[rewrites]]
+rule = "not-linked-raised"
+what = """CallFailed(topic, "refused", "... is not linked ..."), a stand-in for the \
+sidecar's refusal in a test, became NotLinked(topic, "...")"""
+
+[[by_hand]]
+rule = "not-linked-by-text"
+what = """the words "not linked" matched in a way this migration does not recognise as \
+a test of a meridian error"""
+instead = """catch meridian.NotLinked (except meridian.NotLinked:), or ask \
+isinstance(err, meridian.NotLinked): the refusal is told apart by its code, and its \
+words may change at any release"""

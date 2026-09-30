@@ -22,6 +22,14 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# What `meridian plugin migrate` runs the migrations with
+# (meridian.migrations): libcst, which rewrites Python and keeps its
+# formatting and comments. An extra, not a dependency, because a plugin's
+# runtime never rewrites code and would carry some 17 MB for it: the migration
+# installs it in an image of its own, built on this SDK's base.
+migrate = [
+  "libcst>=1.4,<2",
+]
 dev = [
   "pytest>=8",
   "pytest-asyncio>=0.24",
@@ -44,7 +52,9 @@ where = ["src"]
 
 # The bindings' type stubs, and the marker that says this package is typed.
 [tool.setuptools.package-data]
-meridian = ["py.typed", "v1/*.pyi", "plugin/v1/*.pyi"]
+# And each migration's record, beside its code or alone where only the pins
+# move.
+meridian = ["py.typed", "v1/*.pyi", "plugin/v1/*.pyi", "migrations/*/migration.toml"]
 
 [tool.ruff]
 line-length = 96
@@ -52,7 +62,11 @@ src = ["src", "tests", "template/src"]
 # Generated elsewhere and copied or written in: meridian-schema's bindings,
 # and meridian-design's typed operations. Styling them would be editing them,
 # and the next generation would undo it.
-extend-exclude = ["src/meridian/v1", "src/meridian/plugin", "src/meridian/operations.py"]
+extend-exclude = ["src/meridian/v1", "src/meridian/plugin", "src/meridian/operations.py",
+                  # Plugins as written, and as their migration writes them:
+                  # restyling either would change what the migrations are
+                  # tested on.
+                  "tests/migrations"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
@@ -88,3 +102,6 @@ follow_imports = "skip"
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+# tests/migrations holds plugins, whose own tests test_migrations.py runs
+# once it has migrated them.
+norecursedirs = ["migrations"]
