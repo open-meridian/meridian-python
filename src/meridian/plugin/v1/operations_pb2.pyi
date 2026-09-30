@@ -29,6 +29,17 @@ class MissReason(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     MISS_REASON_NOT_FOUND: _ClassVar[MissReason]
     MISS_REASON_AMBIGUOUS: _ClassVar[MissReason]
 
+class AssetClass(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    ASSET_CLASS_UNSPECIFIED: _ClassVar[AssetClass]
+    ASSET_CLASS_EQUITY: _ClassVar[AssetClass]
+    ASSET_CLASS_DEBT: _ClassVar[AssetClass]
+    ASSET_CLASS_FUND: _ClassVar[AssetClass]
+    ASSET_CLASS_DERIVATIVE: _ClassVar[AssetClass]
+    ASSET_CLASS_CRYPTO_ASSET: _ClassVar[AssetClass]
+    ASSET_CLASS_EVENT_CONTRACT: _ClassVar[AssetClass]
+    ASSET_CLASS_CASH: _ClassVar[AssetClass]
+
 class AccountState(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
     ACCOUNT_STATE_UNSPECIFIED: _ClassVar[AccountState]
@@ -47,6 +58,14 @@ HOLDING_SIDE_SHORT: HoldingSide
 MISS_REASON_UNSPECIFIED: MissReason
 MISS_REASON_NOT_FOUND: MissReason
 MISS_REASON_AMBIGUOUS: MissReason
+ASSET_CLASS_UNSPECIFIED: AssetClass
+ASSET_CLASS_EQUITY: AssetClass
+ASSET_CLASS_DEBT: AssetClass
+ASSET_CLASS_FUND: AssetClass
+ASSET_CLASS_DERIVATIVE: AssetClass
+ASSET_CLASS_CRYPTO_ASSET: AssetClass
+ASSET_CLASS_EVENT_CONTRACT: AssetClass
+ASSET_CLASS_CASH: AssetClass
 ACCOUNT_STATE_UNSPECIFIED: AccountState
 ACCOUNT_STATE_OPEN: AccountState
 ACCOUNT_STATE_CLOSED: AccountState
@@ -184,12 +203,12 @@ class ReportMissingInstrumentParams(_message.Message):
     REASON_FIELD_NUMBER: _ClassVar[int]
     OBSERVED_AT_NS_FIELD_NUMBER: _ClassVar[int]
     source: str
-    asset_class: str
+    asset_class: AssetClass
     identifiers: _containers.RepeatedCompositeFieldContainer[Identifier]
     as_of_ns: int
     reason: MissReason
     observed_at_ns: int
-    def __init__(self, source: _Optional[str] = ..., asset_class: _Optional[str] = ..., identifiers: _Optional[_Iterable[_Union[Identifier, _Mapping]]] = ..., as_of_ns: _Optional[int] = ..., reason: _Optional[_Union[MissReason, str]] = ..., observed_at_ns: _Optional[int] = ...) -> None: ...
+    def __init__(self, source: _Optional[str] = ..., asset_class: _Optional[_Union[AssetClass, str]] = ..., identifiers: _Optional[_Iterable[_Union[Identifier, _Mapping]]] = ..., as_of_ns: _Optional[int] = ..., reason: _Optional[_Union[MissReason, str]] = ..., observed_at_ns: _Optional[int] = ...) -> None: ...
 
 class LinkExternalAccountParams(_message.Message):
     __slots__ = ("external_account_id", "account_id", "new_account_name", "new_account_custodian", "new_account_type", "new_account_owner", "new_account_note", "acting_for")

@@ -40,10 +40,11 @@ from .operations import Operations
 #: The contract version this SDK was built for, sent at registration (W4.1). A
 #: sidecar older than this refuses the plugin at the door, naming both versions,
 #: rather than admitting it to run without what the SDK reads -- its links on
-#: the account-scope stream, the refusal code beside a refusal -- and a newer
-#: sidecar still admits it. Raised with every contract revision that adds
-#: something a plugin can depend on.
-SCHEMA_VERSION = "v3"
+#: the account-scope stream, the refusal code beside a refusal, the asset class
+#: as an enum on a miss it reports -- and a newer sidecar still admits it.
+#: Raised with every contract revision that adds something a plugin can depend
+#: on.
+SCHEMA_VERSION = "v4"
 
 #: Where a sidecar listens. Loopback, always: a sidecar reachable from another
 #: host is a way around the boundary it exists to enforce.

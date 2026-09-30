@@ -50,18 +50,21 @@ async def test_registering_sends_no_identity(sidecar: tuple[FakeSidecar, str]) -
 async def test_the_sdk_declares_the_contract_it_was_built_for(
     sidecar: tuple[FakeSidecar, str],
 ) -> None:
-    """v3: links on the account-scope stream and the refusal code are in it.
+    """v4: the asset class is an enum on a reported miss
+    (sdk-contract/asset-class-is-an-enum), after v3's links on the
+    account-scope stream and the refusal code.
 
-    A sidecar from before them, still at v2, refuses the plugin at
-    registration, naming both, rather than admitting it to read no links.
+    A sidecar from before it, still at v3, reads the free-text field the enum
+    replaced and would drop the class, so it refuses the plugin at
+    registration, naming both.
     """
     service, address = sidecar
     plugin = await meridian.connect(address, heartbeat=False)
     await plugin.leave()
 
     (sent,) = service.registered
-    assert meridian.SCHEMA_VERSION == "v3"
-    assert sent.schema_version == "v3"
+    assert meridian.SCHEMA_VERSION == "v4"
+    assert sent.schema_version == "v4"
 
 
 async def test_identity_and_grants_come_back(sidecar: tuple[FakeSidecar, str]) -> None:

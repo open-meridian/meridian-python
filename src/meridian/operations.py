@@ -20,6 +20,7 @@ round-trip form, and never Decimal(value), its binary expansion.
 from __future__ import annotations
 
 import base64
+import re
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
@@ -82,6 +83,29 @@ def _money(value: Money, name: str) -> ops.Money:
     return ops.Money(amount=_decimal(value.amount, name), currency_code=value.currency_code)
 
 
+def _enum(kind: Any, value: Any, name: str) -> Any:
+    """An enum value as the wire carries it: one `kind` defines, given as the
+    value, its name (ASSET_CLASS_EQUITY) or its name without the enum's
+    prefix in lower case (equity). None or an empty string is unset. Anything
+    else is refused naming the field, never sent for the sidecar to refuse."""
+    if value is None or value == "":
+        return None
+    prefix = re.sub(r"(?<!^)(?=[A-Z])", "_", kind.DESCRIPTOR.name).upper() + "_"
+    names = dict(kind.items())
+    short = {n.removeprefix(prefix).lower(): v for n, v in names.items() if n.startswith(prefix)}
+    if isinstance(value, str):
+        if value in names:
+            return names[value]
+        if value in short:
+            return short[value]
+    elif isinstance(value, int) and not isinstance(value, bool) and value in names.values():
+        return value
+    raise ValueError(
+        f"{name} is {value!r}, which {kind.DESCRIPTOR.name} does not define; "
+        f"one of {', '.join(n for n in short if n != 'unspecified') or ', '.join(names)}"
+    )
+
+
 def as_decimal(message: ops.Decimal) -> Decimal:
     """A Decimal read back from the wire exactly as it was stated: 150 at scale
     2 is Decimal('1.50'). Built from its digits rather than by arithmetic,
@@ -139,7 +163,7 @@ class Operations:
         status_detail: str = "",
         observed_at_ns: int = 0,
         external_account_id: str = "",
-        state: ops.SyncState | None = None,
+        state: ops.SyncState | str | None = None,
         holdings_as_of_ns: int = 0,
         history_as_of_ns: int = 0,
     ) -> ops.Published:
@@ -151,7 +175,7 @@ class Operations:
             status_detail=status_detail,
             observed_at_ns=observed_at_ns,
             external_account_id=external_account_id,
-            state=state,
+            state=_enum(ops.SyncState, state, "state"),
             holdings_as_of_ns=holdings_as_of_ns,
             history_as_of_ns=history_as_of_ns,
         )
@@ -195,7 +219,7 @@ class Operations:
         quantity: Decimal | int,
         market_value: Money | None = None,
         external_account_id: str = "",
-        side: ops.HoldingSide | None = None,
+        side: ops.HoldingSide | str | None = None,
         settle_date_quantity: Decimal | int | None = None,
         currency_assumed: bool = False,
         also_counted_in_cash: bool = False,
@@ -209,7 +233,7 @@ class Operations:
             quantity=_decimal(quantity, "quantity"),
             market_value=None if market_value is None else _money(market_value, "market_value"),
             external_account_id=external_account_id,
-            side=side,
+            side=_enum(ops.HoldingSide, side, "side"),
             settle_date_quantity=None if settle_date_quantity is None else _decimal(settle_date_quantity, "settle_date_quantity"),
             currency_assumed=currency_assumed,
             also_counted_in_cash=also_counted_in_cash,
@@ -238,19 +262,19 @@ class Operations:
         self,
         *,
         source: str = "",
-        asset_class: str = "",
+        asset_class: ops.AssetClass | str | None = None,
         identifiers: Sequence[ops.Identifier] = (),
         as_of_ns: int = 0,
-        reason: ops.MissReason | None = None,
+        reason: ops.MissReason | str | None = None,
         observed_at_ns: int = 0,
     ) -> ops.Published:
         """W3.2: A resolution missed. A fact, not a request."""
         params = ops.ReportMissingInstrumentParams(
             source=source,
-            asset_class=asset_class,
+            asset_class=_enum(ops.AssetClass, asset_class, "asset_class"),
             identifiers=list(identifiers),
             as_of_ns=as_of_ns,
-            reason=reason,
+            reason=_enum(ops.MissReason, reason, "reason"),
             observed_at_ns=observed_at_ns,
         )
         return await self._operate(self._operations().ReportMissingInstrument, params)

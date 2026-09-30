@@ -46,6 +46,7 @@ from .operations import Money, as_decimal, as_money
 
 # The plugin-facing mirrors a typed operation takes, generated with it.
 from .plugin.v1.operations_pb2 import (
+    AssetClass,
     ExternalAccount,
     HoldingSide,
     Identifier,
@@ -58,6 +59,7 @@ __all__ = [
     "SCHEMA_VERSION",
     "AccountScope",
     "AppliesWhen",
+    "AssetClass",
     "CallFailed",
     "Caller",
     "CallerMiddleware",

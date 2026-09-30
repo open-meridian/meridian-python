@@ -165,6 +165,58 @@ async def test_identifiers_travel_as_the_plugin_facing_mirror(sidecar) -> None:
 
 
 @pytest.mark.parametrize(
+    "given",
+    ["fund", "ASSET_CLASS_FUND", meridian.AssetClass.ASSET_CLASS_FUND],
+)
+async def test_an_asset_class_is_the_enums_in_the_spelling_it_was_ruled(sidecar, given) -> None:
+    # sdk-contract/asset-class-is-an-enum: equity, debt, fund, derivative,
+    # crypto_asset, event_contract, cash -- or the enum's own name or value.
+    service, _ = sidecar
+    plugin = await connected(sidecar)
+    try:
+        await plugin.report_missing_instrument(
+            source="snaptrade",
+            asset_class=given,
+            identifiers=[Identifier(scheme="symbol", value="VTI", source="snaptrade")],
+        )
+    finally:
+        await plugin.leave()
+    (sent,) = service.operations.sent
+    assert sent.asset_class == operations_pb2.ASSET_CLASS_FUND  # type: ignore[attr-defined]
+
+
+async def test_a_miss_may_say_no_class(sidecar) -> None:
+    # A publisher that does not know the class sends none; a stub may lack one.
+    service, _ = sidecar
+    plugin = await connected(sidecar)
+    try:
+        await plugin.report_missing_instrument(source="snaptrade", asset_class="")
+        await plugin.report_missing_instrument(source="snaptrade")
+    finally:
+        await plugin.leave()
+    assert [s.asset_class for s in service.operations.sent] == [0, 0]  # type: ignore[attr-defined]
+
+
+@pytest.mark.parametrize("given", ["EQUITY", "Equity", "equities", "etf", 99, True])
+async def test_an_asset_class_the_contract_does_not_define_is_refused_before_sending(
+    sidecar, given
+) -> None:
+    # Free text made EQUITY, Equity and equities three classes; an ETF is a
+    # type under fund, not a class. None of them reaches the sidecar.
+    service, _ = sidecar
+    plugin = await connected(sidecar)
+    try:
+        with pytest.raises(ValueError, match="asset_class") as refused:
+            await plugin.report_missing_instrument(source="snaptrade", asset_class=given)
+    finally:
+        await plugin.leave()
+    assert "equity, debt, fund, derivative, crypto_asset, event_contract, cash" in str(
+        refused.value
+    )
+    assert not service.operations.sent
+
+
+@pytest.mark.parametrize(
     ("code", "raised", "kind"),
     [
         (grpc.StatusCode.PERMISSION_DENIED, NotGranted, None),
