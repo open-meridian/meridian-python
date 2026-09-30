@@ -2,7 +2,8 @@
 
 The Python SDK for building [Open Meridian](https://open-meridian.com) plugins:
 the tools a trader has an AI agent build, and the bots and analytics a
-developer writes. Python 3.11 or newer.
+developer writes. Python 3.11 or newer. This is release 0.7.1; its reference
+is at [open-meridian.dev](https://open-meridian.dev/api/python-sdk/).
 
 ## Start here
 
@@ -12,10 +13,12 @@ Start a plugin with the command line, not from this repository:
     meridian plugin dev --instance my-plugin   # on a deployment installed with --development
 
 `plugin new` writes this repository's `template/`, the reference plugin: its
-code and its page, built on the plugin UI kit (open-meridian/meridian-ui), a
+code and its page, built on the plugin UI kit (open-meridian/meridian-ui), its
+tests, a CI workflow running `meridian plugin check --run-tests`, a
 `Dockerfile`, and `AGENTS.md`, which teaches any coding agent to build pages
-with the kit and the live loop (`CLAUDE.md` and a Claude Code skill lead to
-it). See
+with the kit, hold the plugin to `meridian plugin check`, and the live loop
+(`CLAUDE.md` and a Claude Code skill lead to it). meridian-cli vendors the
+template at a pinned commit, so a CLI release carries it. See
 [meridian-cli](https://github.com/open-meridian/meridian-cli).
 
 ## The SDK
@@ -214,6 +217,7 @@ carries libcst.
 | 0.5.0 to 0.6.0: access is read or write, and a plugin declares no tags (decisions/026) | `tags` in `[tool.meridian]`; access gathered over the tags into `caller.read` or `caller.write`, `any(a in held.read for held in caller.access)` into `a in caller.read`; `Caller(access=(TagAccess(...), ...))` into `Caller(read=..., write=...)`; an unused import of `TagAccess` | access read by a tag's own name; `TagAccess` still named; `plugin.identity.tags`; declared tags, whose holders a deployment admin gives read or write |
 | 0.6.0 to 0.6.1 | only the pins move | |
 | 0.6.1 to 0.7.0: the unlinked refusal is `meridian.NotLinked` | a meridian error's words tested for "not linked" into `isinstance(err, meridian.NotLinked)`, and such a handler into `except meridian.NotLinked`; a test's `CallFailed(topic, "refused", "... is not linked ...")` into `NotLinked(topic, "...")` | the words matched anywhere else |
+| 0.7.0 to 0.7.1: the SDK carries its migrations | only the pins move | |
 
 `tests/migrations/` holds the plugins the migrations are recorded for, as
 written and as their migration leaves them, and `make check-migrations` holds
@@ -225,6 +229,15 @@ each result to `meridian plugin check --run-tests`.
 
 Run `make install-hooks` once on a fresh clone, so that `git push` fires
 `ci-local` first. Without it the gate exists and does not run.
+
+## Releasing
+
+By hand, from the `publish` workflow: TestPyPI by default, PyPI when chosen,
+with no token (trusted publishing). A real release then publishes the plugin
+base image, `ghcr.io/open-meridian/plugin-python:<version>`, which a plugin's
+`Dockerfile` builds on; a tag already published is never overwritten. A
+release that changes what a plugin calls carries its migration from the
+release before, and every other release one that only moves the pins.
 
 ## Licence
 
