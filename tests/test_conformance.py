@@ -30,6 +30,7 @@ import importlib
 import os
 import pathlib
 import pkgutil
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -38,7 +39,9 @@ import yaml
 from google.protobuf import descriptor_pool, json_format, message_factory
 
 import meridian.v1
+from meridian import Figure
 from meridian.operations import _decimal
+from meridian.testing import heartbeat
 
 # Importing a generated module registers its messages in the default
 # descriptor pool, which is how a type named in a fixture is found by name.
@@ -50,6 +53,8 @@ for _module in pkgutil.iter_modules(meridian.v1.__path__):
         importlib.import_module(f"meridian.v1.{_module.name}")
 
 SECTIONS = ("request", "reply", "event")
+
+EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 
 # The domain's Decimal and its plugin-facing mirror, which are one shape.
 DECIMALS = {"meridian.v1.Decimal", "meridian.plugin.v1.Decimal"}
@@ -163,3 +168,51 @@ def test_there_are_pins_to_check() -> None:
     above into zero collected tests and a green run.
     """
     assert len(pinned_messages()) >= 30
+
+
+def test_the_heartbeats_figures_built_with_the_sdk_are_the_pinned_bytes() -> None:
+    """A plugin's figures, given as meridian.Figure and put on the wire by the
+    SDK's own conversion, are the bytes the heartbeat fixture pins: each kind
+    of value, an as-of, a state and a why (W4.5)."""
+    fixture = yaml.safe_load(
+        (fixtures_root() / _find("heartbeat.yaml")).read_text(encoding="utf-8")
+    )
+    fields = fixture["request"]["fields"]
+    assert {key for f in fields["figures"] for key in f} >= {
+        "count",
+        "decimal",
+        "text",
+        "at_ns",
+        "as_of_ns",
+        "state",
+        "why",
+    }
+
+    def moment(ns: str | int) -> datetime:
+        assert int(ns) % 1000 == 0, f"{ns} is finer than a datetime holds"
+        return EPOCH + timedelta(microseconds=int(ns) // 1000)
+
+    def figure(given: dict[str, Any]) -> Figure:
+        if "count" in given:
+            value: Any = int(given["count"])
+        elif "decimal" in given:
+            value = Decimal(given["decimal"])
+        elif "text" in given:
+            value = given["text"]
+        else:
+            value = moment(given["at_ns"])
+        return Figure(
+            given["label"],
+            value,
+            as_of=moment(given["as_of_ns"]) if "as_of_ns" in given else None,
+            state=given.get("state"),
+            why=given.get("why"),
+        )
+
+    built = heartbeat(
+        healthy=fields["healthy"],
+        detail=fields["detail"],
+        figures=[figure(given) for given in fields["figures"]],
+    )
+    pin = base64.b64decode(fixture["expected_proto_bytes_b64"]["request"])
+    assert built.SerializeToString(deterministic=True) == pin

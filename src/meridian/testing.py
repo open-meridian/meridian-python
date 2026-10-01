@@ -18,6 +18,11 @@ quantities, values and balances, say -- nothing technical keeps off a page,
 so the plugin's tests do. An account's identity is not its data: a Manage
 page may list every account of the deployment by name as a link target.
 
+`heartbeat` is the heartbeat a plugin's sidecar receives, with the figures
+it reports on its Summary (W4.5), checked as the SDK checks them before
+sending: a test of the figures a plugin computes asserts on it, or on the
+refusal it raises.
+
 `post` carries the person's CSRF token back, as the page's form would;
 `request` sends only what it is given, for a test that a request without
 one, or with somebody else's, is refused. A view raising fails the test with
@@ -37,6 +42,7 @@ from typing import Any, cast
 from markupsafe import escape
 
 from .client import Caller, Page, _levels
+from .figures import Figure, wire
 from .pages import CSRF_FIELD, SPELLING, Pages, Request, Response
 from .v1 import sidecar_pb2
 
@@ -75,6 +81,17 @@ def caller_header(
     )
     assertion = sidecar_pb2.CallerAssertion(claims=claims.SerializeToString())
     return base64.urlsafe_b64encode(assertion.SerializeToString()).decode().rstrip("=")
+
+
+def heartbeat(
+    *, healthy: bool = True, detail: str = "", figures: Iterable[Figure] = ()
+) -> sidecar_pb2.HeartbeatRequest:
+    """The heartbeat the sidecar receives from a plugin reporting these: its
+    figures as the wire carries them, in the plugin's order. Raises as
+    `plugin.figures = figures` does, before anything would be sent, for a
+    figure past a bound (ValueError, in the sidecar's words) or of no kind
+    a figure is (TypeError)."""
+    return sidecar_pb2.HeartbeatRequest(healthy=healthy, detail=detail, figures=wire(figures))
 
 
 @dataclass(frozen=True)

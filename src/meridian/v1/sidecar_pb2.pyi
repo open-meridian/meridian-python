@@ -21,6 +21,13 @@ class SettingType(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     SETTING_TYPE_BOOLEAN: _ClassVar[SettingType]
     SETTING_TYPE_CHOICE: _ClassVar[SettingType]
 
+class FigureState(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    FIGURE_STATE_UNSPECIFIED: _ClassVar[FigureState]
+    FIGURE_STATE_OK: _ClassVar[FigureState]
+    FIGURE_STATE_WARN: _ClassVar[FigureState]
+    FIGURE_STATE_ERROR: _ClassVar[FigureState]
+
 class RefusalReason(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
     REFUSAL_REASON_UNSPECIFIED: _ClassVar[RefusalReason]
@@ -34,6 +41,10 @@ SETTING_TYPE_STRING: SettingType
 SETTING_TYPE_INTEGER: SettingType
 SETTING_TYPE_BOOLEAN: SettingType
 SETTING_TYPE_CHOICE: SettingType
+FIGURE_STATE_UNSPECIFIED: FigureState
+FIGURE_STATE_OK: FigureState
+FIGURE_STATE_WARN: FigureState
+FIGURE_STATE_ERROR: FigureState
 REFUSAL_REASON_UNSPECIFIED: RefusalReason
 REFUSAL_REASON_EXTERNAL_ACCOUNT_NOT_LINKED: RefusalReason
 
@@ -132,12 +143,44 @@ class RegisterReply(_message.Message):
     def __init__(self, admitted: bool = ..., deployment_id: _Optional[str] = ..., refusal_reason: _Optional[str] = ..., publish_grants: _Optional[_Iterable[str]] = ..., subscribe_grants: _Optional[_Iterable[str]] = ..., instance_id: _Optional[str] = ..., roles: _Optional[_Iterable[str]] = ...) -> None: ...
 
 class HeartbeatRequest(_message.Message):
-    __slots__ = ("healthy", "detail")
+    __slots__ = ("healthy", "detail", "figures")
     HEALTHY_FIELD_NUMBER: _ClassVar[int]
     DETAIL_FIELD_NUMBER: _ClassVar[int]
+    FIGURES_FIELD_NUMBER: _ClassVar[int]
     healthy: bool
     detail: str
-    def __init__(self, healthy: bool = ..., detail: _Optional[str] = ...) -> None: ...
+    figures: _containers.RepeatedCompositeFieldContainer[PluginFigure]
+    def __init__(self, healthy: bool = ..., detail: _Optional[str] = ..., figures: _Optional[_Iterable[_Union[PluginFigure, _Mapping]]] = ...) -> None: ...
+
+class PluginFigure(_message.Message):
+    __slots__ = ("label", "count", "decimal", "text", "at_ns", "as_of_ns", "state", "why")
+    LABEL_FIELD_NUMBER: _ClassVar[int]
+    COUNT_FIELD_NUMBER: _ClassVar[int]
+    DECIMAL_FIELD_NUMBER: _ClassVar[int]
+    TEXT_FIELD_NUMBER: _ClassVar[int]
+    AT_NS_FIELD_NUMBER: _ClassVar[int]
+    AS_OF_NS_FIELD_NUMBER: _ClassVar[int]
+    STATE_FIELD_NUMBER: _ClassVar[int]
+    WHY_FIELD_NUMBER: _ClassVar[int]
+    label: str
+    count: int
+    decimal: Decimal
+    text: str
+    at_ns: int
+    as_of_ns: int
+    state: FigureState
+    why: str
+    def __init__(self, label: _Optional[str] = ..., count: _Optional[int] = ..., decimal: _Optional[_Union[Decimal, _Mapping]] = ..., text: _Optional[str] = ..., at_ns: _Optional[int] = ..., as_of_ns: _Optional[int] = ..., state: _Optional[_Union[FigureState, str]] = ..., why: _Optional[str] = ...) -> None: ...
+
+class Decimal(_message.Message):
+    __slots__ = ("high", "low", "scale")
+    HIGH_FIELD_NUMBER: _ClassVar[int]
+    LOW_FIELD_NUMBER: _ClassVar[int]
+    SCALE_FIELD_NUMBER: _ClassVar[int]
+    high: int
+    low: int
+    scale: int
+    def __init__(self, high: _Optional[int] = ..., low: _Optional[int] = ..., scale: _Optional[int] = ...) -> None: ...
 
 class HeartbeatReply(_message.Message):
     __slots__ = ()

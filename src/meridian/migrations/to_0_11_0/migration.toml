@@ -1,0 +1,22 @@
+# open-meridian 0.10.1 to 0.11.0: the SDK declares contract v6; a plugin may
+# report a few figures on its heartbeat (sdk-contract/a-plugin-reports-its-figures).
+# Nothing a plugin calls changed, so only the pins move.
+from = "0.10.1"
+to = "0.11.0"
+summary = """
+The SDK declares contract v6 (meridian.SCHEMA_VERSION). A plugin may report a
+few figures about its own work, which core draws as tiles on its Summary under
+Manage, below core's status: plugin.figures = [meridian.Figure(label, value,
+as_of=None, state=None, why=None), ...], a value being an int (a count), a
+Decimal, a str (a text) or a timezone-aware datetime (a time), sent on every
+heartbeat from the next on, or plugin.report(healthy=..., figures=[...]) to
+send them now. Past a bound -- more than 8, a label empty, over 40 characters
+or given twice, a text over 40, a why over 200, a state other than ok, warn or
+error, no value, or a decimal out of range -- they are refused at the call
+that sets them, in the sidecar's words, and nothing is sent.
+meridian.testing.heartbeat(figures=[...]) is the heartbeat the sidecar
+receives, for a plugin's tests. A plugin built on 0.11.0 is refused at
+registration by a sidecar that accepts only v5, naming both. Nothing a plugin
+calls changed, so only the pins move.
+"""
+breaking = false

@@ -270,6 +270,40 @@ float becomes `Decimal(repr(value))`, its shortest round-trip form, and never
 `Decimal(value)`, which is its binary expansion: `Decimal(0.1)` is
 0.1000000000000000055511151231257827021181583404541015625.
 
+### Figures on Summary
+
+Manage opens on the plugin's Summary, which core draws: its own status first
+(health and why, the versions, restart), then a few figures the plugin
+reports about its own work, each a tile. A plugin gives them on its heartbeat
+and builds no summary page of its own:
+
+```python
+from datetime import datetime, timezone
+import meridian
+
+plugin.figures = [
+    meridian.Figure("Connections", 3, state="warn",
+                    why="1 connection needs attention: the brokerage asked to reconnect"),
+    meridian.Figure("Accounts reached", 7),
+    meridian.Figure("Last read", datetime.now(timezone.utc)),
+]
+```
+
+A value is an `int` (a count), a `Decimal`, a `str` (a text) or a
+timezone-aware `datetime` (a time). `as_of` says when it was true, where
+that is not now; `state` is `"ok"`, `"warn"` or `"error"`, the tile's mark,
+and `why` the note beside it. The list goes on every heartbeat from the next
+on, in its order, each replacing the last, and an empty list clears it;
+`await plugin.report(healthy=True, figures=[...])` sends it at once. A figure
+names no account and carries none of an account's data: Manage shows none.
+
+At most 8; a label of 1 to 40 characters, given once; a text of at most 40;
+a why of at most 200; a decimal within what the wire carries. Anything past
+a bound is refused at the line that sets it, in the words the sidecar would
+refuse it with, and nothing is sent. In a plugin's tests,
+`meridian.testing.heartbeat(figures=[...])` is the heartbeat its sidecar
+receives, or the refusal.
+
 ## Moving a plugin to a new release
 
     meridian plugin migrate            # to the latest release
@@ -318,6 +352,7 @@ carries libcst.
 | 0.8.0 to 0.9.0: the SDK declares contract v4; `asset_class` is an enum | `report_missing_instrument`'s `asset_class`, a string naming one of the seven classes in another case or with its prefix (`"EQUITY"`, `"asset_class_fund"`), into the class's spelling (`"equity"`, `"fund"`) | an `asset_class` string naming no class (`"etf"`, `"stock"`); one the migration cannot read, such as a variable, which must come to a class, an `AssetClass`, or `None` |
 | 0.9.0 to 0.10.0: the SDK declares contract v5; pages carry their levels | `Interface(admin_pages=...)` into `pages=`, and a `Page(path, title)` naming no levels into `Page(path, title, levels=["admin"])` | `caller.deployment_admin` read to decide who is served, which opens no page since v5: declare the page at `admin` or ask `caller.admin`; `admin_pages` read as an attribute; admin pages passed as `Interface`'s third argument |
 | 0.10.0 to 0.10.1: pages answer HEAD and refuse a large body; `assert_no_account_data` looks for account data, not identities | only the pins move | |
+| 0.10.1 to 0.11.0: the SDK declares contract v6; a plugin may report figures on its Summary (`plugin.figures`, `meridian.Figure`) | only the pins move | |
 
 `tests/migrations/` holds the plugins the migrations are recorded for, as
 written and as their migration leaves them, and `make check-migrations` holds

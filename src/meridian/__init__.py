@@ -12,6 +12,9 @@ another plugin.
 
 A plugin's pages are declared where their views are, each with the levels it
 serves, and refused to a session at any other (`Pages`, in `meridian.pages`).
+The few figures it reports about its own work, which core draws on its Summary
+under Manage, go on its heartbeat (`plugin.figures = [Figure(...)]`, in
+`meridian.figures`).
 """
 
 from .asgi import CallerMiddleware
@@ -43,6 +46,7 @@ from .errors import (
     NotRegistered,
     Refused,
 )
+from .figures import Figure, FigureState
 
 # An amount of currency as a typed operation takes one, and the two readers of
 # a number off the wire, generated with the operations (decisions/023).
@@ -71,6 +75,8 @@ __all__ = [
     "CallerMiddleware",
     "Choice",
     "ExternalAccount",
+    "Figure",
+    "FigureState",
     "Grants",
     "HoldingSide",
     "Identifier",

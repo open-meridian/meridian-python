@@ -50,20 +50,20 @@ async def test_registering_sends_no_identity(sidecar: tuple[FakeSidecar, str]) -
 async def test_the_sdk_declares_the_contract_it_was_built_for(
     sidecar: tuple[FakeSidecar, str],
 ) -> None:
-    """v5: one list of pages, each with the levels it serves, and the level a
-    session was opened at in the claims (sdk-contract/a-plugin-has-admins),
-    after v4's asset class as an enum and v3's links and refusal code.
+    """v6: the figures a plugin reports on its heartbeat
+    (sdk-contract/a-plugin-reports-its-figures), after v5's levels and one
+    list of pages, v4's asset class as an enum and v3's links and refusal code.
 
-    A sidecar from before it, still at v4, reads no page's levels and no
-    session's level, so it refuses the plugin at registration, naming both.
+    A sidecar from before it, still at v5, reads no figures, so it refuses the
+    plugin at registration, naming both.
     """
     service, address = sidecar
     plugin = await meridian.connect(address, heartbeat=False)
     await plugin.leave()
 
     (sent,) = service.registered
-    assert meridian.SCHEMA_VERSION == "v5"
-    assert sent.schema_version == "v5"
+    assert meridian.SCHEMA_VERSION == "v6"
+    assert sent.schema_version == "v6"
 
 
 async def test_identity_and_grants_come_back(sidecar: tuple[FakeSidecar, str]) -> None:

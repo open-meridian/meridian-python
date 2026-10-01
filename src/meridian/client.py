@@ -36,6 +36,7 @@ from meridian.plugin.v1 import operations_pb2_grpc
 from meridian.v1 import sidecar_pb2, sidecar_pb2_grpc
 
 from .errors import CallFailed, NoSidecar, NotGranted, NotLinked, NotRegistered, Refused
+from .figures import Figure, listed, wire
 from .operations import Operations, _enum
 
 if TYPE_CHECKING:
@@ -46,10 +47,10 @@ if TYPE_CHECKING:
 #: rather than admitting it to run without what the SDK reads -- its links on
 #: the account-scope stream, the refusal code beside a refusal, the asset class
 #: as an enum on a miss it reports, its pages each declared with the levels it
-#: serves, and the level a session was opened at -- and a newer sidecar still
-#: admits it. Raised with every contract revision that adds something a plugin
-#: can depend on.
-SCHEMA_VERSION = "v5"
+#: serves, the level a session was opened at, and the figures on its heartbeat
+#: -- and a newer sidecar still admits it. Raised with every contract revision
+#: that adds something a plugin can depend on.
+SCHEMA_VERSION = "v6"
 
 #: Where a sidecar listens. Loopback, always: a sidecar reachable from another
 #: host is a way around the boundary it exists to enforce.
@@ -488,6 +489,28 @@ class Plugin(Operations):
     _left: bool = field(default=False, repr=False)
 
     _declared: tuple[Setting, ...] = field(default=(), repr=False)
+    _figures: tuple[Figure, ...] = field(default=(), repr=False)
+    _figures_sent: tuple[sidecar_pb2.PluginFigure, ...] = field(default=(), repr=False)
+
+    @property
+    def figures(self) -> Sequence[Figure]:
+        """The figures this plugin reports on its heartbeat (W4.5), as last set.
+
+        Set a list of `meridian.Figure` to report it on every heartbeat from
+        the next on, each replacing the last; an empty one clears them. Core
+        draws them on the plugin's Summary under Manage. Refused here, as the
+        sidecar would refuse it, when it breaks a bound: more than 8, a label
+        empty, over 40 characters or given twice, a text over 40, a why over
+        200, a state other than ok, warn or error, no value, or a decimal out
+        of range. Nothing is set then, and the last list stands.
+        """
+        return self._figures
+
+    @figures.setter
+    def figures(self, figures: Sequence[Figure]) -> None:
+        given = listed(figures)
+        self._figures_sent = wire(given)
+        self._figures = given
 
     async def settings(self) -> AsyncIterator[Settings]:
         """The settings it declared, now and again on every change (W4.7).
@@ -543,14 +566,24 @@ class Plugin(Operations):
         )
         return reply
 
-    async def report(self, *, healthy: bool, detail: str = "") -> None:
+    async def report(
+        self, *, healthy: bool, detail: str = "", figures: Sequence[Figure] | None = None
+    ) -> None:
         """Report liveness once, out of band of the automatic heartbeat.
 
         For a plugin that knows it is unwell and should say so before the next
         tick, rather than for ordinary liveness, which is already handled.
+        It carries the plugin's figures as they stand; `figures` sets them
+        first, as setting `plugin.figures` does, and sends them now.
         """
         self._check_open()
-        await self._stub.Heartbeat(sidecar_pb2.HeartbeatRequest(healthy=healthy, detail=detail))
+        if figures is not None:
+            self.figures = figures
+        await self._stub.Heartbeat(
+            sidecar_pb2.HeartbeatRequest(
+                healthy=healthy, detail=detail, figures=self._figures_sent
+            )
+        )
 
     async def leave(self, reason: str = "") -> None:
         """Say this plugin is stopping, and stop.
@@ -618,7 +651,9 @@ class Plugin(Operations):
             # The next real operation surfaces it with context; failing here
             # would raise from a background task nobody awaited.
             with contextlib.suppress(grpc.aio.AioRpcError):
-                await self._stub.Heartbeat(sidecar_pb2.HeartbeatRequest(healthy=True))
+                await self._stub.Heartbeat(
+                    sidecar_pb2.HeartbeatRequest(healthy=True, figures=self._figures_sent)
+                )
 
 
 def _reason(failed: grpc.aio.AioRpcError) -> int:

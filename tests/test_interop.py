@@ -25,8 +25,10 @@ import grpc
 import pytest
 
 import meridian
+import meridian.testing
 from meridian import CallFailed, Money, NotLinked
 from meridian.plugin.v1 import operations_pb2, operations_pb2_grpc
+from meridian.v1 import sidecar_pb2, sidecar_pb2_grpc
 
 # A topic the custody role's grants hold. Named here rather than imported,
 # because the point is that two implementations agree about these strings, and
@@ -388,6 +390,43 @@ async def test_a_nineteenth_decimal_sent_raw_is_refused_by_the_sidecar(plugin) -
             )
     assert refused.value.code() == grpc.StatusCode.INVALID_ARGUMENT
     assert (refused.value.details() or "").startswith("quantity has 19 decimal places")
+
+
+async def test_the_figures_go_on_the_heartbeat_and_past_a_bound_are_refused_alike(
+    plugin,
+) -> None:
+    """W4.5: the sidecar takes the figures the SDK sends, and refuses, in the
+    words the SDK refuses with, a heartbeat sent past the SDK that breaks a
+    bound, as a plugin in another language that skipped the check would."""
+    await plugin.report(
+        healthy=True,
+        figures=[
+            meridian.Figure("Connections", 3, state="warn", why="1 needs attention"),
+            meridian.Figure("Accounts reached", 7),
+            meridian.Figure("Rows refused", Decimal("0.5")),
+            meridian.Figure("Key", "Commercial"),
+        ],
+    )
+    nine = [meridian.Figure(f"F{i}", i) for i in range(9)]
+    with pytest.raises(ValueError) as by_the_sdk:
+        meridian.testing.heartbeat(figures=nine)
+    async with grpc.aio.insecure_channel(address()) as channel:
+        raw = sidecar_pb2_grpc.SidecarServiceStub(channel)
+        with pytest.raises(grpc.aio.AioRpcError) as refused:
+            await raw.Heartbeat(
+                sidecar_pb2.HeartbeatRequest(
+                    healthy=True,
+                    figures=[
+                        sidecar_pb2.PluginFigure(label=f"F{i}", count=i) for i in range(9)
+                    ],
+                ),
+                timeout=10,
+            )
+    assert refused.value.code() == grpc.StatusCode.INVALID_ARGUMENT
+    assert refused.value.details() == str(by_the_sdk.value)
+    assert str(by_the_sdk.value) == "9 figures; a plugin reports at most 8"
+    # And a heartbeat within the bounds is taken again.
+    await plugin.report(healthy=True, figures=[])
 
 
 # ── The account side fits every venue (spec/the-account-side-fits-every-venue) ─
