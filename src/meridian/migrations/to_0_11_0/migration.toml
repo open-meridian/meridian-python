@@ -16,7 +16,10 @@ error, no value, or a decimal out of range -- they are refused at the call
 that sets them, in the sidecar's words, and nothing is sent.
 meridian.testing.heartbeat(figures=[...]) is the heartbeat the sidecar
 receives, for a plugin's tests. A plugin built on 0.11.0 is refused at
-registration by a sidecar that accepts only v5, naming both. Nothing a plugin
-calls changed, so only the pins move.
+registration by a sidecar that accepts only v5, naming both. The health a
+plugin reports, with its detail, now stands on every heartbeat after, as its
+figures do: plugin.report(healthy=False, detail=...) keeps it not healthy
+until plugin.report(healthy=True), where before the next automatic heartbeat
+said healthy again. Nothing a plugin calls changed, so only the pins move.
 """
 breaking = false

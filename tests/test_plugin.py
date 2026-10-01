@@ -452,6 +452,57 @@ async def test_the_client_heartbeats_without_being_asked(
         await plugin.leave()
 
 
+async def test_a_reported_health_stands_until_reported_again(
+    sidecar: tuple[FakeSidecar, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A plugin that said it is unwell is not declared well by its own next
+    automatic beat: the health it reported, with its detail, goes on every
+    heartbeat after, as its figures do, until it reports healthy again."""
+    service, address = sidecar
+    monkeypatch.setattr(meridian.client, "HEARTBEAT_SECONDS", 0.01)
+    plugin = await meridian.connect(address)
+    try:
+        await plugin.report(healthy=False, detail="brokerage credentials rejected")
+        service.heartbeats.clear()
+        await asyncio.sleep(0.1)
+        assert len(service.heartbeats) > 1
+        assert all(
+            (beat.healthy, beat.detail) == (False, "brokerage credentials rejected")
+            for beat in service.heartbeats
+        )
+
+        await plugin.report(healthy=True)
+        service.heartbeats.clear()
+        await asyncio.sleep(0.1)
+        assert service.heartbeats
+        assert all((beat.healthy, beat.detail) == (True, "") for beat in service.heartbeats)
+    finally:
+        await plugin.leave()
+
+
+async def test_figures_refused_leave_the_health_as_it_was(
+    sidecar: tuple[FakeSidecar, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A report refused before sending sets nothing: neither its figures nor
+    its health stand on the beats after it."""
+    service, address = sidecar
+    monkeypatch.setattr(meridian.client, "HEARTBEAT_SECONDS", 0.01)
+    plugin = await meridian.connect(address)
+    try:
+        with pytest.raises(ValueError, match="at most 8"):
+            await plugin.report(
+                healthy=False,
+                detail="never sent",
+                figures=[meridian.Figure(f"F{i}", i) for i in range(9)],
+            )
+        service.heartbeats.clear()
+        await asyncio.sleep(0.1)
+        assert service.heartbeats
+        assert all((beat.healthy, beat.detail) == (True, "") for beat in service.heartbeats)
+    finally:
+        await plugin.leave()
+
+
 async def test_leaving_says_why_and_closes_the_plugin(
     sidecar: tuple[FakeSidecar, str],
 ) -> None:

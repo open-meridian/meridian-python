@@ -491,6 +491,8 @@ class Plugin(Operations):
     _declared: tuple[Setting, ...] = field(default=(), repr=False)
     _figures: tuple[Figure, ...] = field(default=(), repr=False)
     _figures_sent: tuple[sidecar_pb2.PluginFigure, ...] = field(default=(), repr=False)
+    _healthy: bool = field(default=True, repr=False)
+    _detail: str = field(default="", repr=False)
 
     @property
     def figures(self) -> Sequence[Figure]:
@@ -569,21 +571,22 @@ class Plugin(Operations):
     async def report(
         self, *, healthy: bool, detail: str = "", figures: Sequence[Figure] | None = None
     ) -> None:
-        """Report liveness once, out of band of the automatic heartbeat.
+        """Report its health now, out of band of the automatic heartbeat.
 
-        For a plugin that knows it is unwell and should say so before the next
-        tick, rather than for ordinary liveness, which is already handled.
-        It carries the plugin's figures as they stand; `figures` sets them
-        first, as setting `plugin.figures` does, and sends them now.
+        For a plugin that knows it is unwell and should say so, rather than
+        for ordinary liveness, which is already handled. The health reported
+        stands, with its `detail`, on every heartbeat after, as the figures
+        do, until the plugin reports again: a plugin reported not healthy
+        stays so until `report(healthy=True)`. It carries the plugin's
+        figures as they stand; `figures` sets them first, as setting
+        `plugin.figures` does, and sends them now. Figures refused leave the
+        health as it was, and nothing is sent.
         """
         self._check_open()
         if figures is not None:
             self.figures = figures
-        await self._stub.Heartbeat(
-            sidecar_pb2.HeartbeatRequest(
-                healthy=healthy, detail=detail, figures=self._figures_sent
-            )
-        )
+        self._healthy, self._detail = healthy, detail
+        await self._stub.Heartbeat(self._heartbeat_request())
 
     async def leave(self, reason: str = "") -> None:
         """Say this plugin is stopping, and stop.
@@ -651,9 +654,14 @@ class Plugin(Operations):
             # The next real operation surfaces it with context; failing here
             # would raise from a background task nobody awaited.
             with contextlib.suppress(grpc.aio.AioRpcError):
-                await self._stub.Heartbeat(
-                    sidecar_pb2.HeartbeatRequest(healthy=True, figures=self._figures_sent)
-                )
+                await self._stub.Heartbeat(self._heartbeat_request())
+
+    def _heartbeat_request(self) -> sidecar_pb2.HeartbeatRequest:
+        """The health and figures as they stand: healthy, with no detail and
+        no figures, until the plugin reports otherwise."""
+        return sidecar_pb2.HeartbeatRequest(
+            healthy=self._healthy, detail=self._detail, figures=self._figures_sent
+        )
 
 
 def _reason(failed: grpc.aio.AioRpcError) -> int:
