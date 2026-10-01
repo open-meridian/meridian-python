@@ -96,11 +96,8 @@ def test_every_release_since_the_first_recorded_has_its_step() -> None:
         ("0.6.1", "0.7.0"),
     ]
     assert (steps[-1].source, steps[-1].target) == ("0.9.0", "0.10.0")
-    # A release that moves the version records its step, if only the pins. The
-    # step to the release being prepared is recorded before the release moves
-    # the version, and is then the one step past it.
-    after = [m for m in steps if migrations.version(m.target) > migrations.version(SDK)]
-    assert steps[-1].target == SDK or (after == [steps[-1]] and steps[-2].target == SDK)
+    # A release that moves the version records its step, if only the pins.
+    assert steps[-1].target == SDK
 
 
 def test_every_rule_the_code_names_is_in_its_record() -> None:

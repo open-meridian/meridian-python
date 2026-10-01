@@ -15,11 +15,10 @@ level, or Page(path, title, levels=[...]); pages.render renders a page's Jinja2
 template on the kit's base template, meridian/base.html (jinja2 is a new
 dependency, in the plugin base image), and a Pages route refuses any request
 but GET and HEAD without the page's CSRF token ({{ csrf_input }} in a form).
-Interface(admin_pages=...) is still
-taken on 0.10.0, as pages at admin, with a DeprecationWarning; this step rewrites
-it. Caller.deployment_admin no longer opens a plugin's admin pages. A plugin built
-on 0.10.0 is refused at registration by a sidecar that accepts only v4, naming
-both.
+Interface(admin_pages=...) is still taken on 0.10.0, as pages at admin, with a
+DeprecationWarning; this step rewrites it. Caller.deployment_admin no longer
+opens a plugin's admin pages. A plugin built on 0.10.0 is refused at
+registration by a sidecar that accepts only v4, naming both.
 """
 # admin_pages= and Page(path, title) still work on 0.10.0, read as pages at
 # admin, so a plugin that is not migrated still registers and serves its pages.
