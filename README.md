@@ -2,7 +2,7 @@
 
 The Python SDK for building [Open Meridian](https://open-meridian.com) plugins:
 the tools a trader has an AI agent build, and the bots and analytics a
-developer writes. Python 3.11 or newer. This is release 0.10.0; its reference
+developer writes. Python 3.11 or newer. This is release 0.10.1; its reference
 is at [open-meridian.dev](https://open-meridian.dev/api/python-sdk/).
 
 ## Start here
@@ -147,10 +147,23 @@ of the person and the session's level under a secret the process makes at
 start, so a restart makes an open page's form stale until it is reloaded. A
 GET changes nothing.
 
+HEAD is answered for every path that takes GET, by its GET view, with the
+headers and no body. A request whose body is over `Pages(max_body=...)` bytes,
+1 MiB unless said (or `pages.serve(..., max_body=...)`), is answered 413
+before any view runs, so a view need not measure what it is sent. The tab row
+marks the tab the request is for, or, for a form's action that answers by
+rendering a page, the tab it was posted from.
+
 `meridian.testing.PageClient` asks the pages in a plugin's tests as the
-sidecar would, at each level: `every_page()` renders each under Manage, Open
-and View, and `assert_no_account_data(...)` fails when a page at `admin`
-shows anything the plugin holds for an account.
+sidecar would, at each level, and as a deployment admin with
+`PageClient(..., deployment_admin=True)`: `every_page()` renders each under
+Manage, Open and View, and `assert_no_account_data(*held)` fails when a page
+at `admin` is not served under Manage, or shows any of `held` -- the account
+data the test gave the plugin: holdings, quantities, values, balances,
+statement rows -- as given or escaped. An account's identity (its ID, name,
+custodian, type, owner and note) is not looked for, since a Manage page may
+list every account of the deployment as a link target; a string the test
+names is looked for whatever it is.
 
 `Interface(admin_pages=...)`, retired by contract v5, is still taken in this
 release, as pages at `admin`, with a DeprecationWarning.
@@ -304,6 +317,7 @@ carries libcst.
 | 0.7.1 to 0.8.0: the SDK declares contract v3 | only the pins move | |
 | 0.8.0 to 0.9.0: the SDK declares contract v4; `asset_class` is an enum | `report_missing_instrument`'s `asset_class`, a string naming one of the seven classes in another case or with its prefix (`"EQUITY"`, `"asset_class_fund"`), into the class's spelling (`"equity"`, `"fund"`) | an `asset_class` string naming no class (`"etf"`, `"stock"`); one the migration cannot read, such as a variable, which must come to a class, an `AssetClass`, or `None` |
 | 0.9.0 to 0.10.0: the SDK declares contract v5; pages carry their levels | `Interface(admin_pages=...)` into `pages=`, and a `Page(path, title)` naming no levels into `Page(path, title, levels=["admin"])` | `caller.deployment_admin` read to decide who is served, which opens no page since v5: declare the page at `admin` or ask `caller.admin`; `admin_pages` read as an attribute; admin pages passed as `Interface`'s third argument |
+| 0.10.0 to 0.10.1: pages answer HEAD and refuse a large body; `assert_no_account_data` looks for account data, not identities | only the pins move | |
 
 `tests/migrations/` holds the plugins the migrations are recorded for, as
 written and as their migration leaves them, and `make check-migrations` holds

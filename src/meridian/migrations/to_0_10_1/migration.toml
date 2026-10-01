@@ -1,0 +1,16 @@
+# open-meridian 0.10.0 to 0.10.1: nothing a plugin calls changed, so only the
+# pins move.
+from = "0.10.0"
+to = "0.10.1"
+summary = """
+Pages answer HEAD for every path that takes GET, and refuse a request body
+over Pages(max_body=...), 1 MiB unless said, with 413 before a view runs. A
+form's action that answers by rendering a page marks the tab it was sent
+from. In meridian.testing, PageClient(deployment_admin=True) asks as a
+deployment admin, and assert_no_account_data looks only for the account data
+the test names, as given or escaped, no longer for every account the person
+may read: a Manage page may list accounts' identities as link targets. A
+call naming no data now fails, since it would check nothing. Nothing a plugin
+calls changed, so only the pins move.
+"""
+breaking = false

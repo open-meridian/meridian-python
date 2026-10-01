@@ -62,6 +62,17 @@ HMAC of the person and the session's level under a secret this process makes
 at start, checked before the view runs and answered 403 when it is missing or
 wrong. A restart makes a page open before it stale, which a reload mends.
 
+The tab row marks the tab whose path the request is for. A request for a
+path that is no tab -- a form's action that answers by rendering a page --
+marks the tab it was sent from, its `Referer`'s path, when it carried this
+plugin's token, so came from one of its pages.
+
+HEAD is answered for every path that takes GET: the GET view runs, with
+`request.method` HEAD, and the answer's headers are sent without its body.
+A request whose body is larger than `max_body` bytes (`Pages(max_body=...)`,
+1 MiB unless said, or `serve(..., max_body=...)`) is answered 413 before
+anything reads it, so a view need not measure what it is sent.
+
 The pages are an ASGI application (`pages.app(plugin)`), with the caller read
 as `CallerMiddleware` reads it; `pages.serve(plugin, port)` runs it on the
 standard library's server, so a plugin needs nothing its base image does not
@@ -117,6 +128,19 @@ SAFE_METHODS = frozenset({"GET", "HEAD"})
 #: How long the standard library's server waits for a view before answering 500.
 REQUEST_SECONDS = 60.0
 
+#: The largest body a request may carry unless `Pages` or `serve` says
+#: otherwise: far over any form of a page's, and under what would weigh on a
+#: plugin's memory.
+MAX_BODY = 1024 * 1024
+
+TOO_LARGE = "This request is larger than this plugin takes."
+
+#: What the standard library's server reads and drops of a body it refused,
+#: and for how long, so that closing the connection does not reset it before
+#: the sender reads the answer. Past either, it is closed regardless.
+DISCARD = 64 * 1024 * 1024
+DISCARD_SECONDS = 10.0
+
 #: A level's ruled spelling, as a template reads it in `level`.
 SPELLING: dict[int, str] = {
     sidecar_pb2.ACCESS_LEVEL_ADMIN: "admin",
@@ -127,7 +151,7 @@ SPELLING: dict[int, str] = {
 
 # Markup is markupsafe's, re-exported: text that is HTML already, which a
 # template puts in as it is, where it escapes every other value.
-__all__ = ["KIT", "Markup", "Pages", "Request", "Response"]
+__all__ = ["KIT", "MAX_BODY", "Markup", "Pages", "Request", "Response"]
 
 
 @dataclass(frozen=True)
@@ -241,8 +265,10 @@ class Pages:
         *,
         templates: str | os.PathLike[str] | None = None,
         kit: str = KIT,
+        max_body: int = MAX_BODY,
     ) -> None:
         self.title = title
+        self.max_body = _limit(max_body)
         self.templates = None if templates is None else Path(templates)
         if self.templates is not None and not self.templates.is_dir():
             raise FileNotFoundError(f"the pages' templates are not at {self.templates}")
@@ -358,25 +384,43 @@ class Pages:
     async def dispatch(self, request: Request) -> Response:
         """The view declared at the request's path and method, if the
         session's level is one it serves: 404 for no such path, 405 for a
-        method it does not take, 403 for a level it does not serve."""
-        route = self._routes.get((request.path, request.method.upper()))
+        method it does not take, 403 for a level it does not serve. HEAD
+        runs the GET view where none is declared for HEAD, and answers its
+        headers, with the length of the body it does not send."""
+        answer = await self._dispatch(request)
+        if request.method.upper() != "HEAD":
+            return answer
+        length = (("content-length", str(len(answer._bytes()))),)
+        unsent = tuple((n, v) for n, v in answer.headers if n.lower() != "content-length")
+        return dataclasses.replace(answer, body=b"", headers=unsent + length)
+
+    async def _dispatch(self, request: Request) -> Response:
+        method = request.method.upper()
+        route = self._routes.get((request.path, method))
+        if route is None and method == "HEAD":
+            route = self._routes.get((request.path, "GET"))
         if route is not None:
             return await route.guarded(request)
-        taken = sorted(verb for path, verb in self._routes if path == request.path)
+        taken = {verb for path, verb in self._routes if path == request.path}
+        if "GET" in taken:
+            taken.add("HEAD")
         if taken:
             return Response(
-                f"{request.path} takes {', '.join(taken)}.",
+                f"{request.path} takes {', '.join(sorted(taken))}.",
                 405,
                 "text/plain; charset=utf-8",
-                (("allow", ", ".join(taken)),),
+                (("allow", ", ".join(sorted(taken))),),
             )
         return Response("No such page.", 404, "text/plain; charset=utf-8")
 
     def app(self, plugin: Plugin | None = None) -> ASGIApp:
         """The pages as an ASGI application, serving `plugin`: the caller read
         from the header its sidecar forwarded (401 without one), then
-        dispatched. A view that raises is logged and answered 500."""
+        dispatched. A body over `max_body` is answered 413 without being
+        read; a view that raises is logged and answered 500."""
+        return self._app(plugin, self.max_body)
 
+    def _app(self, plugin: Plugin | None, max_body: int) -> ASGIApp:
         async def serve(scope: Scope, receive: Receive, send: Send) -> None:
             if scope["type"] == "lifespan":
                 while True:
@@ -388,12 +432,10 @@ class Pages:
                         return
             if scope["type"] != "http":
                 return
-            body = b""
-            while True:
-                message = await receive()
-                body += message.get("body", b"")
-                if not message.get("more_body"):
-                    break
+            body = await _body(scope, receive, max_body)
+            if body is None:
+                await _answer(send, Response(TOO_LARGE, 413, "text/plain; charset=utf-8"))
+                return
             request = _request(scope, body, plugin)
             try:
                 response = await self.dispatch(request)
@@ -409,13 +451,21 @@ class Pages:
         return CallerMiddleware(serve)
 
     def serve(
-        self, plugin: Plugin, port: int, *, loop: asyncio.AbstractEventLoop | None = None
+        self,
+        plugin: Plugin,
+        port: int,
+        *,
+        loop: asyncio.AbstractEventLoop | None = None,
+        max_body: int | None = None,
     ) -> http.server.ThreadingHTTPServer:
         """Serve the pages on 127.0.0.1:`port`, with the standard library's
         server, in a thread of its own; each view runs on `loop`, the running
-        one by default, where the plugin's operations are. The returned
-        server's `shutdown()` stops it."""
-        return _serve(self.app(plugin), port, loop or asyncio.get_running_loop())
+        one by default, where the plugin's operations are. A request whose
+        Content-Length is over `max_body`, the pages' own unless said, is
+        answered 413 without its body being read. The returned server's
+        `shutdown()` stops it."""
+        most = self.max_body if max_body is None else _limit(max_body)
+        return _serve(self._app(plugin, most), port, loop or asyncio.get_running_loop(), most)
 
     # ── Rendering ────────────────────────────────────────────────────────
 
@@ -424,8 +474,11 @@ class Pages:
         `level` (admin, write or read); a page's template extends
         `meridian/base.html`. Called from a view, while it serves a request."""
         serving = _current()
-        page, at = serving.route.page, serving.request.path
         caller = serving.request.caller
+        tabs = [each for each in self._pages if caller.level in each.levels]
+        at = _shown(serving.request, {each.path for each in tabs})
+        # A route answering with a page is titled as the tab it marks.
+        page = serving.route.page or next((each for each in tabs if each.path == at), None)
         named = page.title if page is not None else ""
         base = {
             "kit": self.kit,
@@ -433,8 +486,7 @@ class Pages:
             "title": " · ".join(part for part in (named, self.title) if part),
             "tabs": [
                 {"path": each.path, "title": each.title, "current": each.path == at}
-                for each in self._pages
-                if caller.level in each.levels
+                for each in tabs
             ],
         }
         return self.environment.get_template(template).render(
@@ -457,6 +509,40 @@ def _presented(request: Request) -> bool:
     return bool(presented) and hmac.compare_digest(
         presented.encode(), request.csrf_token.encode()
     )
+
+
+def _shown(request: Request, tabs: set[str]) -> str:
+    """The tab a page rendered for `request` marks: the one at its path, or,
+    for a request that carried this plugin's token and so was sent from one
+    of its pages, the one it was sent from. Otherwise none."""
+    if request.path in tabs:
+        return request.path
+    if request.method.upper() in SAFE_METHODS:
+        return ""
+    sent_from = urllib.parse.urlsplit(request.headers.get("referer", "")).path
+    return sent_from if sent_from in tabs else ""
+
+
+def _limit(most: int) -> int:
+    if isinstance(most, bool) or not isinstance(most, int) or most < 0:
+        raise ValueError(f"max_body is a number of bytes, not {most!r}")
+    return most
+
+
+async def _body(scope: Scope, receive: Receive, most: int) -> bytes | None:
+    """The request's body, or None when it is over `most` bytes: refused by
+    its Content-Length before any of it is read, or as soon as it passes."""
+    for name, value in scope.get("headers", []):
+        if name.lower() == b"content-length" and value.strip().isdigit() and int(value) > most:
+            return None
+    body = b""
+    while True:
+        message = await receive()
+        body += cast(bytes, message.get("body", b""))
+        if len(body) > most:
+            return None
+        if not message.get("more_body"):
+            return body
 
 
 def _current() -> _Serving:
@@ -502,17 +588,19 @@ def _request(scope: Scope, body: bytes, plugin: Any) -> Request:
 
 async def _answer(send: Send, response: Response) -> None:
     body = response._bytes()
+    others = [(n, v) for n, v in response.headers if n.lower() != "content-length"]
+    given = [v for n, v in response.headers if n.lower() == "content-length"]
+    # A HEAD's answer carries the length of the body it does not send
+    # (dispatch); any other body is measured.
+    length = given[0] if given and not body else str(len(body))
     await send(
         {
             "type": "http.response.start",
             "status": response.status,
             "headers": [
                 (b"content-type", response.content_type.encode("latin-1")),
-                (b"content-length", str(len(body)).encode()),
-                *(
-                    (name.encode("latin-1"), value.encode("latin-1"))
-                    for name, value in response.headers
-                ),
+                (b"content-length", length.encode("latin-1")),
+                *((name.encode("latin-1"), value.encode("latin-1")) for name, value in others),
             ],
         }
     )
@@ -520,14 +608,44 @@ async def _answer(send: Send, response: Response) -> None:
 
 
 def _serve(
-    app: ASGIApp, port: int, loop: asyncio.AbstractEventLoop
+    app: ASGIApp, port: int, loop: asyncio.AbstractEventLoop, max_body: int = MAX_BODY
 ) -> http.server.ThreadingHTTPServer:
     """An ASGI application on the standard library's threaded server: each
-    request handed to `app` on `loop`, and its answer written back."""
+    request handed to `app` on `loop`, and its answer written back. A body
+    over `max_body` bytes, by its Content-Length, is refused unread."""
 
     class Handler(http.server.BaseHTTPRequestHandler):
+        def _refuse(self, status: int, said: str, unread: int = 0) -> None:
+            # The body is not taken, so the connection carries no other
+            # request after this answer; what is still arriving of it is
+            # dropped, unkept, so the sender reads the answer.
+            self.close_connection = True
+            text = said.encode()
+            self.send_response(status)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Content-Length", str(len(text)))
+            self.send_header("Connection", "close")
+            self.end_headers()
+            if self.command != "HEAD":
+                self.wfile.write(text)
+            self.wfile.flush()
+            unread = min(unread, DISCARD)
+            try:
+                self.connection.settimeout(DISCARD_SECONDS)
+                while unread > 0 and (dropped := self.rfile.read(min(unread, 65536))):
+                    unread -= len(dropped)
+            except OSError:
+                pass
+
         def _handle(self) -> None:
-            length = int(self.headers.get("Content-Length") or 0)
+            said = (self.headers.get("Content-Length") or "0").strip()
+            if not said.isdigit():
+                self._refuse(400, "This request's Content-Length is not a number of bytes.")
+                return
+            length = int(said)
+            if length > max_body:
+                self._refuse(413, TOO_LARGE, unread=length)
+                return
             body = self.rfile.read(length) if length else b""
             path, _, query = self.path.partition("?")
             scope: Scope = {
@@ -576,11 +694,14 @@ def _serve(
             for name, value in start.get("headers", []):
                 self.send_header(name.decode("latin-1"), value.decode("latin-1"))
             self.end_headers()
+            if self.command == "HEAD":  # whatever answered it, the headers alone
+                return
             for message in sent:
                 if message["type"] == "http.response.body":
                     self.wfile.write(message.get("body", b""))
 
         do_GET = _handle  # noqa: N815 - the server's names
+        do_HEAD = _handle  # noqa: N815
         do_POST = _handle  # noqa: N815
 
         def log_message(self, format: str, *args: Any) -> None:  # noqa: A002

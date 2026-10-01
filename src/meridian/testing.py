@@ -4,16 +4,19 @@
 
     client = PageClient(pages, plugin=sidecar, read={"ACC-1"}, write={"ACC-1"})
     assert client.get("/", "write").status == 200
-    client.assert_no_account_data("ACC-1", "Growth fund", "12,500.00")
+    client.assert_no_account_data("AAPL", "125", "12,500.00")  # what ACC-1 holds
 
 Each request carries a `Meridian-Caller` header for a session at one level,
 its accounts cut to that level as the dashboard cuts them (W6.9): none under
 `admin` (Manage), the read and write sets under `write` (Open), the read set
-alone under `read` (View). `every_page` renders each declared page under each
-of the three; `assert_no_account_data` fails when a page at `admin` shows
-anything the plugin holds for an account, since a Manage session sees no
-account's data. What the plugin holds for itself -- a synced statement's rows,
-say -- nothing technical keeps off a page, so the plugin's tests do.
+alone under `read` (View); `deployment_admin=True` makes the person a
+deployment admin. `every_page` renders each declared page under each of the
+three; `assert_no_account_data` fails when a page at `admin` shows any of the
+account data the test names, since a Manage session sees no account's data.
+What the plugin holds for an account -- a synced statement's holdings,
+quantities, values and balances, say -- nothing technical keeps off a page,
+so the plugin's tests do. An account's identity is not its data: a Manage
+page may list every account of the deployment by name as a link target.
 
 `post` carries the person's CSRF token back, as the page's form would;
 `request` sends only what it is given, for a test that a request without
@@ -30,6 +33,8 @@ import urllib.parse
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any, cast
+
+from markupsafe import escape
 
 from .client import Caller, Page, _levels
 from .pages import CSRF_FIELD, SPELLING, Pages, Request, Response
@@ -86,7 +91,9 @@ class PageClient:
 
     `plugin` is what a view reaches as `request.plugin`: a stand-in for the
     sidecar whose operations answer here. `read` and `write` are the accounts
-    the person asking may read and write, cut to each session's level."""
+    the person asking may read and write, cut to each session's level;
+    `deployment_admin`, whether they are a deployment admin, which every
+    request this client sends says."""
 
     def __init__(
         self,
@@ -97,6 +104,7 @@ class PageClient:
         write: Iterable[str] = (),
         subject: str = "local|ada",
         display_name: str = "Ada Park",
+        deployment_admin: bool = False,
     ) -> None:
         self.pages = pages
         self.plugin = plugin
@@ -104,6 +112,7 @@ class PageClient:
         self.write = frozenset(write)
         self.subject = subject
         self.display_name = display_name
+        self.deployment_admin = deployment_admin
 
     def request(
         self,
@@ -128,8 +137,9 @@ class PageClient:
         )
         return asyncio.run(self.pages.dispatch(request))
 
-    def caller(self, level: str | int) -> Caller:
-        """This client's person, in a session at `level`."""
+    def caller(self, level: str | int, *, deployment_admin: bool | None = None) -> Caller:
+        """This client's person, in a session at `level`: a deployment admin
+        as the client was made, unless `deployment_admin` says."""
         return Caller.from_header(
             caller_header(
                 level,
@@ -137,6 +147,9 @@ class PageClient:
                 write=self.write,
                 subject=self.subject,
                 display_name=self.display_name,
+                deployment_admin=(
+                    self.deployment_admin if deployment_admin is None else deployment_admin
+                ),
             )
         )
 
@@ -144,12 +157,19 @@ class PageClient:
         return self.request("GET", path, level, query=query)
 
     def post(
-        self, path: str, level: str | int, form: Mapping[str, str] | None = None
+        self,
+        path: str,
+        level: str | int,
+        form: Mapping[str, str] | None = None,
+        *,
+        headers: Mapping[str, str] | None = None,
     ) -> Response:
         """A form posted from the plugin's page: its CSRF token carried back,
         unless `form` gives one of its own."""
         token = self.pages.csrf_token(self.caller(level))
-        return self.request("POST", path, level, form={CSRF_FIELD: token, **(form or {})})
+        return self.request(
+            "POST", path, level, form={CSRF_FIELD: token, **(form or {})}, headers=headers
+        )
 
     def every_page(self) -> list[Rendered]:
         """Each declared page, in order, under Manage, Open and View: 200
@@ -161,12 +181,25 @@ class PageClient:
         ]
 
     def assert_no_account_data(self, *held: str) -> None:
-        """Every page at `admin`, rendered under Manage, is served and shows
-        none of `held` -- the account IDs, names and figures the plugin holds,
-        which the test put there -- nor any account this client's person may
-        read or write. Raises AssertionError naming the page and what it
-        showed."""
-        shown = {text for text in (*held, *self.read, *self.write) if text}
+        """Under Manage, every page at `admin` answers 200 and every other
+        page 403, and no page at `admin` shows any of `held`: each string,
+        as given or as a template escapes it, anywhere in the page's text.
+        Raises AssertionError naming the page and what it showed.
+
+        `held` is the account data the test put where the plugin reads it:
+        holdings, quantities, values, balances, a statement's rows. Name at
+        least one. An account's identity -- its ID, name, custodian, type,
+        owner and note -- is not looked for: a Manage page may list every
+        account of the deployment as a link target, as the accounts read
+        answers them, identities and never holdings. Each string named is
+        looked for all the same, an identity too."""
+        named = {text for text in held if text}
+        if not named:
+            raise ValueError(
+                "assert_no_account_data names no account data to look for: pass the "
+                "holdings, figures and rows the test gave the plugin"
+            )
+        shown = {text: (text, str(escape(text))) for text in named}
         for rendered in self.every_page():
             if rendered.level != SPELLING[sidecar_pb2.ACCESS_LEVEL_ADMIN]:
                 continue
@@ -181,7 +214,8 @@ class PageClient:
                 raise AssertionError(
                     f"{rendered.page.path} answered {rendered.response.status} under Manage"
                 )
-            found = sorted(text for text in shown if text in rendered.response.text)
+            page = rendered.response.text
+            found = sorted(t for t, forms in shown.items() if any(f in page for f in forms))
             if found:
                 raise AssertionError(
                     f"{rendered.page.path} shows account data under Manage: {', '.join(found)}"

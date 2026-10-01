@@ -167,7 +167,34 @@ def test_no_such_page_and_no_such_method_are_said(templates: Path) -> None:
     client = PageClient(build(templates))
     assert client.get("/nowhere", "write").status == 404
     answered = client.request("POST", "/", "write")
-    assert answered.status == 405 and ("allow", "GET") in answered.headers
+    assert answered.status == 405 and ("allow", "GET, HEAD") in answered.headers
+    head = client.request("HEAD", "/act", "write")
+    assert head.status == 405 and ("allow", "POST") in head.headers and head.body == b""
+
+
+def test_head_is_answered_for_every_get_page_with_its_headers_and_no_body(
+    templates: Path,
+) -> None:
+    pages = build(templates)
+    methods: list[str] = []
+
+    @pages.route("/report.csv", levels="read")
+    def report(request: Request) -> Response:
+        methods.append(request.method)
+        return Response("a,b\n1,2\n", content_type="text/csv", headers=(("x-rows", "1"),))
+
+    client = PageClient(pages, read={"ACC-1"})
+    got = client.get("/", "read")
+    head = client.request("HEAD", "/", "read")
+    assert head.status == 200 and head.body == b"" and head.content_type == got.content_type
+    assert head.headers == (("content-length", str(len(got.text.encode()))),)
+    # The GET view ran, told it was HEAD; a route's own headers are kept.
+    head = client.request("HEAD", "/report.csv", "read")
+    assert methods == ["HEAD"] and head.body == b""
+    assert head.headers == (("x-rows", "1"), ("content-length", "8"))
+    # Refused as GET is, at a level the page does not serve, and still bodiless.
+    refused = client.request("HEAD", "/setup", "read")
+    assert refused.status == 403 and refused.body == b""
 
 
 # ── Rendered ─────────────────────────────────────────────────────────────
@@ -199,6 +226,37 @@ def test_the_tab_row_is_the_pages_at_the_sessions_level(templates: Path) -> None
     # One page at the level is no row to choose from; Setup is never shown.
     assert '<nav class="tabs">' not in client.get("/", "write").text
     assert "/setup" not in under_view
+
+
+def test_a_form_answered_with_a_page_marks_the_tab_it_was_sent_from(templates: Path) -> None:
+    pages = build(templates)
+
+    @pages.page("/history", "History", levels=["write", "read"])
+    def history(request: Request) -> str:
+        return pages.render("setup.html", note="")
+
+    @pages.route("/refresh", levels=["write"], methods=["GET", "POST"])
+    def refresh(request: Request) -> str:
+        return pages.render("setup.html", note="refreshed")
+
+    def row(text: str) -> str:
+        return text.split('<nav class="tabs">')[1].split("</nav>")[0]
+
+    client = PageClient(pages)
+    on_history = '<a class="tab on" href="/history" aria-current="page">History</a>'
+    # Re-rendered by the form's action: the tab it was posted from is current,
+    # and the page is titled as it.
+    sent = client.post("/refresh", "write", headers={"Referer": "http://p.test/history?x=1"})
+    assert on_history in row(sent.text) and 'class="tab on" href="/"' not in sent.text
+    assert "<title>History · Ledger</title>" in sent.text
+    # Sent from no tab, or with no Referer: none is.
+    for headers in ({"Referer": "http://p.test/elsewhere"}, {}):
+        assert 'class="tab on"' not in client.post("/refresh", "write", headers=headers).text
+    # A GET carries no token, so did not necessarily come from this plugin's page.
+    asked = client.request("GET", "/refresh", "write", headers={"Referer": "http://p.test/"})
+    assert 'class="tab on"' not in asked.text
+    # A redirect's GET is for the tab's own path, which marks it.
+    assert on_history in row(client.get("/history", "write", notice="done").text)
 
 
 def test_what_a_template_shows_is_escaped_and_its_data_cannot_close_its_script(
@@ -352,6 +410,115 @@ async def test_the_standard_librarys_server_serves_the_pages(templates: Path) ->
     assert forged[0] == 403
 
 
+async def test_the_asgi_app_answers_head_without_a_body(templates: Path) -> None:
+    header = caller_header("read", read={"ACC-1"}).encode()
+    got = await asgi(build(templates), [(b"meridian-caller", header)])
+    head = await asgi(build(templates), [(b"meridian-caller", header)], method="HEAD")
+    length = dict(got[0]["headers"])[b"content-length"]
+    assert head[0]["status"] == 200 and dict(head[0]["headers"])[b"content-length"] == length
+    assert int(length) == len(got[1]["body"]) > 0 and head[1]["body"] == b""
+
+
+async def test_a_body_over_the_limit_is_refused_before_it_is_read(templates: Path) -> None:
+    assert meridian.pages.MAX_BODY == Pages().max_body == 1024 * 1024
+    for wrong in (-1, 1.5, True, "8192"):
+        with pytest.raises(ValueError, match="max_body is a number of bytes"):
+            Pages(max_body=wrong)  # type: ignore[arg-type]
+    pages = build(templates)
+    pages.max_body = 200
+    writer = caller_header("write")
+    token = pages.csrf_token(meridian.Caller.from_header(writer))
+    form = f"csrf={token}&account=".encode()
+    headers = [
+        (b"meridian-caller", writer.encode()),
+        (b"content-type", b"application/x-www-form-urlencoded"),
+    ]
+    fits = form + b"A" * (200 - len(form))
+    taken = await asgi(pages, headers, method="POST", path="/act", body=fits)
+    assert taken[0]["status"] == 200
+    over = fits + b"A"
+    sent = await asgi(pages, headers, method="POST", path="/act", body=over)
+    assert sent[0]["status"] == 413 and b"larger than this plugin takes" in sent[1]["body"]
+    # Said by its length, it is refused without a byte of it received.
+    received: list[Any] = []
+
+    async def receive() -> dict[str, Any]:
+        received.append(1)
+        return {"type": "http.request", "body": over}
+
+    answered: list[Any] = []
+
+    async def send(message: Any) -> None:
+        answered.append(message)
+
+    length = (b"content-length", str(len(over)).encode())
+    await pages.app()(
+        {"type": "http", "method": "POST", "path": "/act", "headers": [*headers, length]},
+        receive,
+        send,
+    )
+    assert answered[0]["status"] == 413 and received == []
+
+
+async def test_the_standard_librarys_server_answers_head_and_refuses_a_large_body(
+    templates: Path,
+) -> None:
+    pages = build(templates)
+    acted: list[str] = []
+
+    @pages.route("/big", levels="write", methods=["POST"])
+    def big(request: Request) -> str:
+        acted.append(request.form.get("pad", ""))
+        return "taken"
+
+    writer = caller_header("write")
+    token = pages.csrf_token(meridian.Caller.from_header(writer))
+
+    def ask(
+        port: int, method: str, path: str, header: str | None, data: bytes | None = None
+    ) -> tuple[int, Any, bytes]:
+        request = urllib.request.Request(
+            f"http://127.0.0.1:{port}{path}", data=data, method=method
+        )
+        if header is not None:
+            request.add_header("Meridian-Caller", header)
+        try:
+            with urllib.request.urlopen(request, timeout=10) as answer:
+                return answer.status, answer.headers, answer.read()
+        except urllib.error.HTTPError as answer:
+            return answer.code, answer.headers, answer.read()
+
+    form = f"csrf={token}&pad=".encode()
+    server = pages.serve(plugin=None, port=0)  # type: ignore[arg-type]
+    tight = pages.serve(plugin=None, port=0, max_body=len(form) + 10)  # type: ignore[arg-type]
+    port, tight_port = server.server_address[1], tight.server_address[1]
+    try:
+        reader = caller_header("read", read={"ACC-7"})
+        got = await asyncio.to_thread(ask, port, "GET", "/", reader)
+        head = await asyncio.to_thread(ask, port, "HEAD", "/", reader)
+        unsigned = await asyncio.to_thread(ask, port, "HEAD", "/", None)
+        large = form + b"z" * (1024 * 1024)
+        refused = await asyncio.to_thread(ask, port, "POST", "/big", writer, large)
+        taken = await asyncio.to_thread(ask, port, "POST", "/big", writer, form + b"z" * 9000)
+        tight_refused = await asyncio.to_thread(
+            ask, tight_port, "POST", "/big", writer, form + b"z" * 11
+        )
+        tight_taken = await asyncio.to_thread(
+            ask, tight_port, "POST", "/big", writer, form + b"z" * 10
+        )
+    finally:
+        for each in (server, tight):
+            each.shutdown()
+            each.server_close()
+    assert got[0] == 200 and b"ACC-7" in got[2]
+    assert head[0] == 200 and head[2] == b""
+    assert head[1]["Content-Length"] == str(len(got[2])) == got[1]["Content-Length"]
+    assert unsigned[0] == 401 and unsigned[2] == b""
+    assert refused[0] == 413 and refused[2] == b"This request is larger than this plugin takes."
+    assert taken[:1] == (200,) and tight_taken[:1] == (200,) and tight_refused[0] == 413
+    assert acted == ["z" * 9000, "z" * 10]
+
+
 # ── The test client ──────────────────────────────────────────────────────
 
 
@@ -367,7 +534,7 @@ def test_a_session_carries_the_accounts_cut_to_its_level() -> None:
 
 
 def test_account_data_on_a_page_at_admin_fails_the_plugins_test(templates: Path) -> None:
-    held = {"ACC-1": "Growth fund"}  # what the plugin holds for itself
+    held = {"ACC-1": "12,500.00"}  # what the plugin holds for an account
     pages = build(templates)
 
     @pages.page("/leaky", "Leaky", levels="admin")
@@ -375,13 +542,60 @@ def test_account_data_on_a_page_at_admin_fails_the_plugins_test(templates: Path)
         return pages.render("setup.html", note=", ".join(held.values()))
 
     client = PageClient(pages, read={"ACC-1"}, write={"ACC-1"})
-    with pytest.raises(
-        AssertionError, match="/leaky shows account data under Manage: Growth fund"
-    ):
-        client.assert_no_account_data("Growth fund")
-    # The same page, account agnostic, passes; Setup never showed any.
+    with pytest.raises(AssertionError, match="/leaky shows account data under Manage: 12,500"):
+        client.assert_no_account_data("12,500.00", "AAPL")
+    # The same page, showing none of it, passes; Setup never showed any.
     held.clear()
-    client.assert_no_account_data("Growth fund")
+    client.assert_no_account_data("12,500.00", "AAPL")
+    # Named as a template writes it, escaped, it is found all the same.
+    held["ACC-1"] = "AT&T <common>"
+    with pytest.raises(AssertionError, match="shows account data under Manage: AT&T <common>"):
+        client.assert_no_account_data("AT&T <common>")
+    # Naming nothing would check nothing.
+    with pytest.raises(ValueError, match="names no account data"):
+        client.assert_no_account_data()
+    with pytest.raises(ValueError, match="names no account data"):
+        client.assert_no_account_data("")
+
+
+def test_account_identities_on_a_page_at_admin_are_not_account_data(templates: Path) -> None:
+    # A Manage page lists every account of the deployment as a link target:
+    # the accounts read answers each one's identity, and never its holdings.
+    identities = {"ACC-1": "Growth fund, Fidelity, Roth IRA, Fund I, joint"}
+    pages = build(templates)
+
+    @pages.page("/links", "Account links", levels="admin")
+    def links(request: Request) -> str:
+        listed = "; ".join(f"{k} {v}" for k, v in sorted(identities.items()))
+        return pages.render("setup.html", note=listed)
+
+    client = PageClient(pages, read={"ACC-1"}, write={"ACC-1"})
+    assert "ACC-1 Growth fund" in client.get("/links", "admin").text
+    client.assert_no_account_data("AAPL", "125", "12,500.00")
+    # Strict about what the test names, an identity included.
+    with pytest.raises(AssertionError, match="/links shows account data under Manage: ACC-1"):
+        client.assert_no_account_data("ACC-1")
+
+
+def test_the_client_asks_as_a_deployment_admin_when_told(templates: Path) -> None:
+    pages = build(templates)
+    seen: list[bool] = []
+
+    @pages.page("/accounts", "Account links", levels="admin")
+    def accounts(request: Request) -> str:
+        seen.append(request.caller.deployment_admin)
+        offer = "Create a new account" if request.caller.deployment_admin else ""
+        return pages.render("setup.html", note=offer)
+
+    ada, root = PageClient(pages), PageClient(pages, deployment_admin=True)
+    assert not ada.caller("admin").deployment_admin and root.caller("admin").deployment_admin
+    assert ada.caller("read", deployment_admin=True).deployment_admin
+    assert not root.caller("read", deployment_admin=False).deployment_admin
+    assert "Create a new account" in root.get("/accounts", "admin").text
+    assert "Create a new account" not in ada.get("/accounts", "admin").text
+    assert root.post("/act", "write").status == 200  # the token is the person's either way
+    root.assert_no_account_data("12,500.00")
+    assert seen == [True, False, True]
 
 
 # ── Cross-site requests ──────────────────────────────────────────────────
