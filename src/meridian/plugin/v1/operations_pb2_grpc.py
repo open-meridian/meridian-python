@@ -54,6 +54,16 @@ class PluginOperationsStub(object):
                 request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordHoldingParams.SerializeToString,
                 response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordHoldingResult.FromString,
                 _registered_method=True)
+        self.ListCustodialPositions = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ListCustodialPositions',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListCustodialPositionsParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListCustodialPositionsResult.FromString,
+                _registered_method=True)
+        self.ListStatements = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ListStatements',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListStatementsParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListStatementsResult.FromString,
+                _registered_method=True)
         self.ResolveIdentifier = channel.unary_unary(
                 '/meridian.plugin.v1.PluginOperations/ResolveIdentifier',
                 request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ResolveIdentifierParams.SerializeToString,
@@ -73,6 +83,11 @@ class PluginOperationsStub(object):
                 '/meridian.plugin.v1.PluginOperations/ReadAccountsForLinking',
                 request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadAccountsForLinkingParams.SerializeToString,
                 response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadAccountsForLinkingResult.FromString,
+                _registered_method=True)
+        self.Receive = channel.unary_stream(
+                '/meridian.plugin.v1.PluginOperations/Receive',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReceiveRequest.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.Delivery.FromString,
                 _registered_method=True)
 
 
@@ -107,6 +122,20 @@ class PluginOperationsServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def ListCustodialPositions(self, request, context):
+        """W2.7: platform.street.query.list-custodial-positions (query).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListStatements(self, request, context):
+        """W2.9: platform.street.query.list-statements (query).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def ResolveIdentifier(self, request, context):
         """W3.1: platform.reference.query.resolve-identifier (query).
         """
@@ -135,6 +164,13 @@ class PluginOperationsServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def Receive(self, request, context):
+        """W4.3: every row this plugin's roles hear, within its read scope.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_PluginOperationsServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -158,6 +194,16 @@ def add_PluginOperationsServicer_to_server(servicer, server):
                     request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordHoldingParams.FromString,
                     response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordHoldingResult.SerializeToString,
             ),
+            'ListCustodialPositions': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListCustodialPositions,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListCustodialPositionsParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListCustodialPositionsResult.SerializeToString,
+            ),
+            'ListStatements': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListStatements,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListStatementsParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListStatementsResult.SerializeToString,
+            ),
             'ResolveIdentifier': grpc.unary_unary_rpc_method_handler(
                     servicer.ResolveIdentifier,
                     request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ResolveIdentifierParams.FromString,
@@ -177,6 +223,11 @@ def add_PluginOperationsServicer_to_server(servicer, server):
                     servicer.ReadAccountsForLinking,
                     request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadAccountsForLinkingParams.FromString,
                     response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadAccountsForLinkingResult.SerializeToString,
+            ),
+            'Receive': grpc.unary_stream_rpc_method_handler(
+                    servicer.Receive,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReceiveRequest.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.Delivery.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -298,6 +349,60 @@ class PluginOperations(object):
             _registered_method=True)
 
     @staticmethod
+    def ListCustodialPositions(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ListCustodialPositions',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListCustodialPositionsParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListCustodialPositionsResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListStatements(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ListStatements',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListStatementsParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListStatementsResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
     def ResolveIdentifier(request,
             target,
             options=(),
@@ -395,6 +500,33 @@ class PluginOperations(object):
             '/meridian.plugin.v1.PluginOperations/ReadAccountsForLinking',
             meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadAccountsForLinkingParams.SerializeToString,
             meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadAccountsForLinkingResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def Receive(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_stream(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/Receive',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ReceiveRequest.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.Delivery.FromString,
             options,
             channel_credentials,
             insecure,

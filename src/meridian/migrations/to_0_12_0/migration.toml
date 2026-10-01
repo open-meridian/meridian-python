@@ -1,0 +1,44 @@
+# open-meridian 0.11.0 to 0.12.0: the SDK declares contract v7; a plugin hears
+# what its roles hear, reads within its scope, and a statement names its
+# external account with its figures per margin segment
+# (sdk-contract/plugins-read-positions-and-prices, kernel/reads-are-scoped,
+# sdk-contract/a-holding-carries-its-cost).
+from = "0.11.0"
+to = "0.12.0"
+summary = """
+The SDK declares contract v7 (meridian.SCHEMA_VERSION). A plugin whose roles
+hear rows receives them with a handler per row, plugin.receive(statement_recorded=...,
+custodial_position_updated=...): seeded from the store, each change handed on
+once and in order as a meridian.Heard, caught up from the store after a gap, a
+loss, a broken stream or an account entering its read scope (Heard.caught_up),
+and never showing a number. The street's reads are typed methods,
+list_custodial_positions and list_statements, within the plugin's read scope,
+which is nothing when empty. A statement names its external account and the
+institution holding it, and its figures are meridian.StatementFigures, one per
+margin segment, each with its collateral (meridian.ReportedCollateral); a
+holding carries its cost_basis, average_cost, lots (meridian.ReportedLot) and
+margin_requirement, each as the venue reports it. A Decimal or a Money inside
+any of them is converted and refused as a call's own, naming its path. A
+plugin built on 0.12.0 is refused at registration by a sidecar that accepts
+only v6, naming both. This step rewrites a statement's flat buying_power,
+margin_requirement and maintenance_excess into one set of figures with no
+segment. Breaking: on 0.12.0 a statement without its external account is
+refused, external_account_id is required, which this step finds and leaves
+by hand.
+"""
+breaking = true
+rewrite = "rewrite.py"
+
+[[rewrites]]
+rule = "statement-flat-figures"
+what = """a record_holdings_statement call's buying_power=, margin_requirement= and \
+maintenance_excess= became figures=[StatementFigures(segment="", ...)], the account's \
+figures as a whole, which v7 refuses beside figures"""
+
+[[by_hand]]
+rule = "statement-external-account"
+what = """a record_holdings_statement call naming no external_account_id, which a \
+sidecar at v7 refuses from a plugin built for it: a statement names the account it is of"""
+instead = """pass external_account_id=, the external account the statement was read for, \
+the one its rows name, and institution=, the institution holding it as the connector \
+names it, where it says"""

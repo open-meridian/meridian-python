@@ -95,7 +95,7 @@ def test_every_release_since_the_first_recorded_has_its_step() -> None:
         ("0.6.0", "0.6.1"),
         ("0.6.1", "0.7.0"),
     ]
-    assert (steps[-1].source, steps[-1].target) == ("0.10.1", "0.11.0")
+    assert (steps[-1].source, steps[-1].target) == ("0.11.0", "0.12.0")
     # A release that moves the version records its step, if only the pins.
     assert steps[-1].target == SDK
 
@@ -180,12 +180,23 @@ def test_snaptrade_passes_its_own_tests_once_migrated(tmp_path: Path) -> None:
     own_tests_pass(tmp_path)
 
 
-@pytest.mark.parametrize("fixture", ["desk-0.7.0", "snaptrade-0.7.0"])
-def test_the_recorded_plugins_are_as_the_later_steps_leave_them(fixture: str) -> None:
-    # Neither reports an asset class, so from 0.7.0 on only their pins move.
+@pytest.mark.parametrize(
+    ("fixture", "by_hand"),
+    [
+        # desk opens an empty statement naming no external account, which a
+        # sidecar at v7 refuses (0.11.0 to 0.12.0).
+        ("desk-0.7.0", [("statement-external-account", "src/desk/page.py", 77)]),
+        ("snaptrade-0.7.0", []),
+    ],
+)
+def test_the_recorded_plugins_are_as_the_later_steps_leave_them(
+    fixture: str, by_hand: list[tuple[str, str, int]]
+) -> None:
+    # Neither reports an asset class or sends flat figures, so from 0.7.0 on
+    # nothing is rewritten.
     result = migrate(plugin_files(FIXTURES / fixture), "0.7.0", SDK)
     assert result.files == {}
-    assert left_by_hand(result) == []
+    assert left_by_hand(result) == by_hand
 
 
 # ── Held to the framework's rules ────────────────────────────────────────
@@ -526,6 +537,52 @@ def test_a_page_outside_the_sdk_is_not_touched() -> None:
         "0.10.0",
     )
     assert result.files == {} and left_by_hand(result) == []
+
+
+def test_a_statements_flat_figures_become_one_set_with_no_segment() -> None:
+    result = one(
+        """\
+        from decimal import Decimal
+
+        from meridian import Money
+
+        async def opened(plugin, account):
+            await plugin.record_holdings_statement(
+                source="snaptrade",
+                external_account_id=account,
+                buying_power=Money(Decimal("25000.00"), "USD"),
+                maintenance_excess=None,
+                expected_rows=4,
+            )
+        """,
+        "0.11.0",
+        "0.12.0",
+    )
+    text = result.files["src/p/x.py"]
+    assert "from meridian import Money, StatementFigures" in text
+    assert (
+        '        figures=[StatementFigures(segment="", '
+        'buying_power=Money(Decimal("25000.00"), "USD"), maintenance_excess=None)],\n'
+    ) in text
+    assert "expected_rows=4,\n" in text
+    (step,) = result.steps
+    assert step.rewrote == {"src/p/x.py": {"statement-flat-figures": 1}}
+    assert left_by_hand(result) == []
+
+
+def test_a_statement_naming_no_external_account_is_left_by_hand() -> None:
+    result = one(
+        """\
+        import meridian
+
+        async def opened(plugin: meridian.Plugin) -> None:
+            await plugin.record_holdings_statement(source="snaptrade", expected_rows=0)
+        """,
+        "0.11.0",
+        "0.12.0",
+    )
+    assert result.files == {}
+    assert left_by_hand(result) == [("statement-external-account", "src/p/x.py", 4)]
 
 
 def test_the_runner_reads_stdin_and_writes_what_changed() -> None:

@@ -24,10 +24,13 @@ import re
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from meridian.plugin.v1 import operations_pb2 as ops
 from meridian.v1 import sidecar_pb2
+
+if TYPE_CHECKING:
+    from .receive import Heard
 
 _Answer = TypeVar("_Answer")
 
@@ -122,6 +125,100 @@ def as_money(message: ops.Money) -> Money:
     return Money(as_decimal(message.amount), message.currency_code)
 
 
+@dataclass(frozen=True, kw_only=True)
+class StatementFigures:
+    """A statement's figures for one margin segment, each as the venue
+    reported it and unset where it reported none; never derived.
+
+    The SDK's form of the wire's StatementFigures: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    segment: str = ""
+    buying_power: Money | None = None
+    margin_requirement: Money | None = None
+    maintenance_excess: Money | None = None
+    initial_margin: Money | None = None
+    variation_margin: Money | None = None
+    net_liquidation: Money | None = None
+    collateral: Sequence[ReportedCollateral] = ()
+
+
+def _statement_figures(value: StatementFigures, name: str) -> ops.StatementFigures:
+    """A StatementFigures as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, StatementFigures):
+        raise TypeError(f"{name} is a meridian.StatementFigures, not {type(value).__name__}")
+    return ops.StatementFigures(
+        segment=value.segment,
+        buying_power=None if value.buying_power is None else _money(value.buying_power, f"{name}.buying_power"),
+        margin_requirement=None if value.margin_requirement is None else _money(value.margin_requirement, f"{name}.margin_requirement"),
+        maintenance_excess=None if value.maintenance_excess is None else _money(value.maintenance_excess, f"{name}.maintenance_excess"),
+        initial_margin=None if value.initial_margin is None else _money(value.initial_margin, f"{name}.initial_margin"),
+        variation_margin=None if value.variation_margin is None else _money(value.variation_margin, f"{name}.variation_margin"),
+        net_liquidation=None if value.net_liquidation is None else _money(value.net_liquidation, f"{name}.net_liquidation"),
+        collateral=[_reported_collateral(each, f"{name}.collateral[{i}]") for i, each in enumerate(value.collateral)],
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class ReportedCollateral:
+    """One collateral balance under a margin segment, each field as the
+    venue reports it and unset where it does not; never derived.
+
+    The SDK's form of the wire's ReportedCollateral: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    direction: ops.CollateralDirection | str | None = None
+    instrument_id: str = ""
+    unresolved_identifiers: Sequence[ops.Identifier] = ()
+    quantity: Decimal | int
+    value: Money | None = None
+    haircut: Decimal | int | None = None
+    value_after_haircut: Money | None = None
+    held_at: str = ""
+
+
+def _reported_collateral(value: ReportedCollateral, name: str) -> ops.ReportedCollateral:
+    """A ReportedCollateral as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, ReportedCollateral):
+        raise TypeError(f"{name} is a meridian.ReportedCollateral, not {type(value).__name__}")
+    return ops.ReportedCollateral(
+        direction=_enum(ops.CollateralDirection, value.direction, f"{name}.direction"),
+        instrument_id=value.instrument_id,
+        unresolved_identifiers=list(value.unresolved_identifiers),
+        quantity=_decimal(value.quantity, f"{name}.quantity"),
+        value=None if value.value is None else _money(value.value, f"{name}.value"),
+        haircut=None if value.haircut is None else _decimal(value.haircut, f"{name}.haircut"),
+        value_after_haircut=None if value.value_after_haircut is None else _money(value.value_after_haircut, f"{name}.value_after_haircut"),
+        held_at=value.held_at,
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class ReportedLot:
+    """One lot of a holding, as the custodian lists it.
+
+    The SDK's form of the wire's ReportedLot: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    quantity: Decimal | int
+    cost: Money | None = None
+    acquired_date: str = ""
+
+
+def _reported_lot(value: ReportedLot, name: str) -> ops.ReportedLot:
+    """A ReportedLot as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, ReportedLot):
+        raise TypeError(f"{name} is a meridian.ReportedLot, not {type(value).__name__}")
+    return ops.ReportedLot(
+        quantity=_decimal(value.quantity, f"{name}.quantity"),
+        cost=None if value.cost is None else _money(value.cost, f"{name}.cost"),
+        acquired_date=value.acquired_date,
+    )
+
+
 def _assertion(header: str | None) -> sidecar_pb2.CallerAssertion | None:
     """The person a command is sent for, from the Meridian-Caller header as the
     plugin received it: base64url, unpadded. Handed back to the sidecar, which
@@ -141,6 +238,11 @@ class Operations:
         raise NotImplementedError
 
     def _operations(self) -> Any:  # pragma: no cover - Plugin's
+        raise NotImplementedError
+
+    async def _receive(
+        self, handlers: dict[str, Callable[[Any], Awaitable[None]] | None], *, seed: bool
+    ) -> None:  # pragma: no cover - Plugin's
         raise NotImplementedError
 
     async def report_external_accounts(
@@ -193,6 +295,9 @@ class Operations:
         margin_requirement: Money | None = None,
         maintenance_excess: Money | None = None,
         currency_assumed: bool = False,
+        external_account_id: str = "",
+        figures: Sequence[StatementFigures] = (),
+        institution: str = "",
         acting_for: str | None = None,
     ) -> ops.RecordHoldingsStatementResult:
         """W2.2: Open one statement: the connector's snapshot of one account, at one moment."""
@@ -206,6 +311,9 @@ class Operations:
             margin_requirement=None if margin_requirement is None else _money(margin_requirement, "margin_requirement"),
             maintenance_excess=None if maintenance_excess is None else _money(maintenance_excess, "maintenance_excess"),
             currency_assumed=currency_assumed,
+            external_account_id=external_account_id,
+            figures=[_statement_figures(each, f"figures[{i}]") for i, each in enumerate(figures)],
+            institution=institution,
             acting_for=_assertion(acting_for),
         )
         return await self._operate(self._operations().RecordHoldingsStatement, params)
@@ -223,6 +331,10 @@ class Operations:
         settle_date_quantity: Decimal | int | None = None,
         currency_assumed: bool = False,
         also_counted_in_cash: bool = False,
+        cost_basis: Money | None = None,
+        lots: Sequence[ReportedLot] = (),
+        margin_requirement: Money | None = None,
+        average_cost: Money | None = None,
         acting_for: str | None = None,
     ) -> ops.RecordHoldingResult:
         """W2.3: One holding, for one account, at one instrument, on one side."""
@@ -237,9 +349,51 @@ class Operations:
             settle_date_quantity=None if settle_date_quantity is None else _decimal(settle_date_quantity, "settle_date_quantity"),
             currency_assumed=currency_assumed,
             also_counted_in_cash=also_counted_in_cash,
+            cost_basis=None if cost_basis is None else _money(cost_basis, "cost_basis"),
+            lots=[_reported_lot(each, f"lots[{i}]") for i, each in enumerate(lots)],
+            margin_requirement=None if margin_requirement is None else _money(margin_requirement, "margin_requirement"),
+            average_cost=None if average_cost is None else _money(average_cost, "average_cost"),
             acting_for=_assertion(acting_for),
         )
         return await self._operate(self._operations().RecordHolding, params)
+
+    async def list_custodial_positions(
+        self,
+        *,
+        account_id: str = "",
+        include_unresolved: bool = False,
+        page_size: int = 0,
+        cursor: str = "",
+        since: ops.Watermark | None = None,
+    ) -> ops.ListCustodialPositionsResult:
+        """W2.7: Read custodial positions, and the unresolved holdings beside them (W2.7)."""
+        params = ops.ListCustodialPositionsParams(
+            account_id=account_id,
+            include_unresolved=include_unresolved,
+            page_size=page_size,
+            cursor=cursor,
+            since=since,
+        )
+        return await self._operate(self._operations().ListCustodialPositions, params)
+
+    async def list_statements(
+        self,
+        *,
+        account_id: str = "",
+        as_of_date: str = "",
+        since: ops.Watermark | None = None,
+        page_size: int = 0,
+        cursor: str = "",
+    ) -> ops.ListStatementsResult:
+        """W2.9: Read completed statements and their figures (W2.9)."""
+        params = ops.ListStatementsParams(
+            account_id=account_id,
+            as_of_date=as_of_date,
+            since=since,
+            page_size=page_size,
+            cursor=cursor,
+        )
+        return await self._operate(self._operations().ListStatements, params)
 
     async def resolve_identifier(
         self,
@@ -314,3 +468,78 @@ class Operations:
             acting_for=_assertion(acting_for),
         )
         return await self._operate(self._operations().ReadAccountsForLinking, params)
+
+    async def receive(
+        self,
+        *,
+        statement_recorded: Callable[[Heard[ops.StatementRecordedEvent]], Awaitable[None]] | None = None,
+        custodial_position_updated: Callable[[Heard[ops.CustodialPositionUpdatedEvent]], Awaitable[None]] | None = None,
+        seed: bool = True,
+    ) -> None:
+        """W4.3: hear the rows given a handler, each change once and in order,
+        within the plugin's read scope, until cancelled. Seeded first from the
+        store when `seed`; on a gap, a loss or a broken stream, caught up from
+        it by each row's query, the handler told by `Heard.caught_up`. A row
+        no role of the plugin hears raises NotGranted."""
+        await self._receive(
+            {
+                "StatementRecorded": statement_recorded,
+                "CustodialPositionUpdated": custodial_position_updated,
+            },
+            seed=seed,
+        )
+
+
+@dataclass(frozen=True)
+class DeliveredRow:
+    """A row a plugin's roles may hear (W4.3), as matrix/scoped.tsv declares
+    it: the Delivery's arm carrying it, the path to the account its message
+    names (empty when it names none), and the query that reads its changes
+    since a watermark, given one account in `account_param`, whose reply
+    holds them in `records`, each a record whose last change is in
+    `record_journal` and whose account is at `record_account`; a record goes
+    into the row's message at `within`, or is the row's message where that
+    is empty."""
+
+    name: str
+    step: str
+    arm: str
+    message: Any
+    account: tuple[str, ...]
+    caught_up_by: str
+    account_param: str
+    records: str
+    within: str
+    record_journal: str
+    record_account: tuple[str, ...]
+
+
+#: Every row a plugin's roles may hear, by the arm number of its delivery.
+DELIVERED: tuple[DeliveredRow, ...] = (
+    DeliveredRow(
+        name="StatementRecorded",
+        step="W2.5",
+        arm="statement_recorded",
+        message=ops.StatementRecordedEvent,
+        account=("account_id",),
+        caught_up_by="list_statements",
+        account_param="account_id",
+        records="statements",
+        within="",
+        record_journal="journal",
+        record_account=("account_id",),
+    ),
+    DeliveredRow(
+        name="CustodialPositionUpdated",
+        step="W2.6",
+        arm="custodial_position_updated",
+        message=ops.CustodialPositionUpdatedEvent,
+        account=("position", "account_id"),
+        caught_up_by="list_custodial_positions",
+        account_param="account_id",
+        records="positions",
+        within="position",
+        record_journal="last_change",
+        record_account=("account_id",),
+    ),
+)

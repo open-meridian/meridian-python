@@ -557,3 +557,187 @@ async def test_a_sync_status_says_why_and_how_fresh(sidecar) -> None:
     (sent,) = service.operations.sent
     assert sent.state == meridian.SyncState.SYNC_STATE_NEEDS_SIGN_IN
     assert sent.holdings_as_of_ns > sent.history_as_of_ns
+
+
+async def test_a_statement_names_its_account_and_its_figures_per_segment(sidecar) -> None:
+    service, _ = sidecar
+    plugin = await connected(sidecar)
+    try:
+        await plugin.record_holdings_statement(
+            source="pb-standin",
+            external_account_id="PB-7781",
+            institution="the prime broker",
+            expected_rows=0,
+            figures=[
+                meridian.StatementFigures(
+                    segment="",
+                    margin_requirement=Money(Decimal("310000.00"), "USD"),
+                    collateral=[
+                        meridian.ReportedCollateral(
+                            direction="posted",
+                            instrument_id="INS-UST10Y",
+                            quantity=Decimal("500000"),
+                            haircut=Decimal("0.02"),
+                            held_at="the prime broker",
+                        )
+                    ],
+                ),
+                meridian.StatementFigures(
+                    segment="commodities",
+                    initial_margin=Money(Decimal("8800.00"), "USD"),
+                ),
+            ],
+        )
+    finally:
+        await plugin.leave()
+    (sent,) = service.operations.sent
+    assert sent.external_account_id == "PB-7781"
+    assert sent.institution == "the prime broker"
+    assert [figures.segment for figures in sent.figures] == ["", "commodities"]
+    (collateral,) = sent.figures[0].collateral
+    assert collateral.direction == operations_pb2.COLLATERAL_DIRECTION_POSTED
+    assert integer_and_scale(collateral.haircut) == (2, 2)
+    assert not collateral.HasField("value"), "not reported, so unset"
+    assert not sent.figures[1].HasField("buying_power")
+    assert not sent.HasField("buying_power"), "nothing flat"
+
+
+async def test_a_holding_carries_its_cost_and_lots_as_reported(sidecar) -> None:
+    service, _ = sidecar
+    plugin = await connected(sidecar)
+    try:
+        await plugin.record_holding(
+            quantity=Decimal("-100"),
+            average_cost=Money(Decimal("189.00"), "USD"),
+            lots=[
+                meridian.ReportedLot(
+                    quantity=Decimal("-100"),
+                    cost=Money(Decimal("-18900.00"), "USD"),
+                    acquired_date="2026-09-02",
+                ),
+                meridian.ReportedLot(quantity=0),
+            ],
+            external_account_id="ext-1",
+        )
+    finally:
+        await plugin.leave()
+    (sent,) = service.operations.sent
+    assert not sent.HasField("cost_basis"), "a per-unit average is not a total"
+    assert str(meridian.as_money(sent.average_cost).amount) == "189.00"
+    assert str(meridian.as_money(sent.lots[0].cost).amount) == "-18900.00", "sign as reported"
+    assert sent.lots[0].acquired_date == "2026-09-02"
+    assert not sent.lots[1].HasField("cost")
+
+
+@pytest.mark.parametrize(
+    ("given", "refusal", "says"),
+    [
+        (
+            {"lots": [meridian.ReportedLot(quantity=Decimal("0.0000000000000000001"))]},
+            ValueError,
+            r"lots\[0\]\.quantity has 19 decimal places",
+        ),
+        (
+            {"lots": [meridian.ReportedLot(quantity=1.5)]},  # type: ignore[arg-type]
+            TypeError,
+            r"lots\[0\]\.quantity is a Decimal or an int, not float",
+        ),
+        (
+            {"lots": [{"quantity": Decimal("1")}]},
+            TypeError,
+            r"lots\[0\] is a meridian\.ReportedLot, not dict",
+        ),
+    ],
+)
+async def test_a_number_inside_a_lot_is_refused_naming_its_path(
+    sidecar, given: dict, refusal: type[Exception], says: str
+) -> None:
+    service, _ = sidecar
+    plugin = await connected(sidecar)
+    try:
+        with pytest.raises(refusal, match=says):
+            await plugin.record_holding(
+                quantity=Decimal(1), external_account_id="ext-1", **given
+            )
+    finally:
+        await plugin.leave()
+    assert service.operations.sent == []
+
+
+@pytest.mark.parametrize(
+    ("given", "says"),
+    [
+        (
+            {
+                "figures": [
+                    meridian.StatementFigures(segment="securities"),
+                    meridian.StatementFigures(segment="securities"),
+                ]
+            },
+            r'figures\[1\]\.segment "securities" is named twice',
+        ),
+        (
+            {
+                "figures": [
+                    meridian.StatementFigures(
+                        collateral=[meridian.ReportedCollateral(quantity=Decimal(1))]
+                    )
+                ]
+            },
+            r"figures\[0\]\.collateral\[0\]\.direction is unspecified",
+        ),
+        (
+            {
+                "buying_power": Money(Decimal("25000.00"), "USD"),
+                "figures": [meridian.StatementFigures(segment="")],
+            },
+            "buying_power is read from a plugin before v7; send it in figures",
+        ),
+        (
+            {
+                "figures": [
+                    meridian.StatementFigures(
+                        collateral=[meridian.ReportedCollateral(direction="lent", quantity=1)]
+                    )
+                ]
+            },
+            r"figures\[0\]\.collateral\[0\]\.direction is 'lent'",
+        ),
+    ],
+)
+async def test_a_statement_the_sidecar_would_refuse_is_refused_before_sending(
+    sidecar, given: dict, says: str
+) -> None:
+    service, _ = sidecar
+    plugin = await connected(sidecar)
+    try:
+        with pytest.raises(ValueError, match=says):
+            await plugin.record_holdings_statement(external_account_id="ext-1", **given)
+    finally:
+        await plugin.leave()
+    assert service.operations.sent == []
+
+
+async def test_the_street_is_read_within_the_scope_the_sidecar_stamps(sidecar) -> None:
+    service, _ = sidecar
+
+    class Street:
+        def positions(self, request):
+            return operations_pb2.ListCustodialPositionsResult(
+                positions=[operations_pb2.CustodialPosition(account_id="ACC-1")]
+            )
+
+        def statements(self, request):
+            return operations_pb2.ListStatementsResult()
+
+    service.operations.store = Street()
+    plugin = await connected(sidecar)
+    try:
+        read = await plugin.list_custodial_positions(account_id="ACC-1", page_size=10)
+        await plugin.list_statements(since=operations_pb2.Watermark())
+    finally:
+        await plugin.leave()
+    assert [held.account_id for held in read.positions] == ["ACC-1"]
+    asked, statements = service.operations.reads
+    assert asked.account_id == "ACC-1" and asked.page_size == 10
+    assert statements.HasField("since")

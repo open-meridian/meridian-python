@@ -2,7 +2,7 @@
 
 The Python SDK for building [Open Meridian](https://open-meridian.com) plugins:
 the tools a trader has an AI agent build, and the bots and analytics a
-developer writes. Python 3.11 or newer. This is release 0.11.0; its reference
+developer writes. Python 3.11 or newer. This is release 0.12.0; its reference
 is at [open-meridian.dev](https://open-meridian.dev/api/python-sdk/).
 
 ## Start here
@@ -52,9 +52,10 @@ until it reports `healthy=True`.
 
 The steps a plugin's roles may take are typed methods on the same `plugin`,
 generated from the contract: `report_external_accounts`, `report_sync_status`,
-`record_holdings_statement`, `record_holding`, `resolve_identifier`,
-`report_missing_instrument`, `read_accounts_for_linking` and
-`link_external_account`.
+`record_holdings_statement`, `record_holding`, `list_custodial_positions`,
+`list_statements`, `resolve_identifier`, `report_missing_instrument`,
+`read_accounts_for_linking` and `link_external_account`; and `receive`, for
+what its roles hear.
 
 ### Who is asking, and what they may do
 
@@ -259,8 +260,10 @@ refused before anything is sent, naming the parameter.
 **Say only what the venue said.** A holding states its side, and its quantity
 is signed to match, negative short; a venue reporting an account's long and
 short of one instrument apart is two calls, one on each side. A market value, a
-settle-date quantity, and a statement's buying power and margin figures are
-optional: leave one out where the venue reports none, which is not zero. Where
+settle-date quantity, a holding's `cost_basis` (a total), `average_cost` (per
+unit, in the venue's unit), `lots` and `margin_requirement`, and every figure
+of a statement are optional: leave one out where the venue reports none, which
+is not zero, and never compute one from another. Where
 the venue states no currency and you assume one, pass `currency_assumed=True`.
 Cash is a holding of the currency's cash instrument, which the security master
 names by `iso4217` (`meridian.Identifier(scheme="iso4217", value="USD")`).
@@ -274,6 +277,75 @@ cannot know which venue's convention they were in. A value the venue sent as a
 float becomes `Decimal(repr(value))`, its shortest round-trip form, and never
 `Decimal(value)`, which is its binary expansion: `Decimal(0.1)` is
 0.1000000000000000055511151231257827021181583404541015625.
+
+### A statement's account and figures
+
+A statement names the external account it was read for, as its rows do, and
+the institution holding it where the connector knows it; the sidecar records
+it against the account that external account is linked to, and refuses it,
+`meridian.NotLinked`, where there is none. Its figures are a set per margin
+segment, each naming its segment as the venue does, the one with no segment
+being the account's as a whole, and each carrying the collateral held under
+it:
+
+```python
+await plugin.record_holdings_statement(
+    source="snaptrade",
+    external_statement_id=f"{account}/{read_at_ns}",
+    external_account_id=account,
+    institution="Interactive Brokers",
+    as_of_date="2026-09-08",
+    read_at_ns=read_at_ns,
+    expected_rows=len(rows),
+    figures=[
+        meridian.StatementFigures(
+            segment="",
+            buying_power=meridian.Money(Decimal("25000.00"), "USD"),
+            net_liquidation=meridian.Money(Decimal("93550.00"), "USD"),
+        ),
+    ],
+)
+```
+
+A number inside a set, a `meridian.ReportedCollateral` or a holding's
+`meridian.ReportedLot` is converted and refused as a call's own is, naming its
+path (`figures[0].collateral[1].haircut`). Two sets naming one segment, a
+collateral balance neither posted nor received, and the three flat figures a
+plugin before 0.12.0 sent beside `figures` are refused before anything is
+sent.
+
+### Hearing what other plugins do
+
+A plugin whose roles hear rows -- an `operations` plugin hears the street's
+statements and positions -- gives a handler per row to `receive`, which runs
+until cancelled:
+
+```python
+async def statement_recorded(heard: meridian.Heard) -> None:
+    statement = heard.message  # the whole statement, as the store announced it
+    ...
+
+async def custodial_position_updated(heard: meridian.Heard) -> None:
+    position = heard.message.position  # removed=True when it was removed
+    ...
+
+await plugin.receive(
+    statement_recorded=statement_recorded,
+    custodial_position_updated=custodial_position_updated,
+)
+```
+
+It reads the store first, every row's records across the plugin's read
+scope, then hands on each change heard, once and in order. Deliveries are at
+most once, so where one was missed -- a gap in an account's changes, a loss
+the sidecar marked, a stream that broke, an account entering the read scope
+-- it reads the changes since from the store and hands them on before
+anything heard after, `heard.caught_up` saying so. A handler never sees the
+store's numbers. `heard.own` says the plugin's own act caused the change, and
+`heard.cause` who did, where the store recorded it. `seed=False` reads the
+store without handing on what it holds. The reads are typed methods too,
+`list_custodial_positions` and `list_statements`, within the read scope: an
+account outside it is refused, and an empty scope reads nothing.
 
 ### Figures on Summary
 
@@ -358,6 +430,7 @@ carries libcst.
 | 0.9.0 to 0.10.0: the SDK declares contract v5; pages carry their levels | `Interface(admin_pages=...)` into `pages=`, and a `Page(path, title)` naming no levels into `Page(path, title, levels=["admin"])` | `caller.deployment_admin` read to decide who is served, which opens no page since v5: declare the page at `admin` or ask `caller.admin`; `admin_pages` read as an attribute; admin pages passed as `Interface`'s third argument |
 | 0.10.0 to 0.10.1: pages answer HEAD and refuse a large body; `assert_no_account_data` looks for account data, not identities | only the pins move | |
 | 0.10.1 to 0.11.0: the SDK declares contract v6; a plugin may report figures on its Summary (`plugin.figures`, `meridian.Figure`); a reported health stands until reported again | only the pins move | |
+| 0.11.0 to 0.12.0: the SDK declares contract v7; `receive`, the street's reads, a statement's external account and figures per segment, a holding's cost and lots. Breaking | a statement's flat `buying_power`, `margin_requirement` and `maintenance_excess` into `figures=[StatementFigures(segment="", ...)]` | a statement naming no `external_account_id`, which a sidecar at v7 refuses: pass the external account it was read for, and its `institution` |
 
 `tests/migrations/` holds the plugins the migrations are recorded for, as
 written and as their migration leaves them, and `make check-migrations` holds

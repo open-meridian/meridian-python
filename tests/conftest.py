@@ -27,6 +27,15 @@ from meridian.v1 import sidecar_pb2, sidecar_pb2_grpc
 
 
 @dataclass
+class Stream:
+    """One opening of the delivery stream, as a test scripts it: what is sent
+    in order, and then whether it breaks (a status) or stays open."""
+
+    deliveries: list[operations_pb2.Delivery] = field(default_factory=list)
+    breaks: grpc.StatusCode | None = None
+
+
+@dataclass
 class FakeOperations(operations_pb2_grpc.PluginOperationsServicer):
     """The typed operations, answering fixed results and keeping what was sent."""
 
@@ -34,6 +43,35 @@ class FakeOperations(operations_pb2_grpc.PluginOperationsServicer):
     # Sent beside the refusal, as the sidecar sends a refusal's code.
     refuse_metadata: tuple[tuple[str, bytes], ...] = ()
     sent: list[object] = field(default_factory=list)
+
+    # The delivery stream, one script per opening, the last kept open; and
+    # the reads a catch-up makes, answered by `store` (W2.7, W2.9).
+    streams: list[Stream] = field(default_factory=list)
+    receive_refused: tuple[grpc.StatusCode, str] | None = None
+    received: list[operations_pb2.ReceiveRequest] = field(default_factory=list)
+    store: object | None = None
+    reads: list[object] = field(default_factory=list)
+
+    async def Receive(self, request, context):  # noqa: N802
+        self.received.append(request)
+        if self.receive_refused is not None:
+            await context.abort(*self.receive_refused)
+        await context.send_initial_metadata(())
+        opening = len(self.received) - 1
+        script = self.streams[opening] if opening < len(self.streams) else Stream()
+        for delivery in script.deliveries:
+            yield delivery
+        if script.breaks is not None:
+            await context.abort(script.breaks, "the stream broke")
+        await asyncio.Event().wait()
+
+    async def ListCustodialPositions(self, request, context):  # noqa: N802
+        self.reads.append(request)
+        return self.store.positions(request)  # type: ignore[union-attr]
+
+    async def ListStatements(self, request, context):  # noqa: N802
+        self.reads.append(request)
+        return self.store.statements(request)  # type: ignore[union-attr]
 
     async def _answer(
         self, params: object, answer: object, context: grpc.aio.ServicerContext
@@ -200,4 +238,4 @@ def anyio_backend() -> str:
     return "asyncio"
 
 
-__all__ = ["FakeOperations", "FakeSidecar", "asyncio", "sidecar"]
+__all__ = ["FakeOperations", "FakeSidecar", "Stream", "asyncio", "sidecar"]

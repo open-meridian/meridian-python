@@ -92,6 +92,7 @@ async def test_the_same_statement_twice_is_recognised_not_duplicated(plugin) -> 
     statement = {
         "source": "interop",
         "external_statement_id": f"interop-{uuid.uuid4()}",
+        "external_account_id": LINKED,
         "as_of_date": "2026-09-12",
         "read_at_ns": NOW,
         "expected_rows": 1,
@@ -277,6 +278,7 @@ async def test_a_holding_for_an_unlinked_external_account_is_refused_as_such(plu
     opened = await plugin.record_holdings_statement(
         source="interop",
         external_statement_id=f"typed-{uuid.uuid4()}",
+        external_account_id=LINKED,
         as_of_date="2026-09-26",
         read_at_ns=NOW,
         expected_rows=1,
@@ -290,6 +292,17 @@ async def test_a_holding_for_an_unlinked_external_account_is_refused_as_such(plu
             external_account_id=f"unlinked-{uuid.uuid4().hex[:8]}",
         )
     assert refused.value.kind == "refused"
+
+    # And a statement naming one, from contract v7, the same way (W2.2).
+    with pytest.raises(NotLinked):
+        await plugin.record_holdings_statement(
+            source="interop",
+            external_statement_id=f"typed-{uuid.uuid4()}",
+            external_account_id=f"unlinked-{uuid.uuid4().hex[:8]}",
+            as_of_date="2026-09-26",
+            read_at_ns=NOW,
+            expected_rows=1,
+        )
 
 
 async def test_a_miss_is_reported_by_its_typed_operation(plugin) -> None:
@@ -324,6 +337,7 @@ async def test_the_smallest_and_largest_holdings_reach_the_street_store(plugin) 
     opened = await plugin.record_holdings_statement(
         source="interop",
         external_statement_id=f"scale-{uuid.uuid4()}",
+        external_account_id=LINKED,
         as_of_date="2026-09-28",
         read_at_ns=NOW,
         expected_rows=len(ROUND_TRIPS),
@@ -442,16 +456,22 @@ LONG = meridian.HoldingSide.HOLDING_SIDE_LONG
 SHORT = meridian.HoldingSide.HOLDING_SIDE_SHORT
 
 
-async def statement(plugin, source: str, rows: int, **figures) -> str:
+async def statement(
+    plugin, source: str, rows: int, *, currency_assumed: bool = False, **figures: Money
+) -> str:
     """The connector's snapshot of the linked account: its identifier made
-    from the account and the time it read, as no venue has one of its own."""
+    from the account and the time it read, as no venue has one of its own;
+    naming the account it read, and its figures as the account's as a whole,
+    the set with no segment (contract v7)."""
     opened = await plugin.record_holdings_statement(
         source=source,
         external_statement_id=f"{LINKED}/{NOW}/{uuid.uuid4().hex[:8]}",
+        external_account_id=LINKED,
         as_of_date="2026-09-28",
         read_at_ns=NOW,
         expected_rows=rows,
-        **figures,
+        currency_assumed=currency_assumed,
+        figures=[meridian.StatementFigures(segment="", **figures)] if figures else [],
     )
     return opened.statement_id
 
@@ -636,3 +656,245 @@ async def test_every_sync_state_is_published_with_its_freshness(plugin, state) -
         observed_at_ns=NOW,
     )
     assert published.message_id
+
+
+# ── Contract v7: an operations plugin reads and hears the street ────────────
+#
+# Two more sidecars run beside this suite's custody one, as `operations`
+# plugins: the first with the interop account in its read scope, the second
+# with nothing in its scope. What the custody plugin records, the first reads
+# and hears with its cause; the second reads and hears nothing (W2.5 to W2.7,
+# W2.9, W4.3, W4.11).
+
+_OPERATIONS = os.environ.get("MERIDIAN_OPERATIONS_SIDECAR_ADDRESS")
+_UNSCOPED = os.environ.get("MERIDIAN_UNSCOPED_SIDECAR_ADDRESS")
+
+#: The account a_linked_account.sql links LINKED to.
+ACCOUNT = "ACC-INTEROP"
+HEARD = "interop-operations"
+
+
+@pytest.fixture
+async def operations():
+    if not _OPERATIONS:
+        raise RuntimeError(
+            "MERIDIAN_OPERATIONS_SIDECAR_ADDRESS is not set; `make interop` sets it"
+        )
+    connected = await meridian.connect(_OPERATIONS, heartbeat=False)
+    try:
+        yield connected
+    finally:
+        await connected.leave("interop finished")
+
+
+@pytest.fixture
+async def unscoped():
+    if not _UNSCOPED:
+        raise RuntimeError(
+            "MERIDIAN_UNSCOPED_SIDECAR_ADDRESS is not set; `make interop` sets it"
+        )
+    connected = await meridian.connect(_UNSCOPED, heartbeat=False)
+    try:
+        yield connected
+    finally:
+        await connected.leave("interop finished")
+
+
+async def recorded(plugin, instrument_id: str, quantity: str) -> str:
+    """One statement of one row for the linked account, as the custody plugin
+    sends it, with the account's figures as a whole."""
+    opened = await statement(
+        plugin, HEARD, 1, net_liquidation=Money(Decimal("93550.00"), "USD")
+    )
+    row = await plugin.record_holding(
+        statement_id=opened,
+        instrument_id=instrument_id,
+        side=LONG,
+        quantity=Decimal(quantity),
+        average_cost=Money(Decimal("150.00"), "USD"),
+        lots=[
+            meridian.ReportedLot(
+                quantity=Decimal(quantity),
+                cost=Money(Decimal("1500.00"), "USD"),
+                acquired_date="2024-03-11",
+            )
+        ],
+        external_account_id=LINKED,
+    )
+    assert row.resolved
+    return opened
+
+
+class Hearing:
+    """What an operations plugin's handlers were handed."""
+
+    def __init__(self) -> None:
+        self.positions: list[meridian.Heard] = []
+        self.statements: list[meridian.Heard] = []
+        self.arrived = asyncio.Event()
+
+    async def position(self, heard: meridian.Heard) -> None:
+        self.positions.append(heard)
+        self.arrived.set()
+
+    async def statement(self, heard: meridian.Heard) -> None:
+        self.statements.append(heard)
+        self.arrived.set()
+
+    async def until(self, found, seconds: float = 10.0):
+        """The first thing heard that `found` says is it."""
+
+        async def waiting():
+            while True:
+                for heard in (*self.positions, *self.statements):
+                    if found(heard):
+                        return heard
+                self.arrived.clear()
+                await self.arrived.wait()
+
+        return await asyncio.wait_for(waiting(), timeout=seconds)
+
+
+def listening(plugin, hearing: Hearing, *, seed: bool) -> asyncio.Task[None]:
+    return asyncio.create_task(
+        plugin.receive(
+            statement_recorded=hearing.statement,
+            custodial_position_updated=hearing.position,
+            seed=seed,
+        )
+    )
+
+
+async def stopped(task: asyncio.Task[None]) -> None:
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+
+async def test_an_operations_plugin_is_launched_to_read_and_hear_the_street(operations) -> None:
+    assert operations.identity.roles == ("operations",)
+    assert "platform.street.query.list-statements" in operations.grants.publish
+    assert "platform.street.event.custodial-position-updated" in operations.grants.subscribe
+
+
+async def test_an_operations_plugin_hears_the_streets_changes_with_their_cause(
+    plugin, operations
+) -> None:
+    """The custody plugin records; the operations plugin hears the position
+    and the statement, typed, each with who caused it and not its own act,
+    and with no number in what its handler sees (W2.5, W2.6, W4.3)."""
+    hearing = Hearing()
+    task = listening(operations, hearing, seed=False)
+    try:
+        await asyncio.sleep(1)  # the stream is open and the sidecar subscribed
+        opened = await recorded(plugin, "INS-interop-heard", "12.5")
+        position = await hearing.until(
+            lambda h: (
+                h.row == "CustodialPositionUpdated"
+                and h.message.position.instrument_id == "INS-interop-heard"
+            )
+        )
+        completed = await hearing.until(
+            lambda h: h.row == "StatementRecorded" and h.message.statement_id == opened
+        )
+    finally:
+        await stopped(task)
+
+    assert not position.caught_up and not position.own
+    assert position.cause is not None
+    assert position.cause.instance_id == plugin.identity.instance_id
+    held = position.message.position
+    assert held.account_id == ACCOUNT
+    assert meridian.as_decimal(held.quantity) == Decimal("12.5")
+    assert str(meridian.as_money(held.average_cost).amount) == "150.00"
+    assert [meridian.as_decimal(lot.quantity) for lot in held.lots] == [Decimal("12.5")]
+    assert not position.message.HasField("journal") and not held.HasField("last_change")
+
+    statement_heard = completed.message
+    assert statement_heard.account_id == ACCOUNT
+    assert statement_heard.external_account_id == LINKED
+    assert str(meridian.as_money(statement_heard.figures[0].net_liquidation).amount) == (
+        "93550.00"
+    )
+    assert completed.cause is not None and not completed.own
+
+
+async def test_an_operations_plugin_reads_its_scope_and_is_refused_outside_it(
+    plugin, operations
+) -> None:
+    """W2.7, W2.9, W4.4: the whole scope when it names no account, the
+    account when it names one in its scope, and a refusal before the read
+    leaves when it names one outside."""
+    opened = await recorded(plugin, "INS-interop-read", "3")
+    whole = await operations.list_custodial_positions(page_size=500)
+    assert {held.account_id for held in whole.positions} == {ACCOUNT}
+    assert whole.as_of.partitions[0].partition == "street"
+    named = await operations.list_custodial_positions(account_id=ACCOUNT, page_size=500)
+    assert "INS-interop-read" in {held.instrument_id for held in named.positions}
+
+    statements = await operations.list_statements(account_id=ACCOUNT, page_size=500)
+    read = [each for each in statements.statements if each.statement_id == opened]
+    assert len(read) == 1 and read[0].rows_received == 1
+    since = await operations.list_statements(
+        account_id=ACCOUNT, since=statements.as_of, page_size=500
+    )
+    assert len(since.statements) == 0, "nothing completed since"
+
+    with pytest.raises(
+        meridian.NotGranted, match="ACC-ELSEWHERE is not in this plugin's read scope"
+    ):
+        await operations.list_custodial_positions(account_id="ACC-ELSEWHERE")
+
+
+async def test_a_plugin_whose_scope_is_empty_reads_and_hears_nothing(plugin, unscoped) -> None:
+    """W4.11: an empty scope is nothing, never everything."""
+    hearing = Hearing()
+    task = listening(unscoped, hearing, seed=True)
+    try:
+        await asyncio.sleep(1)
+        await recorded(plugin, "INS-interop-unheard", "1")
+        await asyncio.sleep(2)
+    finally:
+        await stopped(task)
+    assert hearing.positions == [] and hearing.statements == []
+    assert len((await unscoped.list_custodial_positions()).positions) == 0
+    assert len((await unscoped.list_statements()).statements) == 0
+    with pytest.raises(meridian.NotGranted):
+        await unscoped.list_statements(account_id=ACCOUNT)
+
+
+async def test_a_plugin_started_again_reads_what_changed_while_it_was_away(
+    plugin, operations
+) -> None:
+    """W4.3: a plugin holds nothing; started again, it reads the store afresh
+    and is handed what changed while it was not listening, marked caught up,
+    before anything it hears after."""
+    await recorded(plugin, "INS-interop-away", "1")
+    first = Hearing()
+    task = listening(operations, first, seed=True)
+    try:
+        await first.until(
+            lambda h: (
+                h.row == "CustodialPositionUpdated"
+                and h.message.position.instrument_id == "INS-interop-away"
+            )
+        )
+    finally:
+        await stopped(task)
+
+    # Changed while nothing listens.
+    await recorded(plugin, "INS-interop-away", "2")
+
+    again = Hearing()
+    task = listening(operations, again, seed=True)
+    try:
+        caught = await again.until(
+            lambda h: (
+                h.row == "CustodialPositionUpdated"
+                and h.message.position.instrument_id == "INS-interop-away"
+            )
+        )
+    finally:
+        await stopped(task)
+    assert caught.caught_up
+    assert meridian.as_decimal(caught.message.position.quantity) == Decimal("2")

@@ -38,6 +38,7 @@ from meridian.v1 import sidecar_pb2, sidecar_pb2_grpc
 from .errors import CallFailed, NoSidecar, NotGranted, NotLinked, NotRegistered, Refused
 from .figures import Figure, listed, wire
 from .operations import Operations, _enum
+from .statements import checked
 
 if TYPE_CHECKING:
     from .pages import Pages
@@ -47,10 +48,12 @@ if TYPE_CHECKING:
 #: rather than admitting it to run without what the SDK reads -- its links on
 #: the account-scope stream, the refusal code beside a refusal, the asset class
 #: as an enum on a miss it reports, its pages each declared with the levels it
-#: serves, the level a session was opened at, and the figures on its heartbeat
-#: -- and a newer sidecar still admits it. Raised with every contract revision
-#: that adds something a plugin can depend on.
-SCHEMA_VERSION = "v6"
+#: serves, the level a session was opened at, the figures on its heartbeat,
+#: the stream of what its roles hear and the reads within its scope, and a
+#: statement naming its external account with its figures per segment -- and
+#: a newer sidecar still admits it. Raised with every contract revision that
+#: adds something a plugin can depend on.
+SCHEMA_VERSION = "v7"
 
 #: Where a sidecar listens. Loopback, always: a sidecar reachable from another
 #: host is a way around the boundary it exists to enforce.
@@ -624,12 +627,22 @@ class Plugin(Operations):
     def _operations(self) -> Any:
         return self._operations_stub
 
+    async def _receive(
+        self, handlers: dict[str, Callable[[Any], Awaitable[None]] | None], *, seed: bool
+    ) -> None:
+        """What `receive` hears, seeded, followed and caught up (W4.3)."""
+        self._check_open()
+        from .receive import follow
+
+        await follow(self, handlers, seed=seed)
+
     async def _operate(
         self, method: Callable[[Any], Awaitable[_Answer]], params: Any
     ) -> _Answer:
         """One typed operation, its refusal turned into this package's terms."""
         self._check_open()
         operation = type(params).__name__.removesuffix("Params")
+        checked(params)
         try:
             return await method(params)
         except grpc.aio.AioRpcError as failed:

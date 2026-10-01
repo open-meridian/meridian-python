@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1ameridian/v1/envelope.proto\x12\x0bmeridian.v1\"\xe1\x01\n\x0bMessageMeta\x12\x12\n\nmessage_id\x18\x01 \x01(\t\x12\x16\n\x0e\x63orrelation_id\x18\x02 \x01(\t\x12\x14\n\x0c\x63\x61usation_id\x18\x03 \x01(\t\x12\x1d\n\x15publisher_instance_id\x18\x04 \x01(\t\x12\r\n\x05topic\x18\x05 \x01(\t\x12\x16\n\x0eschema_version\x18\x06 \x01(\t\x12\x17\n\x0fpublished_at_ns\x18\x07 \x01(\x03\x12\x1a\n\x12\x61\x63ting_for_subject\x18\x08 \x01(\t\x12\x15\n\raccount_scope\x18\t \x03(\tb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1ameridian/v1/envelope.proto\x12\x0bmeridian.v1\"\x80\x02\n\x0bMessageMeta\x12\x12\n\nmessage_id\x18\x01 \x01(\t\x12\x16\n\x0e\x63orrelation_id\x18\x02 \x01(\t\x12\x14\n\x0c\x63\x61usation_id\x18\x03 \x01(\t\x12\x1d\n\x15publisher_instance_id\x18\x04 \x01(\t\x12\r\n\x05topic\x18\x05 \x01(\t\x12\x16\n\x0eschema_version\x18\x06 \x01(\t\x12\x17\n\x0fpublished_at_ns\x18\x07 \x01(\x03\x12\x1a\n\x12\x61\x63ting_for_subject\x18\x08 \x01(\t\x12\x15\n\raccount_scope\x18\t \x03(\t\x12\x1d\n\x15\x61\x63\x63ount_scope_applies\x18\n \x01(\x08\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -32,5 +32,5 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'meridian.v1.envelope_pb2', 
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
   _globals['_MESSAGEMETA']._serialized_start=44
-  _globals['_MESSAGEMETA']._serialized_end=269
+  _globals['_MESSAGEMETA']._serialized_end=300
 # @@protoc_insertion_point(module_scope)
