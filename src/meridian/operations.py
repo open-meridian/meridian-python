@@ -109,6 +109,25 @@ def _enum(kind: Any, value: Any, name: str) -> Any:
     )
 
 
+def _stated(**flags: bool | None) -> dict[str, Any]:
+    """An optional flag as keyword arguments for the wire's message: absent
+    when None, which is "not stated" and never False (contract v8)."""
+    return {name: value for name, value in flags.items() if value is not None}
+
+
+def _arm(oneof: str, **arms: Any) -> dict[str, Any]:
+    """The arm of a oneof that is set, as keyword arguments for the wire's
+    message: none when none is, and refused naming the oneof when two are.
+    Each arm is None when unset (contract v8)."""
+    given = {name: value for name, value in arms.items() if value is not None}
+    if len(given) > 1:
+        raise ValueError(
+            f"{oneof} takes one of {', '.join(arms)}; "
+            f"{' and '.join(given)} were given"
+        )
+    return given
+
+
 def as_decimal(message: ops.Decimal) -> Decimal:
     """A Decimal read back from the wire exactly as it was stated: 150 at scale
     2 is Decimal('1.50'). Built from its digits rather than by arithmetic,
@@ -177,6 +196,7 @@ class ReportedCollateral:
     haircut: Decimal | int | None = None
     value_after_haircut: Money | None = None
     held_at: str = ""
+    reusable: bool | None = None
 
 
 def _reported_collateral(value: ReportedCollateral, name: str) -> ops.ReportedCollateral:
@@ -192,6 +212,7 @@ def _reported_collateral(value: ReportedCollateral, name: str) -> ops.ReportedCo
         haircut=None if value.haircut is None else _decimal(value.haircut, f"{name}.haircut"),
         value_after_haircut=None if value.value_after_haircut is None else _money(value.value_after_haircut, f"{name}.value_after_haircut"),
         held_at=value.held_at,
+        **_stated(reusable=value.reusable),
     )
 
 
@@ -216,6 +237,493 @@ def _reported_lot(value: ReportedLot, name: str) -> ops.ReportedLot:
         quantity=_decimal(value.quantity, f"{name}.quantity"),
         cost=None if value.cost is None else _money(value.cost, f"{name}.cost"),
         acquired_date=value.acquired_date,
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class ReportedEncumbrance:
+    """One sub-balance of a holding, as the source reports it.
+
+    The SDK's form of the wire's ReportedEncumbrance: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    kind: ops.EncumbranceKind | str | None = None
+    quantity: Decimal | int
+    available: bool | None = None
+    source_code: str = ""
+    pledgee: str = ""
+    held_at: str = ""
+    segment: str = ""
+    detail: str = ""
+
+
+def _reported_encumbrance(value: ReportedEncumbrance, name: str) -> ops.ReportedEncumbrance:
+    """A ReportedEncumbrance as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, ReportedEncumbrance):
+        raise TypeError(f"{name} is a meridian.ReportedEncumbrance, not {type(value).__name__}")
+    return ops.ReportedEncumbrance(
+        kind=_enum(ops.EncumbranceKind, value.kind, f"{name}.kind"),
+        quantity=_decimal(value.quantity, f"{name}.quantity"),
+        **_stated(available=value.available),
+        source_code=value.source_code,
+        pledgee=value.pledgee,
+        held_at=value.held_at,
+        segment=value.segment,
+        detail=value.detail,
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class OpeningSource:
+    """OpeningSource.
+
+    The SDK's form of the wire's OpeningSource: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    kind: ops.OpeningSourceKind | str | None = None
+    name: str = ""
+    as_of_date: str = ""
+    basis: ops.PositionBasis | str | None = None
+    street_records: Sequence[ops.StreetRecordRef] = ()
+
+
+def _opening_source(value: OpeningSource, name: str) -> ops.OpeningSource:
+    """A OpeningSource as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, OpeningSource):
+        raise TypeError(f"{name} is a meridian.OpeningSource, not {type(value).__name__}")
+    return ops.OpeningSource(
+        kind=_enum(ops.OpeningSourceKind, value.kind, f"{name}.kind"),
+        name=value.name,
+        as_of_date=value.as_of_date,
+        basis=_enum(ops.PositionBasis, value.basis, f"{name}.basis"),
+        street_records=list(value.street_records),
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class OpeningPosition:
+    """OpeningPosition.
+
+    The SDK's form of the wire's OpeningPosition: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    instrument_id: str = ""
+    side: ops.HoldingSide | str | None = None
+    trade_date_quantity: Decimal | int
+    settled_quantity: Decimal | int | None = None
+    pending: Sequence[PendingSettlement] = ()
+    lots: Sequence[OpeningLot] = ()
+
+
+def _opening_position(value: OpeningPosition, name: str) -> ops.OpeningPosition:
+    """A OpeningPosition as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, OpeningPosition):
+        raise TypeError(f"{name} is a meridian.OpeningPosition, not {type(value).__name__}")
+    return ops.OpeningPosition(
+        instrument_id=value.instrument_id,
+        side=_enum(ops.HoldingSide, value.side, f"{name}.side"),
+        trade_date_quantity=_decimal(value.trade_date_quantity, f"{name}.trade_date_quantity"),
+        settled_quantity=None if value.settled_quantity is None else _decimal(value.settled_quantity, f"{name}.settled_quantity"),
+        pending=[_pending_settlement(each, f"{name}.pending[{i}]") for i, each in enumerate(value.pending)],
+        lots=[_opening_lot(each, f"{name}.lots[{i}]") for i, each in enumerate(value.lots)],
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class PendingSettlement:
+    """PendingSettlement.
+
+    The SDK's form of the wire's PendingSettlement: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    value_date: str = ""
+    quantity: Decimal | int
+    state: ops.PendingState | None = None
+
+
+def _pending_settlement(value: PendingSettlement, name: str) -> ops.PendingSettlement:
+    """A PendingSettlement as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, PendingSettlement):
+        raise TypeError(f"{name} is a meridian.PendingSettlement, not {type(value).__name__}")
+    return ops.PendingSettlement(
+        value_date=value.value_date,
+        quantity=_decimal(value.quantity, f"{name}.quantity"),
+        state=value.state,
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class OpeningLot:
+    """OpeningLot.
+
+    The SDK's form of the wire's OpeningLot: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    quantity: Decimal | int
+    terms: LotTerms | None = None
+
+
+def _opening_lot(value: OpeningLot, name: str) -> ops.OpeningLot:
+    """A OpeningLot as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, OpeningLot):
+        raise TypeError(f"{name} is a meridian.OpeningLot, not {type(value).__name__}")
+    return ops.OpeningLot(
+        quantity=_decimal(value.quantity, f"{name}.quantity"),
+        terms=None if value.terms is None else _lot_terms(value.terms, f"{name}.terms"),
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class LotTerms:
+    """LotTerms.
+
+    The SDK's form of the wire's LotTerms: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    unit_cost: Money | None = None
+    cost: Money | None = None
+    acquired_date: str = ""
+    holding_period_start: str = ""
+    settlement_date: str = ""
+    source: ops.LotSource | str | None = None
+
+
+def _lot_terms(value: LotTerms, name: str) -> ops.LotTerms:
+    """A LotTerms as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, LotTerms):
+        raise TypeError(f"{name} is a meridian.LotTerms, not {type(value).__name__}")
+    return ops.LotTerms(
+        unit_cost=None if value.unit_cost is None else _money(value.unit_cost, f"{name}.unit_cost"),
+        cost=None if value.cost is None else _money(value.cost, f"{name}.cost"),
+        acquired_date=value.acquired_date,
+        holding_period_start=value.holding_period_start,
+        settlement_date=value.settlement_date,
+        source=_enum(ops.LotSource, value.source, f"{name}.source"),
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class PositionKey:
+    """PositionKey.
+
+    The SDK's form of the wire's PositionKey: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    instrument_id: str = ""
+    side: ops.HoldingSide | str | None = None
+
+
+def _position_key(value: PositionKey, name: str) -> ops.PositionKey:
+    """A PositionKey as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, PositionKey):
+        raise TypeError(f"{name} is a meridian.PositionKey, not {type(value).__name__}")
+    return ops.PositionKey(
+        instrument_id=value.instrument_id,
+        side=_enum(ops.HoldingSide, value.side, f"{name}.side"),
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class BreakDifference:
+    """BreakDifference.
+
+    The SDK's form of the wire's BreakDifference: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    field: str = ""
+    book: BreakValue | None = None
+    street: BreakValue | None = None
+
+
+def _break_difference(value: BreakDifference, name: str) -> ops.BreakDifference:
+    """A BreakDifference as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, BreakDifference):
+        raise TypeError(f"{name} is a meridian.BreakDifference, not {type(value).__name__}")
+    return ops.BreakDifference(
+        field=value.field,
+        book=None if value.book is None else _break_value(value.book, f"{name}.book"),
+        street=None if value.street is None else _break_value(value.street, f"{name}.street"),
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class BreakValue:
+    """One side of a difference; unset: absent on that side.
+
+    The SDK's form of the wire's BreakValue: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    quantity: Decimal | int | None = None
+    amount: Money | None = None
+    text: str | None = None
+
+
+def _break_value(value: BreakValue, name: str) -> ops.BreakValue:
+    """A BreakValue as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, BreakValue):
+        raise TypeError(f"{name} is a meridian.BreakValue, not {type(value).__name__}")
+    return ops.BreakValue(
+        **_arm(f"{name}.value", quantity=None if value.quantity is None else _decimal(value.quantity, f"{name}.quantity"), amount=None if value.amount is None else _money(value.amount, f"{name}.amount"), text=value.text),
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class BreakCause:
+    """The item found to cause a break, linked by value (Q23's target).
+
+    The SDK's form of the wire's BreakCause: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    category: ops.BreakCauseCategory | str | None = None
+    street_record: ops.StreetRecordRef | None = None
+    book_entry: ops.JournalRef | None = None
+    pending_settlement: PendingSettlementRef | None = None
+    event_reference: str | None = None
+    none_found: bool | None = None
+    note: str = ""
+
+
+def _break_cause(value: BreakCause, name: str) -> ops.BreakCause:
+    """A BreakCause as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, BreakCause):
+        raise TypeError(f"{name} is a meridian.BreakCause, not {type(value).__name__}")
+    return ops.BreakCause(
+        category=_enum(ops.BreakCauseCategory, value.category, f"{name}.category"),
+        **_arm(f"{name}.item", street_record=value.street_record, book_entry=value.book_entry, pending_settlement=None if value.pending_settlement is None else _pending_settlement_ref(value.pending_settlement, f"{name}.pending_settlement"), event_reference=value.event_reference, none_found=value.none_found),
+        note=value.note,
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class PendingSettlementRef:
+    """PendingSettlementRef.
+
+    The SDK's form of the wire's PendingSettlementRef: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    instrument_id: str = ""
+    side: ops.HoldingSide | str | None = None
+    value_date: str = ""
+
+
+def _pending_settlement_ref(value: PendingSettlementRef, name: str) -> ops.PendingSettlementRef:
+    """A PendingSettlementRef as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, PendingSettlementRef):
+        raise TypeError(f"{name} is a meridian.PendingSettlementRef, not {type(value).__name__}")
+    return ops.PendingSettlementRef(
+        instrument_id=value.instrument_id,
+        side=_enum(ops.HoldingSide, value.side, f"{name}.side"),
+        value_date=value.value_date,
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class AgreementFigures:
+    """AgreementFigures.
+
+    The SDK's form of the wire's AgreementFigures: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    agreement: ops.MarginAgreementRef | None = None
+    figures: StatementFigures | None = None
+    position_values: Sequence[ReportedPositionValue] = ()
+
+
+def _agreement_figures(value: AgreementFigures, name: str) -> ops.AgreementFigures:
+    """A AgreementFigures as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, AgreementFigures):
+        raise TypeError(f"{name} is a meridian.AgreementFigures, not {type(value).__name__}")
+    return ops.AgreementFigures(
+        agreement=value.agreement,
+        figures=None if value.figures is None else _statement_figures(value.figures, f"{name}.figures"),
+        position_values=[_reported_position_value(each, f"{name}.position_values[{i}]") for i, each in enumerate(value.position_values)],
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class ReportedPositionValue:
+    """The custodian's, labelled as such (Q8, revised and ruled); never a
+    position's own.
+
+    The SDK's form of the wire's ReportedPositionValue: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    instrument_id: str = ""
+    side: ops.HoldingSide | str | None = None
+    market_value: Money | None = None
+    margin_requirement: Money | None = None
+
+
+def _reported_position_value(value: ReportedPositionValue, name: str) -> ops.ReportedPositionValue:
+    """A ReportedPositionValue as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, ReportedPositionValue):
+        raise TypeError(f"{name} is a meridian.ReportedPositionValue, not {type(value).__name__}")
+    return ops.ReportedPositionValue(
+        instrument_id=value.instrument_id,
+        side=_enum(ops.HoldingSide, value.side, f"{name}.side"),
+        market_value=None if value.market_value is None else _money(value.market_value, f"{name}.market_value"),
+        margin_requirement=None if value.margin_requirement is None else _money(value.margin_requirement, f"{name}.margin_requirement"),
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class PositionEncumbrances:
+    """One position's encumbrances, as a statement states them: the whole
+    set, empty when the statement reports none.
+
+    The SDK's form of the wire's PositionEncumbrances: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    instrument_id: str = ""
+    side: ops.HoldingSide | str | None = None
+    encumbrances: Sequence[Encumbrance] = ()
+
+
+def _position_encumbrances(value: PositionEncumbrances, name: str) -> ops.PositionEncumbrances:
+    """A PositionEncumbrances as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, PositionEncumbrances):
+        raise TypeError(f"{name} is a meridian.PositionEncumbrances, not {type(value).__name__}")
+    return ops.PositionEncumbrances(
+        instrument_id=value.instrument_id,
+        side=_enum(ops.HoldingSide, value.side, f"{name}.side"),
+        encumbrances=[_encumbrance(each, f"{name}.encumbrances[{i}]") for i, each in enumerate(value.encumbrances)],
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class Encumbrance:
+    """One encumbrance of a position, as the book holds it.
+
+    The SDK's form of the wire's Encumbrance: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    kind: ops.EncumbranceKind | str | None = None
+    quantity: Decimal | int
+    pledgee: str = ""
+    held_at: str = ""
+    agreement: ops.MarginAgreementRef | None = None
+    source_code: str = ""
+    detail: str = ""
+    source: ops.StreetRecordRef | None = None
+    since_date: str = ""
+    set_by: ops.JournalRef | None = None
+
+
+def _encumbrance(value: Encumbrance, name: str) -> ops.Encumbrance:
+    """A Encumbrance as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, Encumbrance):
+        raise TypeError(f"{name} is a meridian.Encumbrance, not {type(value).__name__}")
+    return ops.Encumbrance(
+        kind=_enum(ops.EncumbranceKind, value.kind, f"{name}.kind"),
+        quantity=_decimal(value.quantity, f"{name}.quantity"),
+        pledgee=value.pledgee,
+        held_at=value.held_at,
+        agreement=value.agreement,
+        source_code=value.source_code,
+        detail=value.detail,
+        source=value.source,
+        since_date=value.since_date,
+        set_by=value.set_by,
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class Adjustment:
+    """Step 5's non-order transaction's first kind (Q28).
+
+    The SDK's form of the wire's Adjustment: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    effective_date: str = ""
+    lines: Sequence[MovementLine] = ()
+    basis_adjustments: Sequence[BasisAdjustment] = ()
+    event_reference: str = ""
+
+
+def _adjustment(value: Adjustment, name: str) -> ops.Adjustment:
+    """A Adjustment as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, Adjustment):
+        raise TypeError(f"{name} is a meridian.Adjustment, not {type(value).__name__}")
+    return ops.Adjustment(
+        effective_date=value.effective_date,
+        lines=[_movement_line(each, f"{name}.lines[{i}]") for i, each in enumerate(value.lines)],
+        basis_adjustments=[_basis_adjustment(each, f"{name}.basis_adjustments[{i}]") for i, each in enumerate(value.basis_adjustments)],
+        event_reference=value.event_reference,
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class MovementLine:
+    """MovementLine.
+
+    The SDK's form of the wire's MovementLine: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    instrument_id: str = ""
+    side: ops.HoldingSide | str | None = None
+    bucket: ops.SettlementBucket | str | None = None
+    value_date: str = ""
+    quantity: Decimal | int
+    lot_id: str = ""
+    opens_lot: LotTerms | None = None
+    pending_state: ops.PendingState | None = None
+
+
+def _movement_line(value: MovementLine, name: str) -> ops.MovementLine:
+    """A MovementLine as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, MovementLine):
+        raise TypeError(f"{name} is a meridian.MovementLine, not {type(value).__name__}")
+    return ops.MovementLine(
+        instrument_id=value.instrument_id,
+        side=_enum(ops.HoldingSide, value.side, f"{name}.side"),
+        bucket=_enum(ops.SettlementBucket, value.bucket, f"{name}.bucket"),
+        value_date=value.value_date,
+        quantity=_decimal(value.quantity, f"{name}.quantity"),
+        lot_id=value.lot_id,
+        opens_lot=None if value.opens_lot is None else _lot_terms(value.opens_lot, f"{name}.opens_lot"),
+        pending_state=value.pending_state,
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class BasisAdjustment:
+    """BasisAdjustment.
+
+    The SDK's form of the wire's BasisAdjustment: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    lot_id: str = ""
+    cost_change: Money | None = None
+    stated_cost: Money | None = None
+    holding_period_start: str = ""
+
+
+def _basis_adjustment(value: BasisAdjustment, name: str) -> ops.BasisAdjustment:
+    """A BasisAdjustment as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, BasisAdjustment):
+        raise TypeError(f"{name} is a meridian.BasisAdjustment, not {type(value).__name__}")
+    return ops.BasisAdjustment(
+        lot_id=value.lot_id,
+        **_arm(f"{name}.cost", cost_change=None if value.cost_change is None else _money(value.cost_change, f"{name}.cost_change"), stated_cost=None if value.stated_cost is None else _money(value.stated_cost, f"{name}.stated_cost")),
+        holding_period_start=value.holding_period_start,
     )
 
 
@@ -298,6 +806,7 @@ class Operations:
         external_account_id: str = "",
         figures: Sequence[StatementFigures] = (),
         institution: str = "",
+        security_interest: bool | None = None,
         acting_for: str | None = None,
     ) -> ops.RecordHoldingsStatementResult:
         """W2.2: Open one statement: the connector's snapshot of one account, at one moment."""
@@ -314,6 +823,7 @@ class Operations:
             external_account_id=external_account_id,
             figures=[_statement_figures(each, f"figures[{i}]") for i, each in enumerate(figures)],
             institution=institution,
+            **_stated(security_interest=security_interest),
             acting_for=_assertion(acting_for),
         )
         return await self._operate(self._operations().RecordHoldingsStatement, params)
@@ -335,6 +845,10 @@ class Operations:
         lots: Sequence[ReportedLot] = (),
         margin_requirement: Money | None = None,
         average_cost: Money | None = None,
+        available_quantity: Decimal | int | None = None,
+        not_available_quantity: Decimal | int | None = None,
+        available_basis: ops.AvailableBasis | str | None = None,
+        encumbrances: Sequence[ReportedEncumbrance] = (),
         acting_for: str | None = None,
     ) -> ops.RecordHoldingResult:
         """W2.3: One holding, for one account, at one instrument, on one side."""
@@ -353,6 +867,10 @@ class Operations:
             lots=[_reported_lot(each, f"lots[{i}]") for i, each in enumerate(lots)],
             margin_requirement=None if margin_requirement is None else _money(margin_requirement, "margin_requirement"),
             average_cost=None if average_cost is None else _money(average_cost, "average_cost"),
+            available_quantity=None if available_quantity is None else _decimal(available_quantity, "available_quantity"),
+            not_available_quantity=None if not_available_quantity is None else _decimal(not_available_quantity, "not_available_quantity"),
+            available_basis=_enum(ops.AvailableBasis, available_basis, "available_basis"),
+            encumbrances=[_reported_encumbrance(each, f"encumbrances[{i}]") for i, each in enumerate(encumbrances)],
             acting_for=_assertion(acting_for),
         )
         return await self._operate(self._operations().RecordHolding, params)
@@ -433,6 +951,19 @@ class Operations:
         )
         return await self._operate(self._operations().ReportMissingInstrument, params)
 
+    async def resolve_instrument(
+        self,
+        *,
+        instrument_id: str = "",
+        as_of_ns: int = 0,
+    ) -> ops.ResolveInstrumentResult:
+        """W3.6: Forward resolution: an instrument identifier to its record."""
+        params = ops.ResolveInstrumentParams(
+            instrument_id=instrument_id,
+            as_of_ns=as_of_ns,
+        )
+        return await self._operate(self._operations().ResolveInstrument, params)
+
     async def link_external_account(
         self,
         *,
@@ -469,11 +1000,264 @@ class Operations:
         )
         return await self._operate(self._operations().ReadAccountsForLinking, params)
 
+    async def record_opening_balance(
+        self,
+        *,
+        account_id: str = "",
+        as_of_date: str = "",
+        sources: Sequence[OpeningSource] = (),
+        positions: Sequence[OpeningPosition] = (),
+        reason: str = "",
+        replaces_entry_id: str = "",
+        idempotency_key: str = "",
+        acting_for: str | None = None,
+    ) -> ops.RecordOpeningBalanceResult:
+        """W9.1: RecordOpeningBalance."""
+        params = ops.RecordOpeningBalanceParams(
+            account_id=account_id,
+            as_of_date=as_of_date,
+            sources=[_opening_source(each, f"sources[{i}]") for i, each in enumerate(sources)],
+            positions=[_opening_position(each, f"positions[{i}]") for i, each in enumerate(positions)],
+            reason=reason,
+            replaces_entry_id=replaces_entry_id,
+            idempotency_key=idempotency_key,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().RecordOpeningBalance, params)
+
+    async def record_break(
+        self,
+        *,
+        account_id: str = "",
+        break_id: str = "",
+        position: PositionKey | None = None,
+        figure: ops.FigureKey | None = None,
+        category: ops.BreakCategory | str | None = None,
+        differences: Sequence[BreakDifference] = (),
+        book_watermark: ops.Watermark | None = None,
+        street: ops.StreetRecordRef | None = None,
+        business_date: str = "",
+        candidate_causes: Sequence[BreakCause] = (),
+        idempotency_key: str = "",
+        acting_for: str | None = None,
+    ) -> ops.RecordBreakResult:
+        """W9.4: W9.4. A new break, or an open one brought up to date."""
+        params = ops.RecordBreakParams(
+            account_id=account_id,
+            break_id=break_id,
+            **_arm("subject", position=None if position is None else _position_key(position, "position"), figure=figure),
+            category=_enum(ops.BreakCategory, category, "category"),
+            differences=[_break_difference(each, f"differences[{i}]") for i, each in enumerate(differences)],
+            book_watermark=book_watermark,
+            street=street,
+            business_date=business_date,
+            candidate_causes=[_break_cause(each, f"candidate_causes[{i}]") for i, each in enumerate(candidate_causes)],
+            idempotency_key=idempotency_key,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().RecordBreak, params)
+
+    async def record_account_figures(
+        self,
+        *,
+        account_id: str = "",
+        business_date: str = "",
+        source: ops.StreetRecordRef | None = None,
+        agreements: Sequence[AgreementFigures] = (),
+        idempotency_key: str = "",
+        acting_for: str | None = None,
+    ) -> ops.RecordAccountFiguresResult:
+        """W9.5: RecordAccountFigures."""
+        params = ops.RecordAccountFiguresParams(
+            account_id=account_id,
+            business_date=business_date,
+            source=source,
+            agreements=[_agreement_figures(each, f"agreements[{i}]") for i, each in enumerate(agreements)],
+            idempotency_key=idempotency_key,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().RecordAccountFigures, params)
+
+    async def record_encumbrances(
+        self,
+        *,
+        account_id: str = "",
+        business_date: str = "",
+        source: ops.StreetRecordRef | None = None,
+        positions: Sequence[PositionEncumbrances] = (),
+        idempotency_key: str = "",
+        acting_for: str | None = None,
+    ) -> ops.RecordEncumbrancesResult:
+        """W9.15: W9.15. A finding, so the plugin may send it as itself."""
+        params = ops.RecordEncumbrancesParams(
+            account_id=account_id,
+            business_date=business_date,
+            source=source,
+            positions=[_position_encumbrances(each, f"positions[{i}]") for i, each in enumerate(positions)],
+            idempotency_key=idempotency_key,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().RecordEncumbrances, params)
+
+    async def handle_break(
+        self,
+        *,
+        account_id: str = "",
+        break_id: str = "",
+        confirmed_cause: BreakCause | None = None,
+        handling: ops.BreakHandling | None = None,
+        reason: str = "",
+        idempotency_key: str = "",
+        acting_for: str | None = None,
+    ) -> ops.HandleBreakResult:
+        """W9.6: W9.6. For a person."""
+        params = ops.HandleBreakParams(
+            account_id=account_id,
+            break_id=break_id,
+            confirmed_cause=None if confirmed_cause is None else _break_cause(confirmed_cause, "confirmed_cause"),
+            handling=handling,
+            reason=reason,
+            idempotency_key=idempotency_key,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().HandleBreak, params)
+
+    async def resolve_break(
+        self,
+        *,
+        account_id: str = "",
+        break_ids: Sequence[str] = (),
+        reason: str = "",
+        adjustment: Adjustment | None = None,
+        reversal: ops.Reversal | None = None,
+        entries: ops.ResolvedByEntries | None = None,
+        explanation: str | None = None,
+        idempotency_key: str = "",
+        acting_for: str | None = None,
+    ) -> ops.ResolveBreakResult:
+        """W9.7: W9.7. For a person."""
+        params = ops.ResolveBreakParams(
+            account_id=account_id,
+            break_ids=list(break_ids),
+            reason=reason,
+            **_arm("resolution", adjustment=None if adjustment is None else _adjustment(adjustment, "adjustment"), reversal=reversal, entries=entries, explanation=explanation),
+            idempotency_key=idempotency_key,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().ResolveBreak, params)
+
+    async def close_breaks_as_cleared(
+        self,
+        *,
+        account_id: str = "",
+        break_ids: Sequence[str] = (),
+        cleared_at: ops.StreetRecordRef | None = None,
+        reason: str = "",
+        idempotency_key: str = "",
+        acting_for: str | None = None,
+    ) -> ops.CloseBreaksAsClearedResult:
+        """W9.7: W9.7. Close breaks as cleared, with no entry."""
+        params = ops.CloseBreaksAsClearedParams(
+            account_id=account_id,
+            break_ids=list(break_ids),
+            cleared_at=cleared_at,
+            reason=reason,
+            idempotency_key=idempotency_key,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().CloseBreaksAsCleared, params)
+
+    async def list_positions(
+        self,
+        *,
+        account_id: str = "",
+        since: ops.Watermark | None = None,
+        business_date: str = "",
+        at: ops.Watermark | None = None,
+        page_size: int = 0,
+        cursor: str = "",
+    ) -> ops.ListPositionsResult:
+        """W9.10: ListPositions."""
+        params = ops.ListPositionsParams(
+            account_id=account_id,
+            since=since,
+            business_date=business_date,
+            at=at,
+            page_size=page_size,
+            cursor=cursor,
+        )
+        return await self._operate(self._operations().ListPositions, params)
+
+    async def list_breaks(
+        self,
+        *,
+        account_id: str = "",
+        states: Sequence[ops.BreakState | str] = (),
+        since: ops.Watermark | None = None,
+        page_size: int = 0,
+        cursor: str = "",
+    ) -> ops.ListBreaksResult:
+        """W9.11: ListBreaks."""
+        params = ops.ListBreaksParams(
+            account_id=account_id,
+            states=[_enum(ops.BreakState, value, "states") for value in states],
+            since=since,
+            page_size=page_size,
+            cursor=cursor,
+        )
+        return await self._operate(self._operations().ListBreaks, params)
+
+    async def list_account_figures(
+        self,
+        *,
+        account_id: str = "",
+        agreement: ops.MarginAgreementRef | None = None,
+        from_date: str = "",
+        to_date: str = "",
+        since: ops.Watermark | None = None,
+        at: ops.Watermark | None = None,
+        page_size: int = 0,
+        cursor: str = "",
+    ) -> ops.ListAccountFiguresResult:
+        """W9.12: ListAccountFigures."""
+        params = ops.ListAccountFiguresParams(
+            account_id=account_id,
+            agreement=agreement,
+            from_date=from_date,
+            to_date=to_date,
+            since=since,
+            at=at,
+            page_size=page_size,
+            cursor=cursor,
+        )
+        return await self._operate(self._operations().ListAccountFigures, params)
+
+    async def list_account_attributes(
+        self,
+        *,
+        account_id: str = "",
+        since: ops.Watermark | None = None,
+        page_size: int = 0,
+        cursor: str = "",
+    ) -> ops.ListAccountAttributesResult:
+        """W9.14: ListAccountAttributes."""
+        params = ops.ListAccountAttributesParams(
+            account_id=account_id,
+            since=since,
+            page_size=page_size,
+            cursor=cursor,
+        )
+        return await self._operate(self._operations().ListAccountAttributes, params)
+
     async def receive(
         self,
         *,
         statement_recorded: Callable[[Heard[ops.StatementRecordedEvent]], Awaitable[None]] | None = None,
         custodial_position_updated: Callable[[Heard[ops.CustodialPositionUpdatedEvent]], Awaitable[None]] | None = None,
+        position_changed: Callable[[Heard[ops.PositionChangedEvent]], Awaitable[None]] | None = None,
+        break_changed: Callable[[Heard[ops.BreakChangedEvent]], Awaitable[None]] | None = None,
+        account_figures_recorded: Callable[[Heard[ops.AccountFiguresRecordedEvent]], Awaitable[None]] | None = None,
+        account_attribute_changed: Callable[[Heard[ops.AccountAttributeChangedEvent]], Awaitable[None]] | None = None,
         seed: bool = True,
     ) -> None:
         """W4.3: hear the rows given a handler, each change once and in order,
@@ -485,6 +1269,10 @@ class Operations:
             {
                 "StatementRecorded": statement_recorded,
                 "CustodialPositionUpdated": custodial_position_updated,
+                "PositionChanged": position_changed,
+                "BreakChanged": break_changed,
+                "AccountFiguresRecorded": account_figures_recorded,
+                "AccountAttributeChanged": account_attribute_changed,
             },
             seed=seed,
         )
@@ -539,6 +1327,58 @@ DELIVERED: tuple[DeliveredRow, ...] = (
         account_param="account_id",
         records="positions",
         within="position",
+        record_journal="last_change",
+        record_account=("account_id",),
+    ),
+    DeliveredRow(
+        name="PositionChanged",
+        step="W9.8",
+        arm="position_changed",
+        message=ops.PositionChangedEvent,
+        account=("position", "account_id"),
+        caught_up_by="list_positions",
+        account_param="account_id",
+        records="positions",
+        within="position",
+        record_journal="last_change",
+        record_account=("account_id",),
+    ),
+    DeliveredRow(
+        name="BreakChanged",
+        step="W9.8",
+        arm="break_changed",
+        message=ops.BreakChangedEvent,
+        account=("break_record", "account_id"),
+        caught_up_by="list_breaks",
+        account_param="account_id",
+        records="breaks",
+        within="break_record",
+        record_journal="last_change",
+        record_account=("account_id",),
+    ),
+    DeliveredRow(
+        name="AccountFiguresRecorded",
+        step="W9.8",
+        arm="account_figures_recorded",
+        message=ops.AccountFiguresRecordedEvent,
+        account=("figures", "account_id"),
+        caught_up_by="list_account_figures",
+        account_param="account_id",
+        records="figures",
+        within="figures",
+        record_journal="last_change",
+        record_account=("account_id",),
+    ),
+    DeliveredRow(
+        name="AccountAttributeChanged",
+        step="W9.8",
+        arm="account_attribute_changed",
+        message=ops.AccountAttributeChangedEvent,
+        account=("attributes", "account_id"),
+        caught_up_by="list_account_attributes",
+        account_param="account_id",
+        records="attributes",
+        within="attributes",
         record_journal="last_change",
         record_account=("account_id",),
     ),

@@ -78,6 +78,34 @@ class CallFailed(MeridianError):
         self.detail = detail
 
 
+class CommandRefused(CallFailed):
+    """A component refused a command with a reason of its own, which the
+    plugin acts on by its code (spec/typed-sidecar-operations, section 7;
+    contract v8).
+
+    The book of record's refusals are these: `reason` is the
+    `meridian.v1.RefusalReason` the sidecar carried beside the refusal --
+    REFUSAL_REASON_OPENING_BALANCE_RECORDED for a second opening balance,
+    REFUSAL_REASON_ACTOR_REQUIRED for a justified act sent for nobody,
+    REFUSAL_REASON_BREAK_STATE for a break no longer open, and so on -- and
+    `reason_name` its name. Match the code, never the words, which may be
+    reworded at any release. A `CallFailed` whose `kind` is "refused", so a
+    plugin catching that still does. Not retried: the same command meets the
+    same refusal, and what to do is the plugin's -- re-read the book and say
+    what stands, or ask the person for what was missing.
+    """
+
+    def __init__(self, topic: str, detail: str, reason: int) -> None:
+        super().__init__(topic, "refused", detail)
+        self.reason = reason
+        from .v1 import sidecar_pb2
+
+        try:
+            self.reason_name = sidecar_pb2.RefusalReason.Name(reason)
+        except ValueError:
+            self.reason_name = str(reason)
+
+
 class NotLinked(CallFailed):
     """A row named an external account nobody has linked to one of the
     deployment's accounts (W6.4), so nothing was recorded for it.

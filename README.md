@@ -2,7 +2,7 @@
 
 The Python SDK for building [Open Meridian](https://open-meridian.com) plugins:
 the tools a trader has an AI agent build, and the bots and analytics a
-developer writes. Python 3.11 or newer. This is release 0.12.0; its reference
+developer writes. Python 3.11 or newer. This is release 0.13.0; its reference
 is at [open-meridian.dev](https://open-meridian.dev/api/python-sdk/).
 
 ## Start here
@@ -261,9 +261,14 @@ refused before anything is sent, naming the parameter.
 is signed to match, negative short; a venue reporting an account's long and
 short of one instrument apart is two calls, one on each side. A market value, a
 settle-date quantity, a holding's `cost_basis` (a total), `average_cost` (per
-unit, in the venue's unit), `lots` and `margin_requirement`, and every figure
-of a statement are optional: leave one out where the venue reports none, which
-is not zero, and never compute one from another. Where
+unit, in the venue's unit), `lots`, `margin_requirement`, `available_quantity`
+and `not_available_quantity` with the `available_basis` they are on, each
+encumbered sub-balance (`meridian.ReportedEncumbrance`: its kind, quantity and
+the source's own code verbatim, `OTHER` for one you cannot map), a statement's
+`security_interest`, and every figure of a statement are optional: leave one
+out where the venue reports none, which is not zero, and never compute one
+from another -- available is never the quantity less what is encumbered, and
+no sub-balances means none reported. Where
 the venue states no currency and you assume one, pass `currency_assumed=True`.
 Cash is a holding of the currency's cash instrument, which the security master
 names by `iso4217` (`meridian.Identifier(scheme="iso4217", value="USD")`).
@@ -346,6 +351,62 @@ store's numbers. `heard.own` says the plugin's own act caused the change, and
 store without handing on what it holds. The reads are typed methods too,
 `list_custodial_positions` and `list_statements`, within the read scope: an
 account outside it is refused, and an empty scope reads nothing.
+
+### The book of record
+
+The street holds what custodians say; the book of record holds what the firm
+says (contract v8). An account enters it once, with an opening balance a
+person answers for, and changes after that only by the book's own entries;
+an `operations` plugin compares it with the street and records each
+difference as a break, which a person resolves with a justified entry or
+closes. `portfolio`, `reporting`, `compliance` and `oms` read and hear it.
+
+```python
+reply = await plugin.record_opening_balance(
+    account_id=account,
+    as_of_date="2026-09-08",
+    sources=[meridian.OpeningSource(kind="custodian", name="Interactive Brokers",
+                                    as_of_date="2026-09-08", basis="trade_date")],
+    positions=[...],                   # each with its lots, as the custodian reports them
+    reason=reason,                     # the person's own words
+    idempotency_key=f"opening-balance:{account}:{statement_id}",
+    acting_for=request.caller.header,  # the person confirming it
+)
+```
+
+Each command answers after its entry commits, with every record it changed;
+the same `idempotency_key` again is answered as the first was and applies
+nothing. A break and the figures are findings, sent as the plugin itself; an
+opening balance, a break's cause and handling, and its resolution are a
+person's, sent `acting_for` them with a reason, as is
+`close_breaks_as_cleared`, citing the statement where the differences were
+gone. A message with a oneof takes one arm by keyword: a break's `position=`
+or `figure=`, a resolution's `adjustment=`, `reversal=`, `entries=` or
+`explanation=`, a basis adjustment's `cost_change=` or `stated_cost=`; two at
+once are refused naming the oneof. A position held under a placeholder
+instrument, its holding unresolved at the street, is flagged `placeholder`
+and moved onto the instrument when it is identified. What of a position
+cannot move is recorded from each statement with `record_encumbrances`, a
+finding sent as the plugin itself, the whole set per position; the position
+then carries its `encumbrances` and the `free_quantity` the book derives
+from them, on its `free_basis` (settled). The book refuses with a
+code, raised as `meridian.CommandRefused`; a different command under a key
+already used is `REFUSAL_REASON_IDEMPOTENCY_CONFLICT`:
+
+```python
+try:
+    await plugin.record_opening_balance(..., acting_for=caller.header)
+except meridian.CommandRefused as refused:
+    if refused.reason_name == "REFUSAL_REASON_OPENING_BALANCE_RECORDED":
+        ...  # already recorded: read it back and say so
+```
+
+The reads -- `list_positions` (by business date, at a watermark, or since
+one), `list_breaks`, `list_account_figures` and `list_account_attributes`,
+whose attributes carry the account's standing opening balance -- are within
+the read scope, and `receive` takes `position_changed`, `break_changed`,
+`account_figures_recorded` and `account_attribute_changed` handlers, each
+record delivered whole.
 
 ### Figures on Summary
 
@@ -431,6 +492,7 @@ carries libcst.
 | 0.10.0 to 0.10.1: pages answer HEAD and refuse a large body; `assert_no_account_data` looks for account data, not identities | only the pins move | |
 | 0.10.1 to 0.11.0: the SDK declares contract v6; a plugin may report figures on its Summary (`plugin.figures`, `meridian.Figure`); a reported health stands until reported again | only the pins move | |
 | 0.11.0 to 0.12.0: the SDK declares contract v7; `receive`, the street's reads, a statement's external account and figures per segment, a holding's cost and lots. Breaking | a statement's flat `buying_power`, `margin_requirement` and `maintenance_excess` into `figures=[StatementFigures(segment="", ...)]` | a statement naming no `external_account_id`, which a sidecar at v7 refuses: pass the external account it was read for, and its `institution` |
+| 0.12.0 to 0.13.0: the SDK declares contract v8; the book of record's operations, reads and deliveries, a oneof taken by keyword, `CommandRefused` with the book's codes, what of a holding cannot move, and the book's encumbrances with their free quantity | only the pins move | |
 
 `tests/migrations/` holds the plugins the migrations are recorded for, as
 written and as their migration leaves them, and `make check-migrations` holds

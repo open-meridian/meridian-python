@@ -119,6 +119,37 @@ class FakeOperations(operations_pb2_grpc.PluginOperationsServicer):
         )
         return await self._answer(request, answer, context)
 
+    # The book of record (contract v8): each command answered with its entry,
+    # each read from `store` where a test gives one.
+    async def RecordOpeningBalance(self, request, context):  # noqa: N802
+        return await self._answer(request, _entry("opening-balance"), context)
+
+    async def RecordBreak(self, request, context):  # noqa: N802
+        return await self._answer(request, _entry("break-recorded"), context)
+
+    async def RecordAccountFigures(self, request, context):  # noqa: N802
+        return await self._answer(request, _entry("figures-recorded"), context)
+
+    async def HandleBreak(self, request, context):  # noqa: N802
+        return await self._answer(request, _entry("break-handled"), context)
+
+    async def ResolveBreak(self, request, context):  # noqa: N802
+        return await self._answer(request, _entry("adjustment"), context)
+
+    async def CloseBreaksAsCleared(self, request, context):  # noqa: N802
+        return await self._answer(request, _entry("breaks-cleared"), context)
+
+    async def RecordEncumbrances(self, request, context):  # noqa: N802
+        return await self._answer(request, _entry("encumbrances-recorded"), context)
+
+    async def ListPositions(self, request, context):  # noqa: N802
+        self.reads.append(request)
+        return self.store.book_positions(request)  # type: ignore[union-attr]
+
+    async def ListBreaks(self, request, context):  # noqa: N802
+        self.reads.append(request)
+        return self.store.book_breaks(request)  # type: ignore[union-attr]
+
     async def ReadAccountsForLinking(self, request, context):  # noqa: N802
         answer = operations_pb2.ReadAccountsForLinkingResult(
             accounts=[
@@ -134,6 +165,14 @@ class FakeOperations(operations_pb2_grpc.PluginOperationsServicer):
             ]
         )
         return await self._answer(request, answer, context)
+
+
+def _entry(kind: str) -> object:
+    """The book's answer to a command: the entry it journalled."""
+    return operations_pb2.RecordOpeningBalanceResult(
+        entry=operations_pb2.EntryMeta(entry_id="ENT-1", kind=kind),
+        journal=operations_pb2.JournalRef(partition="P0", sequence=1),
+    )
 
 
 @dataclass

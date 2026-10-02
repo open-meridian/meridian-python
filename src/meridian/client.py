@@ -35,7 +35,15 @@ import grpc
 from meridian.plugin.v1 import operations_pb2_grpc
 from meridian.v1 import sidecar_pb2, sidecar_pb2_grpc
 
-from .errors import CallFailed, NoSidecar, NotGranted, NotLinked, NotRegistered, Refused
+from .errors import (
+    CallFailed,
+    CommandRefused,
+    NoSidecar,
+    NotGranted,
+    NotLinked,
+    NotRegistered,
+    Refused,
+)
 from .figures import Figure, listed, wire
 from .operations import Operations, _enum
 from .statements import checked
@@ -50,10 +58,11 @@ if TYPE_CHECKING:
 #: as an enum on a miss it reports, its pages each declared with the levels it
 #: serves, the level a session was opened at, the figures on its heartbeat,
 #: the stream of what its roles hear and the reads within its scope, and a
-#: statement naming its external account with its figures per segment -- and
-#: a newer sidecar still admits it. Raised with every contract revision that
-#: adds something a plugin can depend on.
-SCHEMA_VERSION = "v7"
+#: statement naming its external account with its figures per segment, and the
+#: book of record's operations with their refusal codes -- and a newer sidecar
+#: still admits it. Raised with every contract revision that adds something a
+#: plugin can depend on.
+SCHEMA_VERSION = "v8"
 
 #: Where a sidecar listens. Loopback, always: a sidecar reachable from another
 #: host is a way around the boundary it exists to enforce.
@@ -649,8 +658,12 @@ class Plugin(Operations):
             detail = failed.details() or ""
             if failed.code() is grpc.StatusCode.PERMISSION_DENIED:
                 raise NotGranted(operation, detail) from failed
-            if _reason(failed) == sidecar_pb2.REFUSAL_REASON_EXTERNAL_ACCOUNT_NOT_LINKED:
+            reason = _reason(failed)
+            if reason == sidecar_pb2.REFUSAL_REASON_EXTERNAL_ACCOUNT_NOT_LINKED:
                 raise NotLinked(operation, detail) from failed
+            coded = reason != sidecar_pb2.REFUSAL_REASON_UNSPECIFIED
+            if failed.code() is grpc.StatusCode.ABORTED and coded:
+                raise CommandRefused(operation, detail, reason) from failed
             kind = _OPERATION_FAILURES.get(failed.code())
             if kind is None:
                 raise

@@ -1,0 +1,38 @@
+# open-meridian 0.12.0 to 0.13.0: the SDK declares contract v8; the book of
+# record is written by an operations plugin and read and heard by five roles
+# (sdk-contract/the-book-holds-positions). Nothing a plugin calls changed, so
+# only the pins move.
+from = "0.12.0"
+to = "0.13.0"
+summary = """
+The SDK declares contract v8 (meridian.SCHEMA_VERSION). The book of record is
+the firm's own positions, breaks and figures, kept apart from the street's.
+An operations plugin writes it, within its write scope: record_opening_balance
+once per account, for a person (acting_for) with a reason; record_break and
+record_account_figures as itself, a finding; handle_break and resolve_break
+for a person, a resolution by an adjustment, a reversal, entries already
+recorded or an explanation; close_breaks_as_cleared for a person, citing the
+statement where the differences were gone. Each of these takes an
+idempotency_key the plugin derives from its source, so a retry after a lost
+reply is applied once. Five roles -- operations, portfolio, reporting,
+compliance and oms -- read it within their read scope (list_positions,
+list_breaks, list_account_figures but oms, list_account_attributes, whose
+attributes carry the account's standing opening balance) and hear it with
+plugin.receive(position_changed=..., break_changed=...,
+account_figures_recorded=..., account_attribute_changed=...); and
+resolve_instrument reads an instrument's record. A message with a oneof -- a
+break's subject, a cause's item, a resolution -- takes one arm by keyword, and
+two given at once are refused naming the oneof before anything is sent. The
+book's refusals raise meridian.CommandRefused, a CallFailed whose kind is
+"refused", carrying its code (reason, reason_name), as
+REFUSAL_REASON_OPENING_BALANCE_RECORDED for a second opening balance: match
+the code, never the words. A holding may state its available and
+not-available quantities with their basis, and each encumbered sub-balance
+(encumbrances=[meridian.ReportedEncumbrance(...)]), each as the statement
+says, never derived; an operations plugin records a position's encumbrances
+with record_encumbrances, and the book's positions carry them with the free
+quantity it derives. A plugin built on 0.13.0 is refused at
+registration by a sidecar that accepts only v7, naming both. Nothing a plugin
+calls changed, so only the pins move.
+"""
+breaking = false

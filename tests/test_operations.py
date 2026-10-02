@@ -629,6 +629,42 @@ async def test_a_holding_carries_its_cost_and_lots_as_reported(sidecar) -> None:
     assert not sent.lots[1].HasField("cost")
 
 
+async def test_a_holding_carries_what_cannot_move_as_reported(sidecar) -> None:
+    service, _ = sidecar
+    plugin = await connected(sidecar)
+    try:
+        await plugin.record_holding(
+            quantity=Decimal("12.5"),
+            available_quantity=Decimal("8.5"),
+            not_available_quantity=Decimal("4"),
+            available_basis="settled",
+            encumbrances=[
+                meridian.ReportedEncumbrance(
+                    kind="pledged",
+                    quantity=Decimal("4"),
+                    available=False,
+                    source_code="PLED",
+                    pledgee="the prime broker",
+                )
+            ],
+            external_account_id="ext-1",
+        )
+        await plugin.record_holding(quantity=Decimal("12.5"), external_account_id="ext-1")
+    finally:
+        await plugin.leave()
+    stated, silent = service.operations.sent
+    assert meridian.as_decimal(stated.available_quantity) == Decimal("8.5")
+    assert stated.available_basis == operations_pb2.AVAILABLE_BASIS_SETTLED
+    (encumbrance,) = stated.encumbrances
+    assert encumbrance.kind == operations_pb2.ENCUMBRANCE_KIND_PLEDGED
+    assert encumbrance.HasField("available") and not encumbrance.available
+    assert encumbrance.source_code == "PLED"
+    # Not stated: unset, never zero, never the holding's quantity.
+    assert not silent.HasField("available_quantity")
+    assert not silent.HasField("not_available_quantity")
+    assert list(silent.encumbrances) == []
+
+
 @pytest.mark.parametrize(
     ("given", "refusal", "says"),
     [

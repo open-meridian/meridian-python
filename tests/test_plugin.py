@@ -50,22 +50,24 @@ async def test_registering_sends_no_identity(sidecar: tuple[FakeSidecar, str]) -
 async def test_the_sdk_declares_the_contract_it_was_built_for(
     sidecar: tuple[FakeSidecar, str],
 ) -> None:
-    """v7: typed delivery, reads within the scope and a statement naming its
+    """v8 on v7: typed delivery, reads within the scope and a statement naming its
     external account with its figures per segment
     (sdk-contract/plugins-read-positions-and-prices), after v6's figures,
     v5's levels and one list of pages, v4's asset class as an enum and v3's
     links and refusal code.
 
-    A sidecar from before it, still at v6, serves no Receive, so it refuses
-    the plugin at registration, naming both.
+    v8 is the book of record: its commands, reads and deliveries, a oneof
+    taken by keyword, and the book's refusal codes (sdk-contract/the-book-holds-positions).
+    A sidecar from before it, still at v7, has none of the book's operations,
+    so it refuses the plugin at registration, naming both.
     """
     service, address = sidecar
     plugin = await meridian.connect(address, heartbeat=False)
     await plugin.leave()
 
     (sent,) = service.registered
-    assert meridian.SCHEMA_VERSION == "v7"
-    assert sent.schema_version == "v7"
+    assert meridian.SCHEMA_VERSION == "v8"
+    assert sent.schema_version == "v8"
 
 
 async def test_identity_and_grants_come_back(sidecar: tuple[FakeSidecar, str]) -> None:

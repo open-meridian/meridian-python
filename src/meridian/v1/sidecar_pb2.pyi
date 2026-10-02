@@ -32,6 +32,15 @@ class RefusalReason(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
     REFUSAL_REASON_UNSPECIFIED: _ClassVar[RefusalReason]
     REFUSAL_REASON_EXTERNAL_ACCOUNT_NOT_LINKED: _ClassVar[RefusalReason]
+    REFUSAL_REASON_ACTOR_REQUIRED: _ClassVar[RefusalReason]
+    REFUSAL_REASON_REASON_REQUIRED: _ClassVar[RefusalReason]
+    REFUSAL_REASON_OPENING_BALANCE_RECORDED: _ClassVar[RefusalReason]
+    REFUSAL_REASON_NO_OPENING_BALANCE: _ClassVar[RefusalReason]
+    REFUSAL_REASON_BEFORE_OPENING_BALANCE: _ClassVar[RefusalReason]
+    REFUSAL_REASON_LOTS_UNBALANCED: _ClassVar[RefusalReason]
+    REFUSAL_REASON_BREAK_STATE: _ClassVar[RefusalReason]
+    REFUSAL_REASON_LATER_ENTRIES_STAND: _ClassVar[RefusalReason]
+    REFUSAL_REASON_IDEMPOTENCY_CONFLICT: _ClassVar[RefusalReason]
 ACCESS_LEVEL_UNSPECIFIED: AccessLevel
 ACCESS_LEVEL_READ: AccessLevel
 ACCESS_LEVEL_WRITE: AccessLevel
@@ -47,6 +56,15 @@ FIGURE_STATE_WARN: FigureState
 FIGURE_STATE_ERROR: FigureState
 REFUSAL_REASON_UNSPECIFIED: RefusalReason
 REFUSAL_REASON_EXTERNAL_ACCOUNT_NOT_LINKED: RefusalReason
+REFUSAL_REASON_ACTOR_REQUIRED: RefusalReason
+REFUSAL_REASON_REASON_REQUIRED: RefusalReason
+REFUSAL_REASON_OPENING_BALANCE_RECORDED: RefusalReason
+REFUSAL_REASON_NO_OPENING_BALANCE: RefusalReason
+REFUSAL_REASON_BEFORE_OPENING_BALANCE: RefusalReason
+REFUSAL_REASON_LOTS_UNBALANCED: RefusalReason
+REFUSAL_REASON_BREAK_STATE: RefusalReason
+REFUSAL_REASON_LATER_ENTRIES_STAND: RefusalReason
+REFUSAL_REASON_IDEMPOTENCY_CONFLICT: RefusalReason
 
 class RegisterRequest(_message.Message):
     __slots__ = ("schema_version", "interface", "settings", "reads_external_accounts")

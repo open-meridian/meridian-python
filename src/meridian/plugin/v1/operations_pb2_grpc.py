@@ -74,6 +74,11 @@ class PluginOperationsStub(object):
                 request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReportMissingInstrumentParams.SerializeToString,
                 response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.Published.FromString,
                 _registered_method=True)
+        self.ResolveInstrument = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ResolveInstrument',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ResolveInstrumentParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ResolveInstrumentResult.FromString,
+                _registered_method=True)
         self.LinkExternalAccount = channel.unary_unary(
                 '/meridian.plugin.v1.PluginOperations/LinkExternalAccount',
                 request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.LinkExternalAccountParams.SerializeToString,
@@ -83,6 +88,61 @@ class PluginOperationsStub(object):
                 '/meridian.plugin.v1.PluginOperations/ReadAccountsForLinking',
                 request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadAccountsForLinkingParams.SerializeToString,
                 response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadAccountsForLinkingResult.FromString,
+                _registered_method=True)
+        self.RecordOpeningBalance = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/RecordOpeningBalance',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordOpeningBalanceParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordOpeningBalanceResult.FromString,
+                _registered_method=True)
+        self.RecordBreak = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/RecordBreak',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordBreakParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordBreakResult.FromString,
+                _registered_method=True)
+        self.RecordAccountFigures = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/RecordAccountFigures',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordAccountFiguresParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordAccountFiguresResult.FromString,
+                _registered_method=True)
+        self.RecordEncumbrances = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/RecordEncumbrances',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordEncumbrancesParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordEncumbrancesResult.FromString,
+                _registered_method=True)
+        self.HandleBreak = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/HandleBreak',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.HandleBreakParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.HandleBreakResult.FromString,
+                _registered_method=True)
+        self.ResolveBreak = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ResolveBreak',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ResolveBreakParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ResolveBreakResult.FromString,
+                _registered_method=True)
+        self.CloseBreaksAsCleared = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/CloseBreaksAsCleared',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.CloseBreaksAsClearedParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.CloseBreaksAsClearedResult.FromString,
+                _registered_method=True)
+        self.ListPositions = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ListPositions',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListPositionsParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListPositionsResult.FromString,
+                _registered_method=True)
+        self.ListBreaks = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ListBreaks',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListBreaksParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListBreaksResult.FromString,
+                _registered_method=True)
+        self.ListAccountFigures = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ListAccountFigures',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListAccountFiguresParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListAccountFiguresResult.FromString,
+                _registered_method=True)
+        self.ListAccountAttributes = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ListAccountAttributes',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListAccountAttributesParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListAccountAttributesResult.FromString,
                 _registered_method=True)
         self.Receive = channel.unary_stream(
                 '/meridian.plugin.v1.PluginOperations/Receive',
@@ -150,6 +210,13 @@ class PluginOperationsServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def ResolveInstrument(self, request, context):
+        """W3.6: platform.reference.query.resolve-instrument (query).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def LinkExternalAccount(self, request, context):
         """W6.4: platform.config.command.link-external-account (command).
         """
@@ -159,6 +226,83 @@ class PluginOperationsServicer(object):
 
     def ReadAccountsForLinking(self, request, context):
         """W6.4: platform.config.query.accounts (query).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RecordOpeningBalance(self, request, context):
+        """W9.1: platform.book.command.record-opening-balance (command).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RecordBreak(self, request, context):
+        """W9.4: platform.book.command.record-break (command).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RecordAccountFigures(self, request, context):
+        """W9.5: platform.book.command.record-account-figures (command).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RecordEncumbrances(self, request, context):
+        """W9.15: platform.book.command.record-encumbrances (command).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def HandleBreak(self, request, context):
+        """W9.6: platform.book.command.handle-break (command).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ResolveBreak(self, request, context):
+        """W9.7: platform.book.command.resolve-break (command).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def CloseBreaksAsCleared(self, request, context):
+        """W9.7: platform.book.command.close-breaks-as-cleared (command).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListPositions(self, request, context):
+        """W9.10: platform.book.query.list-positions (query).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListBreaks(self, request, context):
+        """W9.11: platform.book.query.list-breaks (query).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListAccountFigures(self, request, context):
+        """W9.12: platform.book.query.list-account-figures (query).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListAccountAttributes(self, request, context):
+        """W9.14: platform.book.query.list-account-attributes (query).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -214,6 +358,11 @@ def add_PluginOperationsServicer_to_server(servicer, server):
                     request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReportMissingInstrumentParams.FromString,
                     response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.Published.SerializeToString,
             ),
+            'ResolveInstrument': grpc.unary_unary_rpc_method_handler(
+                    servicer.ResolveInstrument,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ResolveInstrumentParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ResolveInstrumentResult.SerializeToString,
+            ),
             'LinkExternalAccount': grpc.unary_unary_rpc_method_handler(
                     servicer.LinkExternalAccount,
                     request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.LinkExternalAccountParams.FromString,
@@ -223,6 +372,61 @@ def add_PluginOperationsServicer_to_server(servicer, server):
                     servicer.ReadAccountsForLinking,
                     request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadAccountsForLinkingParams.FromString,
                     response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadAccountsForLinkingResult.SerializeToString,
+            ),
+            'RecordOpeningBalance': grpc.unary_unary_rpc_method_handler(
+                    servicer.RecordOpeningBalance,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordOpeningBalanceParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordOpeningBalanceResult.SerializeToString,
+            ),
+            'RecordBreak': grpc.unary_unary_rpc_method_handler(
+                    servicer.RecordBreak,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordBreakParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordBreakResult.SerializeToString,
+            ),
+            'RecordAccountFigures': grpc.unary_unary_rpc_method_handler(
+                    servicer.RecordAccountFigures,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordAccountFiguresParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordAccountFiguresResult.SerializeToString,
+            ),
+            'RecordEncumbrances': grpc.unary_unary_rpc_method_handler(
+                    servicer.RecordEncumbrances,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordEncumbrancesParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordEncumbrancesResult.SerializeToString,
+            ),
+            'HandleBreak': grpc.unary_unary_rpc_method_handler(
+                    servicer.HandleBreak,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.HandleBreakParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.HandleBreakResult.SerializeToString,
+            ),
+            'ResolveBreak': grpc.unary_unary_rpc_method_handler(
+                    servicer.ResolveBreak,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ResolveBreakParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ResolveBreakResult.SerializeToString,
+            ),
+            'CloseBreaksAsCleared': grpc.unary_unary_rpc_method_handler(
+                    servicer.CloseBreaksAsCleared,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.CloseBreaksAsClearedParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.CloseBreaksAsClearedResult.SerializeToString,
+            ),
+            'ListPositions': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListPositions,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListPositionsParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListPositionsResult.SerializeToString,
+            ),
+            'ListBreaks': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListBreaks,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListBreaksParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListBreaksResult.SerializeToString,
+            ),
+            'ListAccountFigures': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListAccountFigures,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListAccountFiguresParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListAccountFiguresResult.SerializeToString,
+            ),
+            'ListAccountAttributes': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListAccountAttributes,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListAccountAttributesParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListAccountAttributesResult.SerializeToString,
             ),
             'Receive': grpc.unary_stream_rpc_method_handler(
                     servicer.Receive,
@@ -457,6 +661,33 @@ class PluginOperations(object):
             _registered_method=True)
 
     @staticmethod
+    def ResolveInstrument(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ResolveInstrument',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ResolveInstrumentParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ResolveInstrumentResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
     def LinkExternalAccount(request,
             target,
             options=(),
@@ -500,6 +731,303 @@ class PluginOperations(object):
             '/meridian.plugin.v1.PluginOperations/ReadAccountsForLinking',
             meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadAccountsForLinkingParams.SerializeToString,
             meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadAccountsForLinkingResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RecordOpeningBalance(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/RecordOpeningBalance',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordOpeningBalanceParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordOpeningBalanceResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RecordBreak(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/RecordBreak',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordBreakParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordBreakResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RecordAccountFigures(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/RecordAccountFigures',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordAccountFiguresParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordAccountFiguresResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RecordEncumbrances(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/RecordEncumbrances',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordEncumbrancesParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordEncumbrancesResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def HandleBreak(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/HandleBreak',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.HandleBreakParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.HandleBreakResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ResolveBreak(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ResolveBreak',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ResolveBreakParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ResolveBreakResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def CloseBreaksAsCleared(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/CloseBreaksAsCleared',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.CloseBreaksAsClearedParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.CloseBreaksAsClearedResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListPositions(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ListPositions',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListPositionsParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListPositionsResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListBreaks(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ListBreaks',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListBreaksParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListBreaksResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListAccountFigures(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ListAccountFigures',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListAccountFiguresParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListAccountFiguresResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListAccountAttributes(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ListAccountAttributes',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListAccountAttributesParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListAccountAttributesResult.FromString,
             options,
             channel_credentials,
             insecure,
