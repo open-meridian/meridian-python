@@ -449,9 +449,8 @@ async def test_the_client_heartbeats_without_being_asked(
 
     plugin = await meridian.connect(address)
     try:
-        await asyncio.sleep(0.1)
-        assert service.heartbeats, "no heartbeat was sent"
-        assert all(beat.healthy for beat in service.heartbeats)
+        beats = await service.beats_from(0)
+        assert all(beat.healthy for beat in beats)
     finally:
         await plugin.leave()
 
@@ -467,19 +466,15 @@ async def test_a_reported_health_stands_until_reported_again(
     plugin = await meridian.connect(address)
     try:
         await plugin.report(healthy=False, detail="brokerage credentials rejected")
-        service.heartbeats.clear()
-        await asyncio.sleep(0.1)
-        assert len(service.heartbeats) > 1
+        beats = await service.beats_from(service.mark())
         assert all(
             (beat.healthy, beat.detail) == (False, "brokerage credentials rejected")
-            for beat in service.heartbeats
+            for beat in beats
         )
 
         await plugin.report(healthy=True)
-        service.heartbeats.clear()
-        await asyncio.sleep(0.1)
-        assert service.heartbeats
-        assert all((beat.healthy, beat.detail) == (True, "") for beat in service.heartbeats)
+        beats = await service.beats_from(service.mark())
+        assert all((beat.healthy, beat.detail) == (True, "") for beat in beats)
     finally:
         await plugin.leave()
 
@@ -499,10 +494,8 @@ async def test_figures_refused_leave_the_health_as_it_was(
                 detail="never sent",
                 figures=[meridian.Figure(f"F{i}", i) for i in range(9)],
             )
-        service.heartbeats.clear()
-        await asyncio.sleep(0.1)
-        assert service.heartbeats
-        assert all((beat.healthy, beat.detail) == (True, "") for beat in service.heartbeats)
+        beats = await service.beats_from(service.mark())
+        assert all((beat.healthy, beat.detail) == (True, "") for beat in beats)
     finally:
         await plugin.leave()
 

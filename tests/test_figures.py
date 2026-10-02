@@ -9,7 +9,6 @@ same words whichever side caught it.
 
 from __future__ import annotations
 
-import asyncio
 from datetime import UTC, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
@@ -211,16 +210,12 @@ async def test_the_heartbeat_carries_the_figures_as_they_stand(
         figures = [Figure("Connections", 3, state="warn"), Figure("Last read", READ_AT)]
         plugin.figures = figures
         assert plugin.figures == tuple(figures)
-        service.heartbeats.clear()
-        await asyncio.sleep(0.1)
-        assert len(service.heartbeats) > 1
-        assert all(beat.figures == sent(*figures) for beat in service.heartbeats)
+        beats = await service.beats_from(service.mark())
+        assert all(beat.figures == sent(*figures) for beat in beats)
 
         plugin.figures = []  # none clears them
-        service.heartbeats.clear()
-        await asyncio.sleep(0.1)
-        assert service.heartbeats
-        assert all(not beat.figures for beat in service.heartbeats)
+        beats = await service.beats_from(service.mark())
+        assert all(not beat.figures for beat in beats)
     finally:
         await plugin.leave()
 

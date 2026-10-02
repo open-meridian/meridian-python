@@ -194,6 +194,9 @@ class FakeSidecar(sidecar_pb2_grpc.SidecarServiceServicer):
     heartbeats: list[sidecar_pb2.HeartbeatRequest] = field(default_factory=list)
     left: list[sidecar_pb2.LeaveRequest] = field(default_factory=list)
     operations: FakeOperations = field(default_factory=FakeOperations)
+    # Told of each heartbeat as it is heard, so a test waits for the beats it
+    # asserts on instead of sleeping and counting what happened to arrive.
+    beat: asyncio.Condition = field(default_factory=asyncio.Condition, repr=False)
 
     async def Register(  # noqa: N802 - the generated name
         self, request: sidecar_pb2.RegisterRequest, context: grpc.aio.ServicerContext
@@ -233,7 +236,28 @@ class FakeSidecar(sidecar_pb2_grpc.SidecarServiceServicer):
         self, request: sidecar_pb2.HeartbeatRequest, context: grpc.aio.ServicerContext
     ) -> sidecar_pb2.HeartbeatReply:
         self.heartbeats.append(request)
+        async with self.beat:
+            self.beat.notify_all()
         return sidecar_pb2.HeartbeatReply()
+
+    def mark(self) -> int:
+        """Where the heartbeats built from now on begin.
+
+        Past those already heard, and past one more: the beat the plugin's
+        loop may have in flight, built from what stood before. The loop awaits
+        each beat before it builds the next, so there is never more than one.
+        """
+        return len(self.heartbeats) + 1
+
+    async def beats_from(self, mark: int, count: int = 2) -> list[sidecar_pb2.HeartbeatRequest]:
+        """The heartbeats heard from `mark` on, once `count` of them have been.
+
+        The timeout bounds a plugin that never beats; it is not a guess at how
+        long beats take, so a slow machine waits longer rather than failing.
+        """
+        async with asyncio.timeout(10), self.beat:
+            await self.beat.wait_for(lambda: len(self.heartbeats) >= mark + count)
+        return self.heartbeats[mark:]
 
     async def Leave(  # noqa: N802
         self, request: sidecar_pb2.LeaveRequest, context: grpc.aio.ServicerContext
