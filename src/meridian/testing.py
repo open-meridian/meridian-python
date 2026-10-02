@@ -58,12 +58,16 @@ def caller_header(
     subject: str = "local|ada",
     display_name: str = "Ada Park",
     deployment_admin: bool = False,
+    delegation_id: str = "",
+    client_name: str = "",
 ) -> str:
     """The `Meridian-Caller` header a sidecar forwards for a session at
     `level`, with the accounts cut to it: `read` and `write` are those the
     person may read and write through the plugin (write included in read).
-    No level is a session that holds nothing. Unsigned: only a plugin's own
-    tests read it, never a sidecar."""
+    No level is a session that holds nothing. `delegation_id` and
+    `client_name` are a person's who came through a client, such as the CLI,
+    rather than a browser (contract v9). Unsigned: only a plugin's own tests
+    read it, never a sidecar."""
     at = _levels(level, "the session")[0] if level else sidecar_pb2.ACCESS_LEVEL_UNSPECIFIED
     writes = sorted(set(write))
     reads = sorted(set(read) | set(writes))
@@ -78,6 +82,8 @@ def caller_header(
         read_account_ids=reads,
         write_account_ids=writes,
         deployment_admin=deployment_admin,
+        delegation_id=delegation_id,
+        client_name=client_name,
     )
     assertion = sidecar_pb2.CallerAssertion(claims=claims.SerializeToString())
     return base64.urlsafe_b64encode(assertion.SerializeToString()).decode().rstrip("=")

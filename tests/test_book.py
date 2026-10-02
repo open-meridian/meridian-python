@@ -1,4 +1,4 @@
-"""The book of record, end to end, through this SDK and real sidecars (contract v8).
+"""The book of record, end to end, through this SDK and real sidecars (contracts v8 and v9).
 
 Run by `make e2e-book` in meridian-core, which brings up the street store, the
 book, the instrument store and the conductor across a broker, four sidecars in
@@ -10,8 +10,10 @@ container beside them. Its accounts and grants are e2e/book/accounts.sql's.
 What it holds, in one narrative, since each step reads what the last wrote:
 
 day 1, a custody plugin records an account's statement; an operations plugin
-composes the account's opening balance from the street and records it for a
-person, who answers for it; a reporting plugin reads the positions, lots and
+sends an opening balance missing what downstream needs, refused naming each
+field (contract v9), then composes the complete one from the street and
+records it for a person, who answers for it, acting through a client on a
+delegation; a reporting plugin reads the positions, lots and
 pending settlements, and the account's standing opening balance; a second
 opening balance is refused by its code, a duplicate by its key is answered as
 the first, and one sent for nobody is refused;
@@ -146,9 +148,17 @@ def _sign(seed: bytes, message: bytes) -> bytes:
     return big_r + int.to_bytes((r + h * a) % _L, 32, "little")
 
 
-def person(write: list[str], *, instance: str = "operations-test-1") -> str:
+def person(
+    write: list[str],
+    *,
+    instance: str = "operations-test-1",
+    delegation_id: str = "",
+    client_name: str = "",
+) -> str:
     """The Meridian-Caller header for a person at write on `write`, signed
-    with the run's key as the dashboard signs one: under a minute, once."""
+    with the run's key as the dashboard signs one: under a minute, once; with
+    the delegation and client they came through, where they came through one
+    (contract v9)."""
     if not _KEYS:
         raise RuntimeError("MERIDIAN_BOOK_KEYS names no key; `make e2e-book` mounts one")
     keys = Path(_KEYS)
@@ -164,6 +174,8 @@ def person(write: list[str], *, instance: str = "operations-test-1") -> str:
         issued_at_ns=now - 1_000_000_000,
         expires_at_ns=now + 50_000_000_000,
         assertion_id=str(uuid.uuid4()),
+        delegation_id=delegation_id,
+        client_name=client_name,
     ).SerializeToString()
     assertion = sidecar_pb2.CallerAssertion(
         claims=claims,
@@ -226,9 +238,10 @@ async def until(what: str, check: Any, seconds: float = 20) -> Any:
 
 
 def opening_from(street: list[Any]) -> list[meridian.OpeningPosition]:
-    """An opening balance as the sample operations plugin composes one: each
-    custodial position as reported, its settled quantity where stated, its
-    lots as the custodian lists them or one of unknown cost; cash, no lots."""
+    """An opening balance as the sample operations plugin composes one, once
+    complete: each custodial position as reported, its settled quantity, its
+    lots as the custodian lists them with their cost and acquisition date;
+    cash, no lots. Nothing here makes up what the street lacks."""
     positions = []
     for held in street:
         quantity = meridian.as_decimal(held.quantity)
@@ -332,6 +345,48 @@ async def test_the_book_of_record_end_to_end() -> None:
             ],
         )
         key = f"opening-balance:{BROKERAGE}:{day_one}"
+
+        # Incomplete: AAPL with no settled quantity and a lot of unknown
+        # cost, which v8 admitted. Refused, nothing recorded, each missing
+        # field named by its path (contract v9).
+        with pytest.raises(CommandRefused) as incomplete:
+            await operations.record_opening_balance(
+                account_id=BROKERAGE,
+                as_of_date="2026-09-08",
+                sources=[source],
+                positions=[
+                    meridian.OpeningPosition(
+                        instrument_id=aapl,
+                        side="long",
+                        trade_date_quantity=Decimal("12.5"),
+                        lots=[
+                            meridian.OpeningLot(
+                                quantity=Decimal("12.5"),
+                                terms=meridian.LotTerms(
+                                    acquired_date="2025-03-14", source="opening_balance"
+                                ),
+                            )
+                        ],
+                    ),
+                    meridian.OpeningPosition(
+                        instrument_id=usd,
+                        side="long",
+                        trade_date_quantity=Decimal("1000.00"),
+                        settled_quantity=Decimal("1000.00"),
+                    ),
+                ],
+                reason="Opening balance from the statement of 2026-09-08, unfinished",
+                idempotency_key=f"{key}:incomplete",
+                acting_for=person([BROKERAGE, FUTURES]),
+            )
+        assert incomplete.value.reason == sidecar_pb2.REFUSAL_REASON_INCOMPLETE
+        assert incomplete.value.fields == (
+            "positions[0].settled_quantity",
+            "positions[0].lots[0].terms.cost",
+        )
+
+        # Complete, confirmed by the person through a client on a
+        # delegation: admitted, and the person stays the actor (W4.9).
         recorded = await operations.record_opening_balance(
             account_id=BROKERAGE,
             as_of_date="2026-09-08",
@@ -339,7 +394,11 @@ async def test_the_book_of_record_end_to_end() -> None:
             positions=opening_from(list(street.positions)),
             reason="Opening balance from the statement of 2026-09-08, confirmed",
             idempotency_key=key,
-            acting_for=person([BROKERAGE, FUTURES]),
+            acting_for=person(
+                [BROKERAGE, FUTURES],
+                delegation_id="DLG-e2e-book",
+                client_name="meridian on e2e",
+            ),
         )
         assert recorded.entry.kind == "opening-balance"
         assert recorded.entry.actor.person.subject == PERSON

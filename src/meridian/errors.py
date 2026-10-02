@@ -81,7 +81,7 @@ class CallFailed(MeridianError):
 class CommandRefused(CallFailed):
     """A component refused a command with a reason of its own, which the
     plugin acts on by its code (spec/typed-sidecar-operations, section 7;
-    contract v8).
+    contract v8, the fields from v9).
 
     The book of record's refusals are these: `reason` is the
     `meridian.v1.RefusalReason` the sidecar carried beside the refusal --
@@ -93,11 +93,22 @@ class CommandRefused(CallFailed):
     plugin catching that still does. Not retried: the same command meets the
     same refusal, and what to do is the plugin's -- re-read the book and say
     what stands, or ask the person for what was missing.
+
+    `fields` names what was missing (contract v9): for
+    REFUSAL_REASON_INCOMPLETE, the book's refusal of an entry lacking what tax
+    tracking, valuation, confirmation or settlement need, each field the
+    command left out by its path in the call's parameters --
+    `positions[0].settled_quantity`, `positions[1].lots[0].terms.cost`,
+    `adjustment.lines[0].opens_lot.acquired_date` -- so a plugin shows the
+    person, per position, what to supply. Empty for every other refusal.
     """
 
-    def __init__(self, topic: str, detail: str, reason: int) -> None:
+    def __init__(
+        self, topic: str, detail: str, reason: int, *, fields: tuple[str, ...] = ()
+    ) -> None:
         super().__init__(topic, "refused", detail)
         self.reason = reason
+        self.fields = fields
         from .v1 import sidecar_pb2
 
         try:

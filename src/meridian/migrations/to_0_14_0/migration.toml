@@ -1,0 +1,29 @@
+# open-meridian 0.13.0 to 0.14.0: the SDK declares contract v9; the book names
+# what an incomplete entry left out, and a caller names the delegation it came
+# through (sdk-contract/the-book-refuses-what-downstream-cannot-use,
+# sdk-contract/delegations-at-the-deployment-contract). Nothing a plugin calls
+# changed, so only the pins move.
+from = "0.13.0"
+to = "0.14.0"
+summary = """
+The SDK declares contract v9 (meridian.SCHEMA_VERSION). The book refuses an
+entry missing what tax tracking, valuation, confirmation or settlement need:
+an opening position's settled quantity, each pending quantity with its value
+date, its lots but on cash, each lot's quantity, cost and acquisition date,
+and a named source; and every lot an adjustment opens, its cost and
+acquisition date. The refusal is meridian.CommandRefused with
+REFUSAL_REASON_INCOMPLETE, and CommandRefused.fields names each missing field
+by its path in the call (positions[0].settled_quantity,
+positions[1].lots[0].terms.cost, adjustment.lines[0].opens_lot.acquired_date), so
+an operations plugin shows the person what to supply before Confirm. A lot of
+unknown cost and the not-stated settlement bucket are no longer admitted,
+whatever SDK the plugin was built on: a plugin that sent either completes the
+entry first. A meridian.Caller who came through a client on a delegation --
+the CLI, their own agent, an MCP client -- carries delegation_id and
+client_name (Caller.through_a_client), both empty for a browser; the person
+stays the actor, and the sidecar stamps the delegation beside them on what it
+sends for them. A plugin built on 0.14.0 is refused at registration by a
+sidecar that accepts only v8, naming both. Nothing a plugin calls changed, so
+only the pins move.
+"""
+breaking = false

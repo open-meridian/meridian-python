@@ -337,6 +337,51 @@ async def test_the_books_refusal_is_raised_by_its_code(sidecar, reason: int) -> 
     assert caught.value.detail == "worded any way at all"
 
 
+async def test_an_incomplete_entry_names_each_field_it_left_out(sidecar) -> None:
+    """Contract v9: the book refuses an entry missing what downstream needs,
+    and the refusal names each field by its path in the call, beside the
+    code, so a plugin shows the person what to supply."""
+    service, _ = sidecar
+    service.operations.refuse = (grpc.StatusCode.ABORTED, "the opening balance is incomplete")
+    missing = ("positions[0].settled_quantity", "positions[1].lots[0].terms.cost")
+    service.operations.refuse_metadata = (
+        (
+            "meridian-refusal-bin",
+            sidecar_pb2.Refusal(
+                reason=sidecar_pb2.REFUSAL_REASON_INCOMPLETE, fields=missing
+            ).SerializeToString(),
+        ),
+    )
+    plugin = await connected(sidecar)
+    try:
+        with pytest.raises(CommandRefused) as caught:
+            await plugin.record_opening_balance(account_id="ACC-1", reason="r")
+    finally:
+        await plugin.leave()
+    assert caught.value.reason_name == "REFUSAL_REASON_INCOMPLETE"
+    assert caught.value.fields == missing
+
+
+async def test_a_refusal_naming_nothing_missing_has_no_fields(sidecar) -> None:
+    service, _ = sidecar
+    service.operations.refuse = (grpc.StatusCode.ABORTED, "standing")
+    service.operations.refuse_metadata = (
+        (
+            "meridian-refusal-bin",
+            sidecar_pb2.Refusal(
+                reason=sidecar_pb2.REFUSAL_REASON_OPENING_BALANCE_RECORDED
+            ).SerializeToString(),
+        ),
+    )
+    plugin = await connected(sidecar)
+    try:
+        with pytest.raises(CommandRefused) as caught:
+            await plugin.record_opening_balance(account_id="ACC-1", reason="r")
+    finally:
+        await plugin.leave()
+    assert caught.value.fields == ()
+
+
 async def test_an_abort_with_no_code_is_still_a_handler_error(sidecar) -> None:
     service, _ = sidecar
     service.operations.refuse = (grpc.StatusCode.ABORTED, "no break BRK-9 in ACC-1")
@@ -350,8 +395,8 @@ async def test_an_abort_with_no_code_is_still_a_handler_error(sidecar) -> None:
     assert caught.value.kind == "handler error"
 
 
-def test_the_sdk_declares_contract_v8() -> None:
-    assert meridian.SCHEMA_VERSION == "v8"
+def test_the_sdk_declares_contract_v9() -> None:
+    assert meridian.SCHEMA_VERSION == "v9"
 
 
 def test_every_row_of_the_book_is_heard_with_a_handler_of_its_own() -> None:

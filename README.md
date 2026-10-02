@@ -2,7 +2,7 @@
 
 The Python SDK for building [Open Meridian](https://open-meridian.com) plugins:
 the tools a trader has an AI agent build, and the bots and analytics a
-developer writes. Python 3.11 or newer. This is release 0.13.0; its reference
+developer writes. Python 3.11 or newer. This is release 0.14.0; its reference
 is at [open-meridian.dev](https://open-meridian.dev/api/python-sdk/).
 
 ## Start here
@@ -83,6 +83,11 @@ if caller.may_write("ACC-1"):
 every command sent for the person again, whatever the plugin believes: it
 admits one only in a session at `write`. `caller.deployment_admin` opens no
 page; it says only that the person may name a new account when linking.
+A person who came through a client on a delegation -- the CLI, their own
+agent, an MCP client -- rather than a browser carries `caller.delegation_id`
+and `caller.client_name` (`caller.through_a_client`); both are empty for a
+browser. The person stays the actor, and the sidecar stamps the delegation
+beside them on every command sent for them (contract v9).
 `meridian.TagAccess` and `Caller.access`, the same access tag by tag, are
 gone, and say so when reached for.
 
@@ -391,7 +396,13 @@ finding sent as the plugin itself, the whole set per position; the position
 then carries its `encumbrances` and the `free_quantity` the book derives
 from them, on its `free_basis` (settled). The book refuses with a
 code, raised as `meridian.CommandRefused`; a different command under a key
-already used is `REFUSAL_REASON_IDEMPOTENCY_CONFLICT`:
+already used is `REFUSAL_REASON_IDEMPOTENCY_CONFLICT`. From contract v9 the
+book refuses an entry missing what tax tracking, valuation, confirmation or
+settlement need -- an opening position's settled quantity, a pending
+quantity's value date, its lots (but cash's), a lot's cost or acquisition
+date, a named source -- with `REFUSAL_REASON_INCOMPLETE`, each missing field
+in `refused.fields` by its path in the call; a lot of unknown cost and the
+not-stated settlement bucket are no longer admitted:
 
 ```python
 try:
@@ -399,6 +410,8 @@ try:
 except meridian.CommandRefused as refused:
     if refused.reason_name == "REFUSAL_REASON_OPENING_BALANCE_RECORDED":
         ...  # already recorded: read it back and say so
+    elif refused.reason_name == "REFUSAL_REASON_INCOMPLETE":
+        ...  # show what is missing: ("positions[0].settled_quantity", ...)
 ```
 
 The reads -- `list_positions` (by business date, at a watermark, or since
@@ -493,6 +506,7 @@ carries libcst.
 | 0.10.1 to 0.11.0: the SDK declares contract v6; a plugin may report figures on its Summary (`plugin.figures`, `meridian.Figure`); a reported health stands until reported again | only the pins move | |
 | 0.11.0 to 0.12.0: the SDK declares contract v7; `receive`, the street's reads, a statement's external account and figures per segment, a holding's cost and lots. Breaking | a statement's flat `buying_power`, `margin_requirement` and `maintenance_excess` into `figures=[StatementFigures(segment="", ...)]` | a statement naming no `external_account_id`, which a sidecar at v7 refuses: pass the external account it was read for, and its `institution` |
 | 0.12.0 to 0.13.0: the SDK declares contract v8; the book of record's operations, reads and deliveries, a oneof taken by keyword, `CommandRefused` with the book's codes, what of a holding cannot move, and the book's encumbrances with their free quantity | only the pins move | |
+| 0.13.0 to 0.14.0: the SDK declares contract v9; `CommandRefused.fields` names what an incomplete entry left out (`REFUSAL_REASON_INCOMPLETE`); `Caller.delegation_id` and `Caller.client_name` | only the pins move | |
 
 `tests/migrations/` holds the plugins the migrations are recorded for, as
 written and as their migration leaves them, and `make check-migrations` holds

@@ -59,10 +59,11 @@ if TYPE_CHECKING:
 #: serves, the level a session was opened at, the figures on its heartbeat,
 #: the stream of what its roles hear and the reads within its scope, and a
 #: statement naming its external account with its figures per segment, and the
-#: book of record's operations with their refusal codes -- and a newer sidecar
-#: still admits it. Raised with every contract revision that adds something a
-#: plugin can depend on.
-SCHEMA_VERSION = "v8"
+#: book of record's operations with their refusal codes, the fields an
+#: incomplete entry left out, and the delegation a person acted through -- and
+#: a newer sidecar still admits it. Raised with every contract revision that
+#: adds something a plugin can depend on.
+SCHEMA_VERSION = "v9"
 
 #: Where a sidecar listens. Loopback, always: a sidecar reachable from another
 #: host is a way around the boundary it exists to enforce.
@@ -449,6 +450,14 @@ class Caller:
     # Manage, they may name a new account rather than an existing one (W6.4).
     deployment_admin: bool = False
     level: int = sidecar_pb2.ACCESS_LEVEL_UNSPECIFIED
+    # The delegation the person acted through and its client's registered
+    # name, when they came through a client -- the CLI, their own agent, an
+    # MCP client -- rather than a browser; both empty for a browser (W6.18,
+    # decisions/029, contract v9). The person stays the actor: these say
+    # through what, for the plugin to show and record as it chooses. The
+    # sidecar stamps the delegation on every command sent for them.
+    delegation_id: str = ""
+    client_name: str = ""
 
     @classmethod
     def from_header(cls, header: str) -> Caller:
@@ -463,7 +472,15 @@ class Caller:
             write=frozenset(claims.write_account_ids),
             deployment_admin=claims.deployment_admin,
             level=claims.level,
+            delegation_id=claims.delegation_id,
+            client_name=claims.client_name,
         )
+
+    @property
+    def through_a_client(self) -> bool:
+        """Whether the person came through a client on a delegation, rather
+        than a browser (W6.18)."""
+        return bool(self.delegation_id)
 
     @property
     def admin(self) -> bool:
@@ -658,12 +675,15 @@ class Plugin(Operations):
             detail = failed.details() or ""
             if failed.code() is grpc.StatusCode.PERMISSION_DENIED:
                 raise NotGranted(operation, detail) from failed
-            reason = _reason(failed)
+            refusal = _refusal(failed)
+            reason = refusal.reason
             if reason == sidecar_pb2.REFUSAL_REASON_EXTERNAL_ACCOUNT_NOT_LINKED:
                 raise NotLinked(operation, detail) from failed
             coded = reason != sidecar_pb2.REFUSAL_REASON_UNSPECIFIED
             if failed.code() is grpc.StatusCode.ABORTED and coded:
-                raise CommandRefused(operation, detail, reason) from failed
+                raise CommandRefused(
+                    operation, detail, reason, fields=tuple(refusal.fields)
+                ) from failed
             kind = _OPERATION_FAILURES.get(failed.code())
             if kind is None:
                 raise
@@ -690,14 +710,14 @@ class Plugin(Operations):
         )
 
 
-def _reason(failed: grpc.aio.AioRpcError) -> int:
-    """The code a refusal carries beside its status, or unspecified when it
-    carries none: by it, and never by the words, is a refusal told apart."""
+def _refusal(failed: grpc.aio.AioRpcError) -> sidecar_pb2.Refusal:
+    """What a refusal carries beside its status: its code, unspecified when
+    it carries none, and the fields an incomplete command left out (contract
+    v9). By these, and never by the words, is a refusal told apart."""
     for key, value in (*(failed.trailing_metadata() or ()), *(failed.initial_metadata() or ())):
         if key == REFUSAL_METADATA and isinstance(value, bytes):
-            reason: int = sidecar_pb2.Refusal.FromString(value).reason
-            return reason
-    return sidecar_pb2.REFUSAL_REASON_UNSPECIFIED
+            return sidecar_pb2.Refusal.FromString(value)
+    return sidecar_pb2.Refusal(reason=sidecar_pb2.REFUSAL_REASON_UNSPECIFIED)
 
 
 async def connect(

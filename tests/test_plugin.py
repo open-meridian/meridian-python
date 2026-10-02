@@ -58,16 +58,21 @@ async def test_the_sdk_declares_the_contract_it_was_built_for(
 
     v8 is the book of record: its commands, reads and deliveries, a oneof
     taken by keyword, and the book's refusal codes (sdk-contract/the-book-holds-positions).
-    A sidecar from before it, still at v7, has none of the book's operations,
-    so it refuses the plugin at registration, naming both.
+
+    v9 is the book's refusal of an incomplete entry with each field named,
+    and the delegation a caller came through
+    (sdk-contract/the-book-refuses-what-downstream-cannot-use,
+    sdk-contract/delegations-at-the-deployment-contract). A sidecar from
+    before it, still at v8, carries neither, so it refuses the plugin at
+    registration, naming both.
     """
     service, address = sidecar
     plugin = await meridian.connect(address, heartbeat=False)
     await plugin.leave()
 
     (sent,) = service.registered
-    assert meridian.SCHEMA_VERSION == "v8"
-    assert sent.schema_version == "v8"
+    assert meridian.SCHEMA_VERSION == "v9"
+    assert sent.schema_version == "v9"
 
 
 async def test_identity_and_grants_come_back(sidecar: tuple[FakeSidecar, str]) -> None:
@@ -571,3 +576,25 @@ async def test_no_sidecar_at_all_is_said_so_once_the_wait_is_over() -> None:
     with pytest.raises(meridian.NoSidecar) as raised:
         await meridian.connect(f"127.0.0.1:{port}", heartbeat=False, wait=0.5)
     assert f"127.0.0.1:{port}" in str(raised.value)
+
+
+def test_a_caller_through_a_client_names_its_delegation_and_a_browser_none() -> None:
+    """W6.18 (contract v9): the claims name the delegation and client a person
+    came through; the person stays the subject."""
+    from meridian.testing import caller_header
+
+    through = meridian.Caller.from_header(
+        caller_header(
+            "write",
+            write={"ACC-1"},
+            delegation_id="DLG-1",
+            client_name="meridian on ada-laptop",
+        )
+    )
+    assert through.subject == "local|ada"
+    assert through.delegation_id == "DLG-1"
+    assert through.client_name == "meridian on ada-laptop"
+    assert through.through_a_client
+    browser = meridian.Caller.from_header(caller_header("write", write={"ACC-1"}))
+    assert (browser.delegation_id, browser.client_name) == ("", "")
+    assert not browser.through_a_client

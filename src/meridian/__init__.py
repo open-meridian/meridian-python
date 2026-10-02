@@ -21,7 +21,10 @@ written by an operations plugin and read by five roles through the typed
 operations -- record_opening_balance, record_break, record_account_figures,
 handle_break, resolve_break, list_positions, list_breaks,
 list_account_figures, list_account_attributes -- and a refusal the book
-gives is a `CommandRefused` carrying its code.
+gives is a `CommandRefused` carrying its code. From contract v9 the book
+refuses an entry missing what downstream needs (REFUSAL_REASON_INCOMPLETE),
+naming each field in `CommandRefused.fields`; and a `Caller` who came through
+a client names its delegation and client (`delegation_id`, `client_name`).
 """
 
 from .asgi import CallerMiddleware

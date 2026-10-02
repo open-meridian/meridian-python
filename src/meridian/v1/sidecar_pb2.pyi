@@ -41,6 +41,7 @@ class RefusalReason(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     REFUSAL_REASON_BREAK_STATE: _ClassVar[RefusalReason]
     REFUSAL_REASON_LATER_ENTRIES_STAND: _ClassVar[RefusalReason]
     REFUSAL_REASON_IDEMPOTENCY_CONFLICT: _ClassVar[RefusalReason]
+    REFUSAL_REASON_INCOMPLETE: _ClassVar[RefusalReason]
 ACCESS_LEVEL_UNSPECIFIED: AccessLevel
 ACCESS_LEVEL_READ: AccessLevel
 ACCESS_LEVEL_WRITE: AccessLevel
@@ -65,6 +66,7 @@ REFUSAL_REASON_LOTS_UNBALANCED: RefusalReason
 REFUSAL_REASON_BREAK_STATE: RefusalReason
 REFUSAL_REASON_LATER_ENTRIES_STAND: RefusalReason
 REFUSAL_REASON_IDEMPOTENCY_CONFLICT: RefusalReason
+REFUSAL_REASON_INCOMPLETE: RefusalReason
 
 class RegisterRequest(_message.Message):
     __slots__ = ("schema_version", "interface", "settings", "reads_external_accounts")
@@ -337,7 +339,9 @@ class LinkedExternalAccount(_message.Message):
     def __init__(self, external_account_id: _Optional[str] = ..., account_id: _Optional[str] = ..., account_name: _Optional[str] = ...) -> None: ...
 
 class Refusal(_message.Message):
-    __slots__ = ("reason",)
+    __slots__ = ("reason", "fields")
     REASON_FIELD_NUMBER: _ClassVar[int]
+    FIELDS_FIELD_NUMBER: _ClassVar[int]
     reason: RefusalReason
-    def __init__(self, reason: _Optional[_Union[RefusalReason, str]] = ...) -> None: ...
+    fields: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, reason: _Optional[_Union[RefusalReason, str]] = ..., fields: _Optional[_Iterable[str]] = ...) -> None: ...
