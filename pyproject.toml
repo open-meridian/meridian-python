@@ -66,6 +66,7 @@ src = ["src", "tests", "template/src"]
 # and meridian-design's typed operations. Styling them would be editing them,
 # and the next generation would undo it.
 extend-exclude = ["src/meridian/v1", "src/meridian/plugin", "src/meridian/operations.py",
+                  "src/meridian/bounds.py",
                   # Plugins as written, and as their migration writes them:
                   # restyling either would change what the migrations are
                   # tested on.

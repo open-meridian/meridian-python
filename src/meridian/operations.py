@@ -29,15 +29,17 @@ from typing import TYPE_CHECKING, Any, TypeVar
 from meridian.plugin.v1 import operations_pb2 as ops
 from meridian.v1 import sidecar_pb2
 
+from .bounds import DECIMAL_DIGITS, DECIMAL_SCALE
+
 if TYPE_CHECKING:
     from .receive import Heard
 
 _Answer = TypeVar("_Answer")
 
-# What the wire carries (decisions/023): a scale of 0 to 18, and an integer
-# whose magnitude is below 10^38.
-_MOST_PLACES = 18
-_TOO_MANY_DIGITS = 10**38
+# What the wire carries (decisions/023), as the data dictionary's entries
+# state it (meridian.bounds): a scale of 0 to DECIMAL_SCALE.most, and an
+# integer whose magnitude is below 10 to the DECIMAL_DIGITS.
+_TOO_MANY_DIGITS = 10**DECIMAL_DIGITS
 _LOW_HALF = 2**64 - 1
 
 
@@ -67,13 +69,13 @@ def _decimal(value: Decimal | int, name: str) -> ops.Decimal:
             raise ValueError(f"{name} is not a finite number")
         magnitude = int("".join(map(str, digits))) * 10 ** max(exponent, 0)
         integer, scale = -magnitude if sign else magnitude, max(-exponent, 0)
-    if scale > _MOST_PLACES:
+    if scale > DECIMAL_SCALE.most:
         raise ValueError(
-            f"{name} has {scale} decimal places; at most {_MOST_PLACES} cross the wire, "
+            f"{name} has {scale} decimal places; at most {DECIMAL_SCALE.most} cross the wire, "
             "and it is refused rather than rounded"
         )
     if abs(integer) >= _TOO_MANY_DIGITS:
-        raise ValueError(f"{name} has more than 38 digits; it is refused rather than rounded")
+        raise ValueError(f"{name} has more than {DECIMAL_DIGITS} digits; it is refused rather than rounded")
     return ops.Decimal(high=integer >> 64, low=integer & _LOW_HALF, scale=scale)
 
 
@@ -133,7 +135,7 @@ def as_decimal(message: ops.Decimal) -> Decimal:
     2 is Decimal('1.50'). Built from its digits rather than by arithmetic,
     which would round at the context's precision."""
     integer = (message.high << 64) | message.low
-    if message.scale > _MOST_PLACES or abs(integer) >= _TOO_MANY_DIGITS:
+    if message.scale > DECIMAL_SCALE.most or abs(integer) >= _TOO_MANY_DIGITS:
         raise ValueError(f"{integer} at scale {message.scale} is outside what the wire carries")
     digits = tuple(int(digit) for digit in str(abs(integer)))
     return Decimal((int(integer < 0), digits, -message.scale))

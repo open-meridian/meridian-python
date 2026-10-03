@@ -37,6 +37,7 @@ import grpc
 
 from meridian.plugin.v1 import operations_pb2 as ops
 
+from . import bounds
 from .errors import CallFailed, NotGranted
 from .operations import DELIVERED, DeliveredRow
 
@@ -45,11 +46,17 @@ if TYPE_CHECKING:
 
 _log = logging.getLogger("meridian.receive")
 
+
+def catch_up_page(row: DeliveredRow) -> int:
+    """How many records one catch-up read asks for at a time: the most the
+    store answers in one, its query's page_size bound in the data dictionary
+    (W2.7, W9.10)."""
+    bound: bounds.Range = getattr(bounds, f"{row.caught_up_by.upper()}_REQUEST_PAGE_SIZE_RANGE")
+    return bound.most
+
+
 Message = TypeVar("Message")
 
-#: How many records one catch-up read asks for a page at a time: the most a
-#: store answers in one (W2.7).
-PAGE = 500
 
 #: How long to wait before opening the stream again after it broke, doubling
 #: to the most, so a sidecar restarting is not asked a thousand times.
@@ -191,9 +198,10 @@ class _Follower:
         records: list[Any] = []
         answered: dict[str, int] | None = None
         cursor = ""
+        size = catch_up_page(row)
         while True:
             page = await method(
-                **{row.account_param: account}, since=watermark, page_size=PAGE, cursor=cursor
+                **{row.account_param: account}, since=watermark, page_size=size, cursor=cursor
             )
             if answered is None:
                 answered = {held.partition: held.sequence for held in page.as_of.partitions}

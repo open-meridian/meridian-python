@@ -65,14 +65,15 @@ contract-diff:
 # PyPI depends on nothing by URL (PyPI refuses that) and a plugin installs one
 # thing. `make vendor-schema` moves the copy to SCHEMA_REV; `check-vendored`
 # fails when the two disagree, as core's check-codegen does for its bindings.
-SCHEMA_REV  := 4ce61511ed959c53daf6439b8a8b807fc12bf069
+SCHEMA_REV  := 014b51f942b284893cd6a8cec78079840b22ff49
 SCHEMA_REPO := https://github.com/open-meridian/meridian-schema.git
 SCRATCH     := .schema-scratch
 
 define fetch_schema
 	rm -rf $(SCRATCH) && git init -q $(SCRATCH) \
 	&& git -C $(SCRATCH) fetch -q --depth 1 $(SCHEMA_REPO) $(SCHEMA_REV) \
-	&& git -C $(SCRATCH) checkout -q FETCH_HEAD -- gen/python/meridian/v1 gen/python/meridian/plugin
+	&& git -C $(SCRATCH) checkout -q FETCH_HEAD -- gen/python/meridian/v1 gen/python/meridian/plugin \
+		gen/python/meridian/bounds.py
 endef
 
 vendor-schema:
@@ -80,14 +81,16 @@ vendor-schema:
 	@rm -rf src/meridian/v1 src/meridian/plugin \
 		&& cp -R $(SCRATCH)/gen/python/meridian/v1 src/meridian/v1 \
 		&& cp -R $(SCRATCH)/gen/python/meridian/plugin src/meridian/plugin \
+		&& cp $(SCRATCH)/gen/python/meridian/bounds.py src/meridian/bounds.py \
 		&& rm -rf $(SCRATCH)
-	@echo "vendor-schema: src/meridian/v1 and src/meridian/plugin are meridian-schema at $(SCHEMA_REV)"
+	@echo "vendor-schema: src/meridian/v1, src/meridian/plugin and src/meridian/bounds.py are meridian-schema at $(SCHEMA_REV)"
 
 check-vendored:
 	@$(fetch_schema) || { echo "check-vendored: could not fetch meridian-schema at $(SCHEMA_REV)" >&2; rm -rf $(SCRATCH); exit 1; }
 	@if diff -r -x __pycache__ $(SCRATCH)/gen/python/meridian/v1 src/meridian/v1 >/dev/null \
-		&& diff -r -x __pycache__ $(SCRATCH)/gen/python/meridian/plugin src/meridian/plugin >/dev/null; then \
-		rm -rf $(SCRATCH); echo "check-vendored OK: meridian.v1 and meridian.plugin.v1 are meridian-schema at $(SCHEMA_REV)"; \
+		&& diff -r -x __pycache__ $(SCRATCH)/gen/python/meridian/plugin src/meridian/plugin >/dev/null \
+		&& diff $(SCRATCH)/gen/python/meridian/bounds.py src/meridian/bounds.py >/dev/null; then \
+		rm -rf $(SCRATCH); echo "check-vendored OK: meridian.v1, meridian.plugin.v1 and meridian.bounds are meridian-schema at $(SCHEMA_REV)"; \
 	else \
 		rm -rf $(SCRATCH); echo "check-vendored FAILED: src/meridian/v1 is not meridian-schema at $(SCHEMA_REV). Run 'make vendor-schema'." >&2; exit 1; \
 	fi

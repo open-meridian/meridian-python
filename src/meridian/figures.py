@@ -20,7 +20,9 @@ the sidecar's words (meridian-design's fixtures/sidecar/heartbeat.yaml), so a
 plugin learns of a bad figure where it made it rather than from its Summary:
 at most 8; a label of 1 to 40 characters, given once; a text of at most 40; a
 why of at most 200; a state of ok, warn or error; a value always given; a
-decimal within decisions/023's range.
+decimal within decisions/023's range. Each bound is the data dictionary's
+(meridian-schema's boundaries/fields.json), taken from the generated
+meridian.bounds rather than written here.
 """
 
 from __future__ import annotations
@@ -31,24 +33,23 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
+from . import bounds
 from .v1 import sidecar_pb2
 
-#: The most figures a plugin reports.
-MOST_FIGURES = 8
-#: The longest label, in characters.
-LONGEST_LABEL = 40
-#: The longest text value, in characters.
-LONGEST_TEXT = 40
-#: The longest why, in characters.
-LONGEST_WHY = 200
+# The entries' bounds: meridian.v1.HeartbeatRequest.figures' count and
+# meridian.v1.PluginFigure's label, text and why lengths.
+_FIGURES = bounds.HEARTBEAT_REQUEST_FIGURES_COUNT
+_LABEL = bounds.PLUGIN_FIGURE_LABEL_LENGTH
+_TEXT = bounds.PLUGIN_FIGURE_TEXT_LENGTH
+_WHY = bounds.PLUGIN_FIGURE_WHY_LENGTH
 
 #: What a figure's tile is marked with: ok, warn or error, or none, drawn plain.
 FigureState = sidecar_pb2.FigureState
 
-# What the wire carries of a Decimal (decisions/023): a scale of 0 to 18, and
-# an integer whose magnitude is below 10^38; and of a count or a time, 64 bits.
-_MOST_PLACES = 18
-_TOO_MANY_DIGITS = 10**38
+# What the wire carries of a Decimal (decisions/023), as the dictionary states
+# it: a scale of 0 to DECIMAL_SCALE.most, and an integer whose magnitude is
+# below 10 to the DECIMAL_DIGITS; and of a count or a time, 64 bits.
+_TOO_MANY_DIGITS = 10**bounds.DECIMAL_DIGITS
 _LOW_HALF = 2**64 - 1
 _INT64 = range(-(2**63), 2**63)
 _EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
@@ -95,8 +96,8 @@ def wire(figures: Iterable[Figure]) -> tuple[sidecar_pb2.PluginFigure, ...]:
     is sent: ValueError for a bound, in the sidecar's words, and TypeError for
     a value that is not one of a figure's kinds."""
     given = listed(figures)
-    if len(given) > MOST_FIGURES:
-        raise ValueError(f"{len(given)} figures; a plugin reports at most {MOST_FIGURES}")
+    if not _FIGURES.admits(len(given)):
+        raise ValueError(f"{len(given)} figures; a plugin reports at most {_FIGURES.most}")
     labels: set[str] = set()
     sent = []
     for i, figure in enumerate(given):
@@ -111,8 +112,10 @@ def _figure(at: str, figure: Figure, labels: set[str]) -> sidecar_pb2.PluginFigu
     """One figure, its bounds checked in the order the sidecar checks them."""
     label = _text(at, "label", figure.label)
     if not label:
-        raise ValueError(f"{at}.label is empty; a label is 1 to {LONGEST_LABEL} characters")
-    _within(at, "label", "a label", label, LONGEST_LABEL)
+        raise ValueError(
+            f"{at}.label is empty; a label is {_LABEL.least} to {_LABEL.most} characters"
+        )
+    _within(at, "label", "a label", label, _LABEL)
     if label in labels:
         raise ValueError(
             f"{at}.label {json.dumps(label, ensure_ascii=False)} is given twice; "
@@ -133,7 +136,7 @@ def _figure(at: str, figure: Figure, labels: set[str]) -> sidecar_pb2.PluginFigu
     elif isinstance(value, Decimal):
         sent.decimal.CopyFrom(_decimal(at, value))
     elif isinstance(value, str):
-        _within(at, "text", "a text", value, LONGEST_TEXT)
+        _within(at, "text", "a text", value, _TEXT)
         sent.text = value
     elif isinstance(value, datetime):
         sent.at_ns = _ns(f"{at}'s value", value)
@@ -146,7 +149,7 @@ def _figure(at: str, figure: Figure, labels: set[str]) -> sidecar_pb2.PluginFigu
         sent.as_of_ns = _ns(f"{at}.as_of", figure.as_of)
     sent.state = _state(at, figure.state)  # type: ignore[assignment]
     why = _text(at, "why", figure.why or "")
-    _within(at, "why", "a why", why, LONGEST_WHY)
+    _within(at, "why", "a why", why, _WHY)
     sent.why = why
     return sent
 
@@ -157,11 +160,13 @@ def _text(at: str, field: str, value: object) -> str:
     return value
 
 
-def _within(at: str, field: str, what: str, text: str, most: int) -> None:
+def _within(at: str, field: str, what: str, text: str, bound: bounds.Length) -> None:
     """No longer than its bound, counted in characters as a person reads them
     rather than in bytes."""
-    if len(text) > most:
-        raise ValueError(f"{at}.{field} is {len(text)} characters; {what} is at most {most}")
+    if len(text) > bound.most:
+        raise ValueError(
+            f"{at}.{field} is {len(text)} characters; {what} is at most {bound.most}"
+        )
 
 
 def _decimal(at: str, value: Decimal) -> sidecar_pb2.Decimal:
@@ -172,14 +177,15 @@ def _decimal(at: str, value: Decimal) -> sidecar_pb2.Decimal:
         raise ValueError(f"{at}.decimal is not a finite number")
     magnitude = int("".join(map(str, digits))) * 10 ** max(exponent, 0)
     integer, scale = -magnitude if sign else magnitude, max(-exponent, 0)
-    if scale > _MOST_PLACES:
+    if not bounds.DECIMAL_SCALE.admits(scale):
         raise ValueError(
-            f"{at}.decimal has {scale} decimal places, and at most {_MOST_PLACES} cross "
-            "the wire; it is refused rather than rounded"
+            f"{at}.decimal has {scale} decimal places, and at most "
+            f"{bounds.DECIMAL_SCALE.most} cross the wire; it is refused rather than rounded"
         )
     if abs(integer) >= _TOO_MANY_DIGITS:
         raise ValueError(
-            f"{at}.decimal has more than 38 digits; it is refused rather than rounded"
+            f"{at}.decimal has more than {bounds.DECIMAL_DIGITS} digits; "
+            "it is refused rather than rounded"
         )
     return sidecar_pb2.Decimal(high=integer >> 64, low=integer & _LOW_HALF, scale=scale)
 
