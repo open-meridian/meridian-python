@@ -5706,6 +5706,11 @@
         {
           "value": "LIQUIDITY_FEE_REGIME_DISCRETIONARY",
           "meaning": "a fee charged at the board's discretion, where in the fund's interest"
+        },
+        {
+          "value": "LIQUIDITY_FEE_REGIME_NONE",
+          "meaning": "no liquidity fee: a government money market fund that has not chosen one",
+          "since": "v12"
         }
       ],
       "empty": "unspecified is not stated",

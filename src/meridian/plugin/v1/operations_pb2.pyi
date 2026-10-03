@@ -129,6 +129,7 @@ class LiquidityFeeRegime(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     LIQUIDITY_FEE_REGIME_UNSPECIFIED: _ClassVar[LiquidityFeeRegime]
     LIQUIDITY_FEE_REGIME_MANDATORY: _ClassVar[LiquidityFeeRegime]
     LIQUIDITY_FEE_REGIME_DISCRETIONARY: _ClassVar[LiquidityFeeRegime]
+    LIQUIDITY_FEE_REGIME_NONE: _ClassVar[LiquidityFeeRegime]
 
 class AccountState(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
@@ -279,6 +280,7 @@ MONEY_MARKET_FUND_NAV_FLOATING: MoneyMarketFundNav
 LIQUIDITY_FEE_REGIME_UNSPECIFIED: LiquidityFeeRegime
 LIQUIDITY_FEE_REGIME_MANDATORY: LiquidityFeeRegime
 LIQUIDITY_FEE_REGIME_DISCRETIONARY: LiquidityFeeRegime
+LIQUIDITY_FEE_REGIME_NONE: LiquidityFeeRegime
 ACCOUNT_STATE_UNSPECIFIED: AccountState
 ACCOUNT_STATE_OPEN: AccountState
 ACCOUNT_STATE_CLOSED: AccountState
