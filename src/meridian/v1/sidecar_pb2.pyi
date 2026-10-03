@@ -97,18 +97,42 @@ REFUSAL_REASON_RECORD_CHANGED: RefusalReason
 REFUSAL_REASON_REFERENCE_UNAVAILABLE: RefusalReason
 
 class RegisterRequest(_message.Message):
-    __slots__ = ("schema_version", "interface", "settings", "reads_external_accounts", "declaration")
+    __slots__ = ("schema_version", "interface", "settings", "reads_external_accounts", "declaration", "tools")
     SCHEMA_VERSION_FIELD_NUMBER: _ClassVar[int]
     INTERFACE_FIELD_NUMBER: _ClassVar[int]
     SETTINGS_FIELD_NUMBER: _ClassVar[int]
     READS_EXTERNAL_ACCOUNTS_FIELD_NUMBER: _ClassVar[int]
     DECLARATION_FIELD_NUMBER: _ClassVar[int]
+    TOOLS_FIELD_NUMBER: _ClassVar[int]
     schema_version: str
     interface: InterfaceDeclaration
     settings: _containers.RepeatedCompositeFieldContainer[SettingDeclaration]
     reads_external_accounts: bool
     declaration: PluginDeclaration
-    def __init__(self, schema_version: _Optional[str] = ..., interface: _Optional[_Union[InterfaceDeclaration, _Mapping]] = ..., settings: _Optional[_Iterable[_Union[SettingDeclaration, _Mapping]]] = ..., reads_external_accounts: bool = ..., declaration: _Optional[_Union[PluginDeclaration, _Mapping]] = ...) -> None: ...
+    tools: _containers.RepeatedCompositeFieldContainer[ToolDeclaration]
+    def __init__(self, schema_version: _Optional[str] = ..., interface: _Optional[_Union[InterfaceDeclaration, _Mapping]] = ..., settings: _Optional[_Iterable[_Union[SettingDeclaration, _Mapping]]] = ..., reads_external_accounts: bool = ..., declaration: _Optional[_Union[PluginDeclaration, _Mapping]] = ..., tools: _Optional[_Iterable[_Union[ToolDeclaration, _Mapping]]] = ...) -> None: ...
+
+class ToolDeclaration(_message.Message):
+    __slots__ = ("name", "title", "description", "method", "path", "levels", "reads", "input_schema", "output_schema")
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    TITLE_FIELD_NUMBER: _ClassVar[int]
+    DESCRIPTION_FIELD_NUMBER: _ClassVar[int]
+    METHOD_FIELD_NUMBER: _ClassVar[int]
+    PATH_FIELD_NUMBER: _ClassVar[int]
+    LEVELS_FIELD_NUMBER: _ClassVar[int]
+    READS_FIELD_NUMBER: _ClassVar[int]
+    INPUT_SCHEMA_FIELD_NUMBER: _ClassVar[int]
+    OUTPUT_SCHEMA_FIELD_NUMBER: _ClassVar[int]
+    name: str
+    title: str
+    description: str
+    method: str
+    path: str
+    levels: _containers.RepeatedScalarFieldContainer[AccessLevel]
+    reads: bool
+    input_schema: str
+    output_schema: str
+    def __init__(self, name: _Optional[str] = ..., title: _Optional[str] = ..., description: _Optional[str] = ..., method: _Optional[str] = ..., path: _Optional[str] = ..., levels: _Optional[_Iterable[_Union[AccessLevel, str]]] = ..., reads: bool = ..., input_schema: _Optional[str] = ..., output_schema: _Optional[str] = ...) -> None: ...
 
 class PluginDeclaration(_message.Message):
     __slots__ = ("secret_settings", "not_carried", "storage")
@@ -359,7 +383,7 @@ class CallerAssertion(_message.Message):
     def __init__(self, claims: _Optional[bytes] = ..., signature: _Optional[bytes] = ..., key_id: _Optional[str] = ...) -> None: ...
 
 class CallerClaims(_message.Message):
-    __slots__ = ("subject", "display_name", "audience_instance_id", "level", "read_account_ids", "write_account_ids", "issued_at_ns", "expires_at_ns", "assertion_id", "deployment_admin", "delegation_id", "client_name")
+    __slots__ = ("subject", "display_name", "audience_instance_id", "level", "read_account_ids", "write_account_ids", "issued_at_ns", "expires_at_ns", "assertion_id", "deployment_admin", "delegation_id", "client_name", "tool_name")
     SUBJECT_FIELD_NUMBER: _ClassVar[int]
     DISPLAY_NAME_FIELD_NUMBER: _ClassVar[int]
     AUDIENCE_INSTANCE_ID_FIELD_NUMBER: _ClassVar[int]
@@ -372,6 +396,7 @@ class CallerClaims(_message.Message):
     DEPLOYMENT_ADMIN_FIELD_NUMBER: _ClassVar[int]
     DELEGATION_ID_FIELD_NUMBER: _ClassVar[int]
     CLIENT_NAME_FIELD_NUMBER: _ClassVar[int]
+    TOOL_NAME_FIELD_NUMBER: _ClassVar[int]
     subject: str
     display_name: str
     audience_instance_id: str
@@ -384,7 +409,8 @@ class CallerClaims(_message.Message):
     deployment_admin: bool
     delegation_id: str
     client_name: str
-    def __init__(self, subject: _Optional[str] = ..., display_name: _Optional[str] = ..., audience_instance_id: _Optional[str] = ..., level: _Optional[_Union[AccessLevel, str]] = ..., read_account_ids: _Optional[_Iterable[str]] = ..., write_account_ids: _Optional[_Iterable[str]] = ..., issued_at_ns: _Optional[int] = ..., expires_at_ns: _Optional[int] = ..., assertion_id: _Optional[str] = ..., deployment_admin: bool = ..., delegation_id: _Optional[str] = ..., client_name: _Optional[str] = ...) -> None: ...
+    tool_name: str
+    def __init__(self, subject: _Optional[str] = ..., display_name: _Optional[str] = ..., audience_instance_id: _Optional[str] = ..., level: _Optional[_Union[AccessLevel, str]] = ..., read_account_ids: _Optional[_Iterable[str]] = ..., write_account_ids: _Optional[_Iterable[str]] = ..., issued_at_ns: _Optional[int] = ..., expires_at_ns: _Optional[int] = ..., assertion_id: _Optional[str] = ..., deployment_admin: bool = ..., delegation_id: _Optional[str] = ..., client_name: _Optional[str] = ..., tool_name: _Optional[str] = ...) -> None: ...
 
 class PluginAccessRequest(_message.Message):
     __slots__ = ()

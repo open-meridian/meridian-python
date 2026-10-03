@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import json
 import urllib.parse
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
@@ -43,7 +44,7 @@ from markupsafe import escape
 
 from .client import Caller, Page, _levels
 from .figures import Figure, wire
-from .pages import CSRF_FIELD, SPELLING, Pages, Request, Response
+from .pages import CSRF_FIELD, SPELLING, Pages, Request, Response, Tool
 from .v1 import sidecar_pb2
 
 #: The three levels, as the home's Manage, Open and View open a session.
@@ -60,6 +61,7 @@ def caller_header(
     deployment_admin: bool = False,
     delegation_id: str = "",
     client_name: str = "",
+    tool_name: str = "",
 ) -> str:
     """The `Meridian-Caller` header a sidecar forwards for a session at
     `level`, with the accounts cut to it: `read` and `write` are those the
@@ -84,6 +86,7 @@ def caller_header(
         deployment_admin=deployment_admin,
         delegation_id=delegation_id,
         client_name=client_name,
+        tool_name=tool_name,
     )
     assertion = sidecar_pb2.CallerAssertion(claims=claims.SerializeToString())
     return base64.urlsafe_b64encode(assertion.SerializeToString()).decode().rstrip("=")
@@ -112,6 +115,34 @@ def heartbeat(
             for (scheme, name), count in sorted((not_carried_seen or {}).items())
         ],
     )
+
+
+@dataclass(frozen=True)
+class ToolAnswer:
+    """A tool's call, answered as the dashboard would read it: the plugin's
+    status and its typed JSON -- `outcome` made, unchanged or refused, and
+    `data`, or the refusal's `reason`, `fields` and `detail`."""
+
+    status: int
+    json: dict[str, Any]
+    level: str
+
+    @property
+    def outcome(self) -> str:
+        return str(self.json.get("outcome", ""))
+
+    @property
+    def data(self) -> Any:
+        return self.json.get("data")
+
+    @property
+    def paths(self) -> list[str]:
+        """The paths a refusal names, in order."""
+        return [str(each.get("path", "")) for each in self.json.get("fields", [])]
+
+
+#: The order a call picks a level in, as the dashboard picks it (Q6).
+PICKED = ("write", "read", "admin")
 
 
 @dataclass(frozen=True)
@@ -189,6 +220,69 @@ class PageClient:
                 ),
             )
         )
+
+    def tool(self, name: str) -> Tool:
+        """The tool of that name, as registration declares it."""
+        for each in self.pages.tools:
+            if each.name == name:
+                return each
+        raise KeyError(
+            f"no tool {name}: the pages declare {', '.join(t.name for t in self.pages.tools)}"
+        )
+
+    def call_tool(
+        self,
+        name: str,
+        arguments: Mapping[str, Any] | None = None,
+        *,
+        level: str | int | None = None,
+        delegation_id: str = "del-test",
+        client_name: str = "a test's client",
+        body: bytes | None = None,
+    ) -> ToolAnswer:
+        """Call a tool as the deployment's MCP surface would (contract v12):
+        at `level`, or the highest of the tool's this client's person holds
+        -- write, then read, then admin -- with claims naming the delegation,
+        its client and the tool; the arguments as JSON to the tool's method
+        and path; no form token. `body` sends bytes as they are, for a test
+        that arguments which are not JSON are refused."""
+        tool = self.tool(name)
+        served = {SPELLING[each] for each in tool.levels}
+        if level is None:
+            level = next(each for each in PICKED if each in served)
+        header = caller_header(
+            level,
+            read=self.read,
+            write=self.write,
+            subject=self.subject,
+            display_name=self.display_name,
+            deployment_admin=self.deployment_admin,
+            delegation_id=delegation_id,
+            client_name=client_name,
+            tool_name=tool.name,
+        )
+        sent = body if body is not None else json.dumps(dict(arguments or {})).encode()
+        request = Request(
+            method=tool.method,
+            path=tool.path,
+            caller=Caller.from_header(header),
+            plugin=cast(Any, self.plugin),
+            body=sent,
+            headers={"content-type": "application/json"},
+        )
+        response = asyncio.run(self.pages.dispatch(request))
+        try:
+            said = (
+                json.loads(response.text)
+                if response.content_type.startswith("application/json")
+                else {}
+            )
+        except ValueError:
+            said = {}
+        if not said:
+            said = {"outcome": "refused", "reason": "untyped_answer", "detail": response.text}
+        level_said = level if isinstance(level, str) else SPELLING.get(level, str(level))
+        return ToolAnswer(response.status, said, level_said)
 
     def get(self, path: str, level: str | int, **query: str) -> Response:
         return self.request("GET", path, level, query=query)

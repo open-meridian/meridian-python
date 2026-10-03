@@ -1368,7 +1368,7 @@ class InstrumentRecord(_message.Message):
     def __init__(self, instrument_id: _Optional[str] = ..., identifiers: _Optional[_Iterable[_Union[Identifier, _Mapping]]] = ..., asset_class: _Optional[_Union[AssetClass, str]] = ..., currency: _Optional[str] = ..., exchange_mic: _Optional[str] = ..., description: _Optional[str] = ..., lifecycle_state: _Optional[_Union[InstrumentLifecycleState, str]] = ..., version: _Optional[int] = ..., valid_from_ns: _Optional[int] = ..., record_time_ns: _Optional[int] = ..., sources: _Optional[_Iterable[_Union[InstrumentValueSource, _Mapping]]] = ..., offers: _Optional[_Iterable[_Union[OfferedValue, _Mapping]]] = ..., instrument_type: _Optional[_Union[InstrumentType, str]] = ..., money_market_fund: _Optional[_Union[MoneyMarketFund, _Mapping]] = ...) -> None: ...
 
 class InstrumentValueSource(_message.Message):
-    __slots__ = ("field", "identifier", "source", "person", "instance_id", "recorded_at_ns", "note")
+    __slots__ = ("field", "identifier", "source", "person", "instance_id", "recorded_at_ns", "note", "acting_through_delegation", "client_name")
     FIELD_FIELD_NUMBER: _ClassVar[int]
     IDENTIFIER_FIELD_NUMBER: _ClassVar[int]
     SOURCE_FIELD_NUMBER: _ClassVar[int]
@@ -1376,6 +1376,8 @@ class InstrumentValueSource(_message.Message):
     INSTANCE_ID_FIELD_NUMBER: _ClassVar[int]
     RECORDED_AT_NS_FIELD_NUMBER: _ClassVar[int]
     NOTE_FIELD_NUMBER: _ClassVar[int]
+    ACTING_THROUGH_DELEGATION_FIELD_NUMBER: _ClassVar[int]
+    CLIENT_NAME_FIELD_NUMBER: _ClassVar[int]
     field: InstrumentField
     identifier: Identifier
     source: str
@@ -1383,7 +1385,9 @@ class InstrumentValueSource(_message.Message):
     instance_id: str
     recorded_at_ns: int
     note: str
-    def __init__(self, field: _Optional[_Union[InstrumentField, str]] = ..., identifier: _Optional[_Union[Identifier, _Mapping]] = ..., source: _Optional[str] = ..., person: _Optional[str] = ..., instance_id: _Optional[str] = ..., recorded_at_ns: _Optional[int] = ..., note: _Optional[str] = ...) -> None: ...
+    acting_through_delegation: str
+    client_name: str
+    def __init__(self, field: _Optional[_Union[InstrumentField, str]] = ..., identifier: _Optional[_Union[Identifier, _Mapping]] = ..., source: _Optional[str] = ..., person: _Optional[str] = ..., instance_id: _Optional[str] = ..., recorded_at_ns: _Optional[int] = ..., note: _Optional[str] = ..., acting_through_delegation: _Optional[str] = ..., client_name: _Optional[str] = ...) -> None: ...
 
 class OfferedValue(_message.Message):
     __slots__ = ("value", "instance_id", "offered_at_ns")

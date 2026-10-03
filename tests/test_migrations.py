@@ -95,7 +95,7 @@ def test_every_release_since_the_first_recorded_has_its_step() -> None:
         ("0.6.0", "0.6.1"),
         ("0.6.1", "0.7.0"),
     ]
-    assert (steps[-1].source, steps[-1].target) == ("0.15.0", "0.16.0")
+    assert (steps[-1].source, steps[-1].target) == ("0.16.0", "0.17.0")
     # A release that moves the version records its step, if only the pins.
     assert steps[-1].target == SDK
 
@@ -694,3 +694,31 @@ def test_a_read_of_meridian_figures_moved_bounds_is_found_and_left_by_hand() -> 
         ("figures-bounds", "src/p/x.py", 3),
         ("figures-bounds", "src/p/x.py", 6),
     ]
+
+
+def test_a_changing_route_with_no_typed_record_is_found_and_left_by_hand() -> None:
+    # 0.17.0: a route that changes something is derived as a tool only from
+    # its record (params=), which is the plugin's to write.
+    result = one(
+        """\
+        import meridian
+
+        pages = meridian.Pages("Desk")
+
+        @pages.route("/sync", levels="write", methods=["POST"])
+        async def sync(request: meridian.Request) -> str: ...
+
+        @pages.route("/typed", levels="write", methods=["POST"], params=object)
+        async def typed(request: meridian.Request) -> str: ...
+
+        @pages.route("/file", levels="write", methods=["POST"], tool=False, why="a file")
+        async def upload(request: meridian.Request) -> str: ...
+
+        @pages.page("/", "Home", levels=["read"])
+        async def home(request: meridian.Request) -> str: ...
+        """,
+        "0.16.0",
+        "0.17.0",
+    )
+    assert result.files == {}
+    assert left_by_hand(result) == [("typed-route", "src/p/x.py", 5)]

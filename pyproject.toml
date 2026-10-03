@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "open-meridian"
-version = "0.16.0"
+version = "0.17.0"
 description = "Build Meridian plugins"
 license = { text = "Apache-2.0" }
 requires-python = ">=3.11"
@@ -62,7 +62,9 @@ where = ["src"]
 # move.
 meridian = ["py.typed", "v1/*.pyi", "plugin/v1/*.pyi", "migrations/*/migration.toml",
             # The role suites, as meridian-schema publishes them (contract v11).
-            "suites.json"]
+            "suites.json",
+            # The data dictionary a refusal's paths resolve to (contract v12).
+            "fields.json"]
 
 [tool.ruff]
 line-length = 96

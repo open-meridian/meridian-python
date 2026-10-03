@@ -2,7 +2,7 @@
 
 The Python SDK for building [Open Meridian](https://open-meridian.com) plugins:
 the tools a trader has an AI agent build, and the bots and analytics a
-developer writes. Python 3.11 or newer. This is release 0.16.0; its reference
+developer writes. Python 3.11 or newer. This is release 0.17.0; its reference
 is at [open-meridian.dev](https://open-meridian.dev/api/python-sdk/).
 
 ## Start here
@@ -190,6 +190,56 @@ names is looked for whatever it is.
 
 `Interface(admin_pages=...)`, retired by contract v5, is still taken in this
 release, as pages at `admin`, with a DeprecationWarning.
+
+### Tools for agents, from typed routes (contract v12)
+
+A deployment serves one MCP surface at its dashboard's `/mcp`, where an agent a
+person delegated to works on their behalf. A plugin's tools are derived from
+its routes: a route that declares its inputs as one typed record is a tool,
+an act for a method that changes something, a read for GET or `reads=True`.
+
+```python
+@dataclass(frozen=True)
+class Lot:
+    quantity: Decimal
+    cost: Decimal | None = None
+    acquired: date | None = None
+
+@dataclass(frozen=True)
+class Confirmation:
+    account: str
+    reason: str = ""
+    lots: list[Lot] = field(default_factory=list)
+
+@pages.route("/confirm", levels="write", methods=["POST"], params=Confirmation,
+             name="confirm_lots")
+async def confirm(request: meridian.Request) -> meridian.Response:
+    """Record the account's lots, as read."""
+    record = request.params            # from the form, or from the tool's JSON
+    if not record.reason:
+        pages.refuse("Give a reason.", ("reason", "required to confirm"))
+    ...
+    return pages.answer("done.html", Recorded(...))
+```
+
+The record (`meridian.params`) is read from a browser's form whose inputs are
+named by the data dictionary's paths -- `lots[0].cost`, as the kit's
+`om-entry-grid` names its cells -- and from an agent's JSON, by the same
+paths, so one refusal names one cell and one argument. A decimal is a string
+in JSON, never a number; a date `YYYY-MM-DD`. For a tool's call a field that
+does not read, or an argument the record has not, is refused by path before
+the view runs; for a browser each is in `request.param_errors` beside the
+record, for the page to show on its cell. `pages.answer(template, data)`
+renders `data` for a browser and returns it as JSON, with its outcome (`made`
+for an act, `unchanged` for a read or a repeat), for a tool; `pages.refuse`
+refuses by path (`Field.of(path, operation="RecordOpeningBalance")` resolves
+a book's path to its dictionary entry). A call whose claims name its tool
+(`request.tool_name`) carries no form token, since only the dashboard's
+`/mcp` sets one and the sidecar holds it to the tool's route. `tool=False`
+with `why=` declares a route not offered to agents, which `meridian plugin
+check` reports; `@pages.tool(replaces=path)` stands in for a derived tool.
+`PageClient.call_tool(name, arguments)` calls a tool in a plugin's tests as
+the surface would.
 
 ### Linking external accounts
 
@@ -595,6 +645,7 @@ carries libcst.
 | 0.13.0 to 0.14.0: the SDK declares contract v9; `CommandRefused.fields` names what an incomplete entry left out (`REFUSAL_REASON_INCOMPLETE`); `Caller.delegation_id` and `Caller.client_name` | only the pins move | |
 | 0.14.0 to 0.15.0: the SDK declares contract v10; a deployment's instrument identity is its own: `ResolveIdentifierResult.minted`, a resolve's `stated_*` values, a record's `sources` and `offers`, the book's refusal of an incomplete instrument record and `CommandRefused.retryable`, the book's actor naming the delegation and client. Breaking | a resolve result's `.placeholder` into `.minted` | a book position's `.placeholder`, which is gone: drop it, and link the person to the dashboard's Instruments page where the book refuses an incomplete record |
 | 0.15.0 to 0.16.0: the SDK declares contract v11, the edge keeps its own: the version's declaration (`meridian.Declaration`, `connect(declaration=...)`, `meridian-declaration`), a row's raw record and provenance (`plugin.raw_record`, `meridian.edge`), the account kind and values as reported, each asset counted once, pending by value date (`meridian.ReportedPending`), a backfill, the stated instrument type, the custody suite (`meridian.suites`), names not carried counted on the heartbeat (`plugin.note_not_carried`); `meridian.ExternalAccount` is the SDK's form; `meridian.figures.MOST_FIGURES` and `LONGEST_*` moved to `meridian.bounds` | nothing | an ExternalAccount's `venue_account_type=`, a holding's `also_counted_in_cash=`, `currency_assumed=`, each replaced by the plugin's own conversion; a read of `meridian.figures`' moved bounds |
+| 0.16.0 to 0.17.0: the SDK declares contract v12, the deployment serves its MCP: a route's one typed record of inputs (`params=`, `request.params`, `request.param_errors`), read alike from a form named by the dictionary's paths and from an agent's JSON (`meridian.params`); tools derived from typed routes (`name=`, `description=`, `reads=`, `answers=`, `tool=False` with `why=`, `@pages.tool(replaces=...)`), sent at registration; `pages.answer`, `pages.refuse`, `request.tool_name`; a refusal's path resolved to its dictionary entry (`meridian.dictionary`, `Field.of`); `PageClient.call_tool`; the base template on kit 0.9.0 | nothing | a page or route that changes something and declares no `params=`: give it its record, or `tool=False` with `why=` |
 
 `tests/migrations/` holds the plugins the migrations are recorded for, as
 written and as their migration leaves them, and `make check-migrations` holds

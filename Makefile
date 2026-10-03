@@ -65,7 +65,7 @@ contract-diff:
 # PyPI depends on nothing by URL (PyPI refuses that) and a plugin installs one
 # thing. `make vendor-schema` moves the copy to SCHEMA_REV; `check-vendored`
 # fails when the two disagree, as core's check-codegen does for its bindings.
-SCHEMA_REV := 5603dcae10b1aa878b038b051ce7f82baeb475b6
+SCHEMA_REV := 7ded2e64f974ec8bc87488295f25c99b3cb3d7c4
 SCHEMA_REPO := https://github.com/open-meridian/meridian-schema.git
 SCRATCH     := .schema-scratch
 
@@ -73,7 +73,7 @@ define fetch_schema
 	rm -rf $(SCRATCH) && git init -q $(SCRATCH) \
 	&& git -C $(SCRATCH) fetch -q --depth 1 $(SCHEMA_REPO) $(SCHEMA_REV) \
 	&& git -C $(SCRATCH) checkout -q FETCH_HEAD -- gen/python/meridian/v1 gen/python/meridian/plugin \
-		gen/python/meridian/bounds.py boundaries/suites.json
+		gen/python/meridian/bounds.py boundaries/suites.json boundaries/fields.json
 endef
 
 vendor-schema:
@@ -83,6 +83,7 @@ vendor-schema:
 		&& cp -R $(SCRATCH)/gen/python/meridian/plugin src/meridian/plugin \
 		&& cp $(SCRATCH)/gen/python/meridian/bounds.py src/meridian/bounds.py \
 		&& cp $(SCRATCH)/boundaries/suites.json src/meridian/suites.json \
+		&& cp $(SCRATCH)/boundaries/fields.json src/meridian/fields.json \
 		&& rm -rf $(SCRATCH)
 	@echo "vendor-schema: src/meridian/v1, src/meridian/plugin, src/meridian/bounds.py and src/meridian/suites.json are meridian-schema at $(SCHEMA_REV)"
 
@@ -91,7 +92,8 @@ check-vendored:
 	@if diff -r -x __pycache__ $(SCRATCH)/gen/python/meridian/v1 src/meridian/v1 >/dev/null \
 		&& diff -r -x __pycache__ $(SCRATCH)/gen/python/meridian/plugin src/meridian/plugin >/dev/null \
 		&& diff $(SCRATCH)/gen/python/meridian/bounds.py src/meridian/bounds.py >/dev/null \
-		&& diff $(SCRATCH)/boundaries/suites.json src/meridian/suites.json >/dev/null; then \
+		&& diff $(SCRATCH)/boundaries/suites.json src/meridian/suites.json >/dev/null \
+		&& diff $(SCRATCH)/boundaries/fields.json src/meridian/fields.json >/dev/null; then \
 		rm -rf $(SCRATCH); echo "check-vendored OK: meridian.v1, meridian.plugin.v1, meridian.bounds and the role suites are meridian-schema at $(SCHEMA_REV)"; \
 	else \
 		rm -rf $(SCRATCH); echo "check-vendored FAILED: src/meridian/v1 is not meridian-schema at $(SCHEMA_REV). Run 'make vendor-schema'." >&2; exit 1; \
@@ -105,7 +107,7 @@ DESIGN ?= ../meridian-design
 # pinned here by commit as the schema is pinned in pyproject.toml. Core's own
 # interop gate overrides this with its working tree, so a change to both lands
 # without either waiting on the other's push.
-CORE_REV   := 2134a56737718c201a7f63fea81e4d3f5e00d90c
+CORE_REV   := 10653f9cf4406f724eac0cbe8ffc491bde2152bb
 CORE_PROTO ?= https://github.com/open-meridian/meridian-core.git\#$(CORE_REV):proto
 # And meridian-schema's, which core's import, at the revision vendored here.
 SCHEMA_PROTO ?= https://github.com/open-meridian/meridian-schema.git\#$(SCHEMA_REV):proto

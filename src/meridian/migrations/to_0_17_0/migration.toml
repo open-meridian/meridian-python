@@ -1,0 +1,39 @@
+# open-meridian 0.16.0 to 0.17.0: the SDK declares contract v12, the
+# deployment serves its MCP (sdk-contract/a-deployment-serves-its-mcp-contract;
+# spec/a-deployment-serves-its-mcp).
+from = "0.16.0"
+to = "0.17.0"
+summary = """
+The SDK declares contract v12 (meridian.SCHEMA_VERSION). A route may declare its
+inputs as one typed record (params=, a frozen dataclass), read alike from the
+page's form, whose inputs are named by the data dictionary's paths
+(positions[0].lots[1].cost, as the kit's om-entry-grid names its cells), and from
+an agent's JSON, into request.params; each field that does not read is named by
+its path (request.param_errors). Such a route is derived as a tool on the
+deployment's MCP surface: an act for a method that changes something, a read for
+GET or a route declaring reads=True, named name= (else the view's name) and
+described by description= (else its docstring's first paragraph); a page
+declaring answers= is a read too. pages.answer(template, data) renders data for a
+browser and returns it as JSON for a tool; pages.refuse(detail, *fields) refuses
+by path, a tool's error or a browser's 422. A call whose claims name its tool
+needs no form token; request.tool_name says one is being served.
+@pages.tool(replaces=...) declares a tool in place of a derived one;
+tool=False with why= declares a route not offered to agents, which `meridian
+plugin check` reports and verification refuses on a changing route. The test
+client calls a tool as the surface would (PageClient.call_tool). The kit's base
+template links kit 0.9.0 (meridian.pages.KIT). A plugin built on 0.17.0 is refused
+at registration by a sidecar that accepts only v11, naming both. Nothing is
+rewritten: a route that changes something and declares no record is found and
+left by hand, since its record is the plugin's to write.
+"""
+breaking = false
+rewrite = "rewrite.py"
+
+[[by_hand]]
+rule = "typed-route"
+what = """a page or route that takes a method other than GET and declares no params=, \
+so no tool is derived from it and `meridian plugin check` fails it (tools-cover-routes)"""
+instead = """declare its inputs as one frozen dataclass, params=Record, whose fields are \
+named as its form's inputs by the dictionary's paths, read request.params in the view and \
+answer with pages.answer or pages.refuse; or, where it cannot be offered to an agent, \
+tool=False with why= saying why"""

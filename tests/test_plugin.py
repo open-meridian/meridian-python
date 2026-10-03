@@ -79,14 +79,18 @@ async def test_the_sdk_declares_the_contract_it_was_built_for(
     (sdk-contract/the-edge-keeps-its-own). A sidecar from before it, still at
     v10, carries none of it, so it refuses the plugin at registration, naming
     both.
+
+    v12 is the deployment's MCP surface: the tools derived from the
+    plugin's typed routes, declared at registration, and the tool a call
+    names in the claims (sdk-contract/a-deployment-serves-its-mcp-contract).
     """
     service, address = sidecar
     plugin = await meridian.connect(address, heartbeat=False)
     await plugin.leave()
 
     (sent,) = service.registered
-    assert meridian.SCHEMA_VERSION == "v11"
-    assert sent.schema_version == "v11"
+    assert meridian.SCHEMA_VERSION == "v12"
+    assert sent.schema_version == "v12"
 
 
 async def test_identity_and_grants_come_back(sidecar: tuple[FakeSidecar, str]) -> None:

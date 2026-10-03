@@ -89,8 +89,8 @@ def test_every_page_links_the_kit_the_dashboard_serves() -> None:
         parsed = parse(rendered.response.text)
         links = [a.get("href") for t, a in parsed.tags if t == "link"]
         scripts = [a.get("src") for t, a in parsed.tags if t == "script" and a.get("src")]
-        assert links == ["/.meridian/ui/0.7.0/meridian.css"], rendered.page.path
-        assert scripts == ["/.meridian/ui/0.7.0/meridian.js"], rendered.page.path
+        assert links == ["/.meridian/ui/0.9.0/meridian.css"], rendered.page.path
+        assert scripts == ["/.meridian/ui/0.9.0/meridian.js"], rendered.page.path
 
 
 def test_the_scaffold_has_one_manage_page_and_one_open_and_view_page() -> None:

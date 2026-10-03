@@ -129,6 +129,32 @@ the field a backfill fills"""
 BACKFILL_FIELD_LENGTH = Length(least=1, most=200)
 """meridian.v1.Backfill.field: names the field a backfill fills"""
 
+REGISTER_REQUEST_TOOLS_COUNT = Count(least=0, most=200)
+"""meridian.v1.RegisterRequest.tools: declares the plugin's tools on the
+deployment's MCP surface (W4.1, W6.20)"""
+
+TOOL_DECLARATION_NAME_LENGTH = Length(least=1, most=61)
+"""meridian.v1.ToolDeclaration.name: names the tool among the plugin's"""
+
+TOOL_DECLARATION_TITLE_LENGTH = Length(least=1, most=120)
+"""meridian.v1.ToolDeclaration.title: names the tool for a person on the
+consent page"""
+
+TOOL_DECLARATION_DESCRIPTION_LENGTH = Length(least=1, most=1024)
+"""meridian.v1.ToolDeclaration.description: tells an agent what the tool does
+and answers"""
+
+TOOL_DECLARATION_PATH_LENGTH = Length(least=1, most=512)
+"""meridian.v1.ToolDeclaration.path: says where the tool's route is served"""
+
+TOOL_DECLARATION_INPUT_SCHEMA_LENGTH = Length(least=2, most=65536)
+"""meridian.v1.ToolDeclaration.input_schema: describes the route's one typed
+record of inputs"""
+
+TOOL_DECLARATION_OUTPUT_SCHEMA_LENGTH = Length(least=0, most=65536)
+"""meridian.v1.ToolDeclaration.output_schema: describes the typed answer a read
+returns"""
+
 PLUGIN_DECLARATION_SECRET_SETTINGS_COUNT = Count(least=0, most=64)
 """meridian.v1.PluginDeclaration.secret_settings: names the secret settings the
 version will ask for, before it is launched (Q6)"""

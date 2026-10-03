@@ -90,19 +90,22 @@ import hashlib
 import hmac
 import http.server
 import inspect
+import json
 import logging
 import os
+import re
 import secrets
 import threading
 import urllib.parse
 from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, NoReturn, cast
 
 import jinja2
 from markupsafe import Markup
 
+from . import params as _params
 from .asgi import ASGIApp, CallerMiddleware, Receive, Scope, Send
 from .client import BUTTONS, Caller, Page, _levels
 from .v1 import sidecar_pb2
@@ -115,7 +118,7 @@ log = logging.getLogger("meridian.pages")
 #: The kit the base template links, from the path the dashboard serves it at on
 #: the plugin's own host. A dashboard answers any 0.x with the newest 0.x it
 #: carries; this is the version the base template was built against.
-KIT = "0.7.0"
+KIT = "0.9.0"
 
 #: The form field, and the header, a request that changes something carries its
 #: token in.
@@ -151,7 +154,7 @@ SPELLING: dict[int, str] = {
 
 # Markup is markupsafe's, re-exported: text that is HTML already, which a
 # template puts in as it is, where it escapes every other value.
-__all__ = ["KIT", "MAX_BODY", "Markup", "Pages", "Request", "Response"]
+__all__ = ["KIT", "MAX_BODY", "Field", "Markup", "Pages", "Refusal", "Request", "Response"]
 
 
 @dataclass(frozen=True)
@@ -177,6 +180,21 @@ class Request:
     body: bytes = b""
     headers: Mapping[str, str] = field(default_factory=dict)
     csrf_token: str = ""
+    # The route's typed record of inputs (`params=`), read from the form by
+    # its fields' paths or from a tool's JSON; None where the route declares
+    # none, or a form left out a field the record requires. `param_errors`
+    # names each field that did not read, by its path: a tool's call never
+    # reaches the view with one, a browser's does, so the page can show the
+    # person what they typed and what is wrong with it.
+    params: Any = None
+    param_errors: tuple[_params.Problem, ...] = ()
+
+    @property
+    def tool_name(self) -> str:
+        """The tool this request is a call to, through the deployment's MCP
+        surface (contract v12): set only by the dashboard's `/mcp`, and never
+        for a browser's request."""
+        return self.caller.tool_name
 
 
 @dataclass(frozen=True)
@@ -196,8 +214,123 @@ class Response:
         return self.body.encode() if isinstance(self.body, str) else self.body
 
 
+@dataclass(frozen=True)
+class Field:
+    """One field a refusal names: its path in the route's record by the data
+    dictionary's grammar (`positions[3].lots[0].cost`), or a path in the
+    command it was sent in (`positions[2].instrument.asset_class`); the
+    plugin's words; and, where it resolves, the dictionary's entry and what
+    the entry says, so an agent reads why without parsing a sentence."""
+
+    path: str
+    message: str = ""
+    entry: str = ""
+    said: str = ""
+
+    @classmethod
+    def of(cls, path: str, message: str = "", *, operation: str = "", at: str = "") -> Field:
+        """A field, resolved to its entry through `operation` (a matrix row's
+        name, such as RecordOpeningBalance) at `at`, the path in its command
+        (the field's own path unless given)."""
+        found = None
+        if operation:
+            from .dictionary import entry
+
+            found = entry(operation, at or path)
+        if found is None:
+            return cls(path, message)
+        return cls(path, message, str(found["name"]), str(found.get("meaning", "")))
+
+    def to_json(self) -> dict[str, str]:
+        out = {"path": self.path}
+        for name in ("message", "entry", "said"):
+            if getattr(self, name):
+                out[name] = getattr(self, name)
+        return out
+
+
+class Refusal(Exception):  # noqa: N818 - a refusal, not an error of the plugin's
+    """A route refusing what it was asked, by path (`Pages.refuse`): a tool's
+    call answers it as its error, outcome refused, each field by its path; a
+    browser's request is answered 422 with it in words, unless the route
+    says how its page shows it (`on_refused=`)."""
+
+    def __init__(
+        self, detail: str, fields: Sequence[Field] = (), reason: str = "refused"
+    ) -> None:
+        super().__init__(detail)
+        self.detail = detail
+        self.fields = tuple(fields)
+        self.reason = reason
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "outcome": "refused",
+            "reason": self.reason,
+            "fields": [each.to_json() for each in self.fields],
+            "detail": self.detail,
+        }
+
+
 View = Callable[[Request], Response | str | Awaitable[Response | str]]
 Guarded = Callable[[Request], Awaitable[Response]]
+
+
+#: A tool's name: lower-case letters, digits, `_` and `-`, at most 61.
+TOOL_NAME = re.compile(r"[a-z0-9][a-z0-9_-]{0,60}")
+
+
+@dataclass(frozen=True)
+class Tool:
+    """A tool the plugin offers on the deployment's MCP surface, derived from
+    a route that declares its inputs (contract v12; W4.1, W6.20)."""
+
+    name: str
+    title: str
+    description: str
+    method: str
+    path: str
+    levels: tuple[int, ...]
+    reads: bool
+    params: Any = None
+    answers: Any = None
+
+    def declared(self) -> sidecar_pb2.ToolDeclaration:
+        inputs = (
+            _params.schema(self.params)
+            if self.params is not None
+            else {"type": "object", "properties": {}, "additionalProperties": False}
+        )
+        output = ""
+        if self.reads:
+            output = json.dumps(
+                _params.schema(self.answers)
+                if self.answers is not None
+                else {"type": "object"},
+                separators=(",", ":"),
+            )
+        return sidecar_pb2.ToolDeclaration(
+            name=self.name,
+            title=self.title,
+            description=self.description,
+            method=self.method,
+            path=self.path,
+            levels=cast(Any, list(self.levels)),
+            reads=self.reads,
+            input_schema=json.dumps(inputs, separators=(",", ":")),
+            output_schema=output,
+        )
+
+
+@dataclass(frozen=True)
+class NotOffered:
+    """A route a plugin declares it does not offer to agents, and why: what
+    `meridian plugin check` reports, and verification refuses on a changing
+    route."""
+
+    method: str
+    path: str
+    why: str
 
 
 @dataclass(frozen=True)
@@ -207,12 +340,18 @@ class _Route:
     guarded: Guarded
     # The tab, for a page; none for a route.
     page: Page | None
+    params: Any = None
+    tool: Tool | None = None
 
 
 @dataclass(frozen=True)
 class _Serving:
     request: Request
     route: _Route
+
+    @property
+    def for_a_tool(self) -> bool:
+        return bool(self.request.tool_name)
 
 
 _serving: contextvars.ContextVar[_Serving] = contextvars.ContextVar("meridian.pages")
@@ -275,6 +414,11 @@ class Pages:
         self.kit = f"/.meridian/ui/{kit}/"
         self._routes: dict[tuple[str, str], _Route] = {}
         self._pages: list[Page] = []
+        self._tools: dict[str, Tool] = {}
+        # A tool replacing a derived one, by its route: its view serves the
+        # calls naming it there.
+        self._replacing: dict[tuple[str, str], tuple[Tool, Guarded]] = {}
+        self.not_offered: list[NotOffered] = []
         # Held by this process alone, and new at every start.
         self._secret = secrets.token_bytes(32)
         loaders: list[jinja2.BaseLoader] = [jinja2.DictLoader({"meridian/base.html": BASE})]
@@ -296,13 +440,29 @@ class Pages:
         *,
         levels: Sequence[str | int] | str | int,
         methods: Iterable[str] = ("GET",),
+        params: Any = None,
+        answers: Any = None,
+        name: str | None = None,
+        description: str | None = None,
+        tool: bool = True,
+        why: str = "",
     ) -> Callable[[View], Guarded]:
         """A tab: shown under the home's button for each of `levels`, in the
-        order declared, and served only in a session at one of them."""
+        order declared, and served only in a session at one of them.
+
+        From contract v12 a page that declares the typed data it renders
+        (`answers=`, and `params=` for its inputs) is also a read tool on the
+        deployment's MCP surface, answering that data (`answer`)."""
         levelled = _levels(levels, f"page {title!r}")
         page = Page(path, title, levels=levelled)
         page._declared()  # a path without its slash, or no level, refused now
-        return self._add(path, levelled, methods, page)
+        return self._add(
+            path,
+            levelled,
+            methods,
+            page,
+            _Declared(params, answers, name, description, None, tool, why, title),
+        )
 
     def route(
         self,
@@ -310,63 +470,244 @@ class Pages:
         *,
         levels: Sequence[str | int] | str | int,
         methods: Iterable[str] = ("GET",),
+        params: Any = None,
+        answers: Any = None,
+        name: str | None = None,
+        description: str | None = None,
+        reads: bool | None = None,
+        tool: bool = True,
+        why: str = "",
+        title: str = "",
     ) -> Callable[[View], Guarded]:
         """An endpoint that is not a tab -- a form's action, a page's data --
-        served only in a session at one of `levels`."""
+        served only in a session at one of `levels`.
+
+        From contract v12 a route declaring its inputs as one typed record
+        (`params=`) is derived as a tool: an act for a method that changes
+        something, unless `reads=True` says it changes nothing; a read for
+        GET, answering `answers=`. `name=` names the tool (else the view's
+        name), `description=` says what it does (else the view's docstring's
+        first paragraph). `tool=False` with `why=` declares a route not
+        offered to agents, which `meridian plugin check` reports and
+        verification refuses on a changing route."""
         levelled = _levels(levels, f"route {path!r}")
         if not path.startswith("/"):
             raise ValueError(f"route {path!r} does not begin with /")
         if not levelled:
             raise ValueError(f"route {path!r} names no level: admin, write or read")
-        return self._add(path, levelled, methods, None)
+        return self._add(
+            path,
+            levelled,
+            methods,
+            None,
+            _Declared(params, answers, name, description, reads, tool, why, title),
+        )
+
+    def tool(
+        self,
+        *,
+        replaces: str,
+        method: str = "POST",
+        params: Any = None,
+        answers: Any = None,
+        name: str | None = None,
+        description: str | None = None,
+        reads: bool | None = None,
+        title: str = "",
+    ) -> Callable[[View], Guarded]:
+        """A tool replacing the one derived from the route at `replaces` and
+        `method` (or standing in for one the route could not derive): its view
+        serves the calls naming it there, at the route's levels; a browser's
+        request still reaches the route's own view."""
+        verb = method.upper()
+        route = self._routes.get((replaces, verb))
+        if route is None:
+            raise ValueError(f"no route {verb} {replaces} for a tool to replace")
+
+        def decorate(view: View) -> Guarded:
+            made = self._tool_of(
+                view,
+                replaces,
+                verb,
+                route.levels,
+                _Declared(params, answers, name, description, reads, True, "", title),
+            )
+            if made is None:
+                raise ValueError(f"the tool replacing {verb} {replaces} declares no params=")
+            if route.tool is not None:
+                self._tools.pop(route.tool.name, None)
+            if made.name in self._tools:
+                raise ValueError(f"the tool {made.name} is declared twice")
+            self._tools[made.name] = made
+            replacing = dataclasses.replace(route, tool=made, params=made.params)
+            guarded = self._guard(view, replacing)
+            self._replacing[(replaces, verb)] = (made, guarded)
+            self.not_offered = [
+                each
+                for each in self.not_offered
+                if (each.method, each.path) != (verb, replaces)
+            ]
+            return guarded
+
+        return decorate
+
+    def _tool_of(
+        self,
+        view: View,
+        path: str,
+        verb: str,
+        levels: tuple[int, ...],
+        declared: _Declared,
+    ) -> Tool | None:
+        """The tool a route declares, or None where it is not derivable."""
+        if not declared.tool:
+            return None
+        reads = declared.reads if declared.reads is not None else verb in SAFE_METHODS
+        if declared.params is None and not (declared.answers is not None and reads):
+            return None
+        for record in (declared.params, declared.answers):
+            if record is not None:
+                _params.check(record)
+        name: str = declared.name or str(getattr(view, "__name__", ""))
+        if not TOOL_NAME.fullmatch(name):
+            raise ValueError(
+                f"the tool at {verb} {path} is named {name!r}: lower-case letters, digits, _ "
+                "and -, at most 61, beginning with a letter or digit; give name="
+            )
+        docstring = inspect.getdoc(view) or ""
+        description = (
+            declared.description
+            or docstring.split("\n\n")[0].replace("\n", " ")
+            or declared.title
+            or name.replace("_", " ")
+        ).strip()[:1024]
+        title = (declared.title or name.replace("_", " ").replace("-", " ").capitalize())[:120]
+        return Tool(
+            name=name,
+            title=title,
+            description=description,
+            method=verb,
+            path=path,
+            levels=levels,
+            reads=reads,
+            params=declared.params,
+            answers=declared.answers,
+        )
 
     def _add(
-        self, path: str, levels: tuple[int, ...], methods: Iterable[str], page: Page | None
+        self,
+        path: str,
+        levels: tuple[int, ...],
+        methods: Iterable[str],
+        page: Page | None,
+        declared: _Declared,
     ) -> Callable[[View], Guarded]:
         verbs = tuple(dict.fromkeys(method.upper() for method in methods))
         for verb in verbs:
             if (path, verb) in self._routes:
                 raise ValueError(f"{verb} {path} is declared twice")
+        if not declared.tool and not declared.why.strip():
+            raise ValueError(
+                f"{path} is declared tool=False without why=: say why it is not offered"
+            )
+        if declared.params is not None:
+            _params.check(declared.params)
 
         def decorate(view: View) -> Guarded:
-            @functools.wraps(view)
-            async def guarded(request: Request) -> Response:
-                if request.caller.level not in levels:
-                    return _refusal(path, levels, request.caller.level)
-                request = dataclasses.replace(
-                    request, csrf_token=self.csrf_token(request.caller)
-                )
-                if request.method.upper() not in SAFE_METHODS and not _presented(request):
-                    return Response(
-                        "This form has expired or did not come from this plugin's page. "
-                        "Reload the page and try again.",
+            guarded: Guarded | None = None
+            for verb in verbs:
+                made = self._tool_of(view, path, verb, levels, declared)
+                if made is not None:
+                    if made.name in self._tools:
+                        # One view serving two methods: one tool, at the first.
+                        made = None
+                    else:
+                        self._tools[made.name] = made
+                if not declared.tool:
+                    self.not_offered.append(NotOffered(verb, path, declared.why.strip()))
+                route = _Route(path, levels, None, page, declared.params, made)  # type: ignore[arg-type]
+                serving = self._guard(view, route)
+                route = dataclasses.replace(route, guarded=serving)
+                self._routes[(path, verb)] = route
+                guarded = guarded or serving
+            if page is not None:
+                self._pages.append(page)
+            assert guarded is not None
+            return guarded
+
+        return decorate
+
+    def _guard(self, view: View, route: _Route) -> Guarded:
+        """The view, served only in a session at one of the route's levels,
+        its form token checked for a browser, its record read."""
+        path, levels = route.path, route.levels
+
+        @functools.wraps(view)
+        async def guarded(request: Request) -> Response:
+            if request.caller.level not in levels:
+                return _refusal(path, levels, request.caller.level)
+            request = dataclasses.replace(request, csrf_token=self.csrf_token(request.caller))
+            if request.tool_name:
+                # Only `/mcp` sets a tool's name, and the sidecar admits it at
+                # this tool's route alone (W4.9): no browser's cookie came
+                # with it, so no form token guards it.
+                if route.tool is None or route.tool.name != request.tool_name:
+                    return _tool_refused(
+                        Refusal(
+                            f"{request.method} {path} is not the tool {request.tool_name}",
+                            reason="not_this_tool",
+                        ),
                         403,
-                        "text/plain; charset=utf-8",
                     )
-                serving = _serving.set(_Serving(request, route))
+            elif request.method.upper() not in SAFE_METHODS and not _presented(request):
+                return Response(
+                    "This form has expired or did not come from this plugin's page. "
+                    "Reload the page and try again.",
+                    403,
+                    "text/plain; charset=utf-8",
+                )
+            if route.params is not None:
+                read = _read_params(route.params, request)
+                if isinstance(read, Refusal):
+                    return _tool_refused(read, 422)
+                record, problems = read
+                request = dataclasses.replace(request, params=record, param_errors=problems)
+            serving = _serving.set(_Serving(request, route))
+            try:
                 try:
                     answer = view(request)
                     if inspect.isawaitable(answer):
                         answer = await answer
-                finally:
-                    _serving.reset(serving)
-                if isinstance(answer, str):
-                    return Response(answer)
-                if not isinstance(answer, Response):
-                    raise TypeError(
-                        f"the view at {path} answered a {type(answer).__name__}; "
-                        "a view answers a str, the page, or a Response"
-                    )
-                return answer
+                except Refusal as refused:
+                    if request.tool_name:
+                        return _tool_refused(refused, 422)
+                    return Response(_refusal_words(refused), 422, "text/plain; charset=utf-8")
+            finally:
+                _serving.reset(serving)
+            if isinstance(answer, str):
+                answer = Response(answer)
+            if not isinstance(answer, Response):
+                raise TypeError(
+                    f"the view at {path} answered a {type(answer).__name__}; "
+                    "a view answers a str, the page, or a Response"
+                )
+            if request.tool_name and not answer.content_type.startswith("application/json"):
+                # A tool answers typed data (`answer`) or a refusal (`refuse`):
+                # a page's HTML could say anything, a refusal included.
+                log.error(
+                    "the tool %s at %s answered a page, not typed data", request.tool_name, path
+                )
+                return _tool_refused(
+                    Refusal(
+                        f"the tool {request.tool_name} answered a page, not typed data: "
+                        "its view answers with pages.answer or pages.refuse",
+                        reason="untyped_answer",
+                    ),
+                    500,
+                )
+            return answer
 
-            route = _Route(path, levels, guarded, page)
-            for verb in verbs:
-                self._routes[(path, verb)] = route
-            if page is not None:
-                self._pages.append(page)
-            return guarded
-
-        return decorate
+        return guarded
 
     def csrf_token(self, caller: Caller) -> str:
         """The token a request from this person, in a session at this level,
@@ -378,6 +719,54 @@ class Pages:
     def declared(self) -> tuple[Page, ...]:
         """The tabs, in the order declared: what registration sends."""
         return tuple(self._pages)
+
+    @property
+    def tools(self) -> tuple[Tool, ...]:
+        """The tools derived from the routes, and those replacing them, in
+        the order declared: what registration sends (contract v12)."""
+        return tuple(self._tools.values())
+
+    # ── Answering ────────────────────────────────────────────────────────
+
+    def answer(
+        self,
+        template: str,
+        data: Any,
+        /,
+        *,
+        outcome: str | None = None,
+        status: int = 200,
+        **context: Any,
+    ) -> Response:
+        """`data` as the route's answer: rendered into `template` for a
+        browser, with `data` in its context beside `context`; for a tool's
+        call, `data` itself as JSON with its outcome -- `made` for an act,
+        `unchanged` for a read or for a repeat the plugin recognised
+        (`outcome=`). Called from a view, while it serves a request."""
+        serving = _current()
+        if serving.for_a_tool:
+            reads = serving.route.tool is not None and serving.route.tool.reads
+            said = outcome or ("unchanged" if reads else "made")
+            if said not in ("made", "unchanged"):
+                raise ValueError(f"an answer's outcome is made or unchanged, not {said!r}")
+            body = {"outcome": said, "data": _params.to_json(data)}
+            return Response(json.dumps(body, separators=(",", ":")), status, "application/json")
+        return Response(self.render(template, data=data, **context), status)
+
+    def refuse(
+        self, detail: str, *fields: Field | str | tuple[str, str], reason: str = "refused"
+    ) -> NoReturn:
+        """Refuse what the route was asked, naming each field by its path:
+        a tool's call gets it as its error; a browser's page shows it."""
+        named = [
+            each
+            if isinstance(each, Field)
+            else Field(each)
+            if isinstance(each, str)
+            else Field(each[0], each[1])
+            for each in fields
+        ]
+        raise Refusal(detail, named, reason)
 
     # ── Serving ──────────────────────────────────────────────────────────
 
@@ -400,6 +789,9 @@ class Pages:
         if route is None and method == "HEAD":
             route = self._routes.get((request.path, "GET"))
         if route is not None:
+            replaced = self._replacing.get((route.path, method))
+            if replaced is not None and request.tool_name == replaced[0].name:
+                return await replaced[1](request)
             return await route.guarded(request)
         taken = {verb for path, verb in self._routes if path == request.path}
         if "GET" in taken:
@@ -501,6 +893,61 @@ class Pages:
                 "meridian": base,
             }
         )
+
+
+@dataclass(frozen=True)
+class _Declared:
+    """What a route declares of itself as a tool."""
+
+    params: Any
+    answers: Any
+    name: str | None
+    description: str | None
+    reads: bool | None
+    tool: bool
+    why: str
+    title: str
+
+
+def _read_params(
+    record: Any, request: Request
+) -> Refusal | tuple[Any, tuple[_params.Problem, ...]]:
+    """The route's record from the request: a tool's JSON body, refused by
+    path where it does not read; a script's JSON alike; or a form's fields
+    (a GET's query), each field that does not read named beside it."""
+    kind = request.headers.get("content-type", "").split(";")[0].strip()
+    if request.tool_name or kind == "application/json":
+        try:
+            arguments = json.loads(request.body or b"{}")
+        except ValueError:
+            return Refusal("the arguments are not JSON", reason="invalid_arguments")
+        try:
+            return _params.from_json(record, arguments), ()
+        except _params.Unread as unread:
+            if request.tool_name:
+                return Refusal(
+                    "; ".join(
+                        f"{p.path or 'the arguments'}: {p.message}" for p in unread.problems
+                    ),
+                    [Field(p.path, p.message) for p in unread.problems],
+                    "invalid_arguments",
+                )
+            return None, unread.problems
+    given = request.query if request.method.upper() in SAFE_METHODS else request.form
+    return _params.from_form(record, given)
+
+
+def _tool_refused(refusal: Refusal, status: int) -> Response:
+    return Response(
+        json.dumps(refusal.to_json(), separators=(",", ":")), status, "application/json"
+    )
+
+
+def _refusal_words(refusal: Refusal) -> str:
+    lines = [refusal.detail] + [
+        f"{each.path}: {each.message or each.said}".rstrip(": ") for each in refusal.fields
+    ]
+    return "\n".join(line for line in lines if line)
 
 
 def _presented(request: Request) -> bool:

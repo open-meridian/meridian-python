@@ -64,7 +64,7 @@ if TYPE_CHECKING:
 #: incomplete entry left out, and the delegation a person acted through -- and
 #: a newer sidecar still admits it. Raised with every contract revision that
 #: adds something a plugin can depend on.
-SCHEMA_VERSION = "v11"
+SCHEMA_VERSION = "v12"
 
 #: Where a sidecar listens. Loopback, always: a sidecar reachable from another
 #: host is a way around the boundary it exists to enforce.
@@ -253,6 +253,14 @@ class Interface:
                 DeprecationWarning,
                 stacklevel=3,
             )
+
+    def _tools(self) -> list[sidecar_pb2.ToolDeclaration]:
+        """The tools derived from the pages' typed routes (contract v12)."""
+        from .pages import Pages
+
+        if not isinstance(self.pages, Pages):
+            return []
+        return [tool.declared() for tool in self.pages.tools]
 
     def _declared(self) -> sidecar_pb2.InterfaceDeclaration:
         from .pages import Pages
@@ -463,6 +471,10 @@ class Caller:
     # sidecar stamps the delegation on every command sent for them.
     delegation_id: str = ""
     client_name: str = ""
+    # The tool a call through the deployment's MCP surface names (contract
+    # v12): set only by the dashboard's `/mcp`, and the sidecar admits it at
+    # that tool's route alone. Empty for every browser's request.
+    tool_name: str = ""
 
     @classmethod
     def from_header(cls, header: str) -> Caller:
@@ -479,6 +491,7 @@ class Caller:
             level=claims.level,
             delegation_id=claims.delegation_id,
             client_name=claims.client_name,
+            tool_name=claims.tool_name,
         )
 
     @property
@@ -809,6 +822,7 @@ async def connect(
                 settings=[setting._declared() for setting in settings],
                 reads_external_accounts=reads_external_accounts,
                 declaration=declaration.to_wire(),
+                tools=interface._tools() if interface is not None else [],
             ),
             # Held until the channel is ready rather than failed at once,
             # within the deadline; an answer, refusal included, ends the wait.

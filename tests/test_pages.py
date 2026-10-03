@@ -203,8 +203,8 @@ def test_head_is_answered_for_every_get_page_with_its_headers_and_no_body(
 def test_a_page_is_wrapped_in_the_kits_base_template(templates: Path) -> None:
     text = PageClient(build(templates), read={"ACC-1"}).get("/", "read").text
     assert text.startswith("<!doctype html>")
-    assert '<link rel="stylesheet" href="/.meridian/ui/0.7.0/meridian.css">' in text
-    assert '<script src="/.meridian/ui/0.7.0/meridian.js"></script>' in text
+    assert '<link rel="stylesheet" href="/.meridian/ui/0.9.0/meridian.css">' in text
+    assert '<script src="/.meridian/ui/0.9.0/meridian.js"></script>' in text
     assert "<title>Accounts · Ledger</title>" in text
     assert '<main class="page">' in text and "<h1>Ledger</h1>" in text
     assert "Ada Park, at read." in text
