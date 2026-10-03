@@ -395,8 +395,50 @@ async def test_an_abort_with_no_code_is_still_a_handler_error(sidecar) -> None:
     assert caught.value.kind == "handler error"
 
 
-def test_the_sdk_declares_contract_v9() -> None:
-    assert meridian.SCHEMA_VERSION == "v9"
+async def test_an_unusable_instrument_record_is_named_and_unavailability_retryable(
+    sidecar,
+) -> None:
+    """Contract v10: the book names an instrument whose record lacks its asset
+    class or currency, as any missing field; and a command it could not check
+    because the instrument store did not answer is refused beside
+    UNAVAILABLE, to be tried again."""
+    service, _ = sidecar
+    service.operations.refuse = (grpc.StatusCode.ABORTED, "the opening balance is incomplete")
+    missing = ("positions[0].instrument.asset_class", "positions[0].instrument.currency")
+    service.operations.refuse_metadata = (
+        (
+            "meridian-refusal-bin",
+            sidecar_pb2.Refusal(
+                reason=sidecar_pb2.REFUSAL_REASON_INCOMPLETE, fields=missing
+            ).SerializeToString(),
+        ),
+    )
+    plugin = await connected(sidecar)
+    try:
+        with pytest.raises(CommandRefused) as caught:
+            await plugin.record_opening_balance(account_id="ACC-1", reason="r")
+        assert caught.value.fields == missing
+        assert not caught.value.retryable
+
+        service.operations.refuse = (grpc.StatusCode.UNAVAILABLE, "try again")
+        service.operations.refuse_metadata = (
+            (
+                "meridian-refusal-bin",
+                sidecar_pb2.Refusal(
+                    reason=sidecar_pb2.REFUSAL_REASON_REFERENCE_UNAVAILABLE
+                ).SerializeToString(),
+            ),
+        )
+        with pytest.raises(CommandRefused) as again:
+            await plugin.record_opening_balance(account_id="ACC-1", reason="r")
+    finally:
+        await plugin.leave()
+    assert again.value.reason_name == "REFUSAL_REASON_REFERENCE_UNAVAILABLE"
+    assert again.value.retryable
+
+
+def test_the_sdk_declares_contract_v10() -> None:
+    assert meridian.SCHEMA_VERSION == "v10"
 
 
 def test_every_row_of_the_book_is_heard_with_a_handler_of_its_own() -> None:

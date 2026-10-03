@@ -63,7 +63,7 @@ if TYPE_CHECKING:
 #: incomplete entry left out, and the delegation a person acted through -- and
 #: a newer sidecar still admits it. Raised with every contract revision that
 #: adds something a plugin can depend on.
-SCHEMA_VERSION = "v9"
+SCHEMA_VERSION = "v10"
 
 #: Where a sidecar listens. Loopback, always: a sidecar reachable from another
 #: host is a way around the boundary it exists to enforce.
@@ -100,6 +100,10 @@ _OPERATION_FAILURES = {
     grpc.StatusCode.INVALID_ARGUMENT: "invalid",
     grpc.StatusCode.UNAUTHENTICATED: "not vouched for",
 }
+
+#: The statuses a refusal with a code arrives beside: a component's refusal
+#: of its own, or one it could not check, to be tried again (contract v10).
+_CODED = (grpc.StatusCode.ABORTED, grpc.StatusCode.UNAVAILABLE)
 
 #: Where the sidecar sends a refusal's code, beside its status: a `Refusal`,
 #: encoded (spec/typed-sidecar-operations, section 7).
@@ -680,7 +684,10 @@ class Plugin(Operations):
             if reason == sidecar_pb2.REFUSAL_REASON_EXTERNAL_ACCOUNT_NOT_LINKED:
                 raise NotLinked(operation, detail) from failed
             coded = reason != sidecar_pb2.REFUSAL_REASON_UNSPECIFIED
-            if failed.code() is grpc.StatusCode.ABORTED and coded:
+            # ABORTED, a component's refusal of its own; or UNAVAILABLE with a
+            # code, a command the component could not check, nothing recorded,
+            # to be tried again (contract v10).
+            if coded and failed.code() in _CODED:
                 raise CommandRefused(
                     operation, detail, reason, fields=tuple(refusal.fields)
                 ) from failed

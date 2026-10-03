@@ -62,17 +62,21 @@ async def test_the_sdk_declares_the_contract_it_was_built_for(
     v9 is the book's refusal of an incomplete entry with each field named,
     and the delegation a caller came through
     (sdk-contract/the-book-refuses-what-downstream-cannot-use,
-    sdk-contract/delegations-at-the-deployment-contract). A sidecar from
-    before it, still at v8, carries neither, so it refuses the plugin at
-    registration, naming both.
+    sdk-contract/delegations-at-the-deployment-contract).
+
+    v10 is a deployment's own instrument identity: a resolve answering a
+    record the deployment minted and stating what its source says, a
+    record's sources and offers, and the book's refusal of an incomplete
+    instrument record (decisions/030). A sidecar from before it, still at v9,
+    carries none of it, so it refuses the plugin at registration, naming both.
     """
     service, address = sidecar
     plugin = await meridian.connect(address, heartbeat=False)
     await plugin.leave()
 
     (sent,) = service.registered
-    assert meridian.SCHEMA_VERSION == "v9"
-    assert sent.schema_version == "v9"
+    assert meridian.SCHEMA_VERSION == "v10"
+    assert sent.schema_version == "v10"
 
 
 async def test_identity_and_grants_come_back(sidecar: tuple[FakeSidecar, str]) -> None:

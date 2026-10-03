@@ -101,6 +101,14 @@ class CommandRefused(CallFailed):
     `positions[0].settled_quantity`, `positions[1].lots[0].terms.cost`,
     `adjustment.lines[0].opens_lot.acquired_date` -- so a plugin shows the
     person, per position, what to supply. Empty for every other refusal.
+    From contract v10 they include an instrument whose record lacks its asset
+    class or currency -- `positions[0].instrument.asset_class` -- which the
+    deployment admin completes at the dashboard's Instruments page.
+
+    `retryable` is true for REFUSAL_REASON_REFERENCE_UNAVAILABLE (contract
+    v10): the book could not check the command because the instrument store
+    did not answer, nothing was recorded, and the same command may be sent
+    again. Every other refusal is not retried.
     """
 
     def __init__(
@@ -110,6 +118,8 @@ class CommandRefused(CallFailed):
         self.reason = reason
         self.fields = fields
         from .v1 import sidecar_pb2
+
+        self.retryable = reason == sidecar_pb2.REFUSAL_REASON_REFERENCE_UNAVAILABLE
 
         try:
             self.reason_name = sidecar_pb2.RefusalReason.Name(reason)

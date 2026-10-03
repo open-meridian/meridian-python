@@ -103,24 +103,27 @@ async def test_the_same_statement_twice_is_recognised_not_duplicated(plugin) -> 
     assert second.statement_id == first.statement_id
 
 
-async def test_a_set_nothing_matches_is_answered_with_a_placeholder(plugin) -> None:
+async def test_a_set_nothing_matches_is_answered_with_a_minted_record(plugin) -> None:
     """The instrument store answers, and nothing matching is still an answer.
 
-    Nothing is loaded into the instrument store here, so it answers the
-    deployment's LCL- placeholder for the set (W3.7), which a holding can be
-    recorded against until the platform's INS- ID replaces it; and the same
-    one when asked again.
+    Nothing is loaded into the instrument store here, so it mints the
+    deployment's own record for the set (W3.7, contract v10: its LCL- ID is its
+    key for life, not a placeholder), saying so; asked again, the same record
+    matches and nothing is minted. What the source states is offered, never in
+    force, so a resolve stating it is answered the same way.
     """
     asked = {
         "identifiers": [meridian.Identifier(scheme="isin", value="US0000000000")],
         "as_of_ns": NOW,
+        "stated_asset_class": "equity",
+        "stated_currency": "USD",
     }
     reply = await plugin.resolve_identifier(**asked)
     assert reply.found
-    assert reply.placeholder
     assert reply.instrument_id.startswith("LCL-")
     again = await plugin.resolve_identifier(**asked)
     assert again.instrument_id == reply.instrument_id
+    assert not again.minted
 
 
 async def test_there_is_no_path_onto_the_bus_but_a_typed_operation(plugin) -> None:
@@ -516,7 +519,7 @@ async def test_a_snaptrade_shaped_account_records_holdings_with_no_value_and_cas
 
 async def test_cash_is_named_by_its_currency_under_iso4217(plugin) -> None:
     """The scheme reaches the instrument store like any global one; with no
-    security master data here, it answers the deployment's placeholder."""
+    record of it here, it answers one the deployment mints (contract v10)."""
     reply = await plugin.resolve_identifier(
         identifiers=[meridian.Identifier(scheme="iso4217", value="USD")], as_of_ns=NOW
     )

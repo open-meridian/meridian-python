@@ -1,11 +1,12 @@
-"""The book of record, end to end, through this SDK and real sidecars (contracts v8 and v9).
+"""The book of record, end to end, through this SDK and real sidecars (contracts v8 to v10).
 
 Run by `make e2e-book` in meridian-core, which brings up the street store, the
 book, the instrument store and the conductor across a broker, four sidecars in
 one network namespace -- a custody plugin's, an operations plugin's holding the
 public half of a key made for the run, a reporting plugin's whose read scope is
 one account, and an operations plugin's whose scope is empty -- and this
-container beside them. Its accounts and grants are e2e/book/accounts.sql's.
+container beside them. Its accounts and grants are e2e/book/accounts.sql's, and
+the instrument records the deployment admin completed, e2e/book/instruments.sql's.
 
 What it holds, in one narrative, since each step reads what the last wrote:
 
@@ -13,10 +14,13 @@ day 1, a custody plugin records an account's statement; an operations plugin
 sends an opening balance missing what downstream needs, refused naming each
 field (contract v9), then composes the complete one from the street and
 records it for a person, who answers for it, acting through a client on a
-delegation; a reporting plugin reads the positions, lots and
-pending settlements, and the account's standing opening balance; a second
-opening balance is refused by its code, a duplicate by its key is answered as
-the first, and one sent for nobody is refused;
+delegation, which the book's entry names beside the person (contract v10);
+an opening balance naming a record the deployment minted, with nothing in
+force, is refused naming its asset class and currency (contract v10); a
+reporting plugin reads the positions, lots and pending settlements, and the
+account's standing opening balance; a second opening balance is refused by
+its code, a duplicate by its key is answered as the first, and one sent for
+nobody is refused;
 
 day 2, the custodian's change: the operations plugin records the difference
 as a break, as itself, which the reporting plugin hears (own false) and the
@@ -189,8 +193,10 @@ def person(
 
 
 async def resolved(custody: meridian.Plugin, scheme: str, value: str) -> str:
-    """An instrument as custody resolves it: with no platform, the
-    deployment's placeholder for the identifier (W3.1, W3.7)."""
+    """An instrument as custody resolves it: the deployment's record its
+    identifier meets (W3.1), AAPL's and USD's completed by the deployment admin
+    before the run (e2e/book/instruments.sql); anything else, a record the
+    deployment mints, with nothing in force (W3.7, contract v10)."""
     reply = await custody.resolve_identifier(
         identifiers=[meridian.Identifier(scheme=scheme, value=value, source="e2e-book")],
         as_of_ns=time.time_ns(),
@@ -402,6 +408,10 @@ async def test_the_book_of_record_end_to_end() -> None:
         )
         assert recorded.entry.kind == "opening-balance"
         assert recorded.entry.actor.person.subject == PERSON
+        # The delegation and the client beside the person, from the
+        # envelope's stamp (sdk-contract/the-book-records-the-delegation).
+        assert recorded.entry.actor.person.delegation_id == "DLG-e2e-book"
+        assert recorded.entry.actor.person.client_name == "meridian on e2e"
         assert recorded.attributes.opening_balance.as_of_date == "2026-09-08"
 
         # A duplicate by its key, after a lost reply: the first's answer.
@@ -437,6 +447,35 @@ async def test_the_book_of_record_end_to_end() -> None:
                 reason="nobody answers for this",
             )
         assert nobody.value.reason == sidecar_pb2.REFUSAL_REASON_ACTOR_REQUIRED
+
+        # A record the deployment minted for what custody reported, nothing
+        # in force: the book refuses an entry naming it, by its asset class
+        # and currency, until the deployment admin completes it at the
+        # dashboard (contract v10; "flagged, not blocking" ended).
+        snap = await resolved(custody, "symbol", f"SNAP{uuid.uuid4().hex[:6].upper()}")
+        with pytest.raises(CommandRefused) as unusable:
+            await operations.record_opening_balance(
+                account_id=FUTURES,
+                as_of_date="2026-09-08",
+                sources=[source],
+                positions=[
+                    meridian.OpeningPosition(
+                        instrument_id=snap,
+                        side="long",
+                        trade_date_quantity=Decimal("40"),
+                        settled_quantity=Decimal("40"),
+                    )
+                ],
+                reason="an instrument nobody has completed",
+                idempotency_key=f"opening-balance:{FUTURES}:incomplete-record",
+                acting_for=person([BROKERAGE, FUTURES]),
+            )
+        assert unusable.value.reason == sidecar_pb2.REFUSAL_REASON_INCOMPLETE
+        assert unusable.value.fields == (
+            "positions[0].instrument.asset_class",
+            "positions[0].instrument.currency",
+        )
+        assert not unusable.value.retryable
 
         # What reporting reads of it: the positions, lots, and the standing
         # opening balance.

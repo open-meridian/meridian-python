@@ -95,7 +95,7 @@ def test_every_release_since_the_first_recorded_has_its_step() -> None:
         ("0.6.0", "0.6.1"),
         ("0.6.1", "0.7.0"),
     ]
-    assert (steps[-1].source, steps[-1].target) == ("0.13.0", "0.14.0")
+    assert (steps[-1].source, steps[-1].target) == ("0.14.0", "0.15.0")
     # A release that moves the version records its step, if only the pins.
     assert steps[-1].target == SDK
 
@@ -613,3 +613,39 @@ def test_the_runner_refuses_versions_it_has_no_steps_between() -> None:
         check=False,
     )
     assert ran.returncode == 2 and "no migration is recorded from 0.3.0" in ran.stderr
+
+
+def test_a_resolve_results_placeholder_becomes_minted() -> None:
+    result = one(
+        """\
+        import meridian
+
+        async def resolved(plugin: meridian.Plugin, identifiers, counted) -> str:
+            answer = await plugin.resolve_identifier(identifiers=identifiers, as_of_ns=0)
+            counted.placeholders += 1 if answer.placeholder else 0
+            return answer.instrument_id
+        """,
+        "0.14.0",
+        "0.15.0",
+    )
+    text = result.files["src/p/x.py"]
+    assert "1 if answer.minted else 0" in text
+    assert "counted.placeholders" in text, "a name not bound to a resolve is left alone"
+    (step,) = result.steps
+    assert step.rewrote == {"src/p/x.py": {"resolve-minted": 1}}
+    assert left_by_hand(result) == []
+
+
+def test_a_book_positions_placeholder_is_left_by_hand() -> None:
+    result = one(
+        """\
+        import meridian
+
+        def flagged(position: meridian.BookPosition) -> bool:
+            return position.placeholder
+        """,
+        "0.14.0",
+        "0.15.0",
+    )
+    assert result.files == {}
+    assert left_by_hand(result) == [("position-placeholder", "src/p/x.py", 4)]

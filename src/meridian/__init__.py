@@ -25,6 +25,13 @@ gives is a `CommandRefused` carrying its code. From contract v9 the book
 refuses an entry missing what downstream needs (REFUSAL_REASON_INCOMPLETE),
 naming each field in `CommandRefused.fields`; and a `Caller` who came through
 a client names its delegation and client (`delegation_id`, `client_name`).
+From contract v10 a deployment's instrument identity is its own: a resolve
+that matches nothing answers a record the deployment minted
+(`ResolveIdentifierResult.minted`), a resolve may state what the source says
+of the security (`stated_asset_class`, `stated_currency`,
+`stated_description`), kept as offers for the deployment admin to accept, and
+the book requires each instrument's asset class and currency, naming
+`positions[n].instrument.asset_class` when a record lacks it.
 """
 
 from .asgi import CallerMiddleware

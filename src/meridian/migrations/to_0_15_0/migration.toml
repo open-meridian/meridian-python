@@ -1,0 +1,45 @@
+# open-meridian 0.14.0 to 0.15.0: the SDK declares contract v10; a deployment's
+# instrument identity is its own, and a person completes its records
+# (sdk-contract/a-deployments-instrument-identity-is-its-own,
+# kernel/a-deployment-completes-its-instrument-records,
+# sdk-contract/the-book-records-the-delegation; decisions/030).
+from = "0.14.0"
+to = "0.15.0"
+summary = """
+The SDK declares contract v10 (meridian.SCHEMA_VERSION). A deployment mints its
+own instrument IDs and works standalone: a resolve that matches nothing is
+answered with a record the deployment minted, said by
+ResolveIdentifierResult.minted, which replaces .placeholder, and an LCL- ID is a
+record like any other, not one waiting to be replaced. A resolve may state what
+the plugin's source says of the security -- stated_asset_class, stated_currency,
+stated_description -- which the deployment keeps as offers for its admin to
+accept, never in force by itself. A record read with resolve_instrument says
+where each value came from (InstrumentRecord.sources) and what is offered
+beside it (InstrumentRecord.offers). The book requires each instrument's asset
+class and currency: an opening balance or an adjustment naming an instrument
+whose record lacks either is refused with REFUSAL_REASON_INCOMPLETE naming
+positions[n].instrument.asset_class or .currency, which the deployment admin
+completes at the dashboard's Instruments page; and a command the book could not
+check because the instrument store did not answer is refused to be tried again,
+REFUSAL_REASON_REFERENCE_UNAVAILABLE beside UNAVAILABLE. BookPosition no longer
+carries placeholder. The book's actor names the delegation and the client a
+person acted through (PersonActor.delegation_id, .client_name). A plugin built on
+0.15.0 is refused at registration by a sidecar that accepts only v9, naming
+both. This step rewrites a resolve result's .placeholder to .minted; a book
+position's .placeholder, which has no successor, is left by hand.
+"""
+breaking = true
+rewrite = "rewrite.py"
+
+[[rewrites]]
+rule = "resolve-minted"
+what = """a resolve_identifier result's .placeholder became .minted: true when this resolve \
+minted the deployment's record for identifiers nothing matched (contract v10)"""
+
+[[by_hand]]
+rule = "position-placeholder"
+what = """a .placeholder read that is not a resolve result's: BookPosition.placeholder is \
+gone from contract v10, an LCL- ID being a record like any other"""
+instead = """drop it: what holds a position back is a record the book cannot use, which the \
+book's refusal names (positions[n].instrument.asset_class), and a plugin links the person \
+to the dashboard's Instruments page; resolve_instrument reads what a record lacks"""

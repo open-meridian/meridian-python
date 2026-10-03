@@ -42,6 +42,9 @@ class RefusalReason(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     REFUSAL_REASON_LATER_ENTRIES_STAND: _ClassVar[RefusalReason]
     REFUSAL_REASON_IDEMPOTENCY_CONFLICT: _ClassVar[RefusalReason]
     REFUSAL_REASON_INCOMPLETE: _ClassVar[RefusalReason]
+    REFUSAL_REASON_IDENTIFIER_HELD: _ClassVar[RefusalReason]
+    REFUSAL_REASON_RECORD_CHANGED: _ClassVar[RefusalReason]
+    REFUSAL_REASON_REFERENCE_UNAVAILABLE: _ClassVar[RefusalReason]
 ACCESS_LEVEL_UNSPECIFIED: AccessLevel
 ACCESS_LEVEL_READ: AccessLevel
 ACCESS_LEVEL_WRITE: AccessLevel
@@ -67,6 +70,9 @@ REFUSAL_REASON_BREAK_STATE: RefusalReason
 REFUSAL_REASON_LATER_ENTRIES_STAND: RefusalReason
 REFUSAL_REASON_IDEMPOTENCY_CONFLICT: RefusalReason
 REFUSAL_REASON_INCOMPLETE: RefusalReason
+REFUSAL_REASON_IDENTIFIER_HELD: RefusalReason
+REFUSAL_REASON_RECORD_CHANGED: RefusalReason
+REFUSAL_REASON_REFERENCE_UNAVAILABLE: RefusalReason
 
 class RegisterRequest(_message.Message):
     __slots__ = ("schema_version", "interface", "settings", "reads_external_accounts")

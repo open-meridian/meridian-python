@@ -920,6 +920,9 @@ class Operations:
         as_of_ns: int = 0,
         exchange_mic: str = "",
         currency: str = "",
+        stated_asset_class: ops.AssetClass | str | None = None,
+        stated_currency: str = "",
+        stated_description: str = "",
     ) -> ops.ResolveIdentifierResult:
         """W3.1: Reverse resolution: identifiers to an instrument, as of a date."""
         params = ops.ResolveIdentifierParams(
@@ -927,6 +930,9 @@ class Operations:
             as_of_ns=as_of_ns,
             exchange_mic=exchange_mic,
             currency=currency,
+            stated_asset_class=_enum(ops.AssetClass, stated_asset_class, "stated_asset_class"),
+            stated_currency=stated_currency,
+            stated_description=stated_description,
         )
         return await self._operate(self._operations().ResolveIdentifier, params)
 

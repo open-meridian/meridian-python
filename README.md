@@ -2,7 +2,7 @@
 
 The Python SDK for building [Open Meridian](https://open-meridian.com) plugins:
 the tools a trader has an AI agent build, and the bots and analytics a
-developer writes. Python 3.11 or newer. This is release 0.14.0; its reference
+developer writes. Python 3.11 or newer. This is release 0.15.0; its reference
 is at [open-meridian.dev](https://open-meridian.dev/api/python-sdk/).
 
 ## Start here
@@ -56,6 +56,16 @@ generated from the contract: `report_external_accounts`, `report_sync_status`,
 `list_statements`, `resolve_identifier`, `report_missing_instrument`,
 `read_accounts_for_linking` and `link_external_account`; and `receive`, for
 what its roles hear.
+
+A deployment's instrument records are its own (contract v10): a
+`resolve_identifier` that matches nothing is answered with a record the
+deployment minted, `reply.minted` true, and an `LCL-` ID is a record like any
+other. A custody plugin states what its source says of the security --
+`stated_asset_class`, `stated_currency`, `stated_description`, only what the
+source states -- which the deployment keeps as offers for its admin to accept
+at the dashboard's Instruments page, never in force by itself; a record read
+with `resolve_instrument` says where each value came from (`sources`) and what
+is offered beside it (`offers`).
 
 ### Who is asking, and what they may do
 
@@ -388,9 +398,8 @@ person's, sent `acting_for` them with a reason, as is
 gone. A message with a oneof takes one arm by keyword: a break's `position=`
 or `figure=`, a resolution's `adjustment=`, `reversal=`, `entries=` or
 `explanation=`, a basis adjustment's `cost_change=` or `stated_cost=`; two at
-once are refused naming the oneof. A position held under a placeholder
-instrument, its holding unresolved at the street, is flagged `placeholder`
-and moved onto the instrument when it is identified. What of a position
+once are refused naming the oneof. A position under a record the deployment
+admin merges into another is moved onto the one that stays. What of a position
 cannot move is recorded from each statement with `record_encumbrances`, a
 finding sent as the plugin itself, the whole set per position; the position
 then carries its `encumbrances` and the `free_quantity` the book derives
@@ -402,7 +411,13 @@ settlement need -- an opening position's settled quantity, a pending
 quantity's value date, its lots (but cash's), a lot's cost or acquisition
 date, a named source -- with `REFUSAL_REASON_INCOMPLETE`, each missing field
 in `refused.fields` by its path in the call; a lot of unknown cost and the
-not-stated settlement bucket are no longer admitted:
+not-stated settlement bucket are no longer admitted. From contract v10 it
+also requires each instrument's asset class and currency, naming
+`positions[0].instrument.asset_class` and `.currency` when the record lacks
+them, which the deployment admin completes at the dashboard's Instruments
+page; and a command it could not check because the instrument store did not
+answer is `REFUSAL_REASON_REFERENCE_UNAVAILABLE`, `refused.retryable`, nothing
+recorded and the same command safe to send again:
 
 ```python
 try:
@@ -412,6 +427,8 @@ except meridian.CommandRefused as refused:
         ...  # already recorded: read it back and say so
     elif refused.reason_name == "REFUSAL_REASON_INCOMPLETE":
         ...  # show what is missing: ("positions[0].settled_quantity", ...)
+    elif refused.retryable:
+        ...  # the instrument store did not answer: send the same command again
 ```
 
 The reads -- `list_positions` (by business date, at a watermark, or since
@@ -507,6 +524,7 @@ carries libcst.
 | 0.11.0 to 0.12.0: the SDK declares contract v7; `receive`, the street's reads, a statement's external account and figures per segment, a holding's cost and lots. Breaking | a statement's flat `buying_power`, `margin_requirement` and `maintenance_excess` into `figures=[StatementFigures(segment="", ...)]` | a statement naming no `external_account_id`, which a sidecar at v7 refuses: pass the external account it was read for, and its `institution` |
 | 0.12.0 to 0.13.0: the SDK declares contract v8; the book of record's operations, reads and deliveries, a oneof taken by keyword, `CommandRefused` with the book's codes, what of a holding cannot move, and the book's encumbrances with their free quantity | only the pins move | |
 | 0.13.0 to 0.14.0: the SDK declares contract v9; `CommandRefused.fields` names what an incomplete entry left out (`REFUSAL_REASON_INCOMPLETE`); `Caller.delegation_id` and `Caller.client_name` | only the pins move | |
+| 0.14.0 to 0.15.0: the SDK declares contract v10; a deployment's instrument identity is its own: `ResolveIdentifierResult.minted`, a resolve's `stated_*` values, a record's `sources` and `offers`, the book's refusal of an incomplete instrument record and `CommandRefused.retryable`, the book's actor naming the delegation and client. Breaking | a resolve result's `.placeholder` into `.minted` | a book position's `.placeholder`, which is gone: drop it, and link the person to the dashboard's Instruments page where the book refuses an incomplete record |
 
 `tests/migrations/` holds the plugins the migrations are recorded for, as
 written and as their migration leaves them, and `make check-migrations` holds
