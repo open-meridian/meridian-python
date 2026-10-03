@@ -479,7 +479,8 @@ async with await meridian.connect(settings=SETTINGS, declaration=DECLARATION) as
 - **The raw record**: every row and statement names the record in the
   plugin's own storage it was converted from, by the plugin's own key;
   `plugin.raw_record(key)` names this instance, and the sidecar refuses
-  another's.
+  another's. The storage is the deployment's grant to the instance,
+  `edge.storage_dir()`, None where none is granted.
 - **Provenance**: a value the vendor did not send, and the plugin closed,
   says how: `edge.derived(field, rule)`, `edge.supplied(field, person)`,
   `edge.second_source(field, source)`, or `edge.reported(field, raw_record)`.

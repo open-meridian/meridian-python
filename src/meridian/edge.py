@@ -29,9 +29,18 @@ as far back as its declared retention; the street journals it as an amendment
 beside the row as first recorded. `backfill("v11", "raw_record")` is the mark
 `record_holding(backfill=...)` takes, and `within_retention` says whether a
 raw record received at a moment is still in reach.
+
+The raw records live in the storage the deployment grants a plugin holding an
+edge role, for its instance alone (decisions/028): `storage_dir()` is where
+it is mounted, or None where none is granted (a test, a deployment before
+it, a plugin holding no edge role). The plugin keeps what it likes there and
+rebuilds from it; no other plugin reaches it.
 """
 
 from __future__ import annotations
+
+import os
+from pathlib import Path
 
 from .bounds import (
     AS_REPORTED_CODE_LENGTH,
@@ -48,6 +57,16 @@ from .operations import Provenance
 from .plugin.v1.operations_pb2 import AsReported, Backfill, RawRecordRef
 
 NANOS_PER_DAY = 86_400 * 1_000_000_000
+
+#: Where the deployment says it mounted the instance's own storage.
+STORAGE_DIR = "MERIDIAN_STORAGE_DIR"
+
+
+def storage_dir() -> Path | None:
+    """The storage the deployment grants this instance for its raw records
+    (decisions/028), or None where it grants none."""
+    granted = os.environ.get(STORAGE_DIR, "")
+    return Path(granted) if granted else None
 
 
 def _within(text: str, bound: Length, name: str) -> str:

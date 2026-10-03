@@ -4,10 +4,12 @@ declaration, and the role suites' runner."""
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
 import meridian
+from meridian import edge
 from meridian.declaration import Declaration, NotCarried, Storage, main
 from meridian.edge import (
     as_reported,
@@ -189,3 +191,12 @@ async def test_a_net_cash_row_with_its_provenance_matches_the_sweep_case() -> No
     )
     assert check(suite("custody").case("cash-net-of-a-fund-counted-in-cash"), recorder) is None
     assert recorder.sent[0].params.raw_record.instance_id == "toy-1"
+
+
+def test_the_granted_storage_is_where_the_deployment_mounted_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv(edge.STORAGE_DIR, raising=False)
+    assert edge.storage_dir() is None
+    monkeypatch.setenv(edge.STORAGE_DIR, "/var/lib/meridian/storage")
+    assert edge.storage_dir() == Path("/var/lib/meridian/storage")
