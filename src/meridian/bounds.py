@@ -96,9 +96,74 @@ LINK_EXTERNAL_ACCOUNT_REQUEST_NEW_ACCOUNT_NOTE_LENGTH = Length(least=0, most=200
 """meridian.v1.LinkExternalAccountRequest.new_account_note: keeps anything else
 worth knowing about a new account"""
 
+AS_REPORTED_SCHEME_LENGTH = Length(least=1, most=64)
+"""meridian.v1.AsReported.scheme: says whose vocabulary a value as reported is
+in"""
+
+AS_REPORTED_CODE_LENGTH = Length(least=1, most=128)
+"""meridian.v1.AsReported.code: carries the source's code that did not convert"""
+
+AS_REPORTED_TEXT_LENGTH = Length(least=1, most=256)
+"""meridian.v1.AsReported.text: carries the source's own words for the code"""
+
+RAW_RECORD_REF_KEY_LENGTH = Length(least=1, most=512)
+"""meridian.v1.RawRecordRef.key: names the raw record a row was converted from,
+in its plugin's own key"""
+
+PROVENANCE_FIELD_LENGTH = Length(least=1, most=200)
+"""meridian.v1.Provenance.field: names the value a provenance is for"""
+
+PROVENANCE_SOURCE_LENGTH = Length(least=0, most=200)
+"""meridian.v1.Provenance.source: names the second source a value came from"""
+
+PROVENANCE_PERSON_LENGTH = Length(least=0, most=200)
+"""meridian.v1.Provenance.person: names the person who supplied a value"""
+
+PROVENANCE_RULE_LENGTH = Length(least=0, most=200)
+"""meridian.v1.Provenance.rule: names the rule that derived a value"""
+
+BACKFILL_CONTRACT_VERSION_LENGTH = Length(least=2, most=8)
+"""meridian.v1.Backfill.contract_version: names the contract version that added
+the field a backfill fills"""
+
+BACKFILL_FIELD_LENGTH = Length(least=1, most=200)
+"""meridian.v1.Backfill.field: names the field a backfill fills"""
+
+PLUGIN_DECLARATION_SECRET_SETTINGS_COUNT = Count(least=0, most=64)
+"""meridian.v1.PluginDeclaration.secret_settings: names the secret settings the
+version will ask for, before it is launched (Q6)"""
+
+PLUGIN_DECLARATION_NOT_CARRIED_COUNT = Count(least=0, most=500)
+"""meridian.v1.PluginDeclaration.not_carried: names what the version receives
+from its source and does not carry (Q15)"""
+
+NOT_CARRIED_ROLE_LENGTH = Length(least=1, most=32)
+"""meridian.v1.NotCarried.role: names the role the plugin receives the name in"""
+
+NOT_CARRIED_SCHEME_LENGTH = Length(least=1, most=64)
+"""meridian.v1.NotCarried.scheme: says whose vocabulary the name is in"""
+
+NOT_CARRIED_NAME_LENGTH = Length(least=1, most=128)
+"""meridian.v1.NotCarried.name: names a source's field, or a code of its code
+set, the plugin receives and does not carry"""
+
+STORAGE_DECLARATION_RETENTION_DAYS_RANGE = Range(least=1, most=36500, capped=False)
+"""meridian.v1.StorageDeclaration.retention_days: says how long the plugin
+keeps a raw record"""
+
 HEARTBEAT_REQUEST_FIGURES_COUNT = Count(least=0, most=8)
 """meridian.v1.HeartbeatRequest.figures: reports the plugin's figures as they
 stand, in the order to draw them"""
+
+HEARTBEAT_REQUEST_NOT_CARRIED_SEEN_COUNT = Count(least=0, most=500)
+"""meridian.v1.HeartbeatRequest.not_carried_seen: reports how often the plugin
+saw each name it does not carry (W4.5, Q15)"""
+
+NOT_CARRIED_SEEN_SCHEME_LENGTH = Length(least=1, most=64)
+"""meridian.v1.NotCarriedSeen.scheme: says whose vocabulary the name is in"""
+
+NOT_CARRIED_SEEN_NAME_LENGTH = Length(least=1, most=128)
+"""meridian.v1.NotCarriedSeen.name: names what was seen"""
 
 PLUGIN_FIGURE_LABEL_LENGTH = Length(least=1, most=40)
 """meridian.v1.PluginFigure.label: names a figure on the plugin's Summary tile,
@@ -113,6 +178,30 @@ PLUGIN_FIGURE_WHY_LENGTH = Length(least=0, most=200)
 SIDECAR_RECEIVE_LIMIT_RANGE = Range(least=0, most=1024, capped=True)
 """SidecarReceive.limit: bounds what the sidecar holds for a plugin that reads
 slowly"""
+
+RECORD_HOLDINGS_STATEMENT_REQUEST_PROVENANCE_COUNT = Count(least=0, most=32)
+"""meridian.v1.RecordHoldingsStatementRequest.provenance: says where each value
+the plugin closed rather than read came from"""
+
+RECORD_HOLDING_REQUEST_PROVENANCE_COUNT = Count(least=0, most=32)
+"""meridian.v1.RecordHoldingRequest.provenance: says where each value the
+plugin closed rather than read came from"""
+
+RECORD_HOLDING_REQUEST_PENDING_COUNT = Count(least=0, most=64)
+"""meridian.v1.RecordHoldingRequest.pending: states the quantities not yet
+settled, each by its value date"""
+
+STATEMENT_RECORDED_EVENT_PROVENANCE_COUNT = Count(least=0, most=32)
+"""meridian.v1.StatementRecordedEvent.provenance: says where each value the
+plugin closed rather than read came from"""
+
+CUSTODIAL_POSITION_PROVENANCE_COUNT = Count(least=0, most=32)
+"""meridian.v1.CustodialPosition.provenance: says where each value the plugin
+closed rather than read came from"""
+
+CUSTODIAL_POSITION_PENDING_COUNT = Count(least=0, most=64)
+"""meridian.v1.CustodialPosition.pending: states the quantities not yet
+settled, each by its value date"""
 
 LIST_CUSTODIAL_POSITIONS_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=True)
 """meridian.v1.ListCustodialPositionsRequest.page_size: bounds a page"""

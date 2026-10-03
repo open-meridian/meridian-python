@@ -90,14 +90,28 @@ def caller_header(
 
 
 def heartbeat(
-    *, healthy: bool = True, detail: str = "", figures: Iterable[Figure] = ()
+    *,
+    healthy: bool = True,
+    detail: str = "",
+    figures: Iterable[Figure] = (),
+    not_carried_seen: Mapping[tuple[str, str], int] | None = None,
 ) -> sidecar_pb2.HeartbeatRequest:
     """The heartbeat the sidecar receives from a plugin reporting these: its
-    figures as the wire carries them, in the plugin's order. Raises as
-    `plugin.figures = figures` does, before anything would be sent, for a
-    figure past a bound (ValueError, in the sidecar's words) or of no kind
-    a figure is (TypeError)."""
-    return sidecar_pb2.HeartbeatRequest(healthy=healthy, detail=detail, figures=wire(figures))
+    figures as the wire carries them, in the plugin's order, and how often it
+    saw each name not carried (`plugin.note_not_carried`, contract v11), by
+    (scheme, name), in their order. Raises as `plugin.figures = figures`
+    does, before anything would be sent, for a figure past a bound
+    (ValueError, in the sidecar's words) or of no kind a figure is
+    (TypeError)."""
+    return sidecar_pb2.HeartbeatRequest(
+        healthy=healthy,
+        detail=detail,
+        figures=wire(figures),
+        not_carried_seen=[
+            sidecar_pb2.NotCarriedSeen(scheme=scheme, name=name, count=count)
+            for (scheme, name), count in sorted((not_carried_seen or {}).items())
+        ],
+    )
 
 
 @dataclass(frozen=True)

@@ -155,154 +155,154 @@ class PluginOperationsServicer(object):
     """Missing associated documentation comment in .proto file."""
 
     def ReportExternalAccounts(self, request, context):
-        """W2.8: platform.custody.{instance}.event.external-accounts (event).
+        """W2.8: platform.custody.{instance}.event.external-accounts (event; stable).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def ReportSyncStatus(self, request, context):
-        """W2.1: platform.custody.{instance}.event.sync-status (event).
+        """W2.1: platform.custody.{instance}.event.sync-status (event; stable).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def RecordHoldingsStatement(self, request, context):
-        """W2.2: platform.street.command.record-statement (command).
+        """W2.2: platform.street.command.record-statement (command; stable).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def RecordHolding(self, request, context):
-        """W2.3: platform.street.command.record-holding (command).
+        """W2.3: platform.street.command.record-holding (command; stable).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def ListCustodialPositions(self, request, context):
-        """W2.7: platform.street.query.list-custodial-positions (query).
+        """W2.7: platform.street.query.list-custodial-positions (query; stable).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def ListStatements(self, request, context):
-        """W2.9: platform.street.query.list-statements (query).
+        """W2.9: platform.street.query.list-statements (query; stable).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def ResolveIdentifier(self, request, context):
-        """W3.1: platform.reference.query.resolve-identifier (query).
+        """W3.1: platform.reference.query.resolve-identifier (query; stable).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def ReportMissingInstrument(self, request, context):
-        """W3.2: platform.reference.event.instrument-missing (event).
+        """W3.2: platform.reference.event.instrument-missing (event; stable).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def ResolveInstrument(self, request, context):
-        """W3.6: platform.reference.query.resolve-instrument (query).
+        """W3.6: platform.reference.query.resolve-instrument (query; stable).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def LinkExternalAccount(self, request, context):
-        """W6.4: platform.config.command.link-external-account (command).
+        """W6.4: platform.config.command.link-external-account (command; stable).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def ReadAccountsForLinking(self, request, context):
-        """W6.4: platform.config.query.accounts (query).
+        """W6.4: platform.config.query.accounts (query; stable).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def RecordOpeningBalance(self, request, context):
-        """W9.1: platform.book.command.record-opening-balance (command).
+        """W9.1: platform.book.command.record-opening-balance (command; stable).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def RecordBreak(self, request, context):
-        """W9.4: platform.book.command.record-break (command).
+        """W9.4: platform.book.command.record-break (command; stable).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def RecordAccountFigures(self, request, context):
-        """W9.5: platform.book.command.record-account-figures (command).
+        """W9.5: platform.book.command.record-account-figures (command; stable).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def RecordEncumbrances(self, request, context):
-        """W9.15: platform.book.command.record-encumbrances (command).
+        """W9.15: platform.book.command.record-encumbrances (command; stable).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def HandleBreak(self, request, context):
-        """W9.6: platform.book.command.handle-break (command).
+        """W9.6: platform.book.command.handle-break (command; stable).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def ResolveBreak(self, request, context):
-        """W9.7: platform.book.command.resolve-break (command).
+        """W9.7: platform.book.command.resolve-break (command; stable).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def CloseBreaksAsCleared(self, request, context):
-        """W9.7: platform.book.command.close-breaks-as-cleared (command).
+        """W9.7: platform.book.command.close-breaks-as-cleared (command; stable).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def ListPositions(self, request, context):
-        """W9.10: platform.book.query.list-positions (query).
+        """W9.10: platform.book.query.list-positions (query; stable).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def ListBreaks(self, request, context):
-        """W9.11: platform.book.query.list-breaks (query).
+        """W9.11: platform.book.query.list-breaks (query; stable).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def ListAccountFigures(self, request, context):
-        """W9.12: platform.book.query.list-account-figures (query).
+        """W9.12: platform.book.query.list-account-figures (query; stable).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def ListAccountAttributes(self, request, context):
-        """W9.14: platform.book.query.list-account-attributes (query).
+        """W9.14: platform.book.query.list-account-attributes (query; stable).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')

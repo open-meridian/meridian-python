@@ -1,0 +1,72 @@
+# open-meridian 0.15.0 to 0.16.0: the SDK declares contract v11, the edge
+# keeps its own (sdk-contract/the-edge-keeps-its-own,
+# sdk-contract/the-street-counts-each-asset-once; spec/vendor-differences-have-
+# a-place-in-the-contract, slice A, custody half).
+from = "0.15.0"
+to = "0.16.0"
+summary = """
+The SDK declares contract v11 (meridian.SCHEMA_VERSION). A plugin registers with
+its version's declaration (meridian.Declaration: its secret settings' names,
+what it receives and does not carry, the storage it asks for), which `meridian
+plugin upload` reads from its image when pyproject.toml's [tool.meridian] names
+it (declaration = "module:attribute"); without one it declares its secret
+settings' names alone. A value its vendor sent that it cannot convert travels
+as the field's not-known value with the vendor's value beside it, as reported
+(meridian.edge.as_reported): an account's kind (account_kind,
+account_kind_as_reported) in place of the venue's own type, and a miss's asset
+class (asset_class_as_reported). Every row and statement references the raw
+record it was converted from (plugin.raw_record(key)), and every value the
+plugin closed rather than read carries its provenance (meridian.edge: derived,
+supplied, second_source, reported). The street counts each asset once: a
+custody plugin nets the cash of a currency of any holding the custodian also
+counts as cash, at the edge, with that provenance; also_counted_in_cash and
+currency_assumed are deprecated, accepted from an earlier plugin for their
+notice. A holding carries its pending quantities by value date
+(meridian.ReportedPending), and the settled quantity and pending are the custody
+role's, as the custody suite requires (meridian.suites). A resolve may state a
+security's instrument type (stated_instrument_type, money_market_fund under
+fund). A row sent again under its statement with a field a revision added is a
+backfill (meridian.edge.backfill("v11", "raw_record")), journaled beside the row
+as first recorded. meridian.ExternalAccount is the SDK's form now, taking the
+same arguments. meridian.figures.MOST_FIGURES and its LONGEST_* bounds moved to
+meridian.bounds (0.15.0's schema), generated from the data dictionary. A plugin
+built on 0.16.0 is refused at registration by a sidecar that accepts only v10,
+naming both. Nothing is rewritten: what replaces the venue's type, the "also
+counted in cash" mark and the currency flag is the plugin's own conversion, so
+each is found and left by hand, as is a read of meridian.figures' moved bounds.
+"""
+breaking = false
+rewrite = "rewrite.py"
+
+[[by_hand]]
+rule = "account-kind"
+what = """an ExternalAccount's venue_account_type=, the venue's own word, which contract \
+v11 deprecates for the account kind"""
+instead = """convert the venue's type to account_kind= (cash, margin, retirement) and, \
+where it says none of them, leave the kind not known with \
+account_kind_as_reported=meridian.edge.as_reported(scheme, code, text); keep the venue's \
+type in the plugin's raw records, and pre-fill a new account's type from the kind"""
+
+[[by_hand]]
+rule = "counted-once"
+what = """a record_holding call's also_counted_in_cash=, the custodian's double count, \
+which contract v11 deprecates: the street counts each asset once"""
+instead = """send the holding as it is and the cash of its currency net of it, \
+provenance=[meridian.edge.derived("quantity", <your rule>)], keeping the custodian's \
+gross figure in the plugin's raw records; withhold a statement you cannot serve clean"""
+
+[[by_hand]]
+rule = "currency-provenance"
+what = """a currency_assumed= flag, which contract v11 deprecates for the currency's \
+provenance"""
+instead = """send provenance=[meridian.edge.derived("market_value.currency_code", <your \
+rule>)] on the row (on a statement, the figures' path), and narrow a resolve only by a \
+currency the venue stated"""
+
+[[by_hand]]
+rule = "figures-bounds"
+what = """meridian.figures.MOST_FIGURES or a LONGEST_* bound, which moved to meridian.bounds, \
+generated from the data dictionary"""
+instead = """read meridian.bounds: HEARTBEAT_REQUEST_FIGURES_COUNT.most for MOST_FIGURES, and \
+PLUGIN_FIGURE_LABEL_LENGTH.most, PLUGIN_FIGURE_TEXT_LENGTH.most and \
+PLUGIN_FIGURE_WHY_LENGTH.most for LONGEST_LABEL, LONGEST_TEXT and LONGEST_WHY"""

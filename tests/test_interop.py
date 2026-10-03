@@ -25,6 +25,7 @@ import grpc
 import pytest
 
 import meridian
+import meridian.edge
 import meridian.testing
 from meridian import CallFailed, Money, NotLinked
 from meridian.plugin.v1 import operations_pb2, operations_pb2_grpc
@@ -659,6 +660,169 @@ async def test_every_sync_state_is_published_with_its_freshness(plugin, state) -
         observed_at_ns=NOW,
     )
     assert published.message_id
+
+
+# ── Contract v11: the edge keeps its own ─────────────────────────────────────
+#
+# A value as reported is checked for its shape alone; a raw record's
+# reference is the sender's own; a row carries its raw record, pending
+# quantities by value date and the provenance of what the plugin closed; and a
+# backfill amends a row already recorded, journaled beside it, its cause the
+# version and the field, the row as first recorded left as it was. The street
+# lines core's `make interop` reads back hold the pending, closed and amended
+# lines (e2e/interop/positions.expected).
+
+
+async def test_an_account_kind_and_a_type_as_reported_beside_not_known_are_published(
+    plugin,
+) -> None:
+    published = await plugin.report_external_accounts(
+        accounts=[
+            meridian.ExternalAccount(
+                external_account_id=LINKED, name="Interop", account_kind="margin"
+            ),
+            meridian.ExternalAccount(
+                external_account_id=f"unlinked-{uuid.uuid4().hex[:8]}",
+                name="Individual 1234",
+                account_kind="ACCOUNT_KIND_UNSPECIFIED",
+                account_kind_as_reported=meridian.edge.as_reported(
+                    "interop:account-type", "INDIVIDUAL", "Individual"
+                ),
+            ),
+        ]
+    )
+    assert published.message_id
+
+
+async def test_the_venues_own_type_from_an_earlier_plugin_is_still_accepted(plugin) -> None:
+    # Deprecated in v11, accepted for the notice its stability gives.
+    published = await plugin.report_external_accounts(
+        accounts=[
+            meridian.ExternalAccount(
+                external_account_id=LINKED, name="Interop", venue_account_type="Individual"
+            )
+        ]
+    )
+    assert published.message_id
+
+
+@pytest.mark.parametrize(
+    ("given", "named"),
+    [
+        (
+            operations_pb2.AsReported(scheme="interop:account-type", code="INDIVIDUAL"),
+            "text is empty",
+        ),
+        (
+            operations_pb2.AsReported(scheme="interop:account-type", code="x" * 129, text="t"),
+            "code is 129 characters; at most 128",
+        ),
+    ],
+)
+async def test_a_value_as_reported_with_a_part_missing_or_too_long_is_refused_naming_it(
+    plugin, given, named
+) -> None:
+    # Built by hand, past the SDK's own check, as a plugin in another
+    # language might: the sidecar checks the shape and length, and nothing
+    # else.
+    with pytest.raises(CallFailed) as refused:
+        await plugin.report_external_accounts(
+            accounts=[
+                meridian.ExternalAccount(
+                    external_account_id=LINKED,
+                    account_kind_as_reported=given,
+                )
+            ]
+        )
+    assert refused.value.kind == "invalid"
+    assert f"accounts[0].account_kind_as_reported.{named}" in refused.value.detail
+
+
+async def test_a_raw_record_naming_another_plugin_is_refused(plugin) -> None:
+    opened = await statement(plugin, "interop-edge-refused", 1)
+    with pytest.raises(CallFailed) as refused:
+        await plugin.record_holding(
+            statement_id=opened,
+            instrument_id="INS-interop-edge-refused",
+            side=LONG,
+            quantity=Decimal("1"),
+            external_account_id=LINKED,
+            raw_record=operations_pb2.RawRecordRef(instance_id="another-plugin", key="k"),
+        )
+    assert refused.value.kind == "invalid"
+    assert "raw_record.instance_id names another-plugin" in refused.value.detail
+
+
+async def test_a_row_carries_its_raw_record_pending_and_what_the_plugin_closed(plugin) -> None:
+    opened = await statement(plugin, "interop-edge", 1)
+    recorded = await plugin.record_holding(
+        statement_id=opened,
+        instrument_id="INS-interop-edge-vti",
+        side=LONG,
+        quantity=Decimal("12.5"),
+        settle_date_quantity=Decimal("10"),
+        pending=[meridian.ReportedPending(value_date="2026-09-29", quantity=Decimal("2.5"))],
+        provenance=[
+            meridian.edge.derived(
+                "settle_date_quantity", "the quantity less the trades not settled"
+            )
+        ],
+        raw_record=plugin.raw_record("positions/interop/edge"),
+        external_account_id=LINKED,
+    )
+    assert recorded.resolved
+
+
+async def test_a_backfill_amends_a_past_row_and_run_twice_adds_nothing(plugin) -> None:
+    """W2.4: the statement sent again is answered with the one recorded, and
+    the row sent under it marked as a backfill names the field v11 added and
+    the raw record it was re-converted from. The street journals one
+    amendment, however many times it is sent; the row as first recorded
+    stands (positions.expected holds both)."""
+    external = f"{LINKED}/backfill/{uuid.uuid4().hex[:8]}"
+
+    async def opening() -> operations_pb2.RecordHoldingsStatementResult:
+        return await plugin.record_holdings_statement(
+            source="interop-backfill",
+            external_statement_id=external,
+            external_account_id=LINKED,
+            as_of_date="2026-09-28",
+            read_at_ns=NOW,
+            expected_rows=1,
+        )
+
+    first = await opening()
+    await plugin.record_holding(
+        statement_id=first.statement_id,
+        instrument_id="INS-interop-backfill",
+        side=LONG,
+        quantity=Decimal("3"),
+        external_account_id=LINKED,
+    )
+    again = await opening()
+    assert again.already_recorded and again.statement_id == first.statement_id
+    for _ in range(2):
+        amended = await plugin.record_holding(
+            statement_id=again.statement_id,
+            instrument_id="INS-interop-backfill",
+            side=LONG,
+            quantity=Decimal("3"),
+            external_account_id=LINKED,
+            raw_record=plugin.raw_record("positions/interop/backfill"),
+            backfill=meridian.edge.backfill("v11", "raw_record"),
+        )
+        assert amended.holding_id == "", "no new row is recorded"
+    with pytest.raises(meridian.CallFailed) as refused:
+        await plugin.record_holding(
+            statement_id=again.statement_id,
+            instrument_id="INS-interop-never-recorded",
+            side=LONG,
+            quantity=Decimal("1"),
+            external_account_id=LINKED,
+            raw_record=plugin.raw_record("positions/interop/none"),
+            backfill=meridian.edge.backfill("v11", "raw_record"),
+        )
+    assert "a backfill amends a row already recorded" in str(refused.value)
 
 
 # ── Contract v7: an operations plugin reads and hears the street ────────────

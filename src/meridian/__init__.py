@@ -32,6 +32,21 @@ of the security (`stated_asset_class`, `stated_currency`,
 `stated_description`), kept as offers for the deployment admin to accept, and
 the book requires each instrument's asset class and currency, naming
 `positions[n].instrument.asset_class` when a record lacks it.
+From contract v11 the edge keeps its own (`meridian.edge`): a value that did
+not convert travels as reported beside the field's not-known value
+(`as_reported`), every row references the raw record it was converted from
+in the plugin's own storage (`plugin.raw_record(key)`), every value the
+plugin closed rather than read carries its provenance (`derived`,
+`supplied`, `second_source`, `reported`), an account carries its kind
+(`AccountKind`) and a holding its pending quantities by value date
+(`ReportedPending`), each asset is counted once, and a row sent again with a
+field a revision added is a backfill (`backfill("v11", "raw_record")`). A
+plugin registers with its version's declaration (`meridian.Declaration`:
+its secret settings' names, what it does not carry, the storage it asks
+for), and counts what it saw and does not carry
+(`plugin.note_not_carried`). A resolve may state a security's instrument type
+(`stated_instrument_type`, a money market fund first). The role suites a
+plugin holds itself to are `meridian.suites`.
 """
 
 from .asgi import CallerMiddleware
@@ -54,6 +69,7 @@ from .client import (
     Settings,
     connect,
 )
+from .declaration import Declaration, NotCarried, Storage
 from .errors import (
     CallFailed,
     CommandRefused,
@@ -77,6 +93,7 @@ from .operations import (
     BreakDifference,
     BreakValue,
     Encumbrance,
+    ExternalAccount,
     LotTerms,
     Money,
     MovementLine,
@@ -87,9 +104,11 @@ from .operations import (
     PendingSettlementRef,
     PositionEncumbrances,
     PositionKey,
+    Provenance,
     ReportedCollateral,
     ReportedEncumbrance,
     ReportedLot,
+    ReportedPending,
     ReportedPositionValue,
     StatementFigures,
     as_decimal,
@@ -99,16 +118,19 @@ from .pages import Pages, Request, Response
 
 # The plugin-facing mirrors a typed operation takes, generated with it.
 from .plugin.v1.operations_pb2 import (
+    AccountKind,
+    AsReported,
     AssetClass,
+    Backfill,
     BreakCategory,
     BreakCauseCategory,
     BreakHandling,
     BreakState,
     CollateralDirection,
-    ExternalAccount,
     FigureKey,
     HoldingSide,
     Identifier,
+    InstrumentType,
     LotReliefMethod,
     LotSource,
     MarginAgreementRef,
@@ -116,6 +138,8 @@ from .plugin.v1.operations_pb2 import (
     OpeningSourceKind,
     PendingState,
     PositionBasis,
+    ProvenanceKind,
+    RawRecordRef,
     ResolvedByEntries,
     Reversal,
     SettlementBucket,
@@ -129,7 +153,11 @@ __all__ = [
     "DEFAULT_ADDRESS",
     "SCHEMA_VERSION",
     "AccessLevel",
+    "AccountKind",
     "AccountScope",
+    "AsReported",
+    "Backfill",
+    "Declaration",
     "Adjustment",
     "AgreementFigures",
     "AppliesWhen",
@@ -158,6 +186,7 @@ __all__ = [
     "HoldingSide",
     "Identifier",
     "Identity",
+    "InstrumentType",
     "Interface",
     "LinkedExternalAccount",
     "LotReliefMethod",
@@ -169,6 +198,7 @@ __all__ = [
     "Money",
     "MovementLine",
     "NoSidecar",
+    "NotCarried",
     "NotGranted",
     "NotLinked",
     "NotRegistered",
@@ -185,10 +215,14 @@ __all__ = [
     "PositionBasis",
     "PositionEncumbrances",
     "PositionKey",
+    "Provenance",
+    "ProvenanceKind",
+    "RawRecordRef",
     "Refused",
     "ReportedCollateral",
     "ReportedEncumbrance",
     "ReportedLot",
+    "ReportedPending",
     "ReportedPositionValue",
     "Request",
     "ResolvedByEntries",
@@ -199,6 +233,7 @@ __all__ = [
     "SettlementBucket",
     "StatementFigures",
     "StatementSegmentRef",
+    "Storage",
     "StreetRecordRef",
     "SyncState",
     "as_decimal",

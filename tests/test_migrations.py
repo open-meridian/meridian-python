@@ -95,7 +95,7 @@ def test_every_release_since_the_first_recorded_has_its_step() -> None:
         ("0.6.0", "0.6.1"),
         ("0.6.1", "0.7.0"),
     ]
-    assert (steps[-1].source, steps[-1].target) == ("0.14.0", "0.15.0")
+    assert (steps[-1].source, steps[-1].target) == ("0.15.0", "0.16.0")
     # A release that moves the version records its step, if only the pins.
     assert steps[-1].target == SDK
 
@@ -649,3 +649,48 @@ def test_a_book_positions_placeholder_is_left_by_hand() -> None:
     )
     assert result.files == {}
     assert left_by_hand(result) == [("position-placeholder", "src/p/x.py", 4)]
+
+
+def test_what_contract_v11_deprecates_is_found_and_left_by_hand() -> None:
+    # 0.16.0: the venue's type, "also counted in cash" and the currency flag
+    # are each replaced by the plugin's own conversion, so each is found.
+    result = one(
+        """\
+        import meridian
+
+        async def report(plugin: meridian.Plugin) -> None:
+            await plugin.report_external_accounts(accounts=[meridian.ExternalAccount(
+                external_account_id="A", venue_account_type="MARGIN")])
+            await plugin.record_holding(statement_id="S", instrument_id="I", quantity=1,
+                                        also_counted_in_cash=True, currency_assumed=True)
+        """,
+        "0.15.0",
+        "0.16.0",
+    )
+    assert result.files == {}
+    assert left_by_hand(result) == [
+        ("account-kind", "src/p/x.py", 5),
+        ("counted-once", "src/p/x.py", 7),
+        ("currency-provenance", "src/p/x.py", 7),
+    ]
+
+
+def test_a_read_of_meridian_figures_moved_bounds_is_found_and_left_by_hand() -> None:
+    # 0.16.0: MOST_FIGURES and LONGEST_* are meridian.bounds' now.
+    result = one(
+        """\
+        import meridian
+        from meridian import figures
+        from meridian.figures import LONGEST_WHY
+
+        def short(why: str) -> str:
+            return why[: LONGEST_WHY - 1] if len(why) > figures.MOST_FIGURES else why
+        """,
+        "0.15.0",
+        "0.16.0",
+    )
+    assert result.files == {}
+    assert left_by_hand(result) == [
+        ("figures-bounds", "src/p/x.py", 3),
+        ("figures-bounds", "src/p/x.py", 6),
+    ]

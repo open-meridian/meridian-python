@@ -147,6 +147,34 @@ def as_money(message: ops.Money) -> Money:
 
 
 @dataclass(frozen=True, kw_only=True)
+class ExternalAccount:
+    """One account a connection reaches, as the custodian presents it.
+
+    The SDK's form of the wire's ExternalAccount: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    external_account_id: str = ""
+    name: str = ""
+    venue_account_type: str = ""
+    account_kind: ops.AccountKind | str | None = None
+    account_kind_as_reported: ops.AsReported | None = None
+
+
+def _external_account(value: ExternalAccount, name: str) -> ops.ExternalAccount:
+    """A ExternalAccount as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, ExternalAccount):
+        raise TypeError(f"{name} is a meridian.ExternalAccount, not {type(value).__name__}")
+    return ops.ExternalAccount(
+        external_account_id=value.external_account_id,
+        name=value.name,
+        venue_account_type=value.venue_account_type,
+        account_kind=_enum(ops.AccountKind, value.account_kind, f"{name}.account_kind"),
+        account_kind_as_reported=value.account_kind_as_reported,
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
 class StatementFigures:
     """A statement's figures for one margin segment, each as the venue
     reported it and unset where it reported none; never derived.
@@ -219,6 +247,38 @@ def _reported_collateral(value: ReportedCollateral, name: str) -> ops.ReportedCo
 
 
 @dataclass(frozen=True, kw_only=True)
+class Provenance:
+    """Where a value a plugin sent came from, where the plugin closed it
+    rather than read it from its vendor (requirements 31 to 34; plans/an-
+    order-reaches- a-venue-through-the-book, Q13).
+
+    The SDK's form of the wire's Provenance: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    field: str = ""
+    kind: ops.ProvenanceKind | str | None = None
+    raw_record: ops.RawRecordRef | None = None
+    source: str = ""
+    person: str = ""
+    rule: str = ""
+
+
+def _provenance(value: Provenance, name: str) -> ops.Provenance:
+    """A Provenance as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, Provenance):
+        raise TypeError(f"{name} is a meridian.Provenance, not {type(value).__name__}")
+    return ops.Provenance(
+        field=value.field,
+        kind=_enum(ops.ProvenanceKind, value.kind, f"{name}.kind"),
+        raw_record=value.raw_record,
+        source=value.source,
+        person=value.person,
+        rule=value.rule,
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
 class ReportedLot:
     """One lot of a holding, as the custodian lists it.
 
@@ -273,6 +333,29 @@ def _reported_encumbrance(value: ReportedEncumbrance, name: str) -> ops.Reported
         held_at=value.held_at,
         segment=value.segment,
         detail=value.detail,
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class ReportedPending:
+    """A quantity not yet settled, and the date it is due to (W2.3, contract
+    v11).
+
+    The SDK's form of the wire's ReportedPending: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    value_date: str = ""
+    quantity: Decimal | int
+
+
+def _reported_pending(value: ReportedPending, name: str) -> ops.ReportedPending:
+    """A ReportedPending as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, ReportedPending):
+        raise TypeError(f"{name} is a meridian.ReportedPending, not {type(value).__name__}")
+    return ops.ReportedPending(
+        value_date=value.value_date,
+        quantity=_decimal(value.quantity, f"{name}.quantity"),
     )
 
 
@@ -758,11 +841,11 @@ class Operations:
     async def report_external_accounts(
         self,
         *,
-        accounts: Sequence[ops.ExternalAccount] = (),
+        accounts: Sequence[ExternalAccount] = (),
     ) -> ops.Published:
-        """W2.8: Every external account a connection reaches, as the connector sees it now."""
+        """W2.8: Every external account a connection reaches, as the connector sees it now (stable)."""
         params = ops.ReportExternalAccountsParams(
-            accounts=list(accounts),
+            accounts=[_external_account(each, f"accounts[{i}]") for i, each in enumerate(accounts)],
         )
         return await self._operate(self._operations().ReportExternalAccounts, params)
 
@@ -779,7 +862,7 @@ class Operations:
         holdings_as_of_ns: int = 0,
         history_as_of_ns: int = 0,
     ) -> ops.Published:
-        """W2.1: How fresh a connected account's data is, as reported by the rail."""
+        """W2.1: How fresh a connected account's data is, as reported by the rail (stable)."""
         params = ops.ReportSyncStatusParams(
             source=source,
             last_synced_at_ns=last_synced_at_ns,
@@ -809,9 +892,11 @@ class Operations:
         figures: Sequence[StatementFigures] = (),
         institution: str = "",
         security_interest: bool | None = None,
+        raw_record: ops.RawRecordRef | None = None,
+        provenance: Sequence[Provenance] = (),
         acting_for: str | None = None,
     ) -> ops.RecordHoldingsStatementResult:
-        """W2.2: Open one statement: the connector's snapshot of one account, at one moment."""
+        """W2.2: Open one statement: the connector's snapshot of one account, at one moment (stable)."""
         params = ops.RecordHoldingsStatementParams(
             source=source,
             external_statement_id=external_statement_id,
@@ -826,6 +911,8 @@ class Operations:
             figures=[_statement_figures(each, f"figures[{i}]") for i, each in enumerate(figures)],
             institution=institution,
             **_stated(security_interest=security_interest),
+            raw_record=raw_record,
+            provenance=[_provenance(each, f"provenance[{i}]") for i, each in enumerate(provenance)],
             acting_for=_assertion(acting_for),
         )
         return await self._operate(self._operations().RecordHoldingsStatement, params)
@@ -851,9 +938,13 @@ class Operations:
         not_available_quantity: Decimal | int | None = None,
         available_basis: ops.AvailableBasis | str | None = None,
         encumbrances: Sequence[ReportedEncumbrance] = (),
+        raw_record: ops.RawRecordRef | None = None,
+        provenance: Sequence[Provenance] = (),
+        pending: Sequence[ReportedPending] = (),
+        backfill: ops.Backfill | None = None,
         acting_for: str | None = None,
     ) -> ops.RecordHoldingResult:
-        """W2.3: One holding, for one account, at one instrument, on one side."""
+        """W2.3: One holding, for one account, at one instrument, on one side (stable)."""
         params = ops.RecordHoldingParams(
             statement_id=statement_id,
             instrument_id=instrument_id,
@@ -873,6 +964,10 @@ class Operations:
             not_available_quantity=None if not_available_quantity is None else _decimal(not_available_quantity, "not_available_quantity"),
             available_basis=_enum(ops.AvailableBasis, available_basis, "available_basis"),
             encumbrances=[_reported_encumbrance(each, f"encumbrances[{i}]") for i, each in enumerate(encumbrances)],
+            raw_record=raw_record,
+            provenance=[_provenance(each, f"provenance[{i}]") for i, each in enumerate(provenance)],
+            pending=[_reported_pending(each, f"pending[{i}]") for i, each in enumerate(pending)],
+            backfill=backfill,
             acting_for=_assertion(acting_for),
         )
         return await self._operate(self._operations().RecordHolding, params)
@@ -886,7 +981,7 @@ class Operations:
         cursor: str = "",
         since: ops.Watermark | None = None,
     ) -> ops.ListCustodialPositionsResult:
-        """W2.7: Read custodial positions, and the unresolved holdings beside them (W2.7)."""
+        """W2.7: Read custodial positions, and the unresolved holdings beside them (W2.7) (stable)."""
         params = ops.ListCustodialPositionsParams(
             account_id=account_id,
             include_unresolved=include_unresolved,
@@ -905,7 +1000,7 @@ class Operations:
         page_size: int = 0,
         cursor: str = "",
     ) -> ops.ListStatementsResult:
-        """W2.9: Read completed statements and their figures (W2.9)."""
+        """W2.9: Read completed statements and their figures (W2.9) (stable)."""
         params = ops.ListStatementsParams(
             account_id=account_id,
             as_of_date=as_of_date,
@@ -925,8 +1020,9 @@ class Operations:
         stated_asset_class: ops.AssetClass | str | None = None,
         stated_currency: str = "",
         stated_description: str = "",
+        stated_instrument_type: ops.InstrumentType | str | None = None,
     ) -> ops.ResolveIdentifierResult:
-        """W3.1: Reverse resolution: identifiers to an instrument, as of a date."""
+        """W3.1: Reverse resolution: identifiers to an instrument, as of a date (stable)."""
         params = ops.ResolveIdentifierParams(
             identifiers=list(identifiers),
             as_of_ns=as_of_ns,
@@ -935,6 +1031,7 @@ class Operations:
             stated_asset_class=_enum(ops.AssetClass, stated_asset_class, "stated_asset_class"),
             stated_currency=stated_currency,
             stated_description=stated_description,
+            stated_instrument_type=_enum(ops.InstrumentType, stated_instrument_type, "stated_instrument_type"),
         )
         return await self._operate(self._operations().ResolveIdentifier, params)
 
@@ -947,8 +1044,9 @@ class Operations:
         as_of_ns: int = 0,
         reason: ops.MissReason | str | None = None,
         observed_at_ns: int = 0,
+        asset_class_as_reported: ops.AsReported | None = None,
     ) -> ops.Published:
-        """W3.2: A resolution missed. A fact, not a request."""
+        """W3.2: A resolution missed. A fact, not a request (stable)."""
         params = ops.ReportMissingInstrumentParams(
             source=source,
             asset_class=_enum(ops.AssetClass, asset_class, "asset_class"),
@@ -956,6 +1054,7 @@ class Operations:
             as_of_ns=as_of_ns,
             reason=_enum(ops.MissReason, reason, "reason"),
             observed_at_ns=observed_at_ns,
+            asset_class_as_reported=asset_class_as_reported,
         )
         return await self._operate(self._operations().ReportMissingInstrument, params)
 
@@ -965,7 +1064,7 @@ class Operations:
         instrument_id: str = "",
         as_of_ns: int = 0,
     ) -> ops.ResolveInstrumentResult:
-        """W3.6: Forward resolution: an instrument identifier to its record."""
+        """W3.6: Forward resolution: an instrument identifier to its record (stable)."""
         params = ops.ResolveInstrumentParams(
             instrument_id=instrument_id,
             as_of_ns=as_of_ns,
@@ -984,7 +1083,7 @@ class Operations:
         new_account_note: str = "",
         acting_for: str | None = None,
     ) -> ops.LinkExternalAccountResult:
-        """W6.4: Links an external account a plugin reported, or removes its link."""
+        """W6.4: Links an external account a plugin reported, or removes its link (stable)."""
         params = ops.LinkExternalAccountParams(
             external_account_id=external_account_id,
             account_id=account_id,
@@ -1002,7 +1101,7 @@ class Operations:
         *,
         acting_for: str | None = None,
     ) -> ops.ReadAccountsForLinkingResult:
-        """W6.4: The deployment's accounts, read by a plugin acting for its admin."""
+        """W6.4: The deployment's accounts, read by a plugin acting for its admin (stable)."""
         params = ops.ReadAccountsForLinkingParams(
             acting_for=_assertion(acting_for),
         )
@@ -1020,7 +1119,7 @@ class Operations:
         idempotency_key: str = "",
         acting_for: str | None = None,
     ) -> ops.RecordOpeningBalanceResult:
-        """W9.1: RecordOpeningBalance."""
+        """W9.1: RecordOpeningBalance (stable)."""
         params = ops.RecordOpeningBalanceParams(
             account_id=account_id,
             as_of_date=as_of_date,
@@ -1049,7 +1148,7 @@ class Operations:
         idempotency_key: str = "",
         acting_for: str | None = None,
     ) -> ops.RecordBreakResult:
-        """W9.4: W9.4. A new break, or an open one brought up to date."""
+        """W9.4: W9.4. A new break, or an open one brought up to date (stable)."""
         params = ops.RecordBreakParams(
             account_id=account_id,
             break_id=break_id,
@@ -1075,7 +1174,7 @@ class Operations:
         idempotency_key: str = "",
         acting_for: str | None = None,
     ) -> ops.RecordAccountFiguresResult:
-        """W9.5: RecordAccountFigures."""
+        """W9.5: RecordAccountFigures (stable)."""
         params = ops.RecordAccountFiguresParams(
             account_id=account_id,
             business_date=business_date,
@@ -1096,7 +1195,7 @@ class Operations:
         idempotency_key: str = "",
         acting_for: str | None = None,
     ) -> ops.RecordEncumbrancesResult:
-        """W9.15: W9.15. A finding, so the plugin may send it as itself."""
+        """W9.15: W9.15. A finding, so the plugin may send it as itself (stable)."""
         params = ops.RecordEncumbrancesParams(
             account_id=account_id,
             business_date=business_date,
@@ -1118,7 +1217,7 @@ class Operations:
         idempotency_key: str = "",
         acting_for: str | None = None,
     ) -> ops.HandleBreakResult:
-        """W9.6: W9.6. For a person."""
+        """W9.6: W9.6. For a person (stable)."""
         params = ops.HandleBreakParams(
             account_id=account_id,
             break_id=break_id,
@@ -1143,7 +1242,7 @@ class Operations:
         idempotency_key: str = "",
         acting_for: str | None = None,
     ) -> ops.ResolveBreakResult:
-        """W9.7: W9.7. For a person."""
+        """W9.7: W9.7. For a person (stable)."""
         params = ops.ResolveBreakParams(
             account_id=account_id,
             break_ids=list(break_ids),
@@ -1164,7 +1263,7 @@ class Operations:
         idempotency_key: str = "",
         acting_for: str | None = None,
     ) -> ops.CloseBreaksAsClearedResult:
-        """W9.7: W9.7. Close breaks as cleared, with no entry."""
+        """W9.7: W9.7. Close breaks as cleared, with no entry (stable)."""
         params = ops.CloseBreaksAsClearedParams(
             account_id=account_id,
             break_ids=list(break_ids),
@@ -1185,7 +1284,7 @@ class Operations:
         page_size: int = 0,
         cursor: str = "",
     ) -> ops.ListPositionsResult:
-        """W9.10: ListPositions."""
+        """W9.10: ListPositions (stable)."""
         params = ops.ListPositionsParams(
             account_id=account_id,
             since=since,
@@ -1205,7 +1304,7 @@ class Operations:
         page_size: int = 0,
         cursor: str = "",
     ) -> ops.ListBreaksResult:
-        """W9.11: ListBreaks."""
+        """W9.11: ListBreaks (stable)."""
         params = ops.ListBreaksParams(
             account_id=account_id,
             states=[_enum(ops.BreakState, value, "states") for value in states],
@@ -1227,7 +1326,7 @@ class Operations:
         page_size: int = 0,
         cursor: str = "",
     ) -> ops.ListAccountFiguresResult:
-        """W9.12: ListAccountFigures."""
+        """W9.12: ListAccountFigures (stable)."""
         params = ops.ListAccountFiguresParams(
             account_id=account_id,
             agreement=agreement,
@@ -1248,7 +1347,7 @@ class Operations:
         page_size: int = 0,
         cursor: str = "",
     ) -> ops.ListAccountAttributesResult:
-        """W9.14: ListAccountAttributes."""
+        """W9.14: ListAccountAttributes (stable)."""
         params = ops.ListAccountAttributesParams(
             account_id=account_id,
             since=since,

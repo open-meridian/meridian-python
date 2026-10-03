@@ -44,7 +44,11 @@ async def test_registering_sends_no_identity(sidecar: tuple[FakeSidecar, str]) -
 
     (sent,) = service.registered
     assert sent.schema_version == meridian.SCHEMA_VERSION
-    assert not sent.ListFields() or [f.name for f, _ in sent.ListFields()] == ["schema_version"]
+    # From v11 the version's declaration rides beside it, which names no
+    # instance and no role: here, no secret setting, nothing not carried and
+    # no storage.
+    assert [f.name for f, _ in sent.ListFields()] == ["schema_version", "declaration"]
+    assert sent.declaration == sidecar_pb2.PluginDeclaration()
 
 
 async def test_the_sdk_declares_the_contract_it_was_built_for(
@@ -67,16 +71,22 @@ async def test_the_sdk_declares_the_contract_it_was_built_for(
     v10 is a deployment's own instrument identity: a resolve answering a
     record the deployment minted and stating what its source says, a
     record's sources and offers, and the book's refusal of an incomplete
-    instrument record (decisions/030). A sidecar from before it, still at v9,
-    carries none of it, so it refuses the plugin at registration, naming both.
+    instrument record (decisions/030).
+
+    v11 is the edge keeping its own: values as reported, raw records'
+    references, provenance, the account kind, pending by value date, a
+    backfill, the instrument type and the version's declaration
+    (sdk-contract/the-edge-keeps-its-own). A sidecar from before it, still at
+    v10, carries none of it, so it refuses the plugin at registration, naming
+    both.
     """
     service, address = sidecar
     plugin = await meridian.connect(address, heartbeat=False)
     await plugin.leave()
 
     (sent,) = service.registered
-    assert meridian.SCHEMA_VERSION == "v10"
-    assert sent.schema_version == "v10"
+    assert meridian.SCHEMA_VERSION == "v11"
+    assert sent.schema_version == "v11"
 
 
 async def test_identity_and_grants_come_back(sidecar: tuple[FakeSidecar, str]) -> None:

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "open-meridian"
-version = "0.15.0"
+version = "0.16.0"
 description = "Build Meridian plugins"
 license = { text = "Apache-2.0" }
 requires-python = ">=3.11"
@@ -49,6 +49,9 @@ dev = [
 # (spec/live-plugin-development). In every base image, since it is the SDK's.
 [project.scripts]
 meridian-dev = "meridian.dev:main"
+# A version's declaration as JSON, built from the plugin's code: what
+# `meridian plugin upload` reads from the built image (W8.1, contract v11).
+meridian-declaration = "meridian.declaration:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -57,7 +60,9 @@ where = ["src"]
 [tool.setuptools.package-data]
 # And each migration's record, beside its code or alone where only the pins
 # move.
-meridian = ["py.typed", "v1/*.pyi", "plugin/v1/*.pyi", "migrations/*/migration.toml"]
+meridian = ["py.typed", "v1/*.pyi", "plugin/v1/*.pyi", "migrations/*/migration.toml",
+            # The role suites, as meridian-schema publishes them (contract v11).
+            "suites.json"]
 
 [tool.ruff]
 line-length = 96

@@ -2,7 +2,7 @@
 
 The Python SDK for building [Open Meridian](https://open-meridian.com) plugins:
 the tools a trader has an AI agent build, and the bots and analytics a
-developer writes. Python 3.11 or newer. This is release 0.15.0; its reference
+developer writes. Python 3.11 or newer. This is release 0.16.0; its reference
 is at [open-meridian.dev](https://open-meridian.dev/api/python-sdk/).
 
 ## Start here
@@ -23,8 +23,10 @@ template at a pinned commit, so a CLI release carries it. See
 
 ## The SDK
 
-A plugin talks only to its local sidecar. It holds no persistent state and seeds
-from the deployment on start. Plugins themselves live in their own
+A plugin talks only to its local sidecar. Its process holds nothing it cannot
+lose and seeds from the deployment on start; a plugin at the edge (custody,
+servicing, settlement and the like) may also own the storage the deployment
+grants its instance, for its raw external records (decisions/028). Plugins themselves live in their own
 repositories; this one stays thin.
 
 Published to PyPI as `open-meridian`, imported as `meridian`:
@@ -438,6 +440,68 @@ the read scope, and `receive` takes `position_changed`, `break_changed`,
 `account_figures_recorded` and `account_attribute_changed` handlers, each
 record delivered whole.
 
+### The edge keeps its own (contract v11)
+
+A plugin at the edge converts its vendor's words to the contract's, and keeps
+what it converted from (sdk-contract/the-edge-keeps-its-own;
+spec/vendor-differences-have-a-place-in-the-contract):
+
+```python
+from decimal import Decimal
+
+import meridian
+from meridian import edge
+from meridian.declaration import Declaration, NotCarried, Storage
+
+DECLARATION = Declaration(
+    settings=SETTINGS,  # its secret settings' names are declared, never a value
+    not_carried=[NotCarried("custody", "myvendor:position", "open_pnl",
+                            "no_contract_meaning")],
+    storage=Storage(retention_days=30),
+)
+
+async with await meridian.connect(settings=SETTINGS, declaration=DECLARATION) as plugin:
+    await plugin.record_holding(
+        ...,
+        raw_record=plugin.raw_record("ACCT-1/20261003T120000Z/positions"),
+        provenance=[edge.derived("settle_date_quantity", "quantity less unsettled trades")],
+        pending=[meridian.ReportedPending(value_date="2026-10-05", quantity=Decimal("5"))],
+    )
+    plugin.note_not_carried("myvendor:position", "open_pnl")
+```
+
+- **The declaration** (`meridian.Declaration`) goes with registration, and
+  `meridian plugin upload` reads the same one from the built image when
+  pyproject.toml's `[tool.meridian]` names it (`declaration =
+  "my_plugin.declaration:DECLARATION"`; `meridian-declaration` prints it as
+  JSON). Without one, a plugin declares its secret settings' names alone.
+  Storage is for a plugin holding an edge role only.
+- **The raw record**: every row and statement names the record in the
+  plugin's own storage it was converted from, by the plugin's own key;
+  `plugin.raw_record(key)` names this instance, and the sidecar refuses
+  another's.
+- **Provenance**: a value the vendor did not send, and the plugin closed,
+  says how: `edge.derived(field, rule)`, `edge.supplied(field, person)`,
+  `edge.second_source(field, source)`, or `edge.reported(field, raw_record)`.
+- **As reported**: a value that does not convert travels as the field's
+  not-known value with the vendor's beside it, `edge.as_reported(scheme,
+  code, text)`: an account's kind (`account_kind`,
+  `account_kind_as_reported`; the venue's own type is deprecated), and a
+  miss's asset class (`asset_class_as_reported`).
+- **Each asset once**: a custody plugin sends the cash of a currency net of
+  any holding the custodian also counts as cash, with that provenance, and
+  withholds a statement it cannot serve clean; `also_counted_in_cash` and
+  `currency_assumed` are deprecated. The settled quantity and the pending by
+  value date (`meridian.ReportedPending`) are the custody role's.
+- **A backfill**: a row sent again under its statement with a field a
+  revision added, `backfill=edge.backfill("v11", "raw_record")`, is journaled
+  beside the row as first recorded.
+- **The role's suite**: `meridian.suites.run("custody", producers)` runs each
+  case of the role's suite (vendored with the bindings, `suites.json`)
+  against the plugin's own conversion, recorded by a `Recorder` rather than
+  sent; a plugin is verified for its role by passing every case. A resolve
+  may state a money market fund (`stated_instrument_type`).
+
 ### Figures on Summary
 
 Manage opens on the plugin's Summary, which core draws: its own status first
@@ -466,7 +530,11 @@ on, in its order, each replacing the last, and an empty list clears it;
 names no account and carries none of an account's data: Manage shows none.
 
 At most 8; a label of 1 to 40 characters, given once; a text of at most 40;
-a why of at most 200; a decimal within what the wire carries. Anything past
+a why of at most 200; a decimal within what the wire carries. The bounds are
+`meridian.bounds`', generated from the data dictionary
+(`HEARTBEAT_REQUEST_FIGURES_COUNT`, `PLUGIN_FIGURE_LABEL_LENGTH`,
+`PLUGIN_FIGURE_TEXT_LENGTH`, `PLUGIN_FIGURE_WHY_LENGTH`); 0.16.0 moved
+`meridian.figures.MOST_FIGURES` and its `LONGEST_*` there. Anything past
 a bound is refused at the line that sets it, in the words the sidecar would
 refuse it with, and nothing is sent. In a plugin's tests,
 `meridian.testing.heartbeat(figures=[...])` is the heartbeat its sidecar
@@ -525,6 +593,7 @@ carries libcst.
 | 0.12.0 to 0.13.0: the SDK declares contract v8; the book of record's operations, reads and deliveries, a oneof taken by keyword, `CommandRefused` with the book's codes, what of a holding cannot move, and the book's encumbrances with their free quantity | only the pins move | |
 | 0.13.0 to 0.14.0: the SDK declares contract v9; `CommandRefused.fields` names what an incomplete entry left out (`REFUSAL_REASON_INCOMPLETE`); `Caller.delegation_id` and `Caller.client_name` | only the pins move | |
 | 0.14.0 to 0.15.0: the SDK declares contract v10; a deployment's instrument identity is its own: `ResolveIdentifierResult.minted`, a resolve's `stated_*` values, a record's `sources` and `offers`, the book's refusal of an incomplete instrument record and `CommandRefused.retryable`, the book's actor naming the delegation and client. Breaking | a resolve result's `.placeholder` into `.minted` | a book position's `.placeholder`, which is gone: drop it, and link the person to the dashboard's Instruments page where the book refuses an incomplete record |
+| 0.15.0 to 0.16.0: the SDK declares contract v11, the edge keeps its own: the version's declaration (`meridian.Declaration`, `connect(declaration=...)`, `meridian-declaration`), a row's raw record and provenance (`plugin.raw_record`, `meridian.edge`), the account kind and values as reported, each asset counted once, pending by value date (`meridian.ReportedPending`), a backfill, the stated instrument type, the custody suite (`meridian.suites`), names not carried counted on the heartbeat (`plugin.note_not_carried`); `meridian.ExternalAccount` is the SDK's form; `meridian.figures.MOST_FIGURES` and `LONGEST_*` moved to `meridian.bounds` | nothing | an ExternalAccount's `venue_account_type=`, a holding's `also_counted_in_cash=`, `currency_assumed=`, each replaced by the plugin's own conversion; a read of `meridian.figures`' moved bounds |
 
 `tests/migrations/` holds the plugins the migrations are recorded for, as
 written and as their migration leaves them, and `make check-migrations` holds

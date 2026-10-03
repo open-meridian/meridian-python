@@ -6,6 +6,12 @@ from typing import ClassVar as _ClassVar, Iterable as _Iterable, Mapping as _Map
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
+class NotCarriedReason(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    NOT_CARRIED_REASON_UNSPECIFIED: _ClassVar[NotCarriedReason]
+    NOT_CARRIED_REASON_NO_CONTRACT_MEANING: _ClassVar[NotCarriedReason]
+    NOT_CARRIED_REASON_NOT_CONVERTED: _ClassVar[NotCarriedReason]
+
 class AccessLevel(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
     ACCESS_LEVEL_UNSPECIFIED: _ClassVar[AccessLevel]
@@ -28,6 +34,14 @@ class FigureState(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     FIGURE_STATE_WARN: _ClassVar[FigureState]
     FIGURE_STATE_ERROR: _ClassVar[FigureState]
 
+class ProvenanceKind(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    PROVENANCE_KIND_UNSPECIFIED: _ClassVar[ProvenanceKind]
+    PROVENANCE_KIND_REPORTED: _ClassVar[ProvenanceKind]
+    PROVENANCE_KIND_SECOND_SOURCE: _ClassVar[ProvenanceKind]
+    PROVENANCE_KIND_SUPPLIED: _ClassVar[ProvenanceKind]
+    PROVENANCE_KIND_DERIVED: _ClassVar[ProvenanceKind]
+
 class RefusalReason(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
     REFUSAL_REASON_UNSPECIFIED: _ClassVar[RefusalReason]
@@ -45,6 +59,9 @@ class RefusalReason(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     REFUSAL_REASON_IDENTIFIER_HELD: _ClassVar[RefusalReason]
     REFUSAL_REASON_RECORD_CHANGED: _ClassVar[RefusalReason]
     REFUSAL_REASON_REFERENCE_UNAVAILABLE: _ClassVar[RefusalReason]
+NOT_CARRIED_REASON_UNSPECIFIED: NotCarriedReason
+NOT_CARRIED_REASON_NO_CONTRACT_MEANING: NotCarriedReason
+NOT_CARRIED_REASON_NOT_CONVERTED: NotCarriedReason
 ACCESS_LEVEL_UNSPECIFIED: AccessLevel
 ACCESS_LEVEL_READ: AccessLevel
 ACCESS_LEVEL_WRITE: AccessLevel
@@ -58,6 +75,11 @@ FIGURE_STATE_UNSPECIFIED: FigureState
 FIGURE_STATE_OK: FigureState
 FIGURE_STATE_WARN: FigureState
 FIGURE_STATE_ERROR: FigureState
+PROVENANCE_KIND_UNSPECIFIED: ProvenanceKind
+PROVENANCE_KIND_REPORTED: ProvenanceKind
+PROVENANCE_KIND_SECOND_SOURCE: ProvenanceKind
+PROVENANCE_KIND_SUPPLIED: ProvenanceKind
+PROVENANCE_KIND_DERIVED: ProvenanceKind
 REFUSAL_REASON_UNSPECIFIED: RefusalReason
 REFUSAL_REASON_EXTERNAL_ACCOUNT_NOT_LINKED: RefusalReason
 REFUSAL_REASON_ACTOR_REQUIRED: RefusalReason
@@ -75,16 +97,46 @@ REFUSAL_REASON_RECORD_CHANGED: RefusalReason
 REFUSAL_REASON_REFERENCE_UNAVAILABLE: RefusalReason
 
 class RegisterRequest(_message.Message):
-    __slots__ = ("schema_version", "interface", "settings", "reads_external_accounts")
+    __slots__ = ("schema_version", "interface", "settings", "reads_external_accounts", "declaration")
     SCHEMA_VERSION_FIELD_NUMBER: _ClassVar[int]
     INTERFACE_FIELD_NUMBER: _ClassVar[int]
     SETTINGS_FIELD_NUMBER: _ClassVar[int]
     READS_EXTERNAL_ACCOUNTS_FIELD_NUMBER: _ClassVar[int]
+    DECLARATION_FIELD_NUMBER: _ClassVar[int]
     schema_version: str
     interface: InterfaceDeclaration
     settings: _containers.RepeatedCompositeFieldContainer[SettingDeclaration]
     reads_external_accounts: bool
-    def __init__(self, schema_version: _Optional[str] = ..., interface: _Optional[_Union[InterfaceDeclaration, _Mapping]] = ..., settings: _Optional[_Iterable[_Union[SettingDeclaration, _Mapping]]] = ..., reads_external_accounts: bool = ...) -> None: ...
+    declaration: PluginDeclaration
+    def __init__(self, schema_version: _Optional[str] = ..., interface: _Optional[_Union[InterfaceDeclaration, _Mapping]] = ..., settings: _Optional[_Iterable[_Union[SettingDeclaration, _Mapping]]] = ..., reads_external_accounts: bool = ..., declaration: _Optional[_Union[PluginDeclaration, _Mapping]] = ...) -> None: ...
+
+class PluginDeclaration(_message.Message):
+    __slots__ = ("secret_settings", "not_carried", "storage")
+    SECRET_SETTINGS_FIELD_NUMBER: _ClassVar[int]
+    NOT_CARRIED_FIELD_NUMBER: _ClassVar[int]
+    STORAGE_FIELD_NUMBER: _ClassVar[int]
+    secret_settings: _containers.RepeatedScalarFieldContainer[str]
+    not_carried: _containers.RepeatedCompositeFieldContainer[NotCarried]
+    storage: StorageDeclaration
+    def __init__(self, secret_settings: _Optional[_Iterable[str]] = ..., not_carried: _Optional[_Iterable[_Union[NotCarried, _Mapping]]] = ..., storage: _Optional[_Union[StorageDeclaration, _Mapping]] = ...) -> None: ...
+
+class NotCarried(_message.Message):
+    __slots__ = ("role", "scheme", "name", "reason")
+    ROLE_FIELD_NUMBER: _ClassVar[int]
+    SCHEME_FIELD_NUMBER: _ClassVar[int]
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    REASON_FIELD_NUMBER: _ClassVar[int]
+    role: str
+    scheme: str
+    name: str
+    reason: NotCarriedReason
+    def __init__(self, role: _Optional[str] = ..., scheme: _Optional[str] = ..., name: _Optional[str] = ..., reason: _Optional[_Union[NotCarriedReason, str]] = ...) -> None: ...
+
+class StorageDeclaration(_message.Message):
+    __slots__ = ("retention_days",)
+    RETENTION_DAYS_FIELD_NUMBER: _ClassVar[int]
+    retention_days: int
+    def __init__(self, retention_days: _Optional[int] = ...) -> None: ...
 
 class InterfaceDeclaration(_message.Message):
     __slots__ = ("loopback_port", "title", "pages")
@@ -169,14 +221,26 @@ class RegisterReply(_message.Message):
     def __init__(self, admitted: bool = ..., deployment_id: _Optional[str] = ..., refusal_reason: _Optional[str] = ..., publish_grants: _Optional[_Iterable[str]] = ..., subscribe_grants: _Optional[_Iterable[str]] = ..., instance_id: _Optional[str] = ..., roles: _Optional[_Iterable[str]] = ...) -> None: ...
 
 class HeartbeatRequest(_message.Message):
-    __slots__ = ("healthy", "detail", "figures")
+    __slots__ = ("healthy", "detail", "figures", "not_carried_seen")
     HEALTHY_FIELD_NUMBER: _ClassVar[int]
     DETAIL_FIELD_NUMBER: _ClassVar[int]
     FIGURES_FIELD_NUMBER: _ClassVar[int]
+    NOT_CARRIED_SEEN_FIELD_NUMBER: _ClassVar[int]
     healthy: bool
     detail: str
     figures: _containers.RepeatedCompositeFieldContainer[PluginFigure]
-    def __init__(self, healthy: bool = ..., detail: _Optional[str] = ..., figures: _Optional[_Iterable[_Union[PluginFigure, _Mapping]]] = ...) -> None: ...
+    not_carried_seen: _containers.RepeatedCompositeFieldContainer[NotCarriedSeen]
+    def __init__(self, healthy: bool = ..., detail: _Optional[str] = ..., figures: _Optional[_Iterable[_Union[PluginFigure, _Mapping]]] = ..., not_carried_seen: _Optional[_Iterable[_Union[NotCarriedSeen, _Mapping]]] = ...) -> None: ...
+
+class NotCarriedSeen(_message.Message):
+    __slots__ = ("scheme", "name", "count")
+    SCHEME_FIELD_NUMBER: _ClassVar[int]
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    COUNT_FIELD_NUMBER: _ClassVar[int]
+    scheme: str
+    name: str
+    count: int
+    def __init__(self, scheme: _Optional[str] = ..., name: _Optional[str] = ..., count: _Optional[int] = ...) -> None: ...
 
 class PluginFigure(_message.Message):
     __slots__ = ("label", "count", "decimal", "text", "at_ns", "as_of_ns", "state", "why")
@@ -207,6 +271,48 @@ class Decimal(_message.Message):
     low: int
     scale: int
     def __init__(self, high: _Optional[int] = ..., low: _Optional[int] = ..., scale: _Optional[int] = ...) -> None: ...
+
+class AsReported(_message.Message):
+    __slots__ = ("scheme", "code", "text")
+    SCHEME_FIELD_NUMBER: _ClassVar[int]
+    CODE_FIELD_NUMBER: _ClassVar[int]
+    TEXT_FIELD_NUMBER: _ClassVar[int]
+    scheme: str
+    code: str
+    text: str
+    def __init__(self, scheme: _Optional[str] = ..., code: _Optional[str] = ..., text: _Optional[str] = ...) -> None: ...
+
+class RawRecordRef(_message.Message):
+    __slots__ = ("instance_id", "key")
+    INSTANCE_ID_FIELD_NUMBER: _ClassVar[int]
+    KEY_FIELD_NUMBER: _ClassVar[int]
+    instance_id: str
+    key: str
+    def __init__(self, instance_id: _Optional[str] = ..., key: _Optional[str] = ...) -> None: ...
+
+class Provenance(_message.Message):
+    __slots__ = ("field", "kind", "raw_record", "source", "person", "rule")
+    FIELD_FIELD_NUMBER: _ClassVar[int]
+    KIND_FIELD_NUMBER: _ClassVar[int]
+    RAW_RECORD_FIELD_NUMBER: _ClassVar[int]
+    SOURCE_FIELD_NUMBER: _ClassVar[int]
+    PERSON_FIELD_NUMBER: _ClassVar[int]
+    RULE_FIELD_NUMBER: _ClassVar[int]
+    field: str
+    kind: ProvenanceKind
+    raw_record: RawRecordRef
+    source: str
+    person: str
+    rule: str
+    def __init__(self, field: _Optional[str] = ..., kind: _Optional[_Union[ProvenanceKind, str]] = ..., raw_record: _Optional[_Union[RawRecordRef, _Mapping]] = ..., source: _Optional[str] = ..., person: _Optional[str] = ..., rule: _Optional[str] = ...) -> None: ...
+
+class Backfill(_message.Message):
+    __slots__ = ("contract_version", "field")
+    CONTRACT_VERSION_FIELD_NUMBER: _ClassVar[int]
+    FIELD_FIELD_NUMBER: _ClassVar[int]
+    contract_version: str
+    field: str
+    def __init__(self, contract_version: _Optional[str] = ..., field: _Optional[str] = ...) -> None: ...
 
 class HeartbeatReply(_message.Message):
     __slots__ = ()

@@ -49,6 +49,7 @@ from .operations import Operations, _enum
 from .statements import checked
 
 if TYPE_CHECKING:
+    from .declaration import Declaration
     from .pages import Pages
 
 #: The contract version this SDK was built for, sent at registration (W4.1). A
@@ -63,7 +64,7 @@ if TYPE_CHECKING:
 #: incomplete entry left out, and the delegation a person acted through -- and
 #: a newer sidecar still admits it. Raised with every contract revision that
 #: adds something a plugin can depend on.
-SCHEMA_VERSION = "v10"
+SCHEMA_VERSION = "v11"
 
 #: Where a sidecar listens. Loopback, always: a sidecar reachable from another
 #: host is a way around the boundary it exists to enforce.
@@ -526,6 +527,24 @@ class Plugin(Operations):
     _figures_sent: tuple[sidecar_pb2.PluginFigure, ...] = field(default=(), repr=False)
     _healthy: bool = field(default=True, repr=False)
     _detail: str = field(default="", repr=False)
+    _not_carried_seen: dict[tuple[str, str], int] = field(default_factory=dict, repr=False)
+
+    def raw_record(self, key: str) -> Any:
+        """A reference to a raw record in this plugin's own storage, by its
+        own key (contract v11): what a row, a statement or a provenance names
+        it by. Carried, never followed, past this plugin; a person follows it
+        on this plugin's page."""
+        from .edge import raw_record
+
+        return raw_record(key, self.identity.instance_id)
+
+    def note_not_carried(self, scheme: str, name: str) -> None:
+        """Count one sighting of a vendor field or code this plugin's
+        declaration lists as received and not carried (W4.5, contract v11):
+        each heartbeat carries how often each was seen since it started, a
+        name and a count, never a value."""
+        key = (scheme, name)
+        self._not_carried_seen[key] = self._not_carried_seen.get(key, 0) + 1
 
     @property
     def figures(self) -> Sequence[Figure]:
@@ -713,7 +732,13 @@ class Plugin(Operations):
         """The health and figures as they stand: healthy, with no detail and
         no figures, until the plugin reports otherwise."""
         return sidecar_pb2.HeartbeatRequest(
-            healthy=self._healthy, detail=self._detail, figures=self._figures_sent
+            healthy=self._healthy,
+            detail=self._detail,
+            figures=self._figures_sent,
+            not_carried_seen=[
+                sidecar_pb2.NotCarriedSeen(scheme=scheme, name=name, count=count)
+                for (scheme, name), count in sorted(self._not_carried_seen.items())
+            ],
         )
 
 
@@ -735,6 +760,7 @@ async def connect(
     interface: Interface | None = None,
     settings: Sequence[Setting] = (),
     reads_external_accounts: bool = False,
+    declaration: Declaration | None = None,
 ) -> Plugin:
     """Register with the sidecar and return the admitted plugin.
 
@@ -750,7 +776,27 @@ async def connect(
     Raises `Refused` when the sidecar declines, carrying its reason. Refusals
     are not retried; every one of them is a statement about configuration, and
     none resolves by asking again.
+
+    From contract v11 a plugin registers with its version's declaration
+    (`meridian.declaration.Declaration`): the same one `meridian plugin upload`
+    read from its image. Without one, its declaration is its secret settings'
+    names alone. A declaration's own settings are the ones registered where
+    `settings` names none; naming both, they must be the same.
     """
+    from .declaration import Declaration as _Declaration
+
+    if declaration is None:
+        declaration = _Declaration(settings=tuple(settings))
+    elif not settings:
+        settings = tuple(declaration.settings)
+    elif declaration.settings and tuple(declaration.settings) != tuple(settings):
+        raise ValueError("connect's settings and its declaration's settings differ")
+    else:
+        declaration = _Declaration(
+            settings=tuple(settings),
+            not_carried=declaration.not_carried,
+            storage=declaration.storage,
+        )
     target = address or os.environ.get("MERIDIAN_SIDECAR_ADDRESS") or DEFAULT_ADDRESS
     channel = grpc.aio.insecure_channel(target)
     stub = sidecar_pb2_grpc.SidecarServiceStub(channel)
@@ -762,6 +808,7 @@ async def connect(
                 interface=interface._declared() if interface is not None else None,
                 settings=[setting._declared() for setting in settings],
                 reads_external_accounts=reads_external_accounts,
+                declaration=declaration.to_wire(),
             ),
             # Held until the channel is ready rather than failed at once,
             # within the deadline; an answer, refusal included, ends the wait.

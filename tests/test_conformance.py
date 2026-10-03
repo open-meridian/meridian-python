@@ -213,6 +213,10 @@ def test_the_heartbeats_figures_built_with_the_sdk_are_the_pinned_bytes() -> Non
         healthy=fields["healthy"],
         detail=fields["detail"],
         figures=[figure(given) for given in fields["figures"]],
+        not_carried_seen={
+            (seen["scheme"], seen["name"]): int(seen["count"])
+            for seen in fields.get("not_carried_seen", [])
+        },
     )
     pin = base64.b64decode(fixture["expected_proto_bytes_b64"]["request"])
     assert built.SerializeToString(deterministic=True) == pin

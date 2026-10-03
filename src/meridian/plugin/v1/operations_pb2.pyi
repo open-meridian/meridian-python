@@ -7,6 +7,13 @@ from typing import ClassVar as _ClassVar, Iterable as _Iterable, Mapping as _Map
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
+class AccountKind(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    ACCOUNT_KIND_UNSPECIFIED: _ClassVar[AccountKind]
+    ACCOUNT_KIND_CASH: _ClassVar[AccountKind]
+    ACCOUNT_KIND_MARGIN: _ClassVar[AccountKind]
+    ACCOUNT_KIND_RETIREMENT: _ClassVar[AccountKind]
+
 class SyncState(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
     SYNC_STATE_UNSPECIFIED: _ClassVar[SyncState]
@@ -22,6 +29,14 @@ class CollateralDirection(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     COLLATERAL_DIRECTION_UNSPECIFIED: _ClassVar[CollateralDirection]
     COLLATERAL_DIRECTION_POSTED: _ClassVar[CollateralDirection]
     COLLATERAL_DIRECTION_RECEIVED: _ClassVar[CollateralDirection]
+
+class ProvenanceKind(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    PROVENANCE_KIND_UNSPECIFIED: _ClassVar[ProvenanceKind]
+    PROVENANCE_KIND_REPORTED: _ClassVar[ProvenanceKind]
+    PROVENANCE_KIND_SECOND_SOURCE: _ClassVar[ProvenanceKind]
+    PROVENANCE_KIND_SUPPLIED: _ClassVar[ProvenanceKind]
+    PROVENANCE_KIND_DERIVED: _ClassVar[ProvenanceKind]
 
 class HoldingSide(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
@@ -62,6 +77,11 @@ class AssetClass(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     ASSET_CLASS_EVENT_CONTRACT: _ClassVar[AssetClass]
     ASSET_CLASS_CASH: _ClassVar[AssetClass]
 
+class InstrumentType(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    INSTRUMENT_TYPE_UNSPECIFIED: _ClassVar[InstrumentType]
+    INSTRUMENT_TYPE_MONEY_MARKET_FUND: _ClassVar[InstrumentType]
+
 class MissReason(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
     MISS_REASON_UNSPECIFIED: _ClassVar[MissReason]
@@ -82,6 +102,33 @@ class InstrumentField(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     INSTRUMENT_FIELD_CURRENCY: _ClassVar[InstrumentField]
     INSTRUMENT_FIELD_DESCRIPTION: _ClassVar[InstrumentField]
     INSTRUMENT_FIELD_IDENTIFIER: _ClassVar[InstrumentField]
+    INSTRUMENT_FIELD_INSTRUMENT_TYPE: _ClassVar[InstrumentField]
+    INSTRUMENT_FIELD_MONEY_MARKET_FUND: _ClassVar[InstrumentField]
+
+class MoneyMarketFundCategory(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    MONEY_MARKET_FUND_CATEGORY_UNSPECIFIED: _ClassVar[MoneyMarketFundCategory]
+    MONEY_MARKET_FUND_CATEGORY_GOVERNMENT: _ClassVar[MoneyMarketFundCategory]
+    MONEY_MARKET_FUND_CATEGORY_PRIME: _ClassVar[MoneyMarketFundCategory]
+    MONEY_MARKET_FUND_CATEGORY_TAX_EXEMPT: _ClassVar[MoneyMarketFundCategory]
+
+class MoneyMarketFundInvestors(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    MONEY_MARKET_FUND_INVESTORS_UNSPECIFIED: _ClassVar[MoneyMarketFundInvestors]
+    MONEY_MARKET_FUND_INVESTORS_RETAIL: _ClassVar[MoneyMarketFundInvestors]
+    MONEY_MARKET_FUND_INVESTORS_INSTITUTIONAL: _ClassVar[MoneyMarketFundInvestors]
+
+class MoneyMarketFundNav(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    MONEY_MARKET_FUND_NAV_UNSPECIFIED: _ClassVar[MoneyMarketFundNav]
+    MONEY_MARKET_FUND_NAV_STABLE: _ClassVar[MoneyMarketFundNav]
+    MONEY_MARKET_FUND_NAV_FLOATING: _ClassVar[MoneyMarketFundNav]
+
+class LiquidityFeeRegime(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    LIQUIDITY_FEE_REGIME_UNSPECIFIED: _ClassVar[LiquidityFeeRegime]
+    LIQUIDITY_FEE_REGIME_MANDATORY: _ClassVar[LiquidityFeeRegime]
+    LIQUIDITY_FEE_REGIME_DISCRETIONARY: _ClassVar[LiquidityFeeRegime]
 
 class AccountState(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
@@ -157,6 +204,10 @@ class SettlementBucket(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     SETTLEMENT_BUCKET_SETTLED: _ClassVar[SettlementBucket]
     SETTLEMENT_BUCKET_PENDING: _ClassVar[SettlementBucket]
     SETTLEMENT_BUCKET_NOT_STATED: _ClassVar[SettlementBucket]
+ACCOUNT_KIND_UNSPECIFIED: AccountKind
+ACCOUNT_KIND_CASH: AccountKind
+ACCOUNT_KIND_MARGIN: AccountKind
+ACCOUNT_KIND_RETIREMENT: AccountKind
 SYNC_STATE_UNSPECIFIED: SyncState
 SYNC_STATE_CURRENT: SyncState
 SYNC_STATE_STALE: SyncState
@@ -167,6 +218,11 @@ SYNC_STATE_HOLDINGS_UNAVAILABLE: SyncState
 COLLATERAL_DIRECTION_UNSPECIFIED: CollateralDirection
 COLLATERAL_DIRECTION_POSTED: CollateralDirection
 COLLATERAL_DIRECTION_RECEIVED: CollateralDirection
+PROVENANCE_KIND_UNSPECIFIED: ProvenanceKind
+PROVENANCE_KIND_REPORTED: ProvenanceKind
+PROVENANCE_KIND_SECOND_SOURCE: ProvenanceKind
+PROVENANCE_KIND_SUPPLIED: ProvenanceKind
+PROVENANCE_KIND_DERIVED: ProvenanceKind
 HOLDING_SIDE_UNSPECIFIED: HoldingSide
 HOLDING_SIDE_LONG: HoldingSide
 HOLDING_SIDE_SHORT: HoldingSide
@@ -194,6 +250,8 @@ ASSET_CLASS_DERIVATIVE: AssetClass
 ASSET_CLASS_CRYPTO_ASSET: AssetClass
 ASSET_CLASS_EVENT_CONTRACT: AssetClass
 ASSET_CLASS_CASH: AssetClass
+INSTRUMENT_TYPE_UNSPECIFIED: InstrumentType
+INSTRUMENT_TYPE_MONEY_MARKET_FUND: InstrumentType
 MISS_REASON_UNSPECIFIED: MissReason
 MISS_REASON_NOT_FOUND: MissReason
 MISS_REASON_AMBIGUOUS: MissReason
@@ -206,6 +264,21 @@ INSTRUMENT_FIELD_ASSET_CLASS: InstrumentField
 INSTRUMENT_FIELD_CURRENCY: InstrumentField
 INSTRUMENT_FIELD_DESCRIPTION: InstrumentField
 INSTRUMENT_FIELD_IDENTIFIER: InstrumentField
+INSTRUMENT_FIELD_INSTRUMENT_TYPE: InstrumentField
+INSTRUMENT_FIELD_MONEY_MARKET_FUND: InstrumentField
+MONEY_MARKET_FUND_CATEGORY_UNSPECIFIED: MoneyMarketFundCategory
+MONEY_MARKET_FUND_CATEGORY_GOVERNMENT: MoneyMarketFundCategory
+MONEY_MARKET_FUND_CATEGORY_PRIME: MoneyMarketFundCategory
+MONEY_MARKET_FUND_CATEGORY_TAX_EXEMPT: MoneyMarketFundCategory
+MONEY_MARKET_FUND_INVESTORS_UNSPECIFIED: MoneyMarketFundInvestors
+MONEY_MARKET_FUND_INVESTORS_RETAIL: MoneyMarketFundInvestors
+MONEY_MARKET_FUND_INVESTORS_INSTITUTIONAL: MoneyMarketFundInvestors
+MONEY_MARKET_FUND_NAV_UNSPECIFIED: MoneyMarketFundNav
+MONEY_MARKET_FUND_NAV_STABLE: MoneyMarketFundNav
+MONEY_MARKET_FUND_NAV_FLOATING: MoneyMarketFundNav
+LIQUIDITY_FEE_REGIME_UNSPECIFIED: LiquidityFeeRegime
+LIQUIDITY_FEE_REGIME_MANDATORY: LiquidityFeeRegime
+LIQUIDITY_FEE_REGIME_DISCRETIONARY: LiquidityFeeRegime
 ACCOUNT_STATE_UNSPECIFIED: AccountState
 ACCOUNT_STATE_OPEN: AccountState
 ACCOUNT_STATE_CLOSED: AccountState
@@ -287,7 +360,7 @@ class ReportSyncStatusParams(_message.Message):
     def __init__(self, source: _Optional[str] = ..., last_synced_at_ns: _Optional[int] = ..., connection_healthy: bool = ..., status_detail: _Optional[str] = ..., observed_at_ns: _Optional[int] = ..., external_account_id: _Optional[str] = ..., state: _Optional[_Union[SyncState, str]] = ..., holdings_as_of_ns: _Optional[int] = ..., history_as_of_ns: _Optional[int] = ...) -> None: ...
 
 class RecordHoldingsStatementParams(_message.Message):
-    __slots__ = ("source", "external_statement_id", "as_of_date", "read_at_ns", "expected_rows", "buying_power", "margin_requirement", "maintenance_excess", "currency_assumed", "external_account_id", "figures", "institution", "security_interest", "acting_for")
+    __slots__ = ("source", "external_statement_id", "as_of_date", "read_at_ns", "expected_rows", "buying_power", "margin_requirement", "maintenance_excess", "currency_assumed", "external_account_id", "figures", "institution", "security_interest", "raw_record", "provenance", "acting_for")
     SOURCE_FIELD_NUMBER: _ClassVar[int]
     EXTERNAL_STATEMENT_ID_FIELD_NUMBER: _ClassVar[int]
     AS_OF_DATE_FIELD_NUMBER: _ClassVar[int]
@@ -301,6 +374,8 @@ class RecordHoldingsStatementParams(_message.Message):
     FIGURES_FIELD_NUMBER: _ClassVar[int]
     INSTITUTION_FIELD_NUMBER: _ClassVar[int]
     SECURITY_INTEREST_FIELD_NUMBER: _ClassVar[int]
+    RAW_RECORD_FIELD_NUMBER: _ClassVar[int]
+    PROVENANCE_FIELD_NUMBER: _ClassVar[int]
     ACTING_FOR_FIELD_NUMBER: _ClassVar[int]
     source: str
     external_statement_id: str
@@ -315,8 +390,10 @@ class RecordHoldingsStatementParams(_message.Message):
     figures: _containers.RepeatedCompositeFieldContainer[StatementFigures]
     institution: str
     security_interest: bool
+    raw_record: RawRecordRef
+    provenance: _containers.RepeatedCompositeFieldContainer[Provenance]
     acting_for: _sidecar_pb2.CallerAssertion
-    def __init__(self, source: _Optional[str] = ..., external_statement_id: _Optional[str] = ..., as_of_date: _Optional[str] = ..., read_at_ns: _Optional[int] = ..., expected_rows: _Optional[int] = ..., buying_power: _Optional[_Union[Money, _Mapping]] = ..., margin_requirement: _Optional[_Union[Money, _Mapping]] = ..., maintenance_excess: _Optional[_Union[Money, _Mapping]] = ..., currency_assumed: bool = ..., external_account_id: _Optional[str] = ..., figures: _Optional[_Iterable[_Union[StatementFigures, _Mapping]]] = ..., institution: _Optional[str] = ..., security_interest: bool = ..., acting_for: _Optional[_Union[_sidecar_pb2.CallerAssertion, _Mapping]] = ...) -> None: ...
+    def __init__(self, source: _Optional[str] = ..., external_statement_id: _Optional[str] = ..., as_of_date: _Optional[str] = ..., read_at_ns: _Optional[int] = ..., expected_rows: _Optional[int] = ..., buying_power: _Optional[_Union[Money, _Mapping]] = ..., margin_requirement: _Optional[_Union[Money, _Mapping]] = ..., maintenance_excess: _Optional[_Union[Money, _Mapping]] = ..., currency_assumed: bool = ..., external_account_id: _Optional[str] = ..., figures: _Optional[_Iterable[_Union[StatementFigures, _Mapping]]] = ..., institution: _Optional[str] = ..., security_interest: bool = ..., raw_record: _Optional[_Union[RawRecordRef, _Mapping]] = ..., provenance: _Optional[_Iterable[_Union[Provenance, _Mapping]]] = ..., acting_for: _Optional[_Union[_sidecar_pb2.CallerAssertion, _Mapping]] = ...) -> None: ...
 
 class RecordHoldingsStatementResult(_message.Message):
     __slots__ = ("statement_id", "already_recorded")
@@ -327,7 +404,7 @@ class RecordHoldingsStatementResult(_message.Message):
     def __init__(self, statement_id: _Optional[str] = ..., already_recorded: bool = ...) -> None: ...
 
 class RecordHoldingParams(_message.Message):
-    __slots__ = ("statement_id", "instrument_id", "unresolved_identifiers", "quantity", "market_value", "external_account_id", "side", "settle_date_quantity", "currency_assumed", "also_counted_in_cash", "cost_basis", "lots", "margin_requirement", "average_cost", "available_quantity", "not_available_quantity", "available_basis", "encumbrances", "acting_for")
+    __slots__ = ("statement_id", "instrument_id", "unresolved_identifiers", "quantity", "market_value", "external_account_id", "side", "settle_date_quantity", "currency_assumed", "also_counted_in_cash", "cost_basis", "lots", "margin_requirement", "average_cost", "available_quantity", "not_available_quantity", "available_basis", "encumbrances", "raw_record", "provenance", "pending", "backfill", "acting_for")
     STATEMENT_ID_FIELD_NUMBER: _ClassVar[int]
     INSTRUMENT_ID_FIELD_NUMBER: _ClassVar[int]
     UNRESOLVED_IDENTIFIERS_FIELD_NUMBER: _ClassVar[int]
@@ -346,6 +423,10 @@ class RecordHoldingParams(_message.Message):
     NOT_AVAILABLE_QUANTITY_FIELD_NUMBER: _ClassVar[int]
     AVAILABLE_BASIS_FIELD_NUMBER: _ClassVar[int]
     ENCUMBRANCES_FIELD_NUMBER: _ClassVar[int]
+    RAW_RECORD_FIELD_NUMBER: _ClassVar[int]
+    PROVENANCE_FIELD_NUMBER: _ClassVar[int]
+    PENDING_FIELD_NUMBER: _ClassVar[int]
+    BACKFILL_FIELD_NUMBER: _ClassVar[int]
     ACTING_FOR_FIELD_NUMBER: _ClassVar[int]
     statement_id: str
     instrument_id: str
@@ -365,8 +446,12 @@ class RecordHoldingParams(_message.Message):
     not_available_quantity: Decimal
     available_basis: AvailableBasis
     encumbrances: _containers.RepeatedCompositeFieldContainer[ReportedEncumbrance]
+    raw_record: RawRecordRef
+    provenance: _containers.RepeatedCompositeFieldContainer[Provenance]
+    pending: _containers.RepeatedCompositeFieldContainer[ReportedPending]
+    backfill: Backfill
     acting_for: _sidecar_pb2.CallerAssertion
-    def __init__(self, statement_id: _Optional[str] = ..., instrument_id: _Optional[str] = ..., unresolved_identifiers: _Optional[_Iterable[_Union[Identifier, _Mapping]]] = ..., quantity: _Optional[_Union[Decimal, _Mapping]] = ..., market_value: _Optional[_Union[Money, _Mapping]] = ..., external_account_id: _Optional[str] = ..., side: _Optional[_Union[HoldingSide, str]] = ..., settle_date_quantity: _Optional[_Union[Decimal, _Mapping]] = ..., currency_assumed: bool = ..., also_counted_in_cash: bool = ..., cost_basis: _Optional[_Union[Money, _Mapping]] = ..., lots: _Optional[_Iterable[_Union[ReportedLot, _Mapping]]] = ..., margin_requirement: _Optional[_Union[Money, _Mapping]] = ..., average_cost: _Optional[_Union[Money, _Mapping]] = ..., available_quantity: _Optional[_Union[Decimal, _Mapping]] = ..., not_available_quantity: _Optional[_Union[Decimal, _Mapping]] = ..., available_basis: _Optional[_Union[AvailableBasis, str]] = ..., encumbrances: _Optional[_Iterable[_Union[ReportedEncumbrance, _Mapping]]] = ..., acting_for: _Optional[_Union[_sidecar_pb2.CallerAssertion, _Mapping]] = ...) -> None: ...
+    def __init__(self, statement_id: _Optional[str] = ..., instrument_id: _Optional[str] = ..., unresolved_identifiers: _Optional[_Iterable[_Union[Identifier, _Mapping]]] = ..., quantity: _Optional[_Union[Decimal, _Mapping]] = ..., market_value: _Optional[_Union[Money, _Mapping]] = ..., external_account_id: _Optional[str] = ..., side: _Optional[_Union[HoldingSide, str]] = ..., settle_date_quantity: _Optional[_Union[Decimal, _Mapping]] = ..., currency_assumed: bool = ..., also_counted_in_cash: bool = ..., cost_basis: _Optional[_Union[Money, _Mapping]] = ..., lots: _Optional[_Iterable[_Union[ReportedLot, _Mapping]]] = ..., margin_requirement: _Optional[_Union[Money, _Mapping]] = ..., average_cost: _Optional[_Union[Money, _Mapping]] = ..., available_quantity: _Optional[_Union[Decimal, _Mapping]] = ..., not_available_quantity: _Optional[_Union[Decimal, _Mapping]] = ..., available_basis: _Optional[_Union[AvailableBasis, str]] = ..., encumbrances: _Optional[_Iterable[_Union[ReportedEncumbrance, _Mapping]]] = ..., raw_record: _Optional[_Union[RawRecordRef, _Mapping]] = ..., provenance: _Optional[_Iterable[_Union[Provenance, _Mapping]]] = ..., pending: _Optional[_Iterable[_Union[ReportedPending, _Mapping]]] = ..., backfill: _Optional[_Union[Backfill, _Mapping]] = ..., acting_for: _Optional[_Union[_sidecar_pb2.CallerAssertion, _Mapping]] = ...) -> None: ...
 
 class RecordHoldingResult(_message.Message):
     __slots__ = ("holding_id", "resolved")
@@ -427,7 +512,7 @@ class ListStatementsResult(_message.Message):
     def __init__(self, statements: _Optional[_Iterable[_Union[StatementRecordedEvent, _Mapping]]] = ..., next_cursor: _Optional[str] = ..., as_of: _Optional[_Union[Watermark, _Mapping]] = ...) -> None: ...
 
 class ResolveIdentifierParams(_message.Message):
-    __slots__ = ("identifiers", "as_of_ns", "exchange_mic", "currency", "stated_asset_class", "stated_currency", "stated_description")
+    __slots__ = ("identifiers", "as_of_ns", "exchange_mic", "currency", "stated_asset_class", "stated_currency", "stated_description", "stated_instrument_type")
     IDENTIFIERS_FIELD_NUMBER: _ClassVar[int]
     AS_OF_NS_FIELD_NUMBER: _ClassVar[int]
     EXCHANGE_MIC_FIELD_NUMBER: _ClassVar[int]
@@ -435,6 +520,7 @@ class ResolveIdentifierParams(_message.Message):
     STATED_ASSET_CLASS_FIELD_NUMBER: _ClassVar[int]
     STATED_CURRENCY_FIELD_NUMBER: _ClassVar[int]
     STATED_DESCRIPTION_FIELD_NUMBER: _ClassVar[int]
+    STATED_INSTRUMENT_TYPE_FIELD_NUMBER: _ClassVar[int]
     identifiers: _containers.RepeatedCompositeFieldContainer[Identifier]
     as_of_ns: int
     exchange_mic: str
@@ -442,7 +528,8 @@ class ResolveIdentifierParams(_message.Message):
     stated_asset_class: AssetClass
     stated_currency: str
     stated_description: str
-    def __init__(self, identifiers: _Optional[_Iterable[_Union[Identifier, _Mapping]]] = ..., as_of_ns: _Optional[int] = ..., exchange_mic: _Optional[str] = ..., currency: _Optional[str] = ..., stated_asset_class: _Optional[_Union[AssetClass, str]] = ..., stated_currency: _Optional[str] = ..., stated_description: _Optional[str] = ...) -> None: ...
+    stated_instrument_type: InstrumentType
+    def __init__(self, identifiers: _Optional[_Iterable[_Union[Identifier, _Mapping]]] = ..., as_of_ns: _Optional[int] = ..., exchange_mic: _Optional[str] = ..., currency: _Optional[str] = ..., stated_asset_class: _Optional[_Union[AssetClass, str]] = ..., stated_currency: _Optional[str] = ..., stated_description: _Optional[str] = ..., stated_instrument_type: _Optional[_Union[InstrumentType, str]] = ...) -> None: ...
 
 class ResolveIdentifierResult(_message.Message):
     __slots__ = ("found", "instrument_id", "miss_reason", "minted")
@@ -457,20 +544,22 @@ class ResolveIdentifierResult(_message.Message):
     def __init__(self, found: bool = ..., instrument_id: _Optional[str] = ..., miss_reason: _Optional[_Union[MissReason, str]] = ..., minted: bool = ...) -> None: ...
 
 class ReportMissingInstrumentParams(_message.Message):
-    __slots__ = ("source", "asset_class", "identifiers", "as_of_ns", "reason", "observed_at_ns")
+    __slots__ = ("source", "asset_class", "identifiers", "as_of_ns", "reason", "observed_at_ns", "asset_class_as_reported")
     SOURCE_FIELD_NUMBER: _ClassVar[int]
     ASSET_CLASS_FIELD_NUMBER: _ClassVar[int]
     IDENTIFIERS_FIELD_NUMBER: _ClassVar[int]
     AS_OF_NS_FIELD_NUMBER: _ClassVar[int]
     REASON_FIELD_NUMBER: _ClassVar[int]
     OBSERVED_AT_NS_FIELD_NUMBER: _ClassVar[int]
+    ASSET_CLASS_AS_REPORTED_FIELD_NUMBER: _ClassVar[int]
     source: str
     asset_class: AssetClass
     identifiers: _containers.RepeatedCompositeFieldContainer[Identifier]
     as_of_ns: int
     reason: MissReason
     observed_at_ns: int
-    def __init__(self, source: _Optional[str] = ..., asset_class: _Optional[_Union[AssetClass, str]] = ..., identifiers: _Optional[_Iterable[_Union[Identifier, _Mapping]]] = ..., as_of_ns: _Optional[int] = ..., reason: _Optional[_Union[MissReason, str]] = ..., observed_at_ns: _Optional[int] = ...) -> None: ...
+    asset_class_as_reported: AsReported
+    def __init__(self, source: _Optional[str] = ..., asset_class: _Optional[_Union[AssetClass, str]] = ..., identifiers: _Optional[_Iterable[_Union[Identifier, _Mapping]]] = ..., as_of_ns: _Optional[int] = ..., reason: _Optional[_Union[MissReason, str]] = ..., observed_at_ns: _Optional[int] = ..., asset_class_as_reported: _Optional[_Union[AsReported, _Mapping]] = ...) -> None: ...
 
 class ResolveInstrumentParams(_message.Message):
     __slots__ = ("instrument_id", "as_of_ns")
@@ -935,14 +1024,28 @@ class Lost(_message.Message):
     def __init__(self, dropped: _Optional[int] = ..., rows: _Optional[_Iterable[str]] = ...) -> None: ...
 
 class ExternalAccount(_message.Message):
-    __slots__ = ("external_account_id", "name", "venue_account_type")
+    __slots__ = ("external_account_id", "name", "venue_account_type", "account_kind", "account_kind_as_reported")
     EXTERNAL_ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
     NAME_FIELD_NUMBER: _ClassVar[int]
     VENUE_ACCOUNT_TYPE_FIELD_NUMBER: _ClassVar[int]
+    ACCOUNT_KIND_FIELD_NUMBER: _ClassVar[int]
+    ACCOUNT_KIND_AS_REPORTED_FIELD_NUMBER: _ClassVar[int]
     external_account_id: str
     name: str
     venue_account_type: str
-    def __init__(self, external_account_id: _Optional[str] = ..., name: _Optional[str] = ..., venue_account_type: _Optional[str] = ...) -> None: ...
+    account_kind: AccountKind
+    account_kind_as_reported: AsReported
+    def __init__(self, external_account_id: _Optional[str] = ..., name: _Optional[str] = ..., venue_account_type: _Optional[str] = ..., account_kind: _Optional[_Union[AccountKind, str]] = ..., account_kind_as_reported: _Optional[_Union[AsReported, _Mapping]] = ...) -> None: ...
+
+class AsReported(_message.Message):
+    __slots__ = ("scheme", "code", "text")
+    SCHEME_FIELD_NUMBER: _ClassVar[int]
+    CODE_FIELD_NUMBER: _ClassVar[int]
+    TEXT_FIELD_NUMBER: _ClassVar[int]
+    scheme: str
+    code: str
+    text: str
+    def __init__(self, scheme: _Optional[str] = ..., code: _Optional[str] = ..., text: _Optional[str] = ...) -> None: ...
 
 class Money(_message.Message):
     __slots__ = ("amount", "currency_code")
@@ -1014,6 +1117,30 @@ class Identifier(_message.Message):
     source: str
     def __init__(self, scheme: _Optional[str] = ..., value: _Optional[str] = ..., source: _Optional[str] = ...) -> None: ...
 
+class RawRecordRef(_message.Message):
+    __slots__ = ("instance_id", "key")
+    INSTANCE_ID_FIELD_NUMBER: _ClassVar[int]
+    KEY_FIELD_NUMBER: _ClassVar[int]
+    instance_id: str
+    key: str
+    def __init__(self, instance_id: _Optional[str] = ..., key: _Optional[str] = ...) -> None: ...
+
+class Provenance(_message.Message):
+    __slots__ = ("field", "kind", "raw_record", "source", "person", "rule")
+    FIELD_FIELD_NUMBER: _ClassVar[int]
+    KIND_FIELD_NUMBER: _ClassVar[int]
+    RAW_RECORD_FIELD_NUMBER: _ClassVar[int]
+    SOURCE_FIELD_NUMBER: _ClassVar[int]
+    PERSON_FIELD_NUMBER: _ClassVar[int]
+    RULE_FIELD_NUMBER: _ClassVar[int]
+    field: str
+    kind: ProvenanceKind
+    raw_record: RawRecordRef
+    source: str
+    person: str
+    rule: str
+    def __init__(self, field: _Optional[str] = ..., kind: _Optional[_Union[ProvenanceKind, str]] = ..., raw_record: _Optional[_Union[RawRecordRef, _Mapping]] = ..., source: _Optional[str] = ..., person: _Optional[str] = ..., rule: _Optional[str] = ...) -> None: ...
+
 class ReportedLot(_message.Message):
     __slots__ = ("quantity", "cost", "acquired_date")
     QUANTITY_FIELD_NUMBER: _ClassVar[int]
@@ -1044,6 +1171,22 @@ class ReportedEncumbrance(_message.Message):
     detail: str
     def __init__(self, kind: _Optional[_Union[EncumbranceKind, str]] = ..., quantity: _Optional[_Union[Decimal, _Mapping]] = ..., available: bool = ..., source_code: _Optional[str] = ..., pledgee: _Optional[str] = ..., held_at: _Optional[str] = ..., segment: _Optional[str] = ..., detail: _Optional[str] = ...) -> None: ...
 
+class ReportedPending(_message.Message):
+    __slots__ = ("value_date", "quantity")
+    VALUE_DATE_FIELD_NUMBER: _ClassVar[int]
+    QUANTITY_FIELD_NUMBER: _ClassVar[int]
+    value_date: str
+    quantity: Decimal
+    def __init__(self, value_date: _Optional[str] = ..., quantity: _Optional[_Union[Decimal, _Mapping]] = ...) -> None: ...
+
+class Backfill(_message.Message):
+    __slots__ = ("contract_version", "field")
+    CONTRACT_VERSION_FIELD_NUMBER: _ClassVar[int]
+    FIELD_FIELD_NUMBER: _ClassVar[int]
+    contract_version: str
+    field: str
+    def __init__(self, contract_version: _Optional[str] = ..., field: _Optional[str] = ...) -> None: ...
+
 class Watermark(_message.Message):
     __slots__ = ("partitions",)
     PARTITIONS_FIELD_NUMBER: _ClassVar[int]
@@ -1059,7 +1202,7 @@ class PartitionSequence(_message.Message):
     def __init__(self, partition: _Optional[str] = ..., sequence: _Optional[int] = ...) -> None: ...
 
 class CustodialPosition(_message.Message):
-    __slots__ = ("account_id", "instrument_id", "quantity", "market_value", "last_statement_id", "as_of_date", "updated_at_ns", "side", "settle_date_quantity", "also_counted_in_cash", "cost_basis", "lots", "margin_requirement", "last_change", "removed", "average_cost", "available_quantity", "not_available_quantity", "available_basis", "encumbrances")
+    __slots__ = ("account_id", "instrument_id", "quantity", "market_value", "last_statement_id", "as_of_date", "updated_at_ns", "side", "settle_date_quantity", "also_counted_in_cash", "cost_basis", "lots", "margin_requirement", "last_change", "removed", "average_cost", "available_quantity", "not_available_quantity", "available_basis", "encumbrances", "raw_record", "provenance", "pending")
     ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
     INSTRUMENT_ID_FIELD_NUMBER: _ClassVar[int]
     QUANTITY_FIELD_NUMBER: _ClassVar[int]
@@ -1080,6 +1223,9 @@ class CustodialPosition(_message.Message):
     NOT_AVAILABLE_QUANTITY_FIELD_NUMBER: _ClassVar[int]
     AVAILABLE_BASIS_FIELD_NUMBER: _ClassVar[int]
     ENCUMBRANCES_FIELD_NUMBER: _ClassVar[int]
+    RAW_RECORD_FIELD_NUMBER: _ClassVar[int]
+    PROVENANCE_FIELD_NUMBER: _ClassVar[int]
+    PENDING_FIELD_NUMBER: _ClassVar[int]
     account_id: str
     instrument_id: str
     quantity: Decimal
@@ -1100,7 +1246,10 @@ class CustodialPosition(_message.Message):
     not_available_quantity: Decimal
     available_basis: AvailableBasis
     encumbrances: _containers.RepeatedCompositeFieldContainer[ReportedEncumbrance]
-    def __init__(self, account_id: _Optional[str] = ..., instrument_id: _Optional[str] = ..., quantity: _Optional[_Union[Decimal, _Mapping]] = ..., market_value: _Optional[_Union[Money, _Mapping]] = ..., last_statement_id: _Optional[str] = ..., as_of_date: _Optional[str] = ..., updated_at_ns: _Optional[int] = ..., side: _Optional[_Union[HoldingSide, str]] = ..., settle_date_quantity: _Optional[_Union[Decimal, _Mapping]] = ..., also_counted_in_cash: bool = ..., cost_basis: _Optional[_Union[Money, _Mapping]] = ..., lots: _Optional[_Iterable[_Union[ReportedLot, _Mapping]]] = ..., margin_requirement: _Optional[_Union[Money, _Mapping]] = ..., last_change: _Optional[_Union[JournalRef, _Mapping]] = ..., removed: bool = ..., average_cost: _Optional[_Union[Money, _Mapping]] = ..., available_quantity: _Optional[_Union[Decimal, _Mapping]] = ..., not_available_quantity: _Optional[_Union[Decimal, _Mapping]] = ..., available_basis: _Optional[_Union[AvailableBasis, str]] = ..., encumbrances: _Optional[_Iterable[_Union[ReportedEncumbrance, _Mapping]]] = ...) -> None: ...
+    raw_record: RawRecordRef
+    provenance: _containers.RepeatedCompositeFieldContainer[Provenance]
+    pending: _containers.RepeatedCompositeFieldContainer[ReportedPending]
+    def __init__(self, account_id: _Optional[str] = ..., instrument_id: _Optional[str] = ..., quantity: _Optional[_Union[Decimal, _Mapping]] = ..., market_value: _Optional[_Union[Money, _Mapping]] = ..., last_statement_id: _Optional[str] = ..., as_of_date: _Optional[str] = ..., updated_at_ns: _Optional[int] = ..., side: _Optional[_Union[HoldingSide, str]] = ..., settle_date_quantity: _Optional[_Union[Decimal, _Mapping]] = ..., also_counted_in_cash: bool = ..., cost_basis: _Optional[_Union[Money, _Mapping]] = ..., lots: _Optional[_Iterable[_Union[ReportedLot, _Mapping]]] = ..., margin_requirement: _Optional[_Union[Money, _Mapping]] = ..., last_change: _Optional[_Union[JournalRef, _Mapping]] = ..., removed: bool = ..., average_cost: _Optional[_Union[Money, _Mapping]] = ..., available_quantity: _Optional[_Union[Decimal, _Mapping]] = ..., not_available_quantity: _Optional[_Union[Decimal, _Mapping]] = ..., available_basis: _Optional[_Union[AvailableBasis, str]] = ..., encumbrances: _Optional[_Iterable[_Union[ReportedEncumbrance, _Mapping]]] = ..., raw_record: _Optional[_Union[RawRecordRef, _Mapping]] = ..., provenance: _Optional[_Iterable[_Union[Provenance, _Mapping]]] = ..., pending: _Optional[_Iterable[_Union[ReportedPending, _Mapping]]] = ...) -> None: ...
 
 class JournalRef(_message.Message):
     __slots__ = ("partition", "sequence", "previous_sequence")
@@ -1113,7 +1262,7 @@ class JournalRef(_message.Message):
     def __init__(self, partition: _Optional[str] = ..., sequence: _Optional[int] = ..., previous_sequence: _Optional[int] = ...) -> None: ...
 
 class UnresolvedHolding(_message.Message):
-    __slots__ = ("holding_id", "account_id", "identifiers", "quantity", "market_value", "source", "as_of_date", "escalated")
+    __slots__ = ("holding_id", "account_id", "identifiers", "quantity", "market_value", "source", "as_of_date", "escalated", "raw_record")
     HOLDING_ID_FIELD_NUMBER: _ClassVar[int]
     ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
     IDENTIFIERS_FIELD_NUMBER: _ClassVar[int]
@@ -1122,6 +1271,7 @@ class UnresolvedHolding(_message.Message):
     SOURCE_FIELD_NUMBER: _ClassVar[int]
     AS_OF_DATE_FIELD_NUMBER: _ClassVar[int]
     ESCALATED_FIELD_NUMBER: _ClassVar[int]
+    RAW_RECORD_FIELD_NUMBER: _ClassVar[int]
     holding_id: str
     account_id: str
     identifiers: _containers.RepeatedCompositeFieldContainer[Identifier]
@@ -1130,10 +1280,11 @@ class UnresolvedHolding(_message.Message):
     source: str
     as_of_date: str
     escalated: bool
-    def __init__(self, holding_id: _Optional[str] = ..., account_id: _Optional[str] = ..., identifiers: _Optional[_Iterable[_Union[Identifier, _Mapping]]] = ..., quantity: _Optional[_Union[Decimal, _Mapping]] = ..., market_value: _Optional[_Union[Money, _Mapping]] = ..., source: _Optional[str] = ..., as_of_date: _Optional[str] = ..., escalated: bool = ...) -> None: ...
+    raw_record: RawRecordRef
+    def __init__(self, holding_id: _Optional[str] = ..., account_id: _Optional[str] = ..., identifiers: _Optional[_Iterable[_Union[Identifier, _Mapping]]] = ..., quantity: _Optional[_Union[Decimal, _Mapping]] = ..., market_value: _Optional[_Union[Money, _Mapping]] = ..., source: _Optional[str] = ..., as_of_date: _Optional[str] = ..., escalated: bool = ..., raw_record: _Optional[_Union[RawRecordRef, _Mapping]] = ...) -> None: ...
 
 class StatementRecordedEvent(_message.Message):
-    __slots__ = ("statement_id", "source", "as_of_date", "rows_received", "rows_resolved", "rows_unresolved", "recorded_at_ns", "account_id", "figures", "currency_assumed", "journal", "cause", "external_account_id", "institution", "security_interest")
+    __slots__ = ("statement_id", "source", "as_of_date", "rows_received", "rows_resolved", "rows_unresolved", "recorded_at_ns", "account_id", "figures", "currency_assumed", "journal", "cause", "external_account_id", "institution", "security_interest", "raw_record", "provenance")
     STATEMENT_ID_FIELD_NUMBER: _ClassVar[int]
     SOURCE_FIELD_NUMBER: _ClassVar[int]
     AS_OF_DATE_FIELD_NUMBER: _ClassVar[int]
@@ -1149,6 +1300,8 @@ class StatementRecordedEvent(_message.Message):
     EXTERNAL_ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
     INSTITUTION_FIELD_NUMBER: _ClassVar[int]
     SECURITY_INTEREST_FIELD_NUMBER: _ClassVar[int]
+    RAW_RECORD_FIELD_NUMBER: _ClassVar[int]
+    PROVENANCE_FIELD_NUMBER: _ClassVar[int]
     statement_id: str
     source: str
     as_of_date: str
@@ -1164,7 +1317,9 @@ class StatementRecordedEvent(_message.Message):
     external_account_id: str
     institution: str
     security_interest: bool
-    def __init__(self, statement_id: _Optional[str] = ..., source: _Optional[str] = ..., as_of_date: _Optional[str] = ..., rows_received: _Optional[int] = ..., rows_resolved: _Optional[int] = ..., rows_unresolved: _Optional[int] = ..., recorded_at_ns: _Optional[int] = ..., account_id: _Optional[str] = ..., figures: _Optional[_Iterable[_Union[StatementFigures, _Mapping]]] = ..., currency_assumed: bool = ..., journal: _Optional[_Union[JournalRef, _Mapping]] = ..., cause: _Optional[_Union[ChangeCause, _Mapping]] = ..., external_account_id: _Optional[str] = ..., institution: _Optional[str] = ..., security_interest: bool = ...) -> None: ...
+    raw_record: RawRecordRef
+    provenance: _containers.RepeatedCompositeFieldContainer[Provenance]
+    def __init__(self, statement_id: _Optional[str] = ..., source: _Optional[str] = ..., as_of_date: _Optional[str] = ..., rows_received: _Optional[int] = ..., rows_resolved: _Optional[int] = ..., rows_unresolved: _Optional[int] = ..., recorded_at_ns: _Optional[int] = ..., account_id: _Optional[str] = ..., figures: _Optional[_Iterable[_Union[StatementFigures, _Mapping]]] = ..., currency_assumed: bool = ..., journal: _Optional[_Union[JournalRef, _Mapping]] = ..., cause: _Optional[_Union[ChangeCause, _Mapping]] = ..., external_account_id: _Optional[str] = ..., institution: _Optional[str] = ..., security_interest: bool = ..., raw_record: _Optional[_Union[RawRecordRef, _Mapping]] = ..., provenance: _Optional[_Iterable[_Union[Provenance, _Mapping]]] = ...) -> None: ...
 
 class ChangeCause(_message.Message):
     __slots__ = ("instance_id", "acting_for_subject", "correlation_id", "causation_id", "committed_at_ns")
@@ -1181,7 +1336,7 @@ class ChangeCause(_message.Message):
     def __init__(self, instance_id: _Optional[str] = ..., acting_for_subject: _Optional[str] = ..., correlation_id: _Optional[str] = ..., causation_id: _Optional[str] = ..., committed_at_ns: _Optional[int] = ...) -> None: ...
 
 class InstrumentRecord(_message.Message):
-    __slots__ = ("instrument_id", "identifiers", "asset_class", "currency", "exchange_mic", "description", "lifecycle_state", "version", "valid_from_ns", "record_time_ns", "sources", "offers")
+    __slots__ = ("instrument_id", "identifiers", "asset_class", "currency", "exchange_mic", "description", "lifecycle_state", "version", "valid_from_ns", "record_time_ns", "sources", "offers", "instrument_type", "money_market_fund")
     INSTRUMENT_ID_FIELD_NUMBER: _ClassVar[int]
     IDENTIFIERS_FIELD_NUMBER: _ClassVar[int]
     ASSET_CLASS_FIELD_NUMBER: _ClassVar[int]
@@ -1194,6 +1349,8 @@ class InstrumentRecord(_message.Message):
     RECORD_TIME_NS_FIELD_NUMBER: _ClassVar[int]
     SOURCES_FIELD_NUMBER: _ClassVar[int]
     OFFERS_FIELD_NUMBER: _ClassVar[int]
+    INSTRUMENT_TYPE_FIELD_NUMBER: _ClassVar[int]
+    MONEY_MARKET_FUND_FIELD_NUMBER: _ClassVar[int]
     instrument_id: str
     identifiers: _containers.RepeatedCompositeFieldContainer[Identifier]
     asset_class: AssetClass
@@ -1206,7 +1363,9 @@ class InstrumentRecord(_message.Message):
     record_time_ns: int
     sources: _containers.RepeatedCompositeFieldContainer[InstrumentValueSource]
     offers: _containers.RepeatedCompositeFieldContainer[OfferedValue]
-    def __init__(self, instrument_id: _Optional[str] = ..., identifiers: _Optional[_Iterable[_Union[Identifier, _Mapping]]] = ..., asset_class: _Optional[_Union[AssetClass, str]] = ..., currency: _Optional[str] = ..., exchange_mic: _Optional[str] = ..., description: _Optional[str] = ..., lifecycle_state: _Optional[_Union[InstrumentLifecycleState, str]] = ..., version: _Optional[int] = ..., valid_from_ns: _Optional[int] = ..., record_time_ns: _Optional[int] = ..., sources: _Optional[_Iterable[_Union[InstrumentValueSource, _Mapping]]] = ..., offers: _Optional[_Iterable[_Union[OfferedValue, _Mapping]]] = ...) -> None: ...
+    instrument_type: InstrumentType
+    money_market_fund: MoneyMarketFund
+    def __init__(self, instrument_id: _Optional[str] = ..., identifiers: _Optional[_Iterable[_Union[Identifier, _Mapping]]] = ..., asset_class: _Optional[_Union[AssetClass, str]] = ..., currency: _Optional[str] = ..., exchange_mic: _Optional[str] = ..., description: _Optional[str] = ..., lifecycle_state: _Optional[_Union[InstrumentLifecycleState, str]] = ..., version: _Optional[int] = ..., valid_from_ns: _Optional[int] = ..., record_time_ns: _Optional[int] = ..., sources: _Optional[_Iterable[_Union[InstrumentValueSource, _Mapping]]] = ..., offers: _Optional[_Iterable[_Union[OfferedValue, _Mapping]]] = ..., instrument_type: _Optional[_Union[InstrumentType, str]] = ..., money_market_fund: _Optional[_Union[MoneyMarketFund, _Mapping]] = ...) -> None: ...
 
 class InstrumentValueSource(_message.Message):
     __slots__ = ("field", "identifier", "source", "person", "instance_id", "recorded_at_ns", "note")
@@ -1237,18 +1396,34 @@ class OfferedValue(_message.Message):
     def __init__(self, value: _Optional[_Union[InstrumentValue, _Mapping]] = ..., instance_id: _Optional[str] = ..., offered_at_ns: _Optional[int] = ...) -> None: ...
 
 class InstrumentValue(_message.Message):
-    __slots__ = ("asset_class", "currency", "description", "identifier", "source")
+    __slots__ = ("asset_class", "currency", "description", "identifier", "instrument_type", "money_market_fund", "source")
     ASSET_CLASS_FIELD_NUMBER: _ClassVar[int]
     CURRENCY_FIELD_NUMBER: _ClassVar[int]
     DESCRIPTION_FIELD_NUMBER: _ClassVar[int]
     IDENTIFIER_FIELD_NUMBER: _ClassVar[int]
+    INSTRUMENT_TYPE_FIELD_NUMBER: _ClassVar[int]
+    MONEY_MARKET_FUND_FIELD_NUMBER: _ClassVar[int]
     SOURCE_FIELD_NUMBER: _ClassVar[int]
     asset_class: AssetClass
     currency: str
     description: str
     identifier: Identifier
+    instrument_type: InstrumentType
+    money_market_fund: MoneyMarketFund
     source: str
-    def __init__(self, asset_class: _Optional[_Union[AssetClass, str]] = ..., currency: _Optional[str] = ..., description: _Optional[str] = ..., identifier: _Optional[_Union[Identifier, _Mapping]] = ..., source: _Optional[str] = ...) -> None: ...
+    def __init__(self, asset_class: _Optional[_Union[AssetClass, str]] = ..., currency: _Optional[str] = ..., description: _Optional[str] = ..., identifier: _Optional[_Union[Identifier, _Mapping]] = ..., instrument_type: _Optional[_Union[InstrumentType, str]] = ..., money_market_fund: _Optional[_Union[MoneyMarketFund, _Mapping]] = ..., source: _Optional[str] = ...) -> None: ...
+
+class MoneyMarketFund(_message.Message):
+    __slots__ = ("category", "investors", "nav", "liquidity_fee")
+    CATEGORY_FIELD_NUMBER: _ClassVar[int]
+    INVESTORS_FIELD_NUMBER: _ClassVar[int]
+    NAV_FIELD_NUMBER: _ClassVar[int]
+    LIQUIDITY_FEE_FIELD_NUMBER: _ClassVar[int]
+    category: MoneyMarketFundCategory
+    investors: MoneyMarketFundInvestors
+    nav: MoneyMarketFundNav
+    liquidity_fee: LiquidityFeeRegime
+    def __init__(self, category: _Optional[_Union[MoneyMarketFundCategory, str]] = ..., investors: _Optional[_Union[MoneyMarketFundInvestors, str]] = ..., nav: _Optional[_Union[MoneyMarketFundNav, str]] = ..., liquidity_fee: _Optional[_Union[LiquidityFeeRegime, str]] = ...) -> None: ...
 
 class AccountRecord(_message.Message):
     __slots__ = ("account_id", "name", "state", "created_at_ns", "custodian", "account_type", "owner", "note")

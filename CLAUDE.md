@@ -20,9 +20,13 @@ layer, and hand-writing them is the v1 failure decisions/007 names.
 
 ## Rules with teeth
 
-**Plugins are ephemeral.** No persistent state, no local database, no file it
-expects to still be there. A plugin seeds from the kernel on start and can be
-killed and replaced at any moment without losing anything.
+**Stateless compute, owned storage.** A plugin's process holds nothing it
+cannot lose: no local database, no file it expects to still be there. It seeds
+from the kernel on start and can be killed and replaced at any moment without
+losing anything. A plugin at the edge may also own the storage the deployment
+grants its instance, for its raw external records, mounted at the path
+`MERIDIAN_STORAGE_DIR` names, and rebuild from it; no plugin's storage is a
+channel to another (decisions/028).
 
 **A plugin never mints reference data.** When an instrument does not resolve,
 the plugin publishes the fact that a resolution missed and moves on to the next
