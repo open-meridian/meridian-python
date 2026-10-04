@@ -220,3 +220,47 @@ def test_the_heartbeats_figures_built_with_the_sdk_are_the_pinned_bytes() -> Non
     )
     pin = base64.b64decode(fixture["expected_proto_bytes_b64"]["request"])
     assert built.SerializeToString(deterministic=True) == pin
+
+
+async def test_a_filing_and_a_read_made_with_the_sdk_are_the_pinned_bytes(sidecar) -> None:
+    """A ticket filed for a person through `plugin.file_ticket`, and what it
+    filed read back through `plugin.filed_tickets`, reach the sidecar as the
+    bytes the two fixtures pin (W4.12, contract v13), each with the person's
+    assertion as the call's `meridian-caller` metadata."""
+    import meridian
+    from meridian.testing import caller_header
+
+    def pinned(name: str) -> tuple[dict[str, Any], bytes]:
+        fixture = yaml.safe_load((fixtures_root() / _find(name)).read_text(encoding="utf-8"))
+        return (
+            fixture["request"]["fields"],
+            base64.b64decode(fixture["expected_proto_bytes_b64"]["request"]),
+        )
+
+    filed, filed_pin = pinned("file-ticket-for-person.yaml")
+    read, read_pin = pinned("filed-tickets.yaml")
+    ben = caller_header("read", read={"ACC-GROWTH"}, subject="local|ben")
+
+    service, address = sidecar
+    plugin = await meridian.connect(address, heartbeat=False)
+    try:
+        await plugin.file_ticket(
+            title=filed["title"],
+            seen=filed["seen"],
+            kind=filed["kind"],
+            concerns=filed["concerns"]["kind"],
+            step=filed["step"],
+            operation=filed["operation"],
+            references=[meridian.TicketReference(**given) for given in filed["references"]],
+            idempotency_key=filed["idempotency_key"],
+            for_caller=ben,
+        )
+        await plugin.filed_tickets(for_caller=ben, idempotency_keys=read["idempotency_keys"])
+    finally:
+        await plugin.leave()
+
+    ((sent, filed_for),) = service.filings
+    ((asked, read_for),) = service.filed_reads
+    assert sent.SerializeToString(deterministic=True) == filed_pin
+    assert asked.SerializeToString(deterministic=True) == read_pin
+    assert filed_for == read_for == ben

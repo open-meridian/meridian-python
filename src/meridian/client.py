@@ -27,6 +27,7 @@ import os
 import warnings
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
+from enum import StrEnum
 from types import TracebackType
 from typing import TYPE_CHECKING, Any, NoReturn, TypeVar, cast
 
@@ -35,6 +36,13 @@ import grpc
 from meridian.plugin.v1 import operations_pb2_grpc
 from meridian.v1 import sidecar_pb2, sidecar_pb2_grpc
 
+from .bounds import (
+    FILE_TICKET_REQUEST_REFERENCES_COUNT,
+    FILE_TICKET_REQUEST_SEEN_LENGTH,
+    FILE_TICKET_REQUEST_TITLE_LENGTH,
+    TICKET_REFERENCE_VALUE_LENGTH,
+    Length,
+)
 from .errors import (
     CallFailed,
     CommandRefused,
@@ -61,10 +69,11 @@ if TYPE_CHECKING:
 #: the stream of what its roles hear and the reads within its scope, and a
 #: statement naming its external account with its figures per segment, and the
 #: book of record's operations with their refusal codes, the fields an
-#: incomplete entry left out, and the delegation a person acted through -- and
-#: a newer sidecar still admits it. Raised with every contract revision that
-#: adds something a plugin can depend on.
-SCHEMA_VERSION = "v12"
+#: incomplete entry left out, and the delegation a person acted through, and
+#: from v13 a ticket filed for a person and what became of those it filed --
+#: and a newer sidecar still admits it. Raised with every contract revision
+#: that adds something a plugin can depend on.
+SCHEMA_VERSION = "v13"
 
 #: Where a sidecar listens. Loopback, always: a sidecar reachable from another
 #: host is a way around the boundary it exists to enforce.
@@ -100,6 +109,8 @@ _OPERATION_FAILURES = {
     grpc.StatusCode.ABORTED: "handler error",
     grpc.StatusCode.INVALID_ARGUMENT: "invalid",
     grpc.StatusCode.UNAUTHENTICATED: "not vouched for",
+    # A ticket past its instance's 20 filings an hour (W4.12, contract v13).
+    grpc.StatusCode.RESOURCE_EXHAUSTED: "refused",
 }
 
 #: The statuses a refusal with a code arrives beside: a component's refusal
@@ -109,6 +120,10 @@ _CODED = (grpc.StatusCode.ABORTED, grpc.StatusCode.UNAVAILABLE)
 #: Where the sidecar sends a refusal's code, beside its status: a `Refusal`,
 #: encoded (spec/typed-sidecar-operations, section 7).
 REFUSAL_METADATA = "meridian-refusal-bin"
+
+#: Where a call made for a person carries the assertion the plugin was handed
+#: for them, as the `Meridian-Caller` header it read (W4.12, contract v13).
+CALLER_METADATA = "meridian-caller"
 
 _SETTING_TYPES = {
     str: sidecar_pb2.SETTING_TYPE_STRING,
@@ -517,6 +532,160 @@ class Caller:
         raise AttributeError(_RETIRED_BY_026)
 
 
+#: What kind of problem a ticket is (W4.12, contract v13): `defect`,
+#: `discrepancy`, `request` or `question`. A ticket is routed by what it
+#: concerns, never by its kind.
+TicketKind = sidecar_pb2.TicketKind
+
+#: Where a ticket a plugin filed stands: `open`, `resolved` or `closed`.
+TicketState = sidecar_pb2.TicketState
+
+#: What resolved a ticket -- a `note`, an `answer`, a `version` -- or why it
+#: was closed with nothing fixed: `withdrawn`, `duplicate`, `not_a_problem`.
+TicketResolution = sidecar_pb2.TicketResolution
+
+
+class TicketSubject(StrEnum):
+    """The one thing a ticket concerns (W4.12, contract v13): this plugin, a
+    part of core, or the platform; never another plugin, which the sidecar
+    refuses naming it. A plugin names no instance and no version: the sidecar
+    sets this plugin's instance, and the deployment its version at filing."""
+
+    PLUGIN = "plugin"
+    DASHBOARD = "dashboard"
+    BOR = "bor"
+    STREET = "street"
+    INSTRUMENT = "instrument"
+    CONDUCTOR = "conductor"
+    CHART = "chart"
+    CLI = "cli"
+    SDK = "sdk"
+    PLATFORM = "platform"
+
+
+#: What a ticket's reference may name, and those that carry the account they
+#: are about, which the dashboard reads no store to find (W4.12).
+_REFERENCE_KINDS = (
+    "account",
+    "instrument",
+    "break",
+    "entry",
+    "street_record",
+    "tool_call",
+    "plugin",
+)
+_PLACED_BY_ACCOUNT = ("break", "entry", "street_record")
+
+
+@dataclass(frozen=True)
+class TicketReference:
+    """One record a ticket is about, by value (W4.12): `kind` is `account`,
+    `instrument`, `break`, `entry`, `street_record`, `tool_call` or `plugin`
+    (the plugin's own opaque reference); `value` the record's identifier, 1 to
+    200 characters; `account_id` the account it is about, required on a break,
+    an entry and a street record, and the value itself on an account. An
+    account named must be one the person may read through this plugin, and a
+    ticket naming accounts is seen only by those who may read every one."""
+
+    kind: str
+    value: str
+    account_id: str = ""
+
+    def _wire(self, at: str) -> sidecar_pb2.TicketReference:
+        if self.kind not in _REFERENCE_KINDS:
+            raise ValueError(
+                f"{at}.kind is {self.kind!r}; it is one of {', '.join(_REFERENCE_KINDS)}"
+            )
+        _bounded(f"{at}.value", self.value, TICKET_REFERENCE_VALUE_LENGTH)
+        if self.kind in _PLACED_BY_ACCOUNT and not self.account_id:
+            raise ValueError(
+                f"{at}.account_id is empty; a {self.kind.replace('_', ' ')} names the "
+                "account it is about"
+            )
+        return sidecar_pb2.TicketReference(
+            kind=self.kind, value=self.value, account_id=self.account_id
+        )
+
+
+def _bounded(at: str, text: str, bound: Length) -> None:
+    """A text held to its bound, counted in characters, refused naming it."""
+    if not isinstance(text, str):
+        raise TypeError(f"{at} is a str, not {type(text).__name__}")
+    if not bound.admits(len(text)):
+        if len(text) < bound.least:
+            raise ValueError(
+                f"{at} is empty; it holds {bound.least} to {bound.most} characters"
+            )
+        raise ValueError(f"{at} is {len(text)} characters; it holds at most {bound.most}")
+
+
+def _filing(
+    *,
+    title: str,
+    seen: str,
+    kind: str | int,
+    concerns: TicketSubject | str,
+    step: str,
+    operation: str,
+    reason: str,
+    paths: Sequence[str],
+    references: Sequence[TicketReference],
+    idempotency_key: str,
+) -> sidecar_pb2.FileTicketRequest:
+    """A filing as the sidecar takes it, refused here, naming the field, where
+    the sidecar would refuse it by its bounds: a convenience, since the
+    sidecar refuses the same whatever this client believes."""
+    _bounded("title", title, FILE_TICKET_REQUEST_TITLE_LENGTH)
+    _bounded("seen", seen, FILE_TICKET_REQUEST_SEEN_LENGTH)
+    wire_kind = _enum(TicketKind, kind, "kind")
+    if wire_kind is None or wire_kind == sidecar_pb2.TICKET_KIND_UNSPECIFIED:
+        raise ValueError(
+            f"kind is {kind!r}; a ticket is a defect, a discrepancy, a request or a question"
+        )
+    try:
+        subject = TicketSubject(concerns)
+    except ValueError:
+        raise ValueError(
+            f"concerns is {concerns!r}; it is one of {', '.join(TicketSubject)}"
+        ) from None
+    if not idempotency_key:
+        raise ValueError(
+            "idempotency_key is empty; a plugin names each problem by its own key, so a "
+            "restart files nothing twice"
+        )
+    if not FILE_TICKET_REQUEST_REFERENCES_COUNT.admits(len(references)):
+        raise ValueError(
+            f"references names {len(references)} records; a ticket names at most "
+            f"{FILE_TICKET_REQUEST_REFERENCES_COUNT.most}"
+        )
+    return sidecar_pb2.FileTicketRequest(
+        title=title,
+        seen=seen,
+        kind=wire_kind,
+        concerns=sidecar_pb2.TicketSubject(kind=subject.value),
+        step=step,
+        operation=operation,
+        reason=reason,
+        paths=list(paths),
+        references=[
+            reference._wire(f"references[{n}]") for n, reference in enumerate(references)
+        ],
+        idempotency_key=idempotency_key,
+    )
+
+
+def _caller_metadata(for_caller: Caller | str) -> tuple[tuple[str, str], ...]:
+    """The person a ticket is filed or read for, as the call's
+    `meridian-caller` metadata: the header the plugin was handed (W6.9)."""
+    header = for_caller.header if isinstance(for_caller, Caller) else for_caller
+    if not isinstance(header, str) or not header:
+        raise ValueError(
+            "for_caller names nobody; a plugin files a ticket, and reads what it filed, "
+            "only for a person it acts for: pass the Caller of the request it is serving"
+        )
+    return ((CALLER_METADATA, header),)
+
+
 @dataclass
 class Plugin(Operations):
     """A registered plugin.
@@ -633,6 +802,114 @@ class Plugin(Operations):
         )
         return reply
 
+    async def file_ticket(
+        self,
+        *,
+        title: str,
+        kind: str | int,
+        idempotency_key: str,
+        for_caller: Caller | str,
+        seen: str = "",
+        concerns: TicketSubject | str = TicketSubject.PLUGIN,
+        step: str = "",
+        operation: str = "",
+        reason: str = "",
+        paths: Sequence[str] = (),
+        references: Sequence[TicketReference] = (),
+    ) -> sidecar_pb2.FileTicketReply:
+        """File a ticket for the person whose request this plugin is serving
+        (W4.12, contract v13): a problem they met that the plugin cannot
+        handle, for someone who can act. Never as itself: `for_caller` is
+        that person, their `Caller` or the header it was read from, at
+        whatever level their session holds. What the plugin notices on its
+        own is its health, figures on its Summary (`plugin.figures`), from
+        which a person may choose to file.
+
+        `title` says in a line what is wrong (1 to 120 characters) and
+        `seen` what was seen, in the person's words (at most 8,000), both
+        plain text; `kind` a `TicketKind`, its name or `defect`,
+        `discrepancy`, `request` or `question`; `concerns` a `TicketSubject`,
+        this plugin unless it is a part of core or the platform, never
+        another plugin. `step`, `operation`, `reason` and `paths` name the
+        workflow step, the operation, the refusal and the fields by their
+        paths, where known; `references` the records it is about, at most 50
+        `TicketReference`s.
+
+        `idempotency_key` is the plugin's own key for the problem, so a
+        restart files nothing twice: filed again while its ticket is open,
+        the ticket is brought up to date and answered `unchanged`, its
+        `seen_count` counting the filing; after it was resolved or closed, a
+        new ticket. The reply's `ticket_id`, `outcome` (`made` or
+        `unchanged`) and `seen_count` say which.
+
+        Every text filed is data to whoever reads it, never instructions.
+        Refused here, naming the field, past a bound; by the sidecar as
+        itself (`NotGranted`), for a person it cannot vouch for, about
+        another plugin, naming an account the person may not read, or past
+        20 filings an hour from this instance, a repeat not counted.
+        """
+        self._check_open()
+        filing = _filing(
+            title=title,
+            seen=seen,
+            kind=kind,
+            concerns=concerns,
+            step=step,
+            operation=operation,
+            reason=reason,
+            paths=paths,
+            references=references,
+            idempotency_key=idempotency_key,
+        )
+        metadata = _caller_metadata(for_caller)
+        reply: sidecar_pb2.FileTicketReply = await self._for_person(
+            "FileTicket", self._stub.FileTicket(filing, metadata=metadata)
+        )
+        return reply
+
+    async def filed_tickets(
+        self,
+        *,
+        for_caller: Caller | str,
+        ticket_ids: Sequence[str] = (),
+        idempotency_keys: Sequence[str] = (),
+        cursor: str = "",
+    ) -> sidecar_pb2.ReadFiledTicketsReply:
+        """What became of the tickets this plugin filed (W4.12, contract
+        v13), read for a person it acts for, as filing is: the tickets named
+        by `ticket_ids`, those filed under `idempotency_keys`, or, naming
+        neither, every one it filed after `cursor` (from the first when it
+        is empty), the reply's `next_cursor` empty when nothing follows.
+
+        Each `FiledTicket` carries its state (`TicketState`), its
+        `TicketResolution` once resolved or closed, how often it was seen and
+        when first and last, and its `answers`, empty until answers arrive
+        from outside the deployment; never people's notes, nor who holds or
+        works it. A ticket another instance filed is not in the answer.
+        """
+        self._check_open()
+        if ticket_ids and (idempotency_keys or cursor) or idempotency_keys and cursor:
+            raise ValueError(
+                "name one of ticket_ids, idempotency_keys or cursor: the tickets named, "
+                "those filed under the keys, or every one after the cursor"
+            )
+        metadata = _caller_metadata(for_caller)
+        asked = sidecar_pb2.ReadFiledTicketsRequest(
+            ticket_ids=list(ticket_ids), idempotency_keys=list(idempotency_keys), cursor=cursor
+        )
+        reply: sidecar_pb2.ReadFiledTicketsReply = await self._for_person(
+            "FiledTickets", self._stub.FiledTickets(asked, metadata=metadata)
+        )
+        return reply
+
+    async def _for_person(self, operation: str, call: Awaitable[_Answer]) -> _Answer:
+        """A call sent for a person, its refusal in this package's terms as a
+        typed operation's is."""
+        try:
+            return await call
+        except grpc.aio.AioRpcError as failed:
+            _translated(operation, failed)
+
     async def report(
         self, *, healthy: bool, detail: str = "", figures: Sequence[Figure] | None = None
     ) -> None:
@@ -708,25 +985,7 @@ class Plugin(Operations):
         try:
             return await method(params)
         except grpc.aio.AioRpcError as failed:
-            detail = failed.details() or ""
-            if failed.code() is grpc.StatusCode.PERMISSION_DENIED:
-                raise NotGranted(operation, detail) from failed
-            refusal = _refusal(failed)
-            reason = refusal.reason
-            if reason == sidecar_pb2.REFUSAL_REASON_EXTERNAL_ACCOUNT_NOT_LINKED:
-                raise NotLinked(operation, detail) from failed
-            coded = reason != sidecar_pb2.REFUSAL_REASON_UNSPECIFIED
-            # ABORTED, a component's refusal of its own; or UNAVAILABLE with a
-            # code, a command the component could not check, nothing recorded,
-            # to be tried again (contract v10).
-            if coded and failed.code() in _CODED:
-                raise CommandRefused(
-                    operation, detail, reason, fields=tuple(refusal.fields)
-                ) from failed
-            kind = _OPERATION_FAILURES.get(failed.code())
-            if kind is None:
-                raise
-            raise CallFailed(operation, kind, detail) from failed
+            _translated(operation, failed)
 
     def _check_open(self) -> None:
         if self._left:
@@ -753,6 +1012,29 @@ class Plugin(Operations):
                 for (scheme, name), count in sorted(self._not_carried_seen.items())
             ],
         )
+
+
+def _translated(operation: str, failed: grpc.aio.AioRpcError) -> NoReturn:
+    """A sidecar's refusal of `operation` in this package's terms, raised."""
+    detail = failed.details() or ""
+    if failed.code() is grpc.StatusCode.PERMISSION_DENIED:
+        raise NotGranted(operation, detail) from failed
+    refusal = _refusal(failed)
+    reason = refusal.reason
+    if reason == sidecar_pb2.REFUSAL_REASON_EXTERNAL_ACCOUNT_NOT_LINKED:
+        raise NotLinked(operation, detail) from failed
+    coded = reason != sidecar_pb2.REFUSAL_REASON_UNSPECIFIED
+    # ABORTED, a component's refusal of its own; or UNAVAILABLE with a code, a
+    # command the component could not check, nothing recorded, to be tried
+    # again (contract v10).
+    if coded and failed.code() in _CODED:
+        raise CommandRefused(
+            operation, detail, reason, fields=tuple(refusal.fields)
+        ) from failed
+    kind = _OPERATION_FAILURES.get(failed.code())
+    if kind is None:
+        raise failed
+    raise CallFailed(operation, kind, detail) from failed
 
 
 def _refusal(failed: grpc.aio.AioRpcError) -> sidecar_pb2.Refusal:

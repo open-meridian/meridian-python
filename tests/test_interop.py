@@ -17,6 +17,7 @@ that is the deployment shape the design calls for.
 from __future__ import annotations
 
 import asyncio
+import base64
 import os
 import uuid
 from decimal import Decimal
@@ -167,6 +168,61 @@ async def test_the_account_scope_and_access_table_come_from_the_conductor(plugin
     )
     table = await plugin.access()
     assert [group.user_group_id for group in table.user_groups] == ["ug-interop"]
+
+
+async def test_a_ticket_reaches_the_v13_sidecar_only_for_a_person_it_vouches_for(
+    plugin,
+) -> None:
+    """W4.12, contract v13: the sidecar answers both calls, which a v12 one
+    could not, and refuses the plugin as itself before anything else.
+
+    This runtime has no dashboard, so no assertion here is the dashboard's:
+    a filing for a person the sidecar cannot vouch for is refused as such,
+    and core's `make e2e-tickets` files for one through the whole harness.
+    The plugin as itself, which the SDK never sends (`for_caller` names
+    somebody), is refused by the sidecar in the words its fixture pins.
+    """
+    claims = sidecar_pb2.CallerClaims(
+        subject="local|ben", display_name="Ben Ito", level=sidecar_pb2.ACCESS_LEVEL_READ
+    )
+    unsigned = (
+        base64.urlsafe_b64encode(
+            sidecar_pb2.CallerAssertion(
+                claims=claims.SerializeToString(), signature=b"not-the-dashboards"
+            ).SerializeToString()
+        )
+        .decode()
+        .rstrip("=")
+    )
+    with pytest.raises(CallFailed) as filed:
+        await plugin.file_ticket(
+            title="A ticket for a person nobody vouched for",
+            kind="defect",
+            idempotency_key="interop-unvouched",
+            for_caller=unsigned,
+        )
+    assert filed.value.kind == "not vouched for", filed.value
+    with pytest.raises(CallFailed) as read:
+        await plugin.filed_tickets(for_caller=unsigned, idempotency_keys=["interop-unvouched"])
+    assert read.value.kind == "not vouched for", read.value
+
+    stub = sidecar_pb2_grpc.SidecarServiceStub(plugin._channel)
+    with pytest.raises(grpc.aio.AioRpcError) as itself:
+        await stub.FileTicket(
+            sidecar_pb2.FileTicketRequest(
+                title="Filed as the plugin itself",
+                kind=sidecar_pb2.TICKET_KIND_DEFECT,
+                concerns=sidecar_pb2.TicketSubject(kind="plugin"),
+                idempotency_key="interop-itself",
+            )
+        )
+    assert itself.value.code() is grpc.StatusCode.PERMISSION_DENIED
+    assert "a plugin files a ticket only for a person it acts for" in (
+        itself.value.details() or ""
+    )
+    with pytest.raises(grpc.aio.AioRpcError) as reading:
+        await stub.FiledTickets(sidecar_pb2.ReadFiledTicketsRequest())
+    assert reading.value.code() is grpc.StatusCode.PERMISSION_DENIED
 
 
 async def test_the_scaffold_registers_with_a_real_sidecar() -> None:

@@ -10,6 +10,11 @@ What it does not do is enforce anything. It refuses what a test tells it to
 refuse. Access control is the sidecar's job and is tested in meridian-core
 against the real grant table; repeating a weaker version of it here would make
 this suite look like it covers something it does not.
+
+It does keep the tickets filed on it (contract v13), folding a repeat under an
+open ticket's key as the dashboard does, so a filing can be followed through
+to what the plugin reads back; and, as the sidecar does, it refuses a filing
+or a read made for nobody, since the client's shape rests on that refusal.
 """
 
 from __future__ import annotations
@@ -194,6 +199,14 @@ class FakeSidecar(sidecar_pb2_grpc.SidecarServiceServicer):
     heartbeats: list[sidecar_pb2.HeartbeatRequest] = field(default_factory=list)
     left: list[sidecar_pb2.LeaveRequest] = field(default_factory=list)
     operations: FakeOperations = field(default_factory=FakeOperations)
+    # The tickets filed here (W4.12), each filing with the person it was
+    # filed for, each read of them likewise; and a refusal a test scripts.
+    tickets: list[sidecar_pb2.FiledTicket] = field(default_factory=list)
+    filings: list[tuple[sidecar_pb2.FileTicketRequest, str]] = field(default_factory=list)
+    filed_reads: list[tuple[sidecar_pb2.ReadFiledTicketsRequest, str]] = field(
+        default_factory=list
+    )
+    ticket_refused: tuple[grpc.StatusCode, str] | None = None
     # Told of each heartbeat as it is heard, so a test waits for the beats it
     # asserts on instead of sleeping and counting what happened to arrive.
     beat: asyncio.Condition = field(default_factory=asyncio.Condition, repr=False)
@@ -264,6 +277,91 @@ class FakeSidecar(sidecar_pb2_grpc.SidecarServiceServicer):
     ) -> sidecar_pb2.LeaveReply:
         self.left.append(request)
         return sidecar_pb2.LeaveReply()
+
+    async def FileTicket(  # noqa: N802
+        self, request: sidecar_pb2.FileTicketRequest, context: grpc.aio.ServicerContext
+    ) -> sidecar_pb2.FileTicketReply:
+        """Keeps what was filed, and the person it was filed for, and folds a
+        repeat into the open ticket filed under its key, as the dashboard
+        does (W4.12). A filing with no person is refused, as the sidecar
+        refuses one: the one refusal the client's own shape depends on."""
+        caller = _caller(context)
+        self.filings.append((request, caller))
+        if not caller:
+            await context.abort(
+                grpc.StatusCode.PERMISSION_DENIED,
+                "a plugin files a ticket only for a person it acts for",
+            )
+        if self.ticket_refused is not None:
+            await context.abort(*self.ticket_refused)
+        key = request.idempotency_key
+        open_one = next(
+            (
+                t
+                for t in self.tickets
+                if t.idempotency_key == key and t.state == sidecar_pb2.TICKET_STATE_OPEN
+            ),
+            None,
+        )
+        if open_one is not None:
+            open_one.seen_count += 1
+            open_one.last_seen_ns += 1
+            return sidecar_pb2.FileTicketReply(
+                ticket_id=open_one.ticket_id,
+                outcome="unchanged",
+                seen_count=open_one.seen_count,
+            )
+        filed = sidecar_pb2.FiledTicket(
+            ticket_id=f"TKT-{len(self.tickets) + 1}",
+            idempotency_key=key,
+            state=sidecar_pb2.TICKET_STATE_OPEN,
+            seen_count=1,
+            first_seen_ns=1_791_100_800_000_000_000,
+            last_seen_ns=1_791_100_800_000_000_000,
+        )
+        self.tickets.append(filed)
+        return sidecar_pb2.FileTicketReply(
+            ticket_id=filed.ticket_id, outcome="made", seen_count=1
+        )
+
+    async def FiledTickets(  # noqa: N802
+        self, request: sidecar_pb2.ReadFiledTicketsRequest, context: grpc.aio.ServicerContext
+    ) -> sidecar_pb2.ReadFiledTicketsReply:
+        """What was filed here: by the tickets named, by the keys named, or
+        every one after the cursor, two to a page."""
+        caller = _caller(context)
+        self.filed_reads.append((request, caller))
+        if not caller:
+            await context.abort(
+                grpc.StatusCode.PERMISSION_DENIED,
+                "a plugin reads what it filed only for a person it acts for",
+            )
+        if request.ticket_ids:
+            found = [t for t in self.tickets if t.ticket_id in request.ticket_ids]
+            return sidecar_pb2.ReadFiledTicketsReply(tickets=found)
+        if request.idempotency_keys:
+            found = [t for t in self.tickets if t.idempotency_key in request.idempotency_keys]
+            return sidecar_pb2.ReadFiledTicketsReply(tickets=found)
+        after = next(
+            (n + 1 for n, t in enumerate(self.tickets) if t.ticket_id == request.cursor), 0
+        )
+        page = self.tickets[after : after + 2]
+        following = len(self.tickets) > after + 2
+        return sidecar_pb2.ReadFiledTicketsReply(
+            tickets=page, next_cursor=page[-1].ticket_id if following else ""
+        )
+
+
+def _caller(context: grpc.aio.ServicerContext) -> str:
+    """The person a call was made for: its `meridian-caller` metadata."""
+    return next(
+        (
+            str(value)
+            for key, value in context.invocation_metadata() or ()
+            if key == "meridian-caller"
+        ),
+        "",
+    )
 
 
 @pytest_asyncio.fixture

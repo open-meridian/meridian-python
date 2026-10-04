@@ -83,14 +83,19 @@ async def test_the_sdk_declares_the_contract_it_was_built_for(
     v12 is the deployment's MCP surface: the tools derived from the
     plugin's typed routes, declared at registration, and the tool a call
     names in the claims (sdk-contract/a-deployment-serves-its-mcp-contract).
+
+    v13 is a ticket filed for a person, and what became of those the plugin
+    filed (sdk-contract/a-problem-reaches-someone-who-can-act-contract): a
+    sidecar still at v12 answers neither call, so it refuses the plugin at
+    registration, naming both versions.
     """
     service, address = sidecar
     plugin = await meridian.connect(address, heartbeat=False)
     await plugin.leave()
 
     (sent,) = service.registered
-    assert meridian.SCHEMA_VERSION == "v12"
-    assert sent.schema_version == "v12"
+    assert meridian.SCHEMA_VERSION == "v13"
+    assert sent.schema_version == "v13"
 
 
 async def test_identity_and_grants_come_back(sidecar: tuple[FakeSidecar, str]) -> None:

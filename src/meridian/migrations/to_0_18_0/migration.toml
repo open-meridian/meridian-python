@@ -1,0 +1,23 @@
+# open-meridian 0.17.0 to 0.18.0: the SDK declares contract v13, a plugin files
+# a ticket for a person and reads what it filed
+# (sdk-contract/a-problem-reaches-someone-who-can-act-contract;
+# plans/tickets-inside-a-deployment). Nothing a plugin calls changed, so only
+# the pins move.
+from = "0.17.0"
+to = "0.18.0"
+summary = """
+The SDK declares contract v13 (meridian.SCHEMA_VERSION). A plugin files a ticket
+for the person whose request it is serving, never as itself:
+plugin.file_ticket(title=, kind=, idempotency_key=, for_caller=, ...) sends it
+through the sidecar with the person's Caller as the call's meridian-caller
+metadata, about this plugin, a part of core or the platform
+(meridian.TicketSubject), of a meridian.TicketKind, naming the records it is about
+(meridian.TicketReference); filed again under its idempotency_key while its
+ticket is open, the ticket is brought up to date and answered unchanged.
+plugin.filed_tickets(for_caller=, ...) reads what became of the tickets it filed:
+their meridian.TicketState, meridian.TicketResolution and seen counts, never
+people's notes. A plugin built on 0.18.0 is refused at registration by a sidecar
+that accepts only v12, naming both. Nothing a plugin calls changed, so only the
+pins move.
+"""
+breaking = false

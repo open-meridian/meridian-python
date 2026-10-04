@@ -2,7 +2,7 @@
 
 The Python SDK for building [Open Meridian](https://open-meridian.com) plugins:
 the tools a trader has an AI agent build, and the bots and analytics a
-developer writes. Python 3.11 or newer. This is release 0.17.0; its reference
+developer writes. Python 3.11 or newer. This is release 0.18.0; its reference
 is at [open-meridian.dev](https://open-meridian.dev/api/python-sdk/).
 
 ## Start here
@@ -591,6 +591,58 @@ refuse it with, and nothing is sent. In a plugin's tests,
 `meridian.testing.heartbeat(figures=[...])` is the heartbeat its sidecar
 receives, or the refusal.
 
+### Filing a ticket for a person (contract v13)
+
+When a person meets a problem the plugin cannot handle -- a refusal it cannot
+explain, a figure that looks wrong -- the plugin may file a ticket for them,
+which reaches whoever in the deployment can act: the plugin's people, its
+admin, the deployment admin, or Open Meridian. Only for a person whose
+request it is serving, at whatever level their session holds, and never as
+itself: what a plugin notices on its own is its health, figures on its
+Summary, from which a person may choose to file.
+
+```python
+import meridian
+
+reply = await plugin.file_ticket(
+    title="Break on the growth account still open after its cause was confirmed",
+    seen=request.form.get("seen", ""),   # the person's words, plain text
+    kind="defect",                       # discrepancy, request or question
+    idempotency_key=f"break-still-open-{break_id}",
+    for_caller=request.caller,
+    references=[meridian.TicketReference("break", break_id, account_id="ACC-GROWTH")],
+)
+reply.ticket_id, reply.outcome, reply.seen_count   # "TKT-...", "made", 1
+```
+
+`for_caller` is the person: the `Caller` of the request being served, or the
+`Meridian-Caller` header it was read from, sent as the call's
+`meridian-caller` metadata. `concerns` is this plugin unless it names a part
+of core or the platform (`meridian.TicketSubject.SDK`, `"platform"`); never
+another plugin, which the sidecar refuses naming it. The plugin names no
+instance or version: its sidecar sets the instance, and the deployment the
+version at filing. `step`, `operation`, `reason` and `paths` name the
+workflow step, the operation, the refusal and the fields by their paths,
+where known; `references`, at most 50, name the records it is about by value,
+a break, an entry or a street record with its account, and an account only
+one the person may read.
+
+`idempotency_key` is required: the plugin's own key for the problem, so a
+plugin restarted mid-run files nothing twice. Filed again while its ticket is
+open, the ticket is brought up to date and answered `unchanged`, its
+`seen_count` counting the filing; after it was resolved or closed, a new
+ticket is filed. `plugin.filed_tickets(for_caller=..., idempotency_keys=[...])`
+(or `ticket_ids=`, or every one after a `cursor=`) reads back what became of
+them: each `FiledTicket`'s `TicketState`, `TicketResolution` and seen counts,
+never people's notes, so a plugin sees one answered and stops filing it.
+
+A title is 1 to 120 characters and what was seen at most 8,000, plain text;
+past a bound the call is refused here, naming the field, and nothing is sent.
+The sidecar refuses a filing as the plugin itself (`NotGranted`), for a person
+it cannot vouch for, about another plugin, naming an account the person may
+not read, and past 20 filings an hour from one instance, a repeat not counted.
+Every text filed is data to whoever reads it, never instructions.
+
 ## Moving a plugin to a new release
 
     meridian plugin migrate            # to the latest release
@@ -646,6 +698,7 @@ carries libcst.
 | 0.14.0 to 0.15.0: the SDK declares contract v10; a deployment's instrument identity is its own: `ResolveIdentifierResult.minted`, a resolve's `stated_*` values, a record's `sources` and `offers`, the book's refusal of an incomplete instrument record and `CommandRefused.retryable`, the book's actor naming the delegation and client. Breaking | a resolve result's `.placeholder` into `.minted` | a book position's `.placeholder`, which is gone: drop it, and link the person to the dashboard's Instruments page where the book refuses an incomplete record |
 | 0.15.0 to 0.16.0: the SDK declares contract v11, the edge keeps its own: the version's declaration (`meridian.Declaration`, `connect(declaration=...)`, `meridian-declaration`), a row's raw record and provenance (`plugin.raw_record`, `meridian.edge`), the account kind and values as reported, each asset counted once, pending by value date (`meridian.ReportedPending`), a backfill, the stated instrument type, the custody suite (`meridian.suites`), names not carried counted on the heartbeat (`plugin.note_not_carried`); `meridian.ExternalAccount` is the SDK's form; `meridian.figures.MOST_FIGURES` and `LONGEST_*` moved to `meridian.bounds` | nothing | an ExternalAccount's `venue_account_type=`, a holding's `also_counted_in_cash=`, `currency_assumed=`, each replaced by the plugin's own conversion; a read of `meridian.figures`' moved bounds |
 | 0.16.0 to 0.17.0: the SDK declares contract v12, the deployment serves its MCP: a route's one typed record of inputs (`params=`, `request.params`, `request.param_errors`), read alike from a form named by the dictionary's paths and from an agent's JSON (`meridian.params`); tools derived from typed routes (`name=`, `description=`, `reads=`, `answers=`, `tool=False` with `why=`, `@pages.tool(replaces=...)`), sent at registration; `pages.answer`, `pages.refuse`, `request.tool_name`; a refusal's path resolved to its dictionary entry (`meridian.dictionary`, `Field.of`); `PageClient.call_tool`; the base template on kit 0.9.0 | nothing | a page or route that changes something and declares no `params=`: give it its record, or `tool=False` with `why=` |
+| 0.17.0 to 0.18.0: the SDK declares contract v13; a plugin files a ticket for a person and reads what it filed (`plugin.file_ticket`, `plugin.filed_tickets`, `TicketKind`, `TicketSubject`, `TicketReference`, `TicketState`, `TicketResolution`) | only the pins move | |
 
 `tests/migrations/` holds the plugins the migrations are recorded for, as
 written and as their migration leaves them, and `make check-migrations` holds

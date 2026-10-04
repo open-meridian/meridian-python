@@ -47,6 +47,12 @@ for), and counts what it saw and does not carry
 (`plugin.note_not_carried`). A resolve may state a security's instrument type
 (`stated_instrument_type`, a money market fund first). The role suites a
 plugin holds itself to are `meridian.suites`.
+
+From contract v13 a plugin files a ticket for the person whose request it is
+serving, never as itself (`plugin.file_ticket(...)`, keyed by its own
+`idempotency_key`, `for_caller=` the person's `Caller`), about itself, a part
+of core or the platform (`TicketSubject`), and reads what became of those it
+filed (`plugin.filed_tickets(...)`).
 """
 
 from .asgi import CallerMiddleware
@@ -67,6 +73,11 @@ from .client import (
     Plugin,
     Setting,
     Settings,
+    TicketKind,
+    TicketReference,
+    TicketResolution,
+    TicketState,
+    TicketSubject,
     connect,
 )
 from .declaration import Declaration, NotCarried, Storage
@@ -236,6 +247,11 @@ __all__ = [
     "Storage",
     "StreetRecordRef",
     "SyncState",
+    "TicketKind",
+    "TicketReference",
+    "TicketResolution",
+    "TicketState",
+    "TicketSubject",
     "as_decimal",
     "as_money",
     "connect",
