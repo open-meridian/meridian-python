@@ -201,6 +201,19 @@ PLUGIN_FIGURE_TEXT_LENGTH = Length(least=0, most=40)
 PLUGIN_FIGURE_WHY_LENGTH = Length(least=0, most=200)
 """meridian.v1.PluginFigure.why: explains the figure in a note beside the tile"""
 
+FILE_TICKET_REQUEST_TITLE_LENGTH = Length(least=1, most=120)
+"""meridian.v1.FileTicketRequest.title: says in a line what is wrong"""
+
+FILE_TICKET_REQUEST_SEEN_LENGTH = Length(least=0, most=8000)
+"""meridian.v1.FileTicketRequest.seen: says what was seen, in the filer's words"""
+
+FILE_TICKET_REQUEST_REFERENCES_COUNT = Count(least=0, most=50)
+"""meridian.v1.FileTicketRequest.references: names the records the ticket is
+about, by value"""
+
+TICKET_REFERENCE_VALUE_LENGTH = Length(least=1, most=200)
+"""meridian.v1.TicketReference.value: names the record by value"""
+
 SIDECAR_RECEIVE_LIMIT_RANGE = Range(least=0, most=1024, capped=True)
 """SidecarReceive.limit: bounds what the sidecar holds for a plugin that reads
 slowly"""

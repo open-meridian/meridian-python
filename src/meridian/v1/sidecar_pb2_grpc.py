@@ -64,6 +64,16 @@ class SidecarServiceStub(object):
                 request_serializer=meridian_dot_v1_dot_sidecar__pb2.WatchAccountScopeRequest.SerializeToString,
                 response_deserializer=meridian_dot_v1_dot_sidecar__pb2.AccountScopeDelivery.FromString,
                 _registered_method=True)
+        self.FileTicket = channel.unary_unary(
+                '/meridian.v1.SidecarService/FileTicket',
+                request_serializer=meridian_dot_v1_dot_sidecar__pb2.FileTicketRequest.SerializeToString,
+                response_deserializer=meridian_dot_v1_dot_sidecar__pb2.FileTicketReply.FromString,
+                _registered_method=True)
+        self.FiledTickets = channel.unary_unary(
+                '/meridian.v1.SidecarService/FiledTickets',
+                request_serializer=meridian_dot_v1_dot_sidecar__pb2.ReadFiledTicketsRequest.SerializeToString,
+                response_deserializer=meridian_dot_v1_dot_sidecar__pb2.ReadFiledTicketsReply.FromString,
+                _registered_method=True)
 
 
 class SidecarServiceServicer(object):
@@ -111,6 +121,25 @@ class SidecarServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def FileTicket(self, request, context):
+        """W4.12, contract v13. File a ticket for the person whose request the
+        plugin is serving, never as itself: the call carries the caller's
+        assertion as its `meridian-caller` metadata, and the sidecar asks the
+        dashboard on the bus, as itself, for the instance it serves.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def FiledTickets(self, request, context):
+        """W4.12, contract v13. What became of the tickets this plugin filed: their
+        state, resolution and how often each was seen, never people's notes.
+        Acting for a person, as filing is.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_SidecarServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -143,6 +172,16 @@ def add_SidecarServiceServicer_to_server(servicer, server):
                     servicer.WatchAccountScope,
                     request_deserializer=meridian_dot_v1_dot_sidecar__pb2.WatchAccountScopeRequest.FromString,
                     response_serializer=meridian_dot_v1_dot_sidecar__pb2.AccountScopeDelivery.SerializeToString,
+            ),
+            'FileTicket': grpc.unary_unary_rpc_method_handler(
+                    servicer.FileTicket,
+                    request_deserializer=meridian_dot_v1_dot_sidecar__pb2.FileTicketRequest.FromString,
+                    response_serializer=meridian_dot_v1_dot_sidecar__pb2.FileTicketReply.SerializeToString,
+            ),
+            'FiledTickets': grpc.unary_unary_rpc_method_handler(
+                    servicer.FiledTickets,
+                    request_deserializer=meridian_dot_v1_dot_sidecar__pb2.ReadFiledTicketsRequest.FromString,
+                    response_serializer=meridian_dot_v1_dot_sidecar__pb2.ReadFiledTicketsReply.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -307,6 +346,60 @@ class SidecarService(object):
             '/meridian.v1.SidecarService/WatchAccountScope',
             meridian_dot_v1_dot_sidecar__pb2.WatchAccountScopeRequest.SerializeToString,
             meridian_dot_v1_dot_sidecar__pb2.AccountScopeDelivery.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def FileTicket(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.v1.SidecarService/FileTicket',
+            meridian_dot_v1_dot_sidecar__pb2.FileTicketRequest.SerializeToString,
+            meridian_dot_v1_dot_sidecar__pb2.FileTicketReply.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def FiledTickets(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.v1.SidecarService/FiledTickets',
+            meridian_dot_v1_dot_sidecar__pb2.ReadFiledTicketsRequest.SerializeToString,
+            meridian_dot_v1_dot_sidecar__pb2.ReadFiledTicketsReply.FromString,
             options,
             channel_credentials,
             insecure,

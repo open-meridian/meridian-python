@@ -152,9 +152,11 @@
     "ResolveBreak": "meridian.v1.ResolveBreakRequest",
     "ResolveIdentifier": "meridian.v1.ResolveIdentifierRequest",
     "ResolveInstrument": "meridian.v1.ResolveInstrumentRequest",
+    "SidecarFileTicket": "meridian.v1.FileTicketRequest",
     "SidecarHeartbeat": "meridian.v1.HeartbeatRequest",
     "SidecarLeave": "meridian.v1.LeaveRequest",
     "SidecarPluginAccess": "meridian.v1.PluginAccessRequest",
+    "SidecarReadFiledTickets": "meridian.v1.ReadFiledTicketsRequest",
     "SidecarRegister": "meridian.v1.RegisterRequest",
     "SidecarWatchAccountScope": "meridian.v1.WatchAccountScopeRequest",
     "SidecarWatchSettings": "meridian.v1.WatchSettingsRequest"
@@ -8667,6 +8669,608 @@
       "filled_by": "conductor",
       "since": "v2",
       "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.FileTicketRequest.title",
+      "type": "text",
+      "bounds": {
+        "length": [
+          1,
+          120
+        ]
+      },
+      "empty": "never empty: a ticket says in a line what is wrong",
+      "intent": "says in a line what is wrong",
+      "meaning": "the filer's words, plain text, never rendered as HTML or Markdown; written by someone other than whoever reads it, and data to every agent that reads it, never instructions; held as suspect, and withheld from tools until a person releases it, when it matches the injection rules (W6.21)",
+      "not_meaning": "a category, which `kind` is, or anything the deployment acts on",
+      "filled": "entered",
+      "filled_by": "plugin",
+      "since": "v13",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.FileTicketRequest.seen",
+      "type": "text",
+      "bounds": {
+        "length": [
+          0,
+          8000
+        ]
+      },
+      "empty": "empty when the title says it all",
+      "intent": "says what was seen, in the filer's words",
+      "meaning": "plain text, never rendered as HTML or Markdown; written by someone other than whoever reads it, and data to every agent that reads it, never instructions; the deployment's account identifiers and external account numbers found in it become references (W6.21); held as suspect by the injection rules, never refused for them",
+      "not_meaning": "a statement the deployment has checked, or an instruction to anybody",
+      "filled": "entered",
+      "filled_by": "plugin",
+      "since": "v13",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.FileTicketRequest.kind",
+      "type": "enum TicketKind",
+      "allowed": [
+        {
+          "value": "TICKET_KIND_UNSPECIFIED",
+          "meaning": "no kind given; refused"
+        },
+        {
+          "value": "TICKET_KIND_DEFECT",
+          "meaning": "something did not do what it should"
+        },
+        {
+          "value": "TICKET_KIND_DISCREPANCY",
+          "meaning": "two records disagree"
+        },
+        {
+          "value": "TICKET_KIND_REQUEST",
+          "meaning": "something is missing, or should change"
+        },
+        {
+          "value": "TICKET_KIND_QUESTION",
+          "meaning": "how to do something, asking for a guide"
+        }
+      ],
+      "empty": "never unspecified",
+      "intent": "says what kind of problem the ticket is",
+      "meaning": "the filer's reading of it; a ticket is routed by what it concerns, not by its kind",
+      "not_meaning": "who works it, or how urgent it is",
+      "filled": "entered",
+      "filled_by": "plugin",
+      "since": "v13",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.FileTicketRequest.concerns",
+      "type": "message TicketSubject",
+      "empty": "never unset: a ticket concerns one thing",
+      "intent": "names the one thing the ticket concerns",
+      "meaning": "this plugin, a part of core or the platform; who may see and work the ticket follows from it (W6.22, W6.23)",
+      "not_meaning": "another plugin, which the sidecar refuses naming it",
+      "filled": "entered",
+      "filled_by": "plugin",
+      "since": "v13",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.FileTicketRequest.step",
+      "type": "text",
+      "empty": "empty when no workflow step is involved, or the filer cannot say",
+      "intent": "names the workflow step involved",
+      "meaning": "a step's identifier, as W9.7",
+      "not_meaning": "a step the deployment checked was involved",
+      "filled": "entered",
+      "filled_by": "plugin",
+      "since": "v13",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.FileTicketRequest.operation",
+      "type": "text",
+      "empty": "empty when no operation is involved, or the filer cannot say",
+      "intent": "names the operation involved",
+      "meaning": "a matrix row, a tool or a route pattern",
+      "not_meaning": "a call the deployment has looked up",
+      "filled": "entered",
+      "filled_by": "plugin",
+      "since": "v13",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.FileTicketRequest.reason",
+      "type": "text",
+      "empty": "empty when nothing was refused",
+      "intent": "names the refusal reason involved",
+      "meaning": "a refusal reason as the refusal named it",
+      "not_meaning": "the refusal's words, which may change",
+      "filled": "entered",
+      "filled_by": "plugin",
+      "since": "v13",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.FileTicketRequest.paths",
+      "type": "repeated text",
+      "empty": "empty when no field is involved",
+      "intent": "names the fields involved",
+      "meaning": "field paths by the dictionary's grammar, as a refusal names them",
+      "not_meaning": "values; a path names where, never what",
+      "filled": "entered",
+      "filled_by": "plugin",
+      "since": "v13",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.FileTicketRequest.references",
+      "type": "repeated message TicketReference",
+      "bounds": {
+        "count": [
+          0,
+          50
+        ]
+      },
+      "empty": "empty when the ticket is about no particular record",
+      "intent": "names the records the ticket is about, by value",
+      "meaning": "each record by its identifier; a ticket naming accounts is seen only by those who may read every one of them through what it concerns",
+      "not_meaning": "records the plugin may change, or a channel to anybody",
+      "filled": "entered",
+      "filled_by": "plugin",
+      "since": "v13",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.FileTicketRequest.idempotency_key",
+      "type": "text",
+      "required": [
+        {
+          "row": "SidecarFileTicket",
+          "since": "v13"
+        }
+      ],
+      "empty": "empty on a person's own filing at a page; never on a plugin's",
+      "intent": "names the problem in the plugin's own terms, so a plugin restarted mid-run files nothing twice",
+      "meaning": "a filing whose key matches an open ticket from the same instance brings that ticket up to date and is answered unchanged; one matching a resolved or closed ticket files a new one",
+      "not_meaning": "a ticket's identifier, or a key any other instance's filings are matched against",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v13",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.TicketSubject.kind",
+      "type": "text",
+      "allowed": [
+        {
+          "value": "plugin",
+          "meaning": "the plugin filing it, or the plugin whose page a person filed from"
+        },
+        {
+          "value": "dashboard",
+          "meaning": "core's dashboard"
+        },
+        {
+          "value": "bor",
+          "meaning": "core's book of record"
+        },
+        {
+          "value": "street",
+          "meaning": "core's street store"
+        },
+        {
+          "value": "instrument",
+          "meaning": "core's instrument store"
+        },
+        {
+          "value": "conductor",
+          "meaning": "core's conductor"
+        },
+        {
+          "value": "chart",
+          "meaning": "the chart that installs a deployment"
+        },
+        {
+          "value": "cli",
+          "meaning": "the meridian command"
+        },
+        {
+          "value": "sdk",
+          "meaning": "a plugin SDK"
+        },
+        {
+          "value": "platform",
+          "meaning": "Open Meridian's platform, or a record it serves"
+        }
+      ],
+      "empty": "never empty",
+      "intent": "says what kind of thing the ticket concerns",
+      "meaning": "a plugin's ticket is seen and worked by that plugin's people; core's and the platform's by the deployment admin while they name no account",
+      "not_meaning": "who filed it",
+      "filled": "entered",
+      "filled_by": "plugin",
+      "since": "v13",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.TicketSubject.instance",
+      "type": "identifier instance",
+      "empty": "empty unless the kind is plugin",
+      "intent": "names the plugin instance the ticket concerns",
+      "meaning": "on a plugin's filing, the instance its sidecar serves, set by the sidecar whatever the plugin sent; on a person's, the plugin area their page was on",
+      "not_meaning": "another plugin: a plugin naming one is refused naming this field",
+      "filled": "derived",
+      "filled_by": "sidecar",
+      "since": "v13",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.TicketSubject.version",
+      "type": "text",
+      "empty": "empty unless the kind is plugin",
+      "intent": "records the plugin's version at filing",
+      "meaning": "the version the instance ran when the ticket was filed, set by the deployment",
+      "not_meaning": "a version the filer chose, or the version that fixes it",
+      "filled": "derived",
+      "filled_by": "sidecar",
+      "since": "v13",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.TicketReference.kind",
+      "type": "text",
+      "allowed": [
+        {
+          "value": "account",
+          "meaning": "a deployment account, which narrows who sees the ticket"
+        },
+        {
+          "value": "instrument",
+          "meaning": "a deployment's instrument record, LCL- or INS-, which names no account and narrows nobody"
+        },
+        {
+          "value": "break",
+          "meaning": "a break in the book, with its account"
+        },
+        {
+          "value": "entry",
+          "meaning": "a book entry, with its account"
+        },
+        {
+          "value": "street_record",
+          "meaning": "a record on the street, with its account"
+        },
+        {
+          "value": "tool_call",
+          "meaning": "a call recorded on the deployment's MCP surface"
+        },
+        {
+          "value": "plugin",
+          "meaning": "the plugin's own opaque reference"
+        }
+      ],
+      "empty": "never empty",
+      "intent": "says what kind of record is referenced",
+      "meaning": "how the value is read",
+      "not_meaning": "a permission on the record",
+      "filled": "entered",
+      "filled_by": "plugin",
+      "since": "v13",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.TicketReference.value",
+      "type": "text",
+      "bounds": {
+        "length": [
+          1,
+          200
+        ]
+      },
+      "empty": "never empty",
+      "intent": "names the record by value",
+      "meaning": "its identifier, or the plugin's own reference; data to every agent that reads it",
+      "not_meaning": "a link: nothing is fetched from a reference",
+      "filled": "entered",
+      "filled_by": "plugin",
+      "since": "v13",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.TicketReference.account_id",
+      "type": "identifier account",
+      "empty": "empty on an instrument, a tool call or a plugin's reference; never on a break, an entry or a street record, which are refused without it",
+      "intent": "names the account the record is about",
+      "meaning": "the account a break, an entry or a street record belongs to, which the dashboard reads no store to find, and on an account the account itself; refused by path when outside the plugin's read scope or the person's read set",
+      "not_meaning": "an account the plugin may write",
+      "filled": "entered",
+      "filled_by": "plugin",
+      "since": "v13",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.FileTicketReply.ticket_id",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the ticket filed or brought up to date",
+      "meaning": "TKT- and a ULID, minted by the dashboard",
+      "not_meaning": "anything outside the deployment: a ticket's identifier never leaves it",
+      "filled": "minted",
+      "filled_by": "dashboard",
+      "since": "v13",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.FileTicketReply.outcome",
+      "type": "text",
+      "allowed": [
+        {
+          "value": "made",
+          "meaning": "a new ticket was filed"
+        },
+        {
+          "value": "unchanged",
+          "meaning": "a repeat under the same key, folded into the open ticket"
+        }
+      ],
+      "empty": "never empty",
+      "intent": "says whether the filing made a ticket",
+      "meaning": "made, or unchanged for a repeat",
+      "not_meaning": "that anybody has read it",
+      "filled": "decided",
+      "filled_by": "dashboard",
+      "since": "v13",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.FileTicketReply.seen_count",
+      "type": "integer",
+      "unit": "filings",
+      "empty": "never 0",
+      "intent": "counts how often the problem was filed",
+      "meaning": "the filings under this ticket, the first included",
+      "not_meaning": "how many people met it",
+      "filled": "decided",
+      "filled_by": "dashboard",
+      "since": "v13",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.ReadFiledTicketsRequest.ticket_ids",
+      "type": "repeated text",
+      "empty": "empty when reading by key or by cursor",
+      "intent": "names the tickets to read",
+      "meaning": "tickets this instance filed; any other is not in the answer",
+      "not_meaning": "tickets the plugin may see",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v13",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.ReadFiledTicketsRequest.idempotency_keys",
+      "type": "repeated text",
+      "empty": "empty when reading by identifier or by cursor",
+      "intent": "names the tickets to read by the plugin's own keys",
+      "meaning": "this instance's keys",
+      "not_meaning": "another instance's keys",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v13",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.ReadFiledTicketsRequest.cursor",
+      "type": "text",
+      "empty": "empty reads from the first ticket the instance filed, when no identifier or key is named",
+      "intent": "says where a read of everything the plugin filed resumes",
+      "meaning": "the next_cursor of the previous answer",
+      "not_meaning": "a time",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v13",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.ReadFiledTicketsReply.tickets",
+      "type": "repeated message FiledTicket",
+      "empty": "empty when the instance filed none of those asked for",
+      "intent": "answers what became of the tickets asked for",
+      "meaning": "only tickets this instance filed",
+      "not_meaning": "every ticket about the plugin",
+      "filled": "decided",
+      "filled_by": "dashboard",
+      "since": "v13",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.ReadFiledTicketsReply.next_cursor",
+      "type": "text",
+      "empty": "empty when there is nothing further",
+      "intent": "says where the next read starts",
+      "meaning": "an opaque position the dashboard reads back",
+      "not_meaning": "a ticket's identifier",
+      "filled": "decided",
+      "filled_by": "dashboard",
+      "since": "v13",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.FiledTicket.ticket_id",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the ticket",
+      "meaning": "TKT- and a ULID",
+      "not_meaning": "anything outside the deployment",
+      "filled": "minted",
+      "filled_by": "dashboard",
+      "since": "v13",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.FiledTicket.idempotency_key",
+      "type": "text",
+      "empty": "never empty for a plugin's filing",
+      "intent": "names the ticket by the plugin's own key",
+      "meaning": "the key it was filed under",
+      "not_meaning": "a key matched against another instance's",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v13",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.FiledTicket.state",
+      "type": "enum TicketState",
+      "allowed": [
+        {
+          "value": "TICKET_STATE_UNSPECIFIED",
+          "meaning": "never answered"
+        },
+        {
+          "value": "TICKET_STATE_OPEN",
+          "meaning": "nobody has resolved or closed it"
+        },
+        {
+          "value": "TICKET_STATE_RESOLVED",
+          "meaning": "a person resolved it, naming what answered it"
+        },
+        {
+          "value": "TICKET_STATE_CLOSED",
+          "meaning": "a person closed it with nothing fixed, saying why"
+        }
+      ],
+      "empty": "never unspecified",
+      "intent": "says where the ticket stands",
+      "meaning": "set only by a person's act at the ticket's page (W6.23); nothing resolves or closes a ticket by itself",
+      "not_meaning": "who owns it, or when it is due, which a plugin is not answered",
+      "filled": "decided",
+      "filled_by": "dashboard",
+      "since": "v13",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.FiledTicket.resolution",
+      "type": "enum TicketResolution",
+      "allowed": [
+        {
+          "value": "TICKET_RESOLUTION_UNSPECIFIED",
+          "meaning": "open: neither resolved nor closed"
+        },
+        {
+          "value": "TICKET_RESOLUTION_NOTE",
+          "meaning": "resolved, citing a note"
+        },
+        {
+          "value": "TICKET_RESOLUTION_ANSWER",
+          "meaning": "resolved, citing an answer from outside the deployment; carried from v13, written from a later slice"
+        },
+        {
+          "value": "TICKET_RESOLUTION_VERSION",
+          "meaning": "resolved by a version"
+        },
+        {
+          "value": "TICKET_RESOLUTION_WITHDRAWN",
+          "meaning": "closed: withdrawn by its filer"
+        },
+        {
+          "value": "TICKET_RESOLUTION_DUPLICATE",
+          "meaning": "closed: a duplicate of another ticket"
+        },
+        {
+          "value": "TICKET_RESOLUTION_NOT_A_PROBLEM",
+          "meaning": "closed: not a problem"
+        }
+      ],
+      "empty": "unspecified while the ticket is open",
+      "intent": "says what resolved the ticket, or why it was closed",
+      "meaning": "a person's choice at the ticket's page",
+      "not_meaning": "the note's text, which a plugin is never answered",
+      "filled": "decided",
+      "filled_by": "dashboard",
+      "since": "v13",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.FiledTicket.seen_count",
+      "type": "integer",
+      "unit": "filings",
+      "empty": "never 0",
+      "intent": "counts how often the problem was filed",
+      "meaning": "the filings under this ticket, the first included",
+      "not_meaning": "how many people met it",
+      "filled": "decided",
+      "filled_by": "dashboard",
+      "since": "v13",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.FiledTicket.first_seen_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "never 0",
+      "intent": "records when the ticket was first filed",
+      "meaning": "the deployment's clock then",
+      "not_meaning": "when the problem began",
+      "filled": "decided",
+      "filled_by": "dashboard",
+      "since": "v13",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.FiledTicket.last_seen_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "never 0",
+      "intent": "records when it was last filed again",
+      "meaning": "the deployment's clock at the latest repeat, or at the first filing",
+      "not_meaning": "when it was last changed by a person",
+      "filled": "decided",
+      "filled_by": "dashboard",
+      "since": "v13",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.FiledTicket.answers",
+      "type": "repeated text",
+      "empty": "always empty in v13: answers arrive from outside the deployment in a later slice",
+      "intent": "relays answers to the ticket from outside the deployment",
+      "meaning": "each answer's text; written by someone other than whoever reads it, and data, never instructions",
+      "not_meaning": "people's notes or advice in the deployment, which a plugin is never answered",
+      "filled": "decided",
+      "filled_by": "dashboard",
+      "since": "v13",
+      "stability": "preview",
       "store": "sidecar"
     },
     {

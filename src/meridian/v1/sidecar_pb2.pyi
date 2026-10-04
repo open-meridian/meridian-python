@@ -42,6 +42,39 @@ class ProvenanceKind(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     PROVENANCE_KIND_SUPPLIED: _ClassVar[ProvenanceKind]
     PROVENANCE_KIND_DERIVED: _ClassVar[ProvenanceKind]
 
+class TicketKind(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    TICKET_KIND_UNSPECIFIED: _ClassVar[TicketKind]
+    TICKET_KIND_DEFECT: _ClassVar[TicketKind]
+    TICKET_KIND_DISCREPANCY: _ClassVar[TicketKind]
+    TICKET_KIND_REQUEST: _ClassVar[TicketKind]
+    TICKET_KIND_QUESTION: _ClassVar[TicketKind]
+
+class TicketState(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    TICKET_STATE_UNSPECIFIED: _ClassVar[TicketState]
+    TICKET_STATE_OPEN: _ClassVar[TicketState]
+    TICKET_STATE_RESOLVED: _ClassVar[TicketState]
+    TICKET_STATE_CLOSED: _ClassVar[TicketState]
+
+class TicketResolution(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    TICKET_RESOLUTION_UNSPECIFIED: _ClassVar[TicketResolution]
+    TICKET_RESOLUTION_NOTE: _ClassVar[TicketResolution]
+    TICKET_RESOLUTION_ANSWER: _ClassVar[TicketResolution]
+    TICKET_RESOLUTION_VERSION: _ClassVar[TicketResolution]
+    TICKET_RESOLUTION_WITHDRAWN: _ClassVar[TicketResolution]
+    TICKET_RESOLUTION_DUPLICATE: _ClassVar[TicketResolution]
+    TICKET_RESOLUTION_NOT_A_PROBLEM: _ClassVar[TicketResolution]
+
+class TicketNoteKind(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    TICKET_NOTE_KIND_UNSPECIFIED: _ClassVar[TicketNoteKind]
+    TICKET_NOTE_KIND_NOTE: _ClassVar[TicketNoteKind]
+    TICKET_NOTE_KIND_ADVICE: _ClassVar[TicketNoteKind]
+    TICKET_NOTE_KIND_ANSWER: _ClassVar[TicketNoteKind]
+    TICKET_NOTE_KIND_CHANGE: _ClassVar[TicketNoteKind]
+
 class RefusalReason(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
     REFUSAL_REASON_UNSPECIFIED: _ClassVar[RefusalReason]
@@ -80,6 +113,27 @@ PROVENANCE_KIND_REPORTED: ProvenanceKind
 PROVENANCE_KIND_SECOND_SOURCE: ProvenanceKind
 PROVENANCE_KIND_SUPPLIED: ProvenanceKind
 PROVENANCE_KIND_DERIVED: ProvenanceKind
+TICKET_KIND_UNSPECIFIED: TicketKind
+TICKET_KIND_DEFECT: TicketKind
+TICKET_KIND_DISCREPANCY: TicketKind
+TICKET_KIND_REQUEST: TicketKind
+TICKET_KIND_QUESTION: TicketKind
+TICKET_STATE_UNSPECIFIED: TicketState
+TICKET_STATE_OPEN: TicketState
+TICKET_STATE_RESOLVED: TicketState
+TICKET_STATE_CLOSED: TicketState
+TICKET_RESOLUTION_UNSPECIFIED: TicketResolution
+TICKET_RESOLUTION_NOTE: TicketResolution
+TICKET_RESOLUTION_ANSWER: TicketResolution
+TICKET_RESOLUTION_VERSION: TicketResolution
+TICKET_RESOLUTION_WITHDRAWN: TicketResolution
+TICKET_RESOLUTION_DUPLICATE: TicketResolution
+TICKET_RESOLUTION_NOT_A_PROBLEM: TicketResolution
+TICKET_NOTE_KIND_UNSPECIFIED: TicketNoteKind
+TICKET_NOTE_KIND_NOTE: TicketNoteKind
+TICKET_NOTE_KIND_ADVICE: TicketNoteKind
+TICKET_NOTE_KIND_ANSWER: TicketNoteKind
+TICKET_NOTE_KIND_CHANGE: TicketNoteKind
 REFUSAL_REASON_UNSPECIFIED: RefusalReason
 REFUSAL_REASON_EXTERNAL_ACCOUNT_NOT_LINKED: RefusalReason
 REFUSAL_REASON_ACTOR_REQUIRED: RefusalReason
@@ -475,6 +529,98 @@ class LinkedExternalAccount(_message.Message):
     account_id: str
     account_name: str
     def __init__(self, external_account_id: _Optional[str] = ..., account_id: _Optional[str] = ..., account_name: _Optional[str] = ...) -> None: ...
+
+class FileTicketRequest(_message.Message):
+    __slots__ = ("title", "seen", "kind", "concerns", "step", "operation", "reason", "paths", "references", "idempotency_key")
+    TITLE_FIELD_NUMBER: _ClassVar[int]
+    SEEN_FIELD_NUMBER: _ClassVar[int]
+    KIND_FIELD_NUMBER: _ClassVar[int]
+    CONCERNS_FIELD_NUMBER: _ClassVar[int]
+    STEP_FIELD_NUMBER: _ClassVar[int]
+    OPERATION_FIELD_NUMBER: _ClassVar[int]
+    REASON_FIELD_NUMBER: _ClassVar[int]
+    PATHS_FIELD_NUMBER: _ClassVar[int]
+    REFERENCES_FIELD_NUMBER: _ClassVar[int]
+    IDEMPOTENCY_KEY_FIELD_NUMBER: _ClassVar[int]
+    title: str
+    seen: str
+    kind: TicketKind
+    concerns: TicketSubject
+    step: str
+    operation: str
+    reason: str
+    paths: _containers.RepeatedScalarFieldContainer[str]
+    references: _containers.RepeatedCompositeFieldContainer[TicketReference]
+    idempotency_key: str
+    def __init__(self, title: _Optional[str] = ..., seen: _Optional[str] = ..., kind: _Optional[_Union[TicketKind, str]] = ..., concerns: _Optional[_Union[TicketSubject, _Mapping]] = ..., step: _Optional[str] = ..., operation: _Optional[str] = ..., reason: _Optional[str] = ..., paths: _Optional[_Iterable[str]] = ..., references: _Optional[_Iterable[_Union[TicketReference, _Mapping]]] = ..., idempotency_key: _Optional[str] = ...) -> None: ...
+
+class TicketSubject(_message.Message):
+    __slots__ = ("kind", "instance", "version")
+    KIND_FIELD_NUMBER: _ClassVar[int]
+    INSTANCE_FIELD_NUMBER: _ClassVar[int]
+    VERSION_FIELD_NUMBER: _ClassVar[int]
+    kind: str
+    instance: str
+    version: str
+    def __init__(self, kind: _Optional[str] = ..., instance: _Optional[str] = ..., version: _Optional[str] = ...) -> None: ...
+
+class TicketReference(_message.Message):
+    __slots__ = ("kind", "value", "account_id")
+    KIND_FIELD_NUMBER: _ClassVar[int]
+    VALUE_FIELD_NUMBER: _ClassVar[int]
+    ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
+    kind: str
+    value: str
+    account_id: str
+    def __init__(self, kind: _Optional[str] = ..., value: _Optional[str] = ..., account_id: _Optional[str] = ...) -> None: ...
+
+class FileTicketReply(_message.Message):
+    __slots__ = ("ticket_id", "outcome", "seen_count")
+    TICKET_ID_FIELD_NUMBER: _ClassVar[int]
+    OUTCOME_FIELD_NUMBER: _ClassVar[int]
+    SEEN_COUNT_FIELD_NUMBER: _ClassVar[int]
+    ticket_id: str
+    outcome: str
+    seen_count: int
+    def __init__(self, ticket_id: _Optional[str] = ..., outcome: _Optional[str] = ..., seen_count: _Optional[int] = ...) -> None: ...
+
+class ReadFiledTicketsRequest(_message.Message):
+    __slots__ = ("ticket_ids", "idempotency_keys", "cursor")
+    TICKET_IDS_FIELD_NUMBER: _ClassVar[int]
+    IDEMPOTENCY_KEYS_FIELD_NUMBER: _ClassVar[int]
+    CURSOR_FIELD_NUMBER: _ClassVar[int]
+    ticket_ids: _containers.RepeatedScalarFieldContainer[str]
+    idempotency_keys: _containers.RepeatedScalarFieldContainer[str]
+    cursor: str
+    def __init__(self, ticket_ids: _Optional[_Iterable[str]] = ..., idempotency_keys: _Optional[_Iterable[str]] = ..., cursor: _Optional[str] = ...) -> None: ...
+
+class ReadFiledTicketsReply(_message.Message):
+    __slots__ = ("tickets", "next_cursor")
+    TICKETS_FIELD_NUMBER: _ClassVar[int]
+    NEXT_CURSOR_FIELD_NUMBER: _ClassVar[int]
+    tickets: _containers.RepeatedCompositeFieldContainer[FiledTicket]
+    next_cursor: str
+    def __init__(self, tickets: _Optional[_Iterable[_Union[FiledTicket, _Mapping]]] = ..., next_cursor: _Optional[str] = ...) -> None: ...
+
+class FiledTicket(_message.Message):
+    __slots__ = ("ticket_id", "idempotency_key", "state", "resolution", "seen_count", "first_seen_ns", "last_seen_ns", "answers")
+    TICKET_ID_FIELD_NUMBER: _ClassVar[int]
+    IDEMPOTENCY_KEY_FIELD_NUMBER: _ClassVar[int]
+    STATE_FIELD_NUMBER: _ClassVar[int]
+    RESOLUTION_FIELD_NUMBER: _ClassVar[int]
+    SEEN_COUNT_FIELD_NUMBER: _ClassVar[int]
+    FIRST_SEEN_NS_FIELD_NUMBER: _ClassVar[int]
+    LAST_SEEN_NS_FIELD_NUMBER: _ClassVar[int]
+    ANSWERS_FIELD_NUMBER: _ClassVar[int]
+    ticket_id: str
+    idempotency_key: str
+    state: TicketState
+    resolution: TicketResolution
+    seen_count: int
+    first_seen_ns: int
+    last_seen_ns: int
+    answers: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, ticket_id: _Optional[str] = ..., idempotency_key: _Optional[str] = ..., state: _Optional[_Union[TicketState, str]] = ..., resolution: _Optional[_Union[TicketResolution, str]] = ..., seen_count: _Optional[int] = ..., first_seen_ns: _Optional[int] = ..., last_seen_ns: _Optional[int] = ..., answers: _Optional[_Iterable[str]] = ...) -> None: ...
 
 class Refusal(_message.Message):
     __slots__ = ("reason", "fields")
