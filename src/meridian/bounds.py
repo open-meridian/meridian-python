@@ -96,6 +96,9 @@ LINK_EXTERNAL_ACCOUNT_REQUEST_NEW_ACCOUNT_NOTE_LENGTH = Length(least=0, most=200
 """meridian.v1.LinkExternalAccountRequest.new_account_note: keeps anything else
 worth knowing about a new account"""
 
+TICKET_NOTE_NOTE_LENGTH = Length(least=1, most=4000)
+"""meridian.v1.TicketNote.note: carries the note's text"""
+
 AS_REPORTED_SCHEME_LENGTH = Length(least=1, most=64)
 """meridian.v1.AsReported.scheme: says whose vocabulary a value as reported is
 in"""
