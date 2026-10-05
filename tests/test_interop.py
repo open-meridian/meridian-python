@@ -29,6 +29,7 @@ import meridian
 import meridian.edge
 import meridian.testing
 from meridian import CallFailed, Money, NotLinked
+from meridian.operations import CustodialActivity
 from meridian.plugin.v1 import operations_pb2, operations_pb2_grpc
 from meridian.v1 import sidecar_pb2, sidecar_pb2_grpc
 
@@ -1121,3 +1122,182 @@ async def test_a_plugin_started_again_reads_what_changed_while_it_was_away(
         await stopped(task)
     assert caught.caught_up
     assert meridian.as_decimal(caught.message.position.quantity) == Decimal("2")
+
+
+# ── Contract v14: the custodian's activity, and each sync status ────────────
+#
+# The custody plugin records an activity as the custodian states it and says
+# how far back its history reaches; the street keeps both, and the operations
+# plugin reads and hears them within its scope, the empty-scoped one nothing
+# (W2.10 to W2.14; sdk-contract/the-custodians-activity-contract).
+
+
+def reinvestment(
+    plugin, external_activity_id: str, trade_date: str = "2026-09-30"
+) -> CustodialActivity:
+    """SPAXX's monthly dividend reinvested, as a custody plugin reports it."""
+    return CustodialActivity(
+        external_activity_id=external_activity_id,
+        kind="ACTIVITY_KIND_REINVESTMENT",
+        instrument_id="INS-interop-spaxx",
+        trade_date=trade_date,
+        settlement_date=trade_date,
+        units=Decimal("3.27"),
+        price=Money(Decimal("1.00"), "USD"),
+        amount=Money(Decimal("-3.27"), "USD"),
+        description="REINVESTMENT FIDELITY GOVERNMENT MONEY MARKET (SPAXX) (Cash)",
+        raw_record=plugin.raw_record(f"activities/{external_activity_id}"),
+    )
+
+
+async def report_activity(plugin, external_activity_id: str, trade_date: str = "2026-09-30"):
+    return await plugin.record_activity(
+        external_account_id=LINKED,
+        source="interop",
+        activity=reinvestment(plugin, external_activity_id, trade_date),
+    )
+
+
+class Heard:
+    """What an operations plugin's activity and sync-status handlers were handed."""
+
+    def __init__(self) -> None:
+        self.items: list[meridian.Heard] = []
+        self.arrived = asyncio.Event()
+
+    async def hear(self, heard: meridian.Heard) -> None:
+        self.items.append(heard)
+        self.arrived.set()
+
+    async def until(self, found, seconds: float = 10.0):
+        async def waiting():
+            while True:
+                for heard in self.items:
+                    if found(heard):
+                        return heard
+                self.arrived.clear()
+                await self.arrived.wait()
+
+        return await asyncio.wait_for(waiting(), timeout=seconds)
+
+
+def hearing_activity(plugin, heard: Heard, *, seed: bool) -> asyncio.Task[None]:
+    return asyncio.create_task(
+        plugin.receive(activity_recorded=heard.hear, sync_status_recorded=heard.hear, seed=seed)
+    )
+
+
+async def test_an_activity_is_recorded_once_and_read_with_how_far_back_the_history_reaches(
+    plugin, operations
+) -> None:
+    """W2.10, W2.11, W2.13: recorded against the linked account, a redelivery
+    answered as already recorded, and read back with the history_from the
+    account's latest sync status said."""
+    await plugin.report_sync_status(
+        source="interop",
+        external_account_id=LINKED,
+        state="SYNC_STATE_CURRENT",
+        connection_healthy=True,
+        observed_at_ns=NOW,
+        history_from="2024-10-04",
+    )
+    identifier = f"interop-{uuid.uuid4()}"
+    first = await report_activity(plugin, identifier)
+    assert first.activity_id.startswith("ACT-") and not first.already_recorded
+    again = await report_activity(plugin, identifier)
+    assert again.already_recorded and again.activity_id == first.activity_id
+
+    read = None
+    for _ in range(50):
+        read = await operations.list_activities(account_id=ACCOUNT, page_size=500)
+        if read.history_from:
+            break
+        await asyncio.sleep(0.2)
+    assert read is not None and read.history_from == "2024-10-04"
+    mine = [each for each in read.activities if each.activity_id == first.activity_id]
+    assert len(mine) == 1, "recorded once"
+    kept = mine[0]
+    assert kept.account_id == ACCOUNT and kept.external_account_id == LINKED
+    assert kept.activity.external_activity_id == identifier
+    assert kept.activity.kind == operations_pb2.ACTIVITY_KIND_REINVESTMENT
+    assert meridian.as_decimal(kept.activity.units) == Decimal("3.27")
+    assert str(meridian.as_money(kept.activity.amount).amount) == "-3.27"
+    assert kept.cause.instance_id == plugin.identity.instance_id
+
+    dated = await operations.list_activities(
+        account_id=ACCOUNT, trade_date_from="2026-10-01", page_size=500
+    )
+    assert first.activity_id not in {each.activity_id for each in dated.activities}
+
+
+async def test_an_operations_plugin_hears_activity_and_the_sync_status_with_their_cause(
+    plugin, operations
+) -> None:
+    """W2.12, W2.13: each heard typed, caused by the custody plugin; a
+    connection needing a person to sign in again told apart from old data."""
+    heard = Heard()
+    task = hearing_activity(operations, heard, seed=False)
+    try:
+        await asyncio.sleep(1)  # the stream is open and the sidecar subscribed
+        identifier = f"interop-{uuid.uuid4()}"
+        recorded_activity = await report_activity(plugin, identifier)
+        await plugin.report_sync_status(
+            source="interop",
+            external_account_id=LINKED,
+            state="SYNC_STATE_NEEDS_SIGN_IN",
+            connection_healthy=False,
+            status_detail="the daily sign-in has lapsed",
+            observed_at_ns=NOW,
+            history_from="2024-10-04",
+        )
+        activity = await heard.until(
+            lambda h: (
+                h.row == "ActivityRecorded"
+                and h.message.activity_id == recorded_activity.activity_id
+            )
+        )
+        status = await heard.until(
+            lambda h: (
+                h.row == "SyncStatusRecorded"
+                and h.message.status.state == operations_pb2.SYNC_STATE_NEEDS_SIGN_IN
+            )
+        )
+    finally:
+        await stopped(task)
+
+    assert not activity.own and activity.cause.instance_id == plugin.identity.instance_id
+    assert activity.message.activity.external_activity_id == identifier
+    assert status.message.status.account_id == ACCOUNT
+    assert status.message.status.external_account_id == LINKED
+    assert not status.own and status.cause.instance_id == plugin.identity.instance_id
+
+    latest = await operations.list_sync_statuses(account_id=ACCOUNT)
+    assert [each.status.state for each in latest.statuses] == [
+        operations_pb2.SYNC_STATE_NEEDS_SIGN_IN
+    ]
+
+
+async def test_an_unlinked_accounts_activity_is_refused_and_its_sync_status_reaches_no_plugin(
+    plugin, operations, unscoped
+) -> None:
+    """W2.10 refuses an unlinked external account, as a holding; its sync
+    status is kept with no account and answered to no plugin; an empty scope
+    reads and hears nothing (W4.11)."""
+    activity = reinvestment(plugin, f"interop-{uuid.uuid4()}")
+    with pytest.raises(NotLinked):
+        await plugin.record_activity(
+            external_account_id="ext-nobody-linked", source="interop", activity=activity
+        )
+    await plugin.report_sync_status(
+        source="interop",
+        external_account_id="ext-nobody-linked",
+        state="SYNC_STATE_DISABLED",
+        observed_at_ns=NOW,
+    )
+    await asyncio.sleep(1)
+    everything = await operations.list_sync_statuses(page_size=500)
+    assert all(each.status.account_id == ACCOUNT for each in everything.statuses)
+    assert len((await unscoped.list_activities()).activities) == 0
+    assert len((await unscoped.list_sync_statuses()).statuses) == 0
+    with pytest.raises(meridian.NotGranted):
+        await unscoped.list_activities(account_id=ACCOUNT)
