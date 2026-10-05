@@ -396,6 +396,554 @@
               }
             }
           ]
+        },
+        {
+          "name": "activity-purchase",
+          "given": "the venue lists a purchase of units of a security on the account",
+          "closed_list": "meridian.v1.CustodialActivity.kind",
+          "since": "v14",
+          "expect": [
+            {
+              "row": "RecordActivity",
+              "fields": {
+                "external_account_id": "<set>",
+                "source": "<set>",
+                "activity": {
+                  "external_activity_id": "<set>",
+                  "kind": "ACTIVITY_KIND_PURCHASE",
+                  "kind_as_reported": "<unset>",
+                  "trade_date": "<set>",
+                  "raw_record": {
+                    "key": "<set>"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "activity-sale",
+          "given": "the venue lists a sale of units of a security on the account",
+          "closed_list": "meridian.v1.CustodialActivity.kind",
+          "since": "v14",
+          "expect": [
+            {
+              "row": "RecordActivity",
+              "fields": {
+                "external_account_id": "<set>",
+                "source": "<set>",
+                "activity": {
+                  "external_activity_id": "<set>",
+                  "kind": "ACTIVITY_KIND_SALE",
+                  "kind_as_reported": "<unset>",
+                  "trade_date": "<set>",
+                  "raw_record": {
+                    "key": "<set>"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "activity-reinvestment",
+          "given": "the venue lists income it reinvested in units of a money market fund",
+          "closed_list": "meridian.v1.CustodialActivity.kind",
+          "since": "v14",
+          "expect": [
+            {
+              "row": "RecordActivity",
+              "fields": {
+                "external_account_id": "<set>",
+                "source": "<set>",
+                "activity": {
+                  "external_activity_id": "<set>",
+                  "kind": "ACTIVITY_KIND_REINVESTMENT",
+                  "kind_as_reported": "<unset>",
+                  "trade_date": "<set>",
+                  "raw_record": {
+                    "key": "<set>"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "activity-dividend",
+          "given": "the venue lists a dividend paid in cash",
+          "closed_list": "meridian.v1.CustodialActivity.kind",
+          "since": "v14",
+          "expect": [
+            {
+              "row": "RecordActivity",
+              "fields": {
+                "external_account_id": "<set>",
+                "source": "<set>",
+                "activity": {
+                  "external_activity_id": "<set>",
+                  "kind": "ACTIVITY_KIND_DIVIDEND",
+                  "kind_as_reported": "<unset>",
+                  "trade_date": "<set>",
+                  "raw_record": {
+                    "key": "<set>"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "activity-interest",
+          "given": "the venue lists interest paid in cash",
+          "closed_list": "meridian.v1.CustodialActivity.kind",
+          "since": "v14",
+          "expect": [
+            {
+              "row": "RecordActivity",
+              "fields": {
+                "external_account_id": "<set>",
+                "source": "<set>",
+                "activity": {
+                  "external_activity_id": "<set>",
+                  "kind": "ACTIVITY_KIND_INTEREST",
+                  "kind_as_reported": "<unset>",
+                  "trade_date": "<set>",
+                  "raw_record": {
+                    "key": "<set>"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "activity-fee",
+          "given": "the venue lists a fee taken from the account",
+          "closed_list": "meridian.v1.CustodialActivity.kind",
+          "since": "v14",
+          "expect": [
+            {
+              "row": "RecordActivity",
+              "fields": {
+                "external_account_id": "<set>",
+                "source": "<set>",
+                "activity": {
+                  "external_activity_id": "<set>",
+                  "kind": "ACTIVITY_KIND_FEE",
+                  "kind_as_reported": "<unset>",
+                  "trade_date": "<set>",
+                  "raw_record": {
+                    "key": "<set>"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "activity-tax",
+          "given": "the venue lists a tax withheld",
+          "closed_list": "meridian.v1.CustodialActivity.kind",
+          "since": "v14",
+          "expect": [
+            {
+              "row": "RecordActivity",
+              "fields": {
+                "external_account_id": "<set>",
+                "source": "<set>",
+                "activity": {
+                  "external_activity_id": "<set>",
+                  "kind": "ACTIVITY_KIND_TAX",
+                  "kind_as_reported": "<unset>",
+                  "trade_date": "<set>",
+                  "raw_record": {
+                    "key": "<set>"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "activity-split",
+          "given": "the venue lists the units a split added to a holding",
+          "closed_list": "meridian.v1.CustodialActivity.kind",
+          "since": "v14",
+          "expect": [
+            {
+              "row": "RecordActivity",
+              "fields": {
+                "external_account_id": "<set>",
+                "source": "<set>",
+                "activity": {
+                  "external_activity_id": "<set>",
+                  "kind": "ACTIVITY_KIND_SPLIT",
+                  "kind_as_reported": "<unset>",
+                  "trade_date": "<set>",
+                  "raw_record": {
+                    "key": "<set>"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "activity-corporate-action",
+          "given": "the venue lists a corporate action other than a split",
+          "closed_list": "meridian.v1.CustodialActivity.kind",
+          "since": "v14",
+          "expect": [
+            {
+              "row": "RecordActivity",
+              "fields": {
+                "external_account_id": "<set>",
+                "source": "<set>",
+                "activity": {
+                  "external_activity_id": "<set>",
+                  "kind": "ACTIVITY_KIND_CORPORATE_ACTION",
+                  "kind_as_reported": "<unset>",
+                  "trade_date": "<set>",
+                  "raw_record": {
+                    "key": "<set>"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "activity-transfer-in",
+          "given": "the venue lists units moved in from another account",
+          "closed_list": "meridian.v1.CustodialActivity.kind",
+          "since": "v14",
+          "expect": [
+            {
+              "row": "RecordActivity",
+              "fields": {
+                "external_account_id": "<set>",
+                "source": "<set>",
+                "activity": {
+                  "external_activity_id": "<set>",
+                  "kind": "ACTIVITY_KIND_TRANSFER_IN",
+                  "kind_as_reported": "<unset>",
+                  "trade_date": "<set>",
+                  "raw_record": {
+                    "key": "<set>"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "activity-transfer-out",
+          "given": "the venue lists units moved out to another account",
+          "closed_list": "meridian.v1.CustodialActivity.kind",
+          "since": "v14",
+          "expect": [
+            {
+              "row": "RecordActivity",
+              "fields": {
+                "external_account_id": "<set>",
+                "source": "<set>",
+                "activity": {
+                  "external_activity_id": "<set>",
+                  "kind": "ACTIVITY_KIND_TRANSFER_OUT",
+                  "kind_as_reported": "<unset>",
+                  "trade_date": "<set>",
+                  "raw_record": {
+                    "key": "<set>"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "activity-contribution",
+          "given": "the venue lists cash paid into the account",
+          "closed_list": "meridian.v1.CustodialActivity.kind",
+          "since": "v14",
+          "expect": [
+            {
+              "row": "RecordActivity",
+              "fields": {
+                "external_account_id": "<set>",
+                "source": "<set>",
+                "activity": {
+                  "external_activity_id": "<set>",
+                  "kind": "ACTIVITY_KIND_CONTRIBUTION",
+                  "kind_as_reported": "<unset>",
+                  "trade_date": "<set>",
+                  "raw_record": {
+                    "key": "<set>"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "activity-withdrawal",
+          "given": "the venue lists cash taken out of the account",
+          "closed_list": "meridian.v1.CustodialActivity.kind",
+          "since": "v14",
+          "expect": [
+            {
+              "row": "RecordActivity",
+              "fields": {
+                "external_account_id": "<set>",
+                "source": "<set>",
+                "activity": {
+                  "external_activity_id": "<set>",
+                  "kind": "ACTIVITY_KIND_WITHDRAWAL",
+                  "kind_as_reported": "<unset>",
+                  "trade_date": "<set>",
+                  "raw_record": {
+                    "key": "<set>"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "activity-journal",
+          "given": "the venue lists a movement it journals between the account's own positions",
+          "closed_list": "meridian.v1.CustodialActivity.kind",
+          "since": "v14",
+          "expect": [
+            {
+              "row": "RecordActivity",
+              "fields": {
+                "external_account_id": "<set>",
+                "source": "<set>",
+                "activity": {
+                  "external_activity_id": "<set>",
+                  "kind": "ACTIVITY_KIND_JOURNAL",
+                  "kind_as_reported": "<unset>",
+                  "trade_date": "<set>",
+                  "raw_record": {
+                    "key": "<set>"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "activity-kind-not-converted",
+          "given": "the venue lists an activity whose type converts to none of the closed list",
+          "closed_list": "meridian.v1.CustodialActivity.kind",
+          "since": "v14",
+          "expect": [
+            {
+              "row": "RecordActivity",
+              "fields": {
+                "activity": {
+                  "kind": "ACTIVITY_KIND_UNSPECIFIED",
+                  "kind_as_reported": {
+                    "scheme": "<set>",
+                    "code": "<set>",
+                    "text": "<set>"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "activity-signs",
+          "given": "the venue lists a sale of units, stating its price and the cash it brought in",
+          "since": "v14",
+          "expect": [
+            {
+              "row": "RecordActivity",
+              "fields": {
+                "activity": {
+                  "kind": "ACTIVITY_KIND_SALE",
+                  "units": "<set>",
+                  "price": "<set>",
+                  "amount": "<set>"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "activity-moves-no-cash",
+          "given": "the venue lists a split, which moved units and no cash, and states no price",
+          "since": "v14",
+          "expect": [
+            {
+              "row": "RecordActivity",
+              "fields": {
+                "activity": {
+                  "kind": "ACTIVITY_KIND_SPLIT",
+                  "units": "<set>",
+                  "amount": "<unset>",
+                  "price": "<unset>"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "activity-plan-code-not-linked",
+          "given": "the venue names a plan's own fund code for an activity, states no match, and no person has linked the code",
+          "since": "v14",
+          "expect": [
+            {
+              "row": "RecordActivity",
+              "fields": {
+                "activity": {
+                  "instrument_id": "<unset>",
+                  "instrument_as_reported": {
+                    "scheme": "<set>",
+                    "code": "<set>",
+                    "text": "<set>"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "activity-plan-code-linked-by-a-person",
+          "given": "the venue names a plan's own fund code for an activity, and a person linked the code to an instrument on the plugin's page",
+          "since": "v14",
+          "expect": [
+            {
+              "row": "RecordActivity",
+              "fields": {
+                "activity": {
+                  "instrument_id": "<set>",
+                  "instrument_as_reported": "<unset>",
+                  "provenance": [
+                    {
+                      "field": "instrument_id",
+                      "kind": "PROVENANCE_KIND_SUPPLIED",
+                      "person": "<set>"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "history-from-stated",
+          "given": "the venue states the first date it can read an account's activity from",
+          "since": "v14",
+          "expect": [
+            {
+              "row": "ReportSyncStatus",
+              "fields": {
+                "history_from": "<set>"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "role": "operations",
+      "since": "v14",
+      "says": "An operations plugin passing every case reads the account's activity when it reconciles, hears each activity recorded, and offers the activity that explains a break as its candidate cause, linked by value, under the category that fits; it books nothing from activity and confirms nothing without a person.\n",
+      "cases": [
+        {
+          "name": "income-reinvested-explains-a-quantity-gained",
+          "given": "a completed statement shows an account holding more units of a money market fund than the book, and the account's activity since its last reconciled statement holds a reinvestment of exactly those units\n",
+          "expect": [
+            {
+              "row": "ListActivities",
+              "fields": {
+                "account_id": "<set>",
+                "trade_date_from": "<set>"
+              }
+            },
+            {
+              "row": "RecordBreak",
+              "fields": {
+                "candidate_causes": [
+                  {
+                    "category": "BREAK_CAUSE_CATEGORY_INCOME_REINVESTED",
+                    "activity": {
+                      "activity_id": "<set>",
+                      "change": "<set>"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "a-split-explains-the-units-it-added",
+          "given": "a completed statement shows an account holding more units of a security than the book, and the account's activity holds a split adding exactly those units\n",
+          "expect": [
+            {
+              "row": "ListActivities",
+              "fields": {
+                "account_id": "<set>"
+              }
+            },
+            {
+              "row": "RecordBreak",
+              "fields": {
+                "candidate_causes": [
+                  {
+                    "category": "BREAK_CAUSE_CATEGORY_CORPORATE_ACTION",
+                    "activity": {
+                      "activity_id": "<set>"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "activity-heard-after-the-break",
+          "given": "an open break on a fund's units has no candidate cause in the account's activity, and then a reinvestment of exactly those units is recorded\n",
+          "expect": [
+            {
+              "row": "ActivityRecorded"
+            },
+            {
+              "row": "RecordBreak",
+              "fields": {
+                "break_id": "<set>",
+                "candidate_causes": [
+                  {
+                    "category": "BREAK_CAUSE_CATEGORY_INCOME_REINVESTED",
+                    "activity": {
+                      "activity_id": "<set>"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "activity-books-nothing",
+          "given": "an activity is recorded on an account with no open break it explains",
+          "expect": [
+            {
+              "row": "ActivityRecorded"
+            },
+            {
+              "row": "RecordBreak",
+              "sends": false
+            },
+            {
+              "row": "ResolveBreak",
+              "sends": false
+            }
+          ]
         }
       ]
     }

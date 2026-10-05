@@ -126,6 +126,10 @@
           "intent": "a completed statement: its account, date, row counts and figures per margin segment"
         },
         {
+          "message": "meridian.v1.ActivityRecordedEvent",
+          "intent": "an activity as the custodian stated it, kept as reported, on which nothing is derived"
+        },
+        {
           "message": "meridian.v1.UnresolvedHolding",
           "intent": "a holding the deployment received and could not name, kept so nothing a custodian reported is dropped"
         }
@@ -153,12 +157,14 @@
     "LinkExternalAccount": "meridian.v1.LinkExternalAccountRequest",
     "ListAccountAttributes": "meridian.v1.ListAccountAttributesRequest",
     "ListAccountFigures": "meridian.v1.ListAccountFiguresRequest",
+    "ListActivities": "meridian.v1.ListActivitiesRequest",
     "ListBreaks": "meridian.v1.ListBreaksRequest",
     "ListCustodialPositions": "meridian.v1.ListCustodialPositionsRequest",
     "ListPositions": "meridian.v1.ListPositionsRequest",
     "ListStatements": "meridian.v1.ListStatementsRequest",
     "ReadAccountsForLinking": "meridian.v1.AccountsRequest",
     "RecordAccountFigures": "meridian.v1.RecordAccountFiguresRequest",
+    "RecordActivity": "meridian.v1.RecordActivityRequest",
     "RecordBreak": "meridian.v1.RecordBreakRequest",
     "RecordEncumbrances": "meridian.v1.RecordEncumbrancesRequest",
     "RecordHolding": "meridian.v1.RecordHoldingRequest",
@@ -2472,6 +2478,11 @@
         {
           "value": "BREAK_CAUSE_CATEGORY_UNKNOWN",
           "meaning": "no cause found yet"
+        },
+        {
+          "value": "BREAK_CAUSE_CATEGORY_INCOME_REINVESTED",
+          "meaning": "income the custodian reinvested in units, which the book has not booked, such as a money market fund's monthly dividend",
+          "since": "v14"
         }
       ],
       "empty": "unspecified is refused",
@@ -2546,6 +2557,58 @@
       "filled": "as-reported",
       "filled_by": "operations",
       "since": "v8",
+      "stability": "stable",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.BreakCause.activity",
+      "type": "message ActivityRef",
+      "empty": "unset unless this is the item",
+      "intent": "names the custodian's activity found to cause it",
+      "meaning": "an activity the street recorded, by value, recorded as given",
+      "not_meaning": "a key the book follows, or a record it checks: the book reads no other store",
+      "filled": "as-reported",
+      "filled_by": "operations",
+      "since": "v14",
+      "stability": "stable",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.ActivityRef.activity_id",
+      "type": "text",
+      "empty": "never empty on a reference that is sent",
+      "intent": "names a street activity by value",
+      "meaning": "the street store's identifier for the activity",
+      "not_meaning": "the custodian's own identifier, or a key the book follows",
+      "filled": "as-reported",
+      "filled_by": "operations",
+      "since": "v14",
+      "stability": "stable",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.ActivityRef.change",
+      "type": "message JournalRef",
+      "empty": "unset where not stated",
+      "intent": "names the activity's record in the street's partition",
+      "meaning": "the street's journal reference, by value",
+      "not_meaning": "the book's own",
+      "filled": "as-reported",
+      "filled_by": "operations",
+      "since": "v14",
+      "stability": "stable",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.ActivityRef.trade_date",
+      "type": "date",
+      "empty": "empty where not stated",
+      "intent": "says the activity's trade date",
+      "meaning": "as the custodian stated it",
+      "not_meaning": "when the street recorded it",
+      "filled": "as-reported",
+      "filled_by": "operations",
+      "since": "v14",
       "stability": "stable",
       "store": "bor"
     },
@@ -3414,6 +3477,13 @@
       "filled_by": "operations",
       "since": "v8",
       "stability": "stable",
+      "changes": [
+        {
+          "version": "v14",
+          "kind": "clarified",
+          "what": "an adjustment proposed from the custodian's activity names the activity's identifier here (W2.12)"
+        }
+      ],
       "store": "bor"
     },
     {
@@ -7257,6 +7327,10 @@
         {
           "row": "ResolveBreak",
           "since": "v8"
+        },
+        {
+          "row": "RecordActivity",
+          "since": "v14"
         }
       ],
       "empty": "never unset in an amount that is set: the amount is the Money",
@@ -7433,6 +7507,10 @@
         {
           "row": "ReportMissingInstrument",
           "since": "v11"
+        },
+        {
+          "row": "RecordActivity",
+          "since": "v14"
         }
       ],
       "empty": "never empty on a value as reported that is sent",
@@ -7461,6 +7539,10 @@
         {
           "row": "ReportMissingInstrument",
           "since": "v11"
+        },
+        {
+          "row": "RecordActivity",
+          "since": "v14"
         }
       ],
       "empty": "never empty on a value as reported that is sent",
@@ -7489,6 +7571,10 @@
         {
           "row": "ReportMissingInstrument",
           "since": "v11"
+        },
+        {
+          "row": "RecordActivity",
+          "since": "v14"
         }
       ],
       "empty": "never empty on a value as reported that is sent: the code again where the source gives no words",
@@ -7530,6 +7616,10 @@
         {
           "row": "RecordHoldingsStatement",
           "since": "v11"
+        },
+        {
+          "row": "RecordActivity",
+          "since": "v14"
         }
       ],
       "empty": "never empty on a reference that is sent",
@@ -7559,6 +7649,10 @@
         {
           "row": "RecordHoldingsStatement",
           "since": "v11"
+        },
+        {
+          "row": "RecordActivity",
+          "since": "v14"
         }
       ],
       "empty": "never empty on a provenance that is sent",
@@ -7604,6 +7698,10 @@
         {
           "row": "RecordHoldingsStatement",
           "since": "v11"
+        },
+        {
+          "row": "RecordActivity",
+          "since": "v14"
         }
       ],
       "empty": "unspecified is refused",
@@ -10375,6 +10473,19 @@
       "store": "sidecar"
     },
     {
+      "name": "meridian.plugin.v1.Delivery.activity_recorded",
+      "type": "message ActivityRecordedEvent",
+      "empty": "unset unless the delivery is an activity the street recorded",
+      "intent": "delivers an activity the street recorded (W2.12)",
+      "meaning": "the activity's whole record, within the plugin's read scope",
+      "not_meaning": "a position or a lot: the street derives none from it",
+      "filled": "decided",
+      "filled_by": "street",
+      "since": "v14",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
       "name": "meridian.plugin.v1.RecordHoldingsStatementParams.acting_for",
       "type": "message CallerAssertion",
       "empty": "unset, the plugin acts as itself",
@@ -10398,6 +10509,19 @@
       "filled_by": "plugin",
       "since": "v2",
       "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.plugin.v1.RecordActivityParams.acting_for",
+      "type": "message CallerAssertion",
+      "empty": "unset, the plugin acts as itself",
+      "intent": "names the person RecordActivity is sent for",
+      "meaning": "the assertion the plugin was handed for them, the same bytes, never altered; set, the sidecar admits the command only in a session at write, when the person may write the account it names, and stamps them on it (W4.9)",
+      "not_meaning": "the plugin's own identity, which the sidecar knows",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v14",
+      "stability": "preview",
       "store": "sidecar"
     },
     {
@@ -10714,6 +10838,19 @@
       "filled": "as-reported",
       "filled_by": "custody",
       "since": "v2",
+      "stability": "stable",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.SyncStatusEvent.history_from",
+      "type": "date",
+      "empty": "empty where the source does not say, which is not saying the history is complete",
+      "intent": "says how far back the account's history reaches",
+      "meaning": "the first date the source can read the account's activity from, an ISO 8601 date: how far a backfill of activity reaches (W2.10)",
+      "not_meaning": "how fresh the history is, which history_as_of_ns says",
+      "filled": "as-reported",
+      "filled_by": "custody",
+      "since": "v14",
       "stability": "stable",
       "store": "street"
     },
@@ -12984,6 +13121,614 @@
       "filled_by": "street",
       "since": "v7",
       "stability": "stable",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.CustodialActivity.external_activity_id",
+      "type": "text",
+      "bounds": {
+        "length": [
+          1,
+          200
+        ]
+      },
+      "required": [
+        {
+          "row": "RecordActivity",
+          "since": "v14"
+        }
+      ],
+      "empty": "never empty: refused, since it is what recognises the activity sent twice",
+      "intent": "lets the street recognise the same activity sent twice",
+      "meaning": "the custodian's own identifier for the activity, as the plugin read it; with the source and the account, the street's key for it",
+      "not_meaning": "the street's activity_id; a custodian restating an activity under a new identifier sends a new activity, never a change to this one",
+      "filled": "as-reported",
+      "filled_by": "custody",
+      "since": "v14",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.CustodialActivity.kind",
+      "type": "enum ActivityKind",
+      "allowed": [
+        {
+          "value": "ACTIVITY_KIND_UNSPECIFIED",
+          "meaning": "not known: the custodian's type converts to none of these; what a plugin sends when conversion fails, with the type as reported beside it"
+        },
+        {
+          "value": "ACTIVITY_KIND_PURCHASE",
+          "meaning": "units bought"
+        },
+        {
+          "value": "ACTIVITY_KIND_SALE",
+          "meaning": "units sold"
+        },
+        {
+          "value": "ACTIVITY_KIND_REINVESTMENT",
+          "meaning": "income the custodian reinvested in units, as a money market fund's monthly dividend is"
+        },
+        {
+          "value": "ACTIVITY_KIND_DIVIDEND",
+          "meaning": "a dividend paid in cash"
+        },
+        {
+          "value": "ACTIVITY_KIND_INTEREST",
+          "meaning": "interest paid in cash"
+        },
+        {
+          "value": "ACTIVITY_KIND_FEE",
+          "meaning": "a fee, in cash or in units"
+        },
+        {
+          "value": "ACTIVITY_KIND_TAX",
+          "meaning": "a tax withheld or paid"
+        },
+        {
+          "value": "ACTIVITY_KIND_SPLIT",
+          "meaning": "a split: the units it added or removed"
+        },
+        {
+          "value": "ACTIVITY_KIND_CORPORATE_ACTION",
+          "meaning": "another corporate action, as the custodian states it"
+        },
+        {
+          "value": "ACTIVITY_KIND_TRANSFER_IN",
+          "meaning": "units or cash moved in from another account"
+        },
+        {
+          "value": "ACTIVITY_KIND_TRANSFER_OUT",
+          "meaning": "units or cash moved out to another account"
+        },
+        {
+          "value": "ACTIVITY_KIND_CONTRIBUTION",
+          "meaning": "cash paid into the account"
+        },
+        {
+          "value": "ACTIVITY_KIND_WITHDRAWAL",
+          "meaning": "cash taken out of the account"
+        },
+        {
+          "value": "ACTIVITY_KIND_JOURNAL",
+          "meaning": "a movement between the account's own positions or sub-accounts, as the custodian journals it"
+        }
+      ],
+      "empty": "unspecified is not known, and then the custodian's type travels as reported",
+      "intent": "says what the activity was, in the platform's own words",
+      "meaning": "converted by the plugin from the custodian's own type into the closed list",
+      "not_meaning": "a booking: nothing books from it, and the cash-flow class is set by operations and servicing, never inferred",
+      "filled": "derived",
+      "filled_by": "custody",
+      "since": "v14",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.CustodialActivity.kind_as_reported",
+      "type": "message AsReported",
+      "empty": "unset whenever the kind is known: set only beside a kind not known",
+      "intent": "carries the custodian's type that did not convert to a kind",
+      "meaning": "for a person to map, and counted as evidence the kinds may need to grow",
+      "not_meaning": "a kind any reader may act on: nothing past the plugin interprets it",
+      "filled": "as-reported",
+      "filled_by": "custody",
+      "since": "v14",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.CustodialActivity.instrument_id",
+      "type": "identifier instrument",
+      "empty": "empty where the activity concerns no instrument, or where the custodian's code did not resolve, and instrument_as_reported carries it",
+      "intent": "names the instrument the activity concerns",
+      "meaning": "the deployment's record, resolved at the edge as a holding's is; for cash, the currency's cash instrument; a plan's own code linked once by a named person carries that person's provenance",
+      "not_meaning": "an identifier of a scheme, or the custodian's own code",
+      "filled": "as-reported",
+      "filled_by": "custody",
+      "since": "v14",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.CustodialActivity.instrument_as_reported",
+      "type": "message AsReported",
+      "empty": "unset whenever the instrument resolved, or the activity concerns none",
+      "intent": "carries the custodian's code for an instrument that did not resolve",
+      "meaning": "a plan's own fund code no person has linked yet, as the custodian sent it, for a person to link on the plugin's page",
+      "not_meaning": "an instrument any reader may act on: nothing past the plugin interprets it",
+      "filled": "as-reported",
+      "filled_by": "custody",
+      "since": "v14",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.CustodialActivity.trade_date",
+      "type": "date",
+      "required": [
+        {
+          "row": "RecordActivity",
+          "since": "v14"
+        }
+      ],
+      "empty": "never empty",
+      "intent": "says when the activity was traded or took effect",
+      "meaning": "an ISO 8601 date, as the custodian states it; what a read by date range and a lot's acquisition date go by",
+      "not_meaning": "when the plugin read it, or when it settles",
+      "filled": "as-reported",
+      "filled_by": "custody",
+      "since": "v14",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.CustodialActivity.settlement_date",
+      "type": "date",
+      "empty": "empty where the custodian does not state it",
+      "intent": "says when the activity settles or settled",
+      "meaning": "an ISO 8601 date, as the custodian states it",
+      "not_meaning": "the trade date, or a date the plugin worked out unless its provenance says by which rule",
+      "filled": "as-reported",
+      "filled_by": "custody",
+      "since": "v14",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.CustodialActivity.units",
+      "type": "Decimal",
+      "bounds": {
+        "digits": 38,
+        "scale": [
+          0,
+          18
+        ]
+      },
+      "unit": "units of the instrument",
+      "empty": "unset where the activity moved no units, a cash dividend's say, which is not zero",
+      "intent": "states the units of the instrument the activity moved",
+      "meaning": "signed by what it did to the account: positive added units (a purchase, a reinvestment, the units a split added, a transfer in), negative removed them (a sale, a fee taken in units, a transfer out)",
+      "not_meaning": "a quantity held, or a figure anything derives a position or a lot from without a person's confirmation",
+      "filled": "as-reported",
+      "filled_by": "custody",
+      "since": "v14",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.CustodialActivity.price",
+      "type": "Money",
+      "empty": "unset where the custodian states no price",
+      "intent": "carries the price per unit the custodian states",
+      "meaning": "as reported, in its currency",
+      "not_meaning": "a price worked out from the amount and the units, which is never done",
+      "filled": "as-reported",
+      "filled_by": "custody",
+      "since": "v14",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.CustodialActivity.amount",
+      "type": "Money",
+      "empty": "unset where the activity moved no cash, a split's say, which is not zero",
+      "intent": "carries the amount of cash the activity moved",
+      "meaning": "in its currency, signed by what it did to the account's cash: positive in (a sale, a dividend, a contribution), negative out (a purchase, a reinvestment, a fee, a withdrawal)",
+      "not_meaning": "income booked, or a figure netted against another activity: a reinvested dividend and its dividend are two activities",
+      "filled": "as-reported",
+      "filled_by": "custody",
+      "since": "v14",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.CustodialActivity.description",
+      "type": "text",
+      "bounds": {
+        "length": [
+          0,
+          500
+        ]
+      },
+      "empty": "empty where the custodian gives none",
+      "intent": "carries the custodian's own description of the activity",
+      "meaning": "the custodian's words, for a person; diagnostic, nothing branches on it",
+      "not_meaning": "a kind or a code: the kind says what it was",
+      "filled": "as-reported",
+      "filled_by": "custody",
+      "since": "v14",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.CustodialActivity.raw_record",
+      "type": "message RawRecordRef",
+      "required": [
+        {
+          "row": "RecordActivity",
+          "since": "v14"
+        }
+      ],
+      "empty": "never unset: refused, since every record a custody plugin sends references what it was converted from",
+      "intent": "references the raw record the activity was converted from",
+      "meaning": "the record in the plugin's own storage, kept as long as the history it reported, which a person follows on that plugin's page",
+      "not_meaning": "a record core or another plugin reads: carried, never followed, past the plugin that owns it",
+      "filled": "as-reported",
+      "filled_by": "custody",
+      "since": "v14",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.CustodialActivity.provenance",
+      "type": "repeated message Provenance",
+      "bounds": {
+        "count": [
+          0,
+          32
+        ]
+      },
+      "empty": "empty where every value is the custodian's, from the raw record",
+      "intent": "says where each value the plugin closed rather than read came from",
+      "meaning": "one per closed value, by its path: an instrument linked once by a named person, a settlement date derived by a named rule",
+      "not_meaning": "a value presented as the custodian's: a closed value never is",
+      "filled": "as-reported",
+      "filled_by": "custody",
+      "since": "v14",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.RecordActivityRequest.account_id",
+      "type": "identifier account",
+      "empty": "a plugin leaves it empty; the sidecar sets it from the link, and refuses the activity when there is none (REFUSAL_REASON_EXTERNAL_ACCOUNT_NOT_LINKED)",
+      "intent": "names the account the activity is recorded against",
+      "meaning": "the deployment's account the external account is linked to (W6.4)",
+      "not_meaning": "anything a plugin sets",
+      "filled": "stamped",
+      "filled_by": "sidecar",
+      "since": "v14",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.RecordActivityRequest.external_account_id",
+      "type": "identifier external account",
+      "required": [
+        {
+          "row": "RecordActivity",
+          "since": "v14"
+        }
+      ],
+      "empty": "never empty",
+      "intent": "names the external account the activity is on",
+      "meaning": "as the plugin reported it (W2.8), which the sidecar translates",
+      "not_meaning": "an account of the deployment",
+      "filled": "as-reported",
+      "filled_by": "custody",
+      "since": "v14",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.RecordActivityRequest.source",
+      "type": "text",
+      "required": [
+        {
+          "row": "RecordActivity",
+          "since": "v14"
+        }
+      ],
+      "empty": "never empty",
+      "intent": "names the source the activity was read from",
+      "meaning": "the plugin's scheme for its source, as on a statement; with the account and the custodian's identifier, the street's key",
+      "not_meaning": "the institution holding the account",
+      "filled": "as-reported",
+      "filled_by": "custody",
+      "since": "v14",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.RecordActivityRequest.activity",
+      "type": "message CustodialActivity",
+      "required": [
+        {
+          "row": "RecordActivity",
+          "since": "v14"
+        }
+      ],
+      "empty": "never unset",
+      "intent": "carries the activity as the custodian states it",
+      "meaning": "one activity",
+      "not_meaning": "a batch, or a statement's row",
+      "filled": "as-reported",
+      "filled_by": "custody",
+      "since": "v14",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.RecordActivityReply.activity_id",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "identifies the activity the street recorded",
+      "meaning": "minted by the street; what a break's cause and an adjustment name it by",
+      "not_meaning": "the custodian's external_activity_id",
+      "filled": "minted",
+      "filled_by": "street",
+      "since": "v14",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.RecordActivityReply.already_recorded",
+      "type": "boolean",
+      "empty": "false for an activity recorded now",
+      "intent": "says the activity had already been recorded",
+      "meaning": "a redelivery, by its source, account and the custodian's identifier: the existing activity is returned, and nothing is recorded twice",
+      "not_meaning": "a refusal",
+      "filled": "decided",
+      "filled_by": "street",
+      "since": "v14",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.ActivityRecordedEvent.activity_id",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "identifies the activity recorded",
+      "meaning": "the street's identifier, as the record's reply answered it",
+      "not_meaning": "the custodian's external_activity_id",
+      "filled": "minted",
+      "filled_by": "street",
+      "since": "v14",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.ActivityRecordedEvent.account_id",
+      "type": "identifier account",
+      "empty": "never empty",
+      "intent": "names the account the activity is on",
+      "meaning": "the account the sidecar stamped on the record",
+      "not_meaning": "an external account",
+      "filled": "stamped",
+      "filled_by": "sidecar",
+      "since": "v14",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.ActivityRecordedEvent.external_account_id",
+      "type": "identifier external account",
+      "empty": "never empty",
+      "intent": "names the external account the activity is on",
+      "meaning": "as the custody plugin reported it",
+      "not_meaning": "an account of the deployment",
+      "filled": "as-reported",
+      "filled_by": "custody",
+      "since": "v14",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.ActivityRecordedEvent.source",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the source the activity was read from",
+      "meaning": "the plugin's scheme for its source, as recorded",
+      "not_meaning": "the institution holding the account",
+      "filled": "as-reported",
+      "filled_by": "custody",
+      "since": "v14",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.ActivityRecordedEvent.activity",
+      "type": "message CustodialActivity",
+      "empty": "never unset",
+      "intent": "carries the activity as recorded",
+      "meaning": "as the custodian stated it and the plugin sent it, whole",
+      "not_meaning": "a position, a lot or a figure: the street derives none from it",
+      "filled": "as-reported",
+      "filled_by": "custody",
+      "since": "v14",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.ActivityRecordedEvent.recorded_at_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "never 0",
+      "intent": "records when the street recorded the activity",
+      "meaning": "the deployment's clock when it was recorded",
+      "not_meaning": "when it was traded, or when the plugin read it",
+      "filled": "decided",
+      "filled_by": "street",
+      "since": "v14",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.ActivityRecordedEvent.journal",
+      "type": "message JournalRef",
+      "empty": "never unset",
+      "intent": "says where the record sits in the street's record",
+      "meaning": "its number in the street's partition, chained per account with the activities before it",
+      "not_meaning": "the activity's identifier",
+      "filled": "decided",
+      "filled_by": "street",
+      "since": "v14",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.ActivityRecordedEvent.cause",
+      "type": "message ChangeCause",
+      "empty": "never unset",
+      "intent": "says who caused the record",
+      "meaning": "the custody plugin's command that recorded it",
+      "not_meaning": "who traded",
+      "filled": "decided",
+      "filled_by": "street",
+      "since": "v14",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.ListActivitiesRequest.account_id",
+      "type": "identifier account",
+      "empty": "empty for every account in the reader's scope",
+      "intent": "names the account whose activity to read",
+      "meaning": "an account in the plugin's read scope",
+      "not_meaning": "an external account",
+      "filled": "as-reported",
+      "since": "v14",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.ListActivitiesRequest.trade_date_from",
+      "type": "date",
+      "empty": "empty for no earliest date",
+      "intent": "bounds the read by trade date, from",
+      "meaning": "an ISO 8601 date, inclusive",
+      "not_meaning": "a point in the street's record, which since is",
+      "filled": "as-reported",
+      "since": "v14",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.ListActivitiesRequest.trade_date_to",
+      "type": "date",
+      "empty": "empty for no latest date",
+      "intent": "bounds the read by trade date, to",
+      "meaning": "an ISO 8601 date, inclusive",
+      "not_meaning": "a point in the street's record, which since is",
+      "filled": "as-reported",
+      "since": "v14",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.ListActivitiesRequest.since",
+      "type": "message Watermark",
+      "empty": "unset for every activity recorded",
+      "intent": "asks only for activities recorded after a point",
+      "meaning": "a point in the street's record",
+      "not_meaning": "a time, or a trade date",
+      "filled": "as-reported",
+      "since": "v14",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.ListActivitiesRequest.page_size",
+      "type": "integer",
+      "unit": "records",
+      "bounds": {
+        "range": {
+          "least": "0",
+          "most": "500"
+        },
+        "past": "capped"
+      },
+      "empty": "0 is 100; past 500, answered at 500",
+      "intent": "bounds a page",
+      "meaning": "how many activities a page holds at most",
+      "not_meaning": "a promise that a page is full",
+      "filled": "as-reported",
+      "since": "v14",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.ListActivitiesRequest.cursor",
+      "type": "text",
+      "empty": "empty for the first page",
+      "intent": "asks for the next page",
+      "meaning": "opaque: the previous reply's next_cursor",
+      "not_meaning": "anything a reader parses",
+      "filled": "as-reported",
+      "since": "v14",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.ListActivitiesReply.activities",
+      "type": "repeated message ActivityRecordedEvent",
+      "empty": "empty when none is in scope and range",
+      "intent": "answers the activities recorded",
+      "meaning": "each as it was announced (W2.12), by trade date; read since a watermark, in the order recorded",
+      "not_meaning": "positions or lots: the street derives none from them",
+      "filled": "decided",
+      "filled_by": "street",
+      "since": "v14",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.ListActivitiesReply.next_cursor",
+      "type": "text",
+      "empty": "empty on the last page",
+      "intent": "points at the next page",
+      "meaning": "opaque, passed back as cursor",
+      "not_meaning": "anything a reader parses",
+      "filled": "decided",
+      "filled_by": "street",
+      "since": "v14",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.ListActivitiesReply.as_of",
+      "type": "message Watermark",
+      "empty": "never unset",
+      "intent": "says the point in the street's record the page was read at",
+      "meaning": "what a reader passes as since",
+      "not_meaning": "a time",
+      "filled": "decided",
+      "filled_by": "street",
+      "since": "v14",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.ListActivitiesReply.history_from",
+      "type": "date",
+      "empty": "empty where the request names no account, or the account's source has not said",
+      "intent": "says how far back the named account's history reaches",
+      "meaning": "the first date the account's source can read activity from, as its sync status last said (W2.1): an opening balance older than it has no activity to explain it",
+      "not_meaning": "the earliest activity listed, or a statement that the history is complete",
+      "filled": "decided",
+      "filled_by": "street",
+      "since": "v14",
+      "stability": "preview",
       "store": "street"
     },
     {

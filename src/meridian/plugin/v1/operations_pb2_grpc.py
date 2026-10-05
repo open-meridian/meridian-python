@@ -64,6 +64,16 @@ class PluginOperationsStub(object):
                 request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListStatementsParams.SerializeToString,
                 response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListStatementsResult.FromString,
                 _registered_method=True)
+        self.RecordActivity = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/RecordActivity',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordActivityParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordActivityResult.FromString,
+                _registered_method=True)
+        self.ListActivities = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ListActivities',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListActivitiesParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListActivitiesResult.FromString,
+                _registered_method=True)
         self.ResolveIdentifier = channel.unary_unary(
                 '/meridian.plugin.v1.PluginOperations/ResolveIdentifier',
                 request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ResolveIdentifierParams.SerializeToString,
@@ -191,6 +201,20 @@ class PluginOperationsServicer(object):
 
     def ListStatements(self, request, context):
         """W2.9: platform.street.query.list-statements (query; stable).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RecordActivity(self, request, context):
+        """W2.10: platform.street.command.record-activity (command; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListActivities(self, request, context):
+        """W2.11: platform.street.query.list-activities (query; preview).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -347,6 +371,16 @@ def add_PluginOperationsServicer_to_server(servicer, server):
                     servicer.ListStatements,
                     request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListStatementsParams.FromString,
                     response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListStatementsResult.SerializeToString,
+            ),
+            'RecordActivity': grpc.unary_unary_rpc_method_handler(
+                    servicer.RecordActivity,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordActivityParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordActivityResult.SerializeToString,
+            ),
+            'ListActivities': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListActivities,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListActivitiesParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListActivitiesResult.SerializeToString,
             ),
             'ResolveIdentifier': grpc.unary_unary_rpc_method_handler(
                     servicer.ResolveIdentifier,
@@ -596,6 +630,60 @@ class PluginOperations(object):
             '/meridian.plugin.v1.PluginOperations/ListStatements',
             meridian_dot_plugin_dot_v1_dot_operations__pb2.ListStatementsParams.SerializeToString,
             meridian_dot_plugin_dot_v1_dot_operations__pb2.ListStatementsResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RecordActivity(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/RecordActivity',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordActivityParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordActivityResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListActivities(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ListActivities',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListActivitiesParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListActivitiesResult.FromString,
             options,
             channel_credentials,
             insecure,

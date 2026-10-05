@@ -360,6 +360,53 @@ def _reported_pending(value: ReportedPending, name: str) -> ops.ReportedPending:
 
 
 @dataclass(frozen=True, kw_only=True)
+class CustodialActivity:
+    """One activity on an account, as the custodian states it: a purchase, a
+    sale, a reinvested dividend, a dividend or interest, a fee or a tax, a
+    split or another corporate action, a transfer, a contribution, a
+    withdrawal or a journal (spec/the-custodians-activity-explains-a-break).
+
+    The SDK's form of the wire's CustodialActivity: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    external_activity_id: str = ""
+    kind: ops.ActivityKind | str | None = None
+    kind_as_reported: ops.AsReported | None = None
+    instrument_id: str = ""
+    instrument_as_reported: ops.AsReported | None = None
+    trade_date: str = ""
+    settlement_date: str = ""
+    units: Decimal | int | None = None
+    price: Money | None = None
+    amount: Money | None = None
+    description: str = ""
+    raw_record: ops.RawRecordRef | None = None
+    provenance: Sequence[Provenance] = ()
+
+
+def _custodial_activity(value: CustodialActivity, name: str) -> ops.CustodialActivity:
+    """A CustodialActivity as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, CustodialActivity):
+        raise TypeError(f"{name} is a meridian.CustodialActivity, not {type(value).__name__}")
+    return ops.CustodialActivity(
+        external_activity_id=value.external_activity_id,
+        kind=_enum(ops.ActivityKind, value.kind, f"{name}.kind"),
+        kind_as_reported=value.kind_as_reported,
+        instrument_id=value.instrument_id,
+        instrument_as_reported=value.instrument_as_reported,
+        trade_date=value.trade_date,
+        settlement_date=value.settlement_date,
+        units=None if value.units is None else _decimal(value.units, f"{name}.units"),
+        price=None if value.price is None else _money(value.price, f"{name}.price"),
+        amount=None if value.amount is None else _money(value.amount, f"{name}.amount"),
+        description=value.description,
+        raw_record=value.raw_record,
+        provenance=[_provenance(each, f"{name}.provenance[{i}]") for i, each in enumerate(value.provenance)],
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
 class OpeningSource:
     """OpeningSource.
 
@@ -575,6 +622,7 @@ class BreakCause:
     pending_settlement: PendingSettlementRef | None = None
     event_reference: str | None = None
     none_found: bool | None = None
+    activity: ops.ActivityRef | None = None
     note: str = ""
 
 
@@ -584,7 +632,7 @@ def _break_cause(value: BreakCause, name: str) -> ops.BreakCause:
         raise TypeError(f"{name} is a meridian.BreakCause, not {type(value).__name__}")
     return ops.BreakCause(
         category=_enum(ops.BreakCauseCategory, value.category, f"{name}.category"),
-        **_arm(f"{name}.item", street_record=value.street_record, book_entry=value.book_entry, pending_settlement=None if value.pending_settlement is None else _pending_settlement_ref(value.pending_settlement, f"{name}.pending_settlement"), event_reference=value.event_reference, none_found=value.none_found),
+        **_arm(f"{name}.item", street_record=value.street_record, book_entry=value.book_entry, pending_settlement=None if value.pending_settlement is None else _pending_settlement_ref(value.pending_settlement, f"{name}.pending_settlement"), event_reference=value.event_reference, none_found=value.none_found, activity=value.activity),
         note=value.note,
     )
 
@@ -861,6 +909,7 @@ class Operations:
         state: ops.SyncState | str | None = None,
         holdings_as_of_ns: int = 0,
         history_as_of_ns: int = 0,
+        history_from: str = "",
     ) -> ops.Published:
         """W2.1: How fresh a connected account's data is, as reported by the rail (stable)."""
         params = ops.ReportSyncStatusParams(
@@ -873,6 +922,7 @@ class Operations:
             state=_enum(ops.SyncState, state, "state"),
             holdings_as_of_ns=holdings_as_of_ns,
             history_as_of_ns=history_as_of_ns,
+            history_from=history_from,
         )
         return await self._operate(self._operations().ReportSyncStatus, params)
 
@@ -1009,6 +1059,44 @@ class Operations:
             cursor=cursor,
         )
         return await self._operate(self._operations().ListStatements, params)
+
+    async def record_activity(
+        self,
+        *,
+        external_account_id: str = "",
+        source: str = "",
+        activity: CustodialActivity | None = None,
+        acting_for: str | None = None,
+    ) -> ops.RecordActivityResult:
+        """W2.10: Record one activity (W2.10), as a holding row is recorded (preview)."""
+        params = ops.RecordActivityParams(
+            external_account_id=external_account_id,
+            source=source,
+            activity=None if activity is None else _custodial_activity(activity, "activity"),
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().RecordActivity, params)
+
+    async def list_activities(
+        self,
+        *,
+        account_id: str = "",
+        trade_date_from: str = "",
+        trade_date_to: str = "",
+        since: ops.Watermark | None = None,
+        page_size: int = 0,
+        cursor: str = "",
+    ) -> ops.ListActivitiesResult:
+        """W2.11: Read an account's activity (W2.11), by trade date, paged (preview)."""
+        params = ops.ListActivitiesParams(
+            account_id=account_id,
+            trade_date_from=trade_date_from,
+            trade_date_to=trade_date_to,
+            since=since,
+            page_size=page_size,
+            cursor=cursor,
+        )
+        return await self._operate(self._operations().ListActivities, params)
 
     async def resolve_identifier(
         self,
@@ -1365,6 +1453,7 @@ class Operations:
         break_changed: Callable[[Heard[ops.BreakChangedEvent]], Awaitable[None]] | None = None,
         account_figures_recorded: Callable[[Heard[ops.AccountFiguresRecordedEvent]], Awaitable[None]] | None = None,
         account_attribute_changed: Callable[[Heard[ops.AccountAttributeChangedEvent]], Awaitable[None]] | None = None,
+        activity_recorded: Callable[[Heard[ops.ActivityRecordedEvent]], Awaitable[None]] | None = None,
         seed: bool = True,
     ) -> None:
         """W4.3: hear the rows given a handler, each change once and in order,
@@ -1380,6 +1469,7 @@ class Operations:
                 "BreakChanged": break_changed,
                 "AccountFiguresRecorded": account_figures_recorded,
                 "AccountAttributeChanged": account_attribute_changed,
+                "ActivityRecorded": activity_recorded,
             },
             seed=seed,
         )
@@ -1487,6 +1577,19 @@ DELIVERED: tuple[DeliveredRow, ...] = (
         records="attributes",
         within="attributes",
         record_journal="last_change",
+        record_account=("account_id",),
+    ),
+    DeliveredRow(
+        name="ActivityRecorded",
+        step="W2.12",
+        arm="activity_recorded",
+        message=ops.ActivityRecordedEvent,
+        account=("account_id",),
+        caught_up_by="list_activities",
+        account_param="account_id",
+        records="activities",
+        within="",
+        record_journal="journal",
         record_account=("account_id",),
     ),
 )
