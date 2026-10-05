@@ -299,6 +299,38 @@ except meridian.NotLinked:
     ...  # offer it for linking; stop this statement
 ```
 
+### A table setting (contract v14)
+
+A setting may be rows of typed columns, such as a plan's own fund code per
+account linked to the instrument it is. An admin of the plugin enters the
+rows in the dashboard's Settings form, an editable table checked cell by
+cell; the plugin only reads them, as any setting arrives. A plugin sets none
+of its settings itself.
+
+```python
+PLAN_CODES = meridian.Setting(
+    "plan_code_links",
+    list,
+    label="Plan-code links",
+    columns=(
+        meridian.Column("account", "external_account", label="Account", required=True),
+        meridian.Column("code", label="Plan code", required=True),
+        meridian.Column("instrument", "instrument", label="Instrument", required=True),
+    ),
+)
+
+async for settings in plugin.settings():
+    for row in settings.values.get("plan_code_links", []):
+        row["code"], row["instrument"], row["changed_by"], row["changed_at"]
+```
+
+A column's kind is "text", "integer", "decimal", "date", "choice" (with
+`choices`), "external_account" (one this plugin reported) or "instrument" (a
+deployment instrument record's ID, picked by search, never a symbol). Each
+row arrives as a dict of text by column name, with `changed_by` and
+`changed_at`, which the conductor stamps when a row is added or changed.
+`most_rows` bounds the table (at most 500). `preview` in v14.
+
 ### Quantities and money
 
 A quantity is a Python `Decimal` (or an `int`), and an amount of currency is a
@@ -757,7 +789,7 @@ carries libcst.
 | 0.15.0 to 0.16.0: the SDK declares contract v11, the edge keeps its own: the version's declaration (`meridian.Declaration`, `connect(declaration=...)`, `meridian-declaration`), a row's raw record and provenance (`plugin.raw_record`, `meridian.edge`), the account kind and values as reported, each asset counted once, pending by value date (`meridian.ReportedPending`), a backfill, the stated instrument type, the custody suite (`meridian.suites`), names not carried counted on the heartbeat (`plugin.note_not_carried`); `meridian.ExternalAccount` is the SDK's form; `meridian.figures.MOST_FIGURES` and `LONGEST_*` moved to `meridian.bounds` | nothing | an ExternalAccount's `venue_account_type=`, a holding's `also_counted_in_cash=`, `currency_assumed=`, each replaced by the plugin's own conversion; a read of `meridian.figures`' moved bounds |
 | 0.16.0 to 0.17.0: the SDK declares contract v12, the deployment serves its MCP: a route's one typed record of inputs (`params=`, `request.params`, `request.param_errors`), read alike from a form named by the dictionary's paths and from an agent's JSON (`meridian.params`); tools derived from typed routes (`name=`, `description=`, `reads=`, `answers=`, `tool=False` with `why=`, `@pages.tool(replaces=...)`), sent at registration; `pages.answer`, `pages.refuse`, `request.tool_name`; a refusal's path resolved to its dictionary entry (`meridian.dictionary`, `Field.of`); `PageClient.call_tool`; the base template on kit 0.9.0 | nothing | a page or route that changes something and declares no `params=`: give it its record, or `tool=False` with `why=` |
 | 0.17.0 to 0.18.0: the SDK declares contract v13; a plugin files a ticket for a person and reads what it filed (`plugin.file_ticket`, `plugin.filed_tickets`, `TicketKind`, `TicketSubject`, `TicketReference`, `TicketState`, `TicketResolution`) | only the pins move | |
-| 0.18.0 to 0.19.0: the SDK declares contract v14; a custody plugin reports the custodian's activity and operations reads, hears and links it (`plugin.record_activity`, `plugin.list_activities`, `CustodialActivity`, `ActivityKind`, `ActivityRef`, `receive(activity_recorded=)`); each sync status the street keeps (`plugin.list_sync_statuses`, `receive(sync_status_recorded=)`) | only the pins move | |
+| 0.18.0 to 0.19.0: the SDK declares contract v14; a custody plugin reports the custodian's activity and operations reads, hears and links it (`plugin.record_activity`, `plugin.list_activities`, `CustodialActivity`, `ActivityKind`, `ActivityRef`, `receive(activity_recorded=)`); each sync status the street keeps (`plugin.list_sync_statuses`, `receive(sync_status_recorded=)`); a table setting (`meridian.Setting(name, list, columns=...)`, `meridian.Column`) | only the pins move | |
 
 `tests/migrations/` holds the plugins the migrations are recorded for, as
 written and as their migration leaves them, and `make check-migrations` holds

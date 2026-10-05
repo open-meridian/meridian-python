@@ -19,6 +19,17 @@ class AccessLevel(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     ACCESS_LEVEL_WRITE: _ClassVar[AccessLevel]
     ACCESS_LEVEL_ADMIN: _ClassVar[AccessLevel]
 
+class SettingColumnType(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    SETTING_COLUMN_TYPE_UNSPECIFIED: _ClassVar[SettingColumnType]
+    SETTING_COLUMN_TYPE_TEXT: _ClassVar[SettingColumnType]
+    SETTING_COLUMN_TYPE_INTEGER: _ClassVar[SettingColumnType]
+    SETTING_COLUMN_TYPE_DECIMAL: _ClassVar[SettingColumnType]
+    SETTING_COLUMN_TYPE_DATE: _ClassVar[SettingColumnType]
+    SETTING_COLUMN_TYPE_CHOICE: _ClassVar[SettingColumnType]
+    SETTING_COLUMN_TYPE_EXTERNAL_ACCOUNT: _ClassVar[SettingColumnType]
+    SETTING_COLUMN_TYPE_INSTRUMENT: _ClassVar[SettingColumnType]
+
 class SettingType(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
     SETTING_TYPE_UNSPECIFIED: _ClassVar[SettingType]
@@ -26,6 +37,7 @@ class SettingType(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     SETTING_TYPE_INTEGER: _ClassVar[SettingType]
     SETTING_TYPE_BOOLEAN: _ClassVar[SettingType]
     SETTING_TYPE_CHOICE: _ClassVar[SettingType]
+    SETTING_TYPE_TABLE: _ClassVar[SettingType]
 
 class FigureState(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
@@ -99,11 +111,20 @@ ACCESS_LEVEL_UNSPECIFIED: AccessLevel
 ACCESS_LEVEL_READ: AccessLevel
 ACCESS_LEVEL_WRITE: AccessLevel
 ACCESS_LEVEL_ADMIN: AccessLevel
+SETTING_COLUMN_TYPE_UNSPECIFIED: SettingColumnType
+SETTING_COLUMN_TYPE_TEXT: SettingColumnType
+SETTING_COLUMN_TYPE_INTEGER: SettingColumnType
+SETTING_COLUMN_TYPE_DECIMAL: SettingColumnType
+SETTING_COLUMN_TYPE_DATE: SettingColumnType
+SETTING_COLUMN_TYPE_CHOICE: SettingColumnType
+SETTING_COLUMN_TYPE_EXTERNAL_ACCOUNT: SettingColumnType
+SETTING_COLUMN_TYPE_INSTRUMENT: SettingColumnType
 SETTING_TYPE_UNSPECIFIED: SettingType
 SETTING_TYPE_STRING: SettingType
 SETTING_TYPE_INTEGER: SettingType
 SETTING_TYPE_BOOLEAN: SettingType
 SETTING_TYPE_CHOICE: SettingType
+SETTING_TYPE_TABLE: SettingType
 FIGURE_STATE_UNSPECIFIED: FigureState
 FIGURE_STATE_OK: FigureState
 FIGURE_STATE_WARN: FigureState
@@ -237,7 +258,7 @@ class PageDeclaration(_message.Message):
     def __init__(self, path: _Optional[str] = ..., title: _Optional[str] = ..., levels: _Optional[_Iterable[_Union[AccessLevel, str]]] = ...) -> None: ...
 
 class SettingDeclaration(_message.Message):
-    __slots__ = ("name", "type", "required", "secret", "description", "label", "default_value", "unit", "choices", "applies_when", "developer")
+    __slots__ = ("name", "type", "required", "secret", "description", "label", "default_value", "unit", "choices", "applies_when", "developer", "columns", "most_rows")
     NAME_FIELD_NUMBER: _ClassVar[int]
     TYPE_FIELD_NUMBER: _ClassVar[int]
     REQUIRED_FIELD_NUMBER: _ClassVar[int]
@@ -249,6 +270,8 @@ class SettingDeclaration(_message.Message):
     CHOICES_FIELD_NUMBER: _ClassVar[int]
     APPLIES_WHEN_FIELD_NUMBER: _ClassVar[int]
     DEVELOPER_FIELD_NUMBER: _ClassVar[int]
+    COLUMNS_FIELD_NUMBER: _ClassVar[int]
+    MOST_ROWS_FIELD_NUMBER: _ClassVar[int]
     name: str
     type: SettingType
     required: bool
@@ -260,7 +283,25 @@ class SettingDeclaration(_message.Message):
     choices: _containers.RepeatedCompositeFieldContainer[SettingChoice]
     applies_when: SettingCondition
     developer: bool
-    def __init__(self, name: _Optional[str] = ..., type: _Optional[_Union[SettingType, str]] = ..., required: bool = ..., secret: bool = ..., description: _Optional[str] = ..., label: _Optional[str] = ..., default_value: _Optional[str] = ..., unit: _Optional[str] = ..., choices: _Optional[_Iterable[_Union[SettingChoice, _Mapping]]] = ..., applies_when: _Optional[_Union[SettingCondition, _Mapping]] = ..., developer: bool = ...) -> None: ...
+    columns: _containers.RepeatedCompositeFieldContainer[SettingColumn]
+    most_rows: int
+    def __init__(self, name: _Optional[str] = ..., type: _Optional[_Union[SettingType, str]] = ..., required: bool = ..., secret: bool = ..., description: _Optional[str] = ..., label: _Optional[str] = ..., default_value: _Optional[str] = ..., unit: _Optional[str] = ..., choices: _Optional[_Iterable[_Union[SettingChoice, _Mapping]]] = ..., applies_when: _Optional[_Union[SettingCondition, _Mapping]] = ..., developer: bool = ..., columns: _Optional[_Iterable[_Union[SettingColumn, _Mapping]]] = ..., most_rows: _Optional[int] = ...) -> None: ...
+
+class SettingColumn(_message.Message):
+    __slots__ = ("name", "label", "type", "required", "description", "choices")
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    LABEL_FIELD_NUMBER: _ClassVar[int]
+    TYPE_FIELD_NUMBER: _ClassVar[int]
+    REQUIRED_FIELD_NUMBER: _ClassVar[int]
+    DESCRIPTION_FIELD_NUMBER: _ClassVar[int]
+    CHOICES_FIELD_NUMBER: _ClassVar[int]
+    name: str
+    label: str
+    type: SettingColumnType
+    required: bool
+    description: str
+    choices: _containers.RepeatedCompositeFieldContainer[SettingChoice]
+    def __init__(self, name: _Optional[str] = ..., label: _Optional[str] = ..., type: _Optional[_Union[SettingColumnType, str]] = ..., required: bool = ..., description: _Optional[str] = ..., choices: _Optional[_Iterable[_Union[SettingChoice, _Mapping]]] = ...) -> None: ...
 
 class SettingChoice(_message.Message):
     __slots__ = ("value", "label", "description")

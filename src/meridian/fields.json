@@ -8411,6 +8411,11 @@
         {
           "value": "SETTING_TYPE_CHOICE",
           "meaning": "one of the declared choices, held as its value"
+        },
+        {
+          "value": "SETTING_TYPE_TABLE",
+          "meaning": "rows of the declared columns, held as JSON text: a list of rows, each keyed by column name, with each row's changed_by and changed_at",
+          "since": "v14"
         }
       ],
       "empty": "unspecified is text",
@@ -8420,6 +8425,37 @@
       "filled": "as-reported",
       "filled_by": "plugin",
       "since": "v2",
+      "changes": [
+        {
+          "version": "v14",
+          "kind": "widened",
+          "what": "a table: rows of typed columns, entered in the dashboard's Settings form as an editable table",
+          "was": {
+            "allowed": [
+              {
+                "value": "SETTING_TYPE_UNSPECIFIED",
+                "meaning": "not said; taken as text"
+              },
+              {
+                "value": "SETTING_TYPE_STRING",
+                "meaning": "text"
+              },
+              {
+                "value": "SETTING_TYPE_INTEGER",
+                "meaning": "a whole number"
+              },
+              {
+                "value": "SETTING_TYPE_BOOLEAN",
+                "meaning": "true or false"
+              },
+              {
+                "value": "SETTING_TYPE_CHOICE",
+                "meaning": "one of the declared choices, held as its value"
+              }
+            ]
+          }
+        }
+      ],
       "stability": "stable",
       "store": "sidecar"
     },
@@ -8577,6 +8613,151 @@
       "filled_by": "plugin",
       "since": "v2",
       "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.SettingDeclaration.columns",
+      "type": "repeated message SettingColumn",
+      "empty": "empty unless the type is a table",
+      "intent": "declares a table setting's columns, in the order shown",
+      "meaning": "each column's name, label, type, whether a row must fill it, and its choices; every cell is checked against its column",
+      "not_meaning": "the rows, which an admin of the plugin enters",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v14",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.SettingDeclaration.most_rows",
+      "type": "integer",
+      "unit": "rows",
+      "bounds": {
+        "range": {
+          "least": "0",
+          "most": "500"
+        }
+      },
+      "empty": "0 for no more than 500, the most any table holds",
+      "intent": "bounds how many rows a table setting holds",
+      "meaning": "the most rows the form takes and the conductor stores",
+      "not_meaning": "how many rows a page shows at once",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v14",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.SettingColumn.name",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names a column for the plugin's code",
+      "meaning": "the key each row's cell is held under; never changed_by or changed_at, which the conductor stamps",
+      "not_meaning": "what a person reads, which label is",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v14",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.SettingColumn.label",
+      "type": "text",
+      "empty": "empty shows the name",
+      "intent": "names the column for a person",
+      "meaning": "the column's heading in the form's table",
+      "not_meaning": "anything parsed",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v14",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.SettingColumn.type",
+      "type": "enum SettingColumnType",
+      "allowed": [
+        {
+          "value": "SETTING_COLUMN_TYPE_UNSPECIFIED",
+          "meaning": "not said; taken as text"
+        },
+        {
+          "value": "SETTING_COLUMN_TYPE_TEXT",
+          "meaning": "text"
+        },
+        {
+          "value": "SETTING_COLUMN_TYPE_INTEGER",
+          "meaning": "a whole number"
+        },
+        {
+          "value": "SETTING_COLUMN_TYPE_DECIMAL",
+          "meaning": "an exact decimal, written as text, at most 18 places"
+        },
+        {
+          "value": "SETTING_COLUMN_TYPE_DATE",
+          "meaning": "a date, YYYY-MM-DD"
+        },
+        {
+          "value": "SETTING_COLUMN_TYPE_CHOICE",
+          "meaning": "one of the column's choices, held as its value"
+        },
+        {
+          "value": "SETTING_COLUMN_TYPE_EXTERNAL_ACCOUNT",
+          "meaning": "an external account this plugin reported, by its identifier"
+        },
+        {
+          "value": "SETTING_COLUMN_TYPE_INSTRUMENT",
+          "meaning": "a deployment instrument record's ID, picked by search and checked to exist; never a symbol"
+        }
+      ],
+      "empty": "unspecified is text",
+      "intent": "says what kind of value a column's cells hold",
+      "meaning": "how the form takes a cell and the conductor checks it",
+      "not_meaning": "how it travels: every cell is text in the row's JSON",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v14",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.SettingColumn.required",
+      "type": "boolean",
+      "empty": "false: a row may leave the cell empty",
+      "intent": "says whether every row fills the column",
+      "meaning": "true: a row with the cell empty is refused, naming the cell",
+      "not_meaning": "whether the table needs any row, which the setting's own required says",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v14",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.SettingColumn.description",
+      "type": "text",
+      "empty": "empty for none",
+      "intent": "explains the column",
+      "meaning": "words shown beside its heading",
+      "not_meaning": "anything parsed",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v14",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.SettingColumn.choices",
+      "type": "repeated message SettingChoice",
+      "empty": "empty unless the column is a choice",
+      "intent": "lists a choice column's options, in the order shown",
+      "meaning": "each option's value, label and description; a cell not among them is refused",
+      "not_meaning": "values of any other column type",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v14",
+      "stability": "preview",
       "store": "sidecar"
     },
     {
@@ -9020,11 +9201,18 @@
       "type": "text",
       "empty": "never empty: a setting with no value is not delivered",
       "intent": "carries a setting's value",
-      "meaning": "as text, whatever the declared type, parsed by the SDK against the declaration; a secret's value is delivered here and nowhere else",
+      "meaning": "as text, whatever the declared type, parsed by the SDK against the declaration; a table's is JSON, a list of rows keyed by column name, each with changed_by and changed_at, which the conductor stamps on a row added or changed; a secret's value is delivered here and nowhere else",
       "not_meaning": "a typed value on the wire",
       "filled": "entered",
       "filled_by": "dashboard",
       "since": "v2",
+      "changes": [
+        {
+          "version": "v14",
+          "kind": "clarified",
+          "what": "a table setting's value is JSON rows, each stamped with who changed it and when"
+        }
+      ],
       "stability": "stable",
       "store": "sidecar"
     },
@@ -13272,7 +13460,7 @@
       "type": "message AsReported",
       "empty": "unset whenever the instrument resolved, or the activity concerns none",
       "intent": "carries the custodian's code for an instrument that did not resolve",
-      "meaning": "a plan's own fund code no person has linked yet, as the custodian sent it, for a person to link on the plugin's page",
+      "meaning": "a plan's own fund code no person has linked yet, as the custodian sent it, for a person to link in the plugin's settings (W6.11)",
       "not_meaning": "an instrument any reader may act on: nothing past the plugin interprets it",
       "filled": "as-reported",
       "filled_by": "custody",

@@ -812,7 +812,7 @@
         },
         {
           "name": "activity-plan-code-linked-by-a-person",
-          "given": "the venue names a plan's own fund code for an activity, and a person linked the code to an instrument on the plugin's page",
+          "given": "the venue names a plan's own fund code for an activity, and a person linked the code to an instrument in the plugin's settings",
           "since": "v14",
           "expect": [
             {

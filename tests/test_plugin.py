@@ -159,8 +159,77 @@ async def test_a_page_and_settings_are_declared_at_registration(
 
 
 def test_a_setting_of_a_kind_the_contract_does_not_carry_is_refused() -> None:
-    with pytest.raises(TypeError, match="str, int or bool"):
+    with pytest.raises(TypeError, match="str, int, bool or list"):
         Setting("ratio", kind=float)._declared()
+
+
+PLAN_CODES = Setting(
+    "plan_code_links",
+    list,
+    label="Plan-code links",
+    columns=(
+        meridian.Column("account", "external_account", label="Account", required=True),
+        meridian.Column("code", label="Plan code", required=True),
+        meridian.Column("instrument", "instrument", label="Instrument", required=True),
+    ),
+    most_rows=200,
+)
+
+
+def test_a_table_setting_is_declared_with_its_typed_columns() -> None:
+    """Contract v14: rows of typed columns, which the dashboard's Settings
+    form shows as an editable table, and the plugin only reads."""
+    declared = PLAN_CODES._declared()
+    assert declared.type == sidecar_pb2.SETTING_TYPE_TABLE
+    assert declared.most_rows == 200
+    assert [(c.name, c.type, c.required) for c in declared.columns] == [
+        ("account", sidecar_pb2.SETTING_COLUMN_TYPE_EXTERNAL_ACCOUNT, True),
+        ("code", sidecar_pb2.SETTING_COLUMN_TYPE_TEXT, True),
+        ("instrument", sidecar_pb2.SETTING_COLUMN_TYPE_INSTRUMENT, True),
+    ]
+    with pytest.raises(ValueError, match="one of text"):
+        Setting("t", list, columns=(meridian.Column("a", "symbol"),))._declared()
+    with pytest.raises(ValueError, match="conductor stamps"):
+        Setting("t", list, columns=(meridian.Column("changed_by"),))._declared()
+    with pytest.raises(ValueError, match="choice with no options"):
+        Setting("t", list, columns=(meridian.Column("a", "choice"),))._declared()
+    with pytest.raises(TypeError, match="only a table has columns"):
+        Setting("t", columns=(meridian.Column("a"),))._declared()
+    with pytest.raises(TypeError, match="only a table has columns"):
+        Setting("t", list)._declared()
+    with pytest.raises(ValueError, match="never secret"):
+        Setting("t", list, secret=True, columns=(meridian.Column("a"),))._declared()
+
+
+async def test_a_table_setting_arrives_as_its_rows_with_who_changed_each(
+    sidecar: tuple[FakeSidecar, str],
+) -> None:
+    service, address = sidecar
+    rows = (
+        '[{"account":"st-1","code":"OQKR","instrument":"INS-7",'
+        '"changed_by":"local|ada","changed_at":"2026-10-05T12:00:00.000000Z"}]'
+    )
+    service.settings = [
+        sidecar_pb2.SettingsDelivery(
+            values=[sidecar_pb2.SettingValue(name="plan_code_links", value=rows)]
+        )
+    ]
+    plugin = await meridian.connect(address, heartbeat=False, settings=[PLAN_CODES])
+    try:
+        (seen,) = [settings async for settings in plugin.settings()]
+    finally:
+        await plugin.leave()
+    assert seen.values["plan_code_links"] == [
+        {
+            "account": "st-1",
+            "code": "OQKR",
+            "instrument": "INS-7",
+            "changed_by": "local|ada",
+            "changed_at": "2026-10-05T12:00:00.000000Z",
+        }
+    ]
+    with pytest.raises(ValueError, match="not a table's JSON"):
+        PLAN_CODES._parsed("nonsense")
 
 
 ADMIN = sidecar_pb2.ACCESS_LEVEL_ADMIN

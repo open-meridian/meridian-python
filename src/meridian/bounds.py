@@ -180,6 +180,10 @@ STORAGE_DECLARATION_RETENTION_DAYS_RANGE = Range(least=1, most=36500, capped=Fal
 """meridian.v1.StorageDeclaration.retention_days: says how long the plugin
 keeps a raw record"""
 
+SETTING_DECLARATION_MOST_ROWS_RANGE = Range(least=0, most=500, capped=False)
+"""meridian.v1.SettingDeclaration.most_rows: bounds how many rows a table
+setting holds"""
+
 HEARTBEAT_REQUEST_FIGURES_COUNT = Count(least=0, most=8)
 """meridian.v1.HeartbeatRequest.figures: reports the plugin's figures as they
 stand, in the order to draw them"""

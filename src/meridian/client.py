@@ -23,6 +23,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import contextlib
+import json
 import os
 import warnings
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
@@ -130,7 +131,23 @@ _SETTING_TYPES = {
     str: sidecar_pb2.SETTING_TYPE_STRING,
     int: sidecar_pb2.SETTING_TYPE_INTEGER,
     bool: sidecar_pb2.SETTING_TYPE_BOOLEAN,
+    list: sidecar_pb2.SETTING_TYPE_TABLE,
 }
+
+#: A table setting's column kinds, as `Column` takes them (contract v14).
+_COLUMN_KINDS = {
+    "text": sidecar_pb2.SETTING_COLUMN_TYPE_TEXT,
+    "integer": sidecar_pb2.SETTING_COLUMN_TYPE_INTEGER,
+    "decimal": sidecar_pb2.SETTING_COLUMN_TYPE_DECIMAL,
+    "date": sidecar_pb2.SETTING_COLUMN_TYPE_DATE,
+    "choice": sidecar_pb2.SETTING_COLUMN_TYPE_CHOICE,
+    "external_account": sidecar_pb2.SETTING_COLUMN_TYPE_EXTERNAL_ACCOUNT,
+    "instrument": sidecar_pb2.SETTING_COLUMN_TYPE_INSTRUMENT,
+}
+#: What the conductor stamps on each row of a table setting.
+_STAMPS = ("changed_by", "changed_at")
+#: The most rows any table setting holds.
+_MOST_ROWS = 500
 
 _Answer = TypeVar("_Answer")
 
@@ -312,10 +329,61 @@ class AppliesWhen:
 
 
 @dataclass(frozen=True)
+class Column:
+    """One column of a table setting (contract v14): its `name`, the key each
+    row's cell is held under, and its `kind` -- "text", "integer",
+    "decimal", "date", "choice" (one of `choices`), "external_account" (one
+    this plugin reported) or "instrument" (a deployment instrument record's
+    ID, picked by search, never a symbol). A `required` column is filled on
+    every row."""
+
+    name: str
+    kind: str = "text"
+    label: str = ""
+    required: bool = False
+    description: str = ""
+    choices: tuple[Choice, ...] = ()
+
+    def _declared(self, setting: str) -> sidecar_pb2.SettingColumn:
+        if self.kind not in _COLUMN_KINDS:
+            raise ValueError(
+                f"setting {setting}'s column {self.name} is a {self.kind!r}; one of "
+                f"{', '.join(_COLUMN_KINDS)}"
+            )
+        if self.name in _STAMPS:
+            raise ValueError(
+                f"setting {setting}'s column is named {self.name}, which the conductor stamps"
+            )
+        if self.kind == "choice" and not self.choices:
+            raise ValueError(
+                f"setting {setting}'s column {self.name} is a choice with no options"
+            )
+        return sidecar_pb2.SettingColumn(
+            name=self.name,
+            label=self.label,
+            type=_COLUMN_KINDS[self.kind],
+            required=self.required,
+            description=self.description,
+            choices=[
+                sidecar_pb2.SettingChoice(
+                    value=c.value, label=c.label, description=c.description
+                )
+                for c in self.choices
+            ],
+        )
+
+
+@dataclass(frozen=True)
 class Setting:
     """One setting the plugin needs, declared at registration (W4.7).
 
     `kind` is str, int or bool; a str with `choices` is a choice, one of them.
+    `list` with `columns` is a table (contract v14): rows an admin of the
+    plugin enters in the dashboard's Settings form, as an editable table, and
+    which the plugin only reads -- in `Settings.values`, a list of rows, each
+    a dict of its cells by column name, every cell text, with `changed_by`
+    and `changed_at`, which the conductor stamps on a row added or changed.
+    `most_rows` bounds it (0: 500).
     A secret is set through the dashboard and never read back, displayed,
     logged, reported or bundled; the plugin receives it in `Settings` and
     nowhere else.
@@ -338,10 +406,25 @@ class Setting:
     choices: tuple[Choice, ...] = ()
     applies_when: AppliesWhen | None = None
     developer: bool = False
+    columns: tuple[Column, ...] = ()
+    most_rows: int = 0
 
     def _declared(self) -> sidecar_pb2.SettingDeclaration:
         if self.kind not in _SETTING_TYPES:
-            raise TypeError(f"setting {self.name} is a {self.kind.__name__}; str, int or bool")
+            raise TypeError(
+                f"setting {self.name} is a {self.kind.__name__}; str, int, bool or list"
+            )
+        if (self.kind is list) != bool(self.columns):
+            raise TypeError(
+                f"setting {self.name}: a table's kind is list, and only a table has columns"
+            )
+        if self.kind is list:
+            if self.secret or self.default is not None or self.choices:
+                raise ValueError(f"setting {self.name} is a table: never secret, no default")
+            if len({c.name for c in self.columns}) != len(self.columns):
+                raise ValueError(f"setting {self.name} names a column twice")
+            if not 0 <= self.most_rows <= _MOST_ROWS:
+                raise ValueError(f"setting {self.name}'s most_rows is 0 to {_MOST_ROWS}")
         if self.choices and self.kind is not str:
             raise TypeError(f"setting {self.name} has choices, so its kind is str")
         if self.secret and self.default is not None:
@@ -376,9 +459,22 @@ class Setting:
                 )
             ),
             developer=self.developer,
+            columns=[column._declared(self.name) for column in self.columns],
+            most_rows=self.most_rows,
         )
 
-    def _parsed(self, text: str) -> str | int | bool:
+    def _parsed(self, text: str) -> str | int | bool | list[dict[str, str]]:
+        if self.kind is list:
+            try:
+                rows = json.loads(text)
+            except ValueError:
+                raise ValueError(f"setting {self.name} is not a table's JSON") from None
+            if not isinstance(rows, list) or not all(
+                isinstance(row, dict) and all(isinstance(v, str) for v in row.values())
+                for row in rows
+            ):
+                raise ValueError(f"setting {self.name} is not a list of rows of text")
+            return [dict(row) for row in rows]
         if self.kind is bool:
             if text.lower() in ("true", "yes", "1", "on"):
                 return True
@@ -405,7 +501,7 @@ class Settings:
     declared, and the required ones it holds nothing for yet. While any is
     missing the sidecar reports the plugin unhealthy, naming it."""
 
-    values: dict[str, str | int | bool]
+    values: dict[str, str | int | bool | list[dict[str, str]]]
     missing_required: tuple[str, ...] = ()
 
 
@@ -757,7 +853,7 @@ class Plugin(Operations):
         """
         self._check_open()
         by_name = {setting.name: setting for setting in self._declared}
-        defaults = {
+        defaults: dict[str, str | int | bool | list[dict[str, str]]] = {
             setting.name: setting.default
             for setting in self._declared
             if setting.default is not None
