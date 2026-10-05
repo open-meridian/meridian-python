@@ -150,6 +150,10 @@ and answers"""
 TOOL_DECLARATION_PATH_LENGTH = Length(least=1, most=512)
 """meridian.v1.ToolDeclaration.path: says where the tool's route is served"""
 
+TOOL_DECLARATION_ROLES_COUNT = Count(least=0, most=13)
+"""meridian.v1.ToolDeclaration.roles: says which of the plugin's roles the tool
+serves"""
+
 TOOL_DECLARATION_INPUT_SCHEMA_LENGTH = Length(least=2, most=65536)
 """meridian.v1.ToolDeclaration.input_schema: describes the route's one typed
 record of inputs"""
@@ -180,9 +184,17 @@ STORAGE_DECLARATION_RETENTION_DAYS_RANGE = Range(least=1, most=36500, capped=Fal
 """meridian.v1.StorageDeclaration.retention_days: says how long the plugin
 keeps a raw record"""
 
+PAGE_DECLARATION_ROLES_COUNT = Count(least=0, most=13)
+"""meridian.v1.PageDeclaration.roles: says which of the plugin's roles the page
+serves"""
+
 SETTING_DECLARATION_MOST_ROWS_RANGE = Range(least=0, most=500, capped=False)
 """meridian.v1.SettingDeclaration.most_rows: bounds how many rows a table
 setting holds"""
+
+SETTING_DECLARATION_ROLES_COUNT = Count(least=0, most=13)
+"""meridian.v1.SettingDeclaration.roles: says which of the plugin's roles the
+setting serves"""
 
 HEARTBEAT_REQUEST_FIGURES_COUNT = Count(least=0, most=8)
 """meridian.v1.HeartbeatRequest.figures: reports the plugin's figures as they
@@ -207,6 +219,26 @@ PLUGIN_FIGURE_TEXT_LENGTH = Length(least=0, most=40)
 
 PLUGIN_FIGURE_WHY_LENGTH = Length(least=0, most=200)
 """meridian.v1.PluginFigure.why: explains the figure in a note beside the tile"""
+
+CALLER_CLAIMS_ROLES_COUNT = Count(least=0, most=13)
+"""meridian.v1.CallerClaims.roles: carries the person's level and accounts on
+each of the plugin's roles within the session's button"""
+
+ROLE_ACCESS_READ_POSITIONS_COUNT = Count(least=0, most=10000)
+"""meridian.v1.RoleAccess.read_positions: names the accounts this role reaches
+to read, without repeating them"""
+
+ROLE_ACCESS_WRITE_POSITIONS_COUNT = Count(least=0, most=10000)
+"""meridian.v1.RoleAccess.write_positions: names the accounts this role reaches
+to write, without repeating them"""
+
+USER_GROUP_ACCESS_ROLES_COUNT = Count(least=0, most=13)
+"""meridian.v1.UserGroupAccess.roles: breaks the group's access to the plugin
+down by role"""
+
+PERSON_ACCESS_ROLES_COUNT = Count(least=0, most=13)
+"""meridian.v1.PersonAccess.roles: breaks the person's access to the plugin
+down by role"""
 
 FILE_TICKET_REQUEST_TITLE_LENGTH = Length(least=1, most=120)
 """meridian.v1.FileTicketRequest.title: says in a line what is wrong"""

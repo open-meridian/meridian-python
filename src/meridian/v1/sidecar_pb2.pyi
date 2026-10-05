@@ -188,7 +188,7 @@ class RegisterRequest(_message.Message):
     def __init__(self, schema_version: _Optional[str] = ..., interface: _Optional[_Union[InterfaceDeclaration, _Mapping]] = ..., settings: _Optional[_Iterable[_Union[SettingDeclaration, _Mapping]]] = ..., reads_external_accounts: bool = ..., declaration: _Optional[_Union[PluginDeclaration, _Mapping]] = ..., tools: _Optional[_Iterable[_Union[ToolDeclaration, _Mapping]]] = ...) -> None: ...
 
 class ToolDeclaration(_message.Message):
-    __slots__ = ("name", "title", "description", "method", "path", "levels", "reads", "input_schema", "output_schema")
+    __slots__ = ("name", "title", "description", "method", "path", "levels", "reads", "input_schema", "output_schema", "roles")
     NAME_FIELD_NUMBER: _ClassVar[int]
     TITLE_FIELD_NUMBER: _ClassVar[int]
     DESCRIPTION_FIELD_NUMBER: _ClassVar[int]
@@ -198,6 +198,7 @@ class ToolDeclaration(_message.Message):
     READS_FIELD_NUMBER: _ClassVar[int]
     INPUT_SCHEMA_FIELD_NUMBER: _ClassVar[int]
     OUTPUT_SCHEMA_FIELD_NUMBER: _ClassVar[int]
+    ROLES_FIELD_NUMBER: _ClassVar[int]
     name: str
     title: str
     description: str
@@ -207,7 +208,8 @@ class ToolDeclaration(_message.Message):
     reads: bool
     input_schema: str
     output_schema: str
-    def __init__(self, name: _Optional[str] = ..., title: _Optional[str] = ..., description: _Optional[str] = ..., method: _Optional[str] = ..., path: _Optional[str] = ..., levels: _Optional[_Iterable[_Union[AccessLevel, str]]] = ..., reads: bool = ..., input_schema: _Optional[str] = ..., output_schema: _Optional[str] = ...) -> None: ...
+    roles: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, name: _Optional[str] = ..., title: _Optional[str] = ..., description: _Optional[str] = ..., method: _Optional[str] = ..., path: _Optional[str] = ..., levels: _Optional[_Iterable[_Union[AccessLevel, str]]] = ..., reads: bool = ..., input_schema: _Optional[str] = ..., output_schema: _Optional[str] = ..., roles: _Optional[_Iterable[str]] = ...) -> None: ...
 
 class PluginDeclaration(_message.Message):
     __slots__ = ("secret_settings", "not_carried", "storage")
@@ -248,17 +250,19 @@ class InterfaceDeclaration(_message.Message):
     def __init__(self, loopback_port: _Optional[int] = ..., title: _Optional[str] = ..., pages: _Optional[_Iterable[_Union[PageDeclaration, _Mapping]]] = ...) -> None: ...
 
 class PageDeclaration(_message.Message):
-    __slots__ = ("path", "title", "levels")
+    __slots__ = ("path", "title", "levels", "roles")
     PATH_FIELD_NUMBER: _ClassVar[int]
     TITLE_FIELD_NUMBER: _ClassVar[int]
     LEVELS_FIELD_NUMBER: _ClassVar[int]
+    ROLES_FIELD_NUMBER: _ClassVar[int]
     path: str
     title: str
     levels: _containers.RepeatedScalarFieldContainer[AccessLevel]
-    def __init__(self, path: _Optional[str] = ..., title: _Optional[str] = ..., levels: _Optional[_Iterable[_Union[AccessLevel, str]]] = ...) -> None: ...
+    roles: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, path: _Optional[str] = ..., title: _Optional[str] = ..., levels: _Optional[_Iterable[_Union[AccessLevel, str]]] = ..., roles: _Optional[_Iterable[str]] = ...) -> None: ...
 
 class SettingDeclaration(_message.Message):
-    __slots__ = ("name", "type", "required", "secret", "description", "label", "default_value", "unit", "choices", "applies_when", "developer", "columns", "most_rows")
+    __slots__ = ("name", "type", "required", "secret", "description", "label", "default_value", "unit", "choices", "applies_when", "developer", "columns", "most_rows", "roles")
     NAME_FIELD_NUMBER: _ClassVar[int]
     TYPE_FIELD_NUMBER: _ClassVar[int]
     REQUIRED_FIELD_NUMBER: _ClassVar[int]
@@ -272,6 +276,7 @@ class SettingDeclaration(_message.Message):
     DEVELOPER_FIELD_NUMBER: _ClassVar[int]
     COLUMNS_FIELD_NUMBER: _ClassVar[int]
     MOST_ROWS_FIELD_NUMBER: _ClassVar[int]
+    ROLES_FIELD_NUMBER: _ClassVar[int]
     name: str
     type: SettingType
     required: bool
@@ -285,7 +290,8 @@ class SettingDeclaration(_message.Message):
     developer: bool
     columns: _containers.RepeatedCompositeFieldContainer[SettingColumn]
     most_rows: int
-    def __init__(self, name: _Optional[str] = ..., type: _Optional[_Union[SettingType, str]] = ..., required: bool = ..., secret: bool = ..., description: _Optional[str] = ..., label: _Optional[str] = ..., default_value: _Optional[str] = ..., unit: _Optional[str] = ..., choices: _Optional[_Iterable[_Union[SettingChoice, _Mapping]]] = ..., applies_when: _Optional[_Union[SettingCondition, _Mapping]] = ..., developer: bool = ..., columns: _Optional[_Iterable[_Union[SettingColumn, _Mapping]]] = ..., most_rows: _Optional[int] = ...) -> None: ...
+    roles: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, name: _Optional[str] = ..., type: _Optional[_Union[SettingType, str]] = ..., required: bool = ..., secret: bool = ..., description: _Optional[str] = ..., label: _Optional[str] = ..., default_value: _Optional[str] = ..., unit: _Optional[str] = ..., choices: _Optional[_Iterable[_Union[SettingChoice, _Mapping]]] = ..., applies_when: _Optional[_Union[SettingCondition, _Mapping]] = ..., developer: bool = ..., columns: _Optional[_Iterable[_Union[SettingColumn, _Mapping]]] = ..., most_rows: _Optional[int] = ..., roles: _Optional[_Iterable[str]] = ...) -> None: ...
 
 class SettingColumn(_message.Message):
     __slots__ = ("name", "label", "type", "required", "description", "choices")
@@ -478,7 +484,7 @@ class CallerAssertion(_message.Message):
     def __init__(self, claims: _Optional[bytes] = ..., signature: _Optional[bytes] = ..., key_id: _Optional[str] = ...) -> None: ...
 
 class CallerClaims(_message.Message):
-    __slots__ = ("subject", "display_name", "audience_instance_id", "level", "read_account_ids", "write_account_ids", "issued_at_ns", "expires_at_ns", "assertion_id", "deployment_admin", "delegation_id", "client_name", "tool_name")
+    __slots__ = ("subject", "display_name", "audience_instance_id", "level", "read_account_ids", "write_account_ids", "issued_at_ns", "expires_at_ns", "assertion_id", "deployment_admin", "delegation_id", "client_name", "tool_name", "roles")
     SUBJECT_FIELD_NUMBER: _ClassVar[int]
     DISPLAY_NAME_FIELD_NUMBER: _ClassVar[int]
     AUDIENCE_INSTANCE_ID_FIELD_NUMBER: _ClassVar[int]
@@ -492,6 +498,7 @@ class CallerClaims(_message.Message):
     DELEGATION_ID_FIELD_NUMBER: _ClassVar[int]
     CLIENT_NAME_FIELD_NUMBER: _ClassVar[int]
     TOOL_NAME_FIELD_NUMBER: _ClassVar[int]
+    ROLES_FIELD_NUMBER: _ClassVar[int]
     subject: str
     display_name: str
     audience_instance_id: str
@@ -505,7 +512,20 @@ class CallerClaims(_message.Message):
     delegation_id: str
     client_name: str
     tool_name: str
-    def __init__(self, subject: _Optional[str] = ..., display_name: _Optional[str] = ..., audience_instance_id: _Optional[str] = ..., level: _Optional[_Union[AccessLevel, str]] = ..., read_account_ids: _Optional[_Iterable[str]] = ..., write_account_ids: _Optional[_Iterable[str]] = ..., issued_at_ns: _Optional[int] = ..., expires_at_ns: _Optional[int] = ..., assertion_id: _Optional[str] = ..., deployment_admin: bool = ..., delegation_id: _Optional[str] = ..., client_name: _Optional[str] = ..., tool_name: _Optional[str] = ...) -> None: ...
+    roles: _containers.RepeatedCompositeFieldContainer[RoleAccess]
+    def __init__(self, subject: _Optional[str] = ..., display_name: _Optional[str] = ..., audience_instance_id: _Optional[str] = ..., level: _Optional[_Union[AccessLevel, str]] = ..., read_account_ids: _Optional[_Iterable[str]] = ..., write_account_ids: _Optional[_Iterable[str]] = ..., issued_at_ns: _Optional[int] = ..., expires_at_ns: _Optional[int] = ..., assertion_id: _Optional[str] = ..., deployment_admin: bool = ..., delegation_id: _Optional[str] = ..., client_name: _Optional[str] = ..., tool_name: _Optional[str] = ..., roles: _Optional[_Iterable[_Union[RoleAccess, _Mapping]]] = ...) -> None: ...
+
+class RoleAccess(_message.Message):
+    __slots__ = ("role", "level", "read_positions", "write_positions")
+    ROLE_FIELD_NUMBER: _ClassVar[int]
+    LEVEL_FIELD_NUMBER: _ClassVar[int]
+    READ_POSITIONS_FIELD_NUMBER: _ClassVar[int]
+    WRITE_POSITIONS_FIELD_NUMBER: _ClassVar[int]
+    role: str
+    level: AccessLevel
+    read_positions: _containers.RepeatedScalarFieldContainer[int]
+    write_positions: _containers.RepeatedScalarFieldContainer[int]
+    def __init__(self, role: _Optional[str] = ..., level: _Optional[_Union[AccessLevel, str]] = ..., read_positions: _Optional[_Iterable[int]] = ..., write_positions: _Optional[_Iterable[int]] = ...) -> None: ...
 
 class PluginAccessRequest(_message.Message):
     __slots__ = ()
@@ -520,32 +540,36 @@ class PluginAccessReply(_message.Message):
     def __init__(self, user_groups: _Optional[_Iterable[_Union[UserGroupAccess, _Mapping]]] = ..., people: _Optional[_Iterable[_Union[PersonAccess, _Mapping]]] = ...) -> None: ...
 
 class UserGroupAccess(_message.Message):
-    __slots__ = ("user_group_id", "name", "read_account_ids", "write_account_ids")
+    __slots__ = ("user_group_id", "name", "read_account_ids", "write_account_ids", "roles")
     USER_GROUP_ID_FIELD_NUMBER: _ClassVar[int]
     NAME_FIELD_NUMBER: _ClassVar[int]
     READ_ACCOUNT_IDS_FIELD_NUMBER: _ClassVar[int]
     WRITE_ACCOUNT_IDS_FIELD_NUMBER: _ClassVar[int]
+    ROLES_FIELD_NUMBER: _ClassVar[int]
     user_group_id: str
     name: str
     read_account_ids: _containers.RepeatedScalarFieldContainer[str]
     write_account_ids: _containers.RepeatedScalarFieldContainer[str]
-    def __init__(self, user_group_id: _Optional[str] = ..., name: _Optional[str] = ..., read_account_ids: _Optional[_Iterable[str]] = ..., write_account_ids: _Optional[_Iterable[str]] = ...) -> None: ...
+    roles: _containers.RepeatedCompositeFieldContainer[RoleAccess]
+    def __init__(self, user_group_id: _Optional[str] = ..., name: _Optional[str] = ..., read_account_ids: _Optional[_Iterable[str]] = ..., write_account_ids: _Optional[_Iterable[str]] = ..., roles: _Optional[_Iterable[_Union[RoleAccess, _Mapping]]] = ...) -> None: ...
 
 class PersonAccess(_message.Message):
-    __slots__ = ("subject", "display_name", "user_group_ids", "last_signed_in_at_ns", "read_account_ids", "write_account_ids")
+    __slots__ = ("subject", "display_name", "user_group_ids", "last_signed_in_at_ns", "read_account_ids", "write_account_ids", "roles")
     SUBJECT_FIELD_NUMBER: _ClassVar[int]
     DISPLAY_NAME_FIELD_NUMBER: _ClassVar[int]
     USER_GROUP_IDS_FIELD_NUMBER: _ClassVar[int]
     LAST_SIGNED_IN_AT_NS_FIELD_NUMBER: _ClassVar[int]
     READ_ACCOUNT_IDS_FIELD_NUMBER: _ClassVar[int]
     WRITE_ACCOUNT_IDS_FIELD_NUMBER: _ClassVar[int]
+    ROLES_FIELD_NUMBER: _ClassVar[int]
     subject: str
     display_name: str
     user_group_ids: _containers.RepeatedScalarFieldContainer[str]
     last_signed_in_at_ns: int
     read_account_ids: _containers.RepeatedScalarFieldContainer[str]
     write_account_ids: _containers.RepeatedScalarFieldContainer[str]
-    def __init__(self, subject: _Optional[str] = ..., display_name: _Optional[str] = ..., user_group_ids: _Optional[_Iterable[str]] = ..., last_signed_in_at_ns: _Optional[int] = ..., read_account_ids: _Optional[_Iterable[str]] = ..., write_account_ids: _Optional[_Iterable[str]] = ...) -> None: ...
+    roles: _containers.RepeatedCompositeFieldContainer[RoleAccess]
+    def __init__(self, subject: _Optional[str] = ..., display_name: _Optional[str] = ..., user_group_ids: _Optional[_Iterable[str]] = ..., last_signed_in_at_ns: _Optional[int] = ..., read_account_ids: _Optional[_Iterable[str]] = ..., write_account_ids: _Optional[_Iterable[str]] = ..., roles: _Optional[_Iterable[_Union[RoleAccess, _Mapping]]] = ...) -> None: ...
 
 class WatchAccountScopeRequest(_message.Message):
     __slots__ = ()

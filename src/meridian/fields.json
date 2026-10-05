@@ -5180,6 +5180,58 @@
       "store": "conductor"
     },
     {
+      "name": "meridian.v1.AccessEntry.role",
+      "type": "text",
+      "empty": "empty only on an entry for a plugin holding no role; refused empty on a plugin holding one once the one-time rewrite has run",
+      "intent": "names the role of the plugin the entry grants a level on",
+      "meaning": "a role from the deployment's fixed list that the plugin holds, as its sidecar last reported; an entry naming a role the plugin no longer holds holds nothing and is flagged",
+      "not_meaning": "a part the plugin names for itself, or a grant on the bus, which the plugin's roles' generated grants decide",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v15",
+      "stability": "stable",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.AccessRecords.known_plugins",
+      "type": "repeated message KnownPluginRoles",
+      "empty": "empty before any sidecar has reported, and from a conductor before v15",
+      "intent": "gives the dashboard each known plugin's roles, so it folds grants per role and mints each role's entry in the claims",
+      "meaning": "every plugin a sidecar has reported, with the roles it was launched with as its sidecar last reported them, launched through the dashboard or installed by the chart, running or stopped",
+      "not_meaning": "who holds those roles, which the access groups say",
+      "filled": "decided",
+      "filled_by": "conductor",
+      "since": "v15",
+      "stability": "stable",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.KnownPluginRoles.plugin_instance_id",
+      "type": "identifier instance",
+      "empty": "never empty",
+      "intent": "names the plugin instance",
+      "meaning": "the instance as its sidecar reported it",
+      "not_meaning": "a version or an image",
+      "filled": "decided",
+      "filled_by": "conductor",
+      "since": "v15",
+      "stability": "stable",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.KnownPluginRoles.roles",
+      "type": "repeated text",
+      "empty": "empty for a plugin holding no role",
+      "intent": "lists the roles the plugin was launched with",
+      "meaning": "roles from the deployment's fixed list, as the plugin's sidecar last reported them",
+      "not_meaning": "the roles its metadata asked for, where a launch approved otherwise; or anything a person holds",
+      "filled": "decided",
+      "filled_by": "conductor",
+      "since": "v15",
+      "stability": "stable",
+      "store": "conductor"
+    },
+    {
       "name": "meridian.v1.Ticket.filed_by",
       "type": "message TicketAuthor",
       "empty": "never unset",
@@ -8073,6 +8125,25 @@
       "store": "sidecar"
     },
     {
+      "name": "meridian.v1.ToolDeclaration.roles",
+      "type": "repeated text",
+      "bounds": {
+        "count": [
+          0,
+          13
+        ]
+      },
+      "empty": "empty on a plugin holding one role, where it serves that role, and on a plugin holding none; refused empty from a plugin built at v15 or later holding several",
+      "intent": "says which of the plugin's roles the tool serves",
+      "meaning": "roles from the deployment's fixed list that the plugin was launched with, a derived tool taking its route's; listed to a person holding one of its levels on one of these roles, and a call opens at the highest such level the delegation covers",
+      "not_meaning": "a grant: the sidecar admits what a call sends by the role whose generated grants include it, whatever the tool names",
+      "filled": "derived",
+      "filled_by": "plugin",
+      "since": "v15",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
       "name": "meridian.v1.ToolDeclaration.reads",
       "type": "boolean",
       "empty": "false is an act",
@@ -8376,6 +8447,25 @@
       "store": "sidecar"
     },
     {
+      "name": "meridian.v1.PageDeclaration.roles",
+      "type": "repeated text",
+      "bounds": {
+        "count": [
+          0,
+          13
+        ]
+      },
+      "empty": "empty on a plugin holding one role, where it serves that role, and on a plugin holding none; refused empty from a plugin built at v15 or later holding several, and read as every role from one built earlier",
+      "intent": "says which of the plugin's roles the page serves",
+      "meaning": "roles from the deployment's fixed list that the plugin was launched with; the page's tab shows under a button when, for one of these roles, the person's level within it is one of the page's levels, and a page serving several adapts per role",
+      "not_meaning": "what the sidecar admits, which the generated grants and the person's grant on the role holding each act decide; a page naming a role the plugin was not launched with is refused at registration",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v15",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
       "name": "meridian.v1.SettingDeclaration.name",
       "type": "text",
       "empty": "never empty",
@@ -8646,6 +8736,25 @@
       "filled_by": "plugin",
       "since": "v14",
       "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.SettingDeclaration.roles",
+      "type": "repeated text",
+      "bounds": {
+        "count": [
+          0,
+          13
+        ]
+      },
+      "empty": "empty on a plugin holding one role, where it serves that role, and on a plugin holding none; refused empty from a plugin built at v15 or later holding several",
+      "intent": "says which of the plugin's roles the setting serves",
+      "meaning": "roles from the deployment's fixed list that the plugin was launched with; shown to an admin of any of them, and set only by a person holding admin on every one",
+      "not_meaning": "who may read the value: a secret is never shown back to anybody, and a plugin reads every setting it declared whatever its roles",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v15",
+      "stability": "stable",
       "store": "sidecar"
     },
     {
@@ -9318,10 +9427,17 @@
       "empty": "unspecified holds nothing",
       "intent": "says the level the session was opened at",
       "meaning": "one the person holds on this plugin (W6.9); the plugin serves a page only at a level it declares, and the sidecar admits what is sent for the person by it (W4.9)",
-      "not_meaning": "a role",
+      "not_meaning": "a role, or the person's level on one: from v15 each role's level within the session is in roles",
       "filled": "decided",
       "filled_by": "dashboard",
       "since": "v5",
+      "changes": [
+        {
+          "version": "v15",
+          "kind": "clarified",
+          "what": "a role's level within the session is in roles; this stays the button's"
+        }
+      ],
       "stability": "stable",
       "store": "sidecar"
     },
@@ -9330,11 +9446,18 @@
       "type": "repeated identifier account",
       "empty": "empty under admin, and for a person who may read no account through the plugin",
       "intent": "lists the accounts the session may read",
-      "meaning": "every account the person may read through their read and write grants, cut to the level; every write account is listed here too",
-      "not_meaning": "the plugin's read scope, which may be wider",
+      "meaning": "every account the person may read through their read and write grants, cut to the level, the union over the session's roles; every write account is listed here too",
+      "not_meaning": "the plugin's read scope, which may be wider; or one role's accounts, which roles names by position here",
       "filled": "decided",
       "filled_by": "dashboard",
       "since": "v2",
+      "changes": [
+        {
+          "version": "v15",
+          "kind": "clarified",
+          "what": "the union over the session's roles, each role's entry in roles naming its accounts by position here"
+        }
+      ],
       "stability": "stable",
       "store": "sidecar"
     },
@@ -9343,11 +9466,18 @@
       "type": "repeated identifier account",
       "empty": "empty under read and admin",
       "intent": "lists the accounts the session may write",
-      "meaning": "the accounts the person's write grants name, under write",
-      "not_meaning": "accounts the plugin may write as itself",
+      "meaning": "the accounts the person's write grants name, under write, the union over the session's roles",
+      "not_meaning": "accounts the plugin may write as itself; or the accounts one role may write, which roles names",
       "filled": "decided",
       "filled_by": "dashboard",
       "since": "v2",
+      "changes": [
+        {
+          "version": "v15",
+          "kind": "clarified",
+          "what": "the union over the session's roles; a command is admitted on an account in the write accounts of the role holding it"
+        }
+      ],
       "stability": "stable",
       "store": "sidecar"
     },
@@ -9445,6 +9575,109 @@
       "store": "sidecar"
     },
     {
+      "name": "meridian.v1.CallerClaims.roles",
+      "type": "repeated message RoleAccess",
+      "bounds": {
+        "count": [
+          0,
+          13
+        ]
+      },
+      "empty": "empty for a plugin holding no role, and from a dashboard before v15: a sidecar then reads the level and account sets as the one role's on a plugin holding one, and refuses a command sent for the person on a plugin holding several",
+      "intent": "carries the person's level and accounts on each of the plugin's roles within the session's button",
+      "meaning": "one entry per role of the plugin the person holds something on within the button: under Manage each role they administer at admin with no account, under Open each role they hold a data level on at that level, under View each at read; the sidecar admits a command sent for them by their write on a role whose generated grants include it",
+      "not_meaning": "the roles the plugin holds, which its registration reply says; or a role the person holds nothing on, for which nothing is carried",
+      "filled": "decided",
+      "filled_by": "dashboard",
+      "since": "v15",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.RoleAccess.role",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the role this entry is for",
+      "meaning": "a role from the deployment's fixed list that the plugin was launched with",
+      "not_meaning": "a part the plugin names for itself: roles are the deployment's list",
+      "filled": "decided",
+      "filled_by": "dashboard",
+      "since": "v15",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.RoleAccess.level",
+      "type": "enum AccessLevel",
+      "allowed": [
+        {
+          "value": "ACCESS_LEVEL_UNSPECIFIED",
+          "meaning": "holds nothing; never carried"
+        },
+        {
+          "value": "ACCESS_LEVEL_READ",
+          "meaning": "reads what the plugin shows for this role, cut to the read accounts named"
+        },
+        {
+          "value": "ACCESS_LEVEL_WRITE",
+          "meaning": "also acts for the person in this role, on the write accounts named"
+        },
+        {
+          "value": "ACCESS_LEVEL_ADMIN",
+          "meaning": "administers this role's side of the plugin, reaching no account; in the claims under Manage only, never in the access table"
+        }
+      ],
+      "empty": "never unspecified",
+      "intent": "says the person's level on this role within the button, or a group's or a person's data level on it in the access table",
+      "meaning": "in the claims, the level within the session's button; in the access table, the data level held, read or write",
+      "not_meaning": "the session's button, which the claims' level says",
+      "filled": "decided",
+      "filled_by": "dashboard",
+      "since": "v15",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.RoleAccess.read_positions",
+      "type": "repeated integer",
+      "unit": "positions, counted from 0, in the read accounts of the message carrying this entry",
+      "bounds": {
+        "count": [
+          0,
+          10000
+        ]
+      },
+      "empty": "empty under admin, and where the role reaches no account to read",
+      "intent": "names the accounts this role reaches to read, without repeating them",
+      "meaning": "each a position in the carrying message's read_account_ids: the claims', a user group's or a person's; every write account of the role is among them",
+      "not_meaning": "an account identifier, or the plugin's read scope",
+      "filled": "decided",
+      "filled_by": "dashboard",
+      "since": "v15",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.RoleAccess.write_positions",
+      "type": "repeated integer",
+      "unit": "positions, counted from 0, in the read accounts of the message carrying this entry",
+      "bounds": {
+        "count": [
+          0,
+          10000
+        ]
+      },
+      "empty": "empty at read and admin, and where the role reaches no account to write",
+      "intent": "names the accounts this role reaches to write, without repeating them",
+      "meaning": "each a position in the carrying message's read_account_ids, since every write account is a read account; a command for the person in this role is admitted only on one of these",
+      "not_meaning": "a position in write_account_ids, or accounts the plugin may write as itself",
+      "filled": "decided",
+      "filled_by": "dashboard",
+      "since": "v15",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
       "name": "meridian.v1.PluginAccessReply.user_groups",
       "type": "repeated message UserGroupAccess",
       "empty": "empty when no group may use the plugin",
@@ -9519,6 +9752,25 @@
       "filled": "decided",
       "filled_by": "conductor",
       "since": "v2",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.UserGroupAccess.roles",
+      "type": "repeated message RoleAccess",
+      "bounds": {
+        "count": [
+          0,
+          13
+        ]
+      },
+      "empty": "empty for a plugin holding no role, and before v15",
+      "intent": "breaks the group's access to the plugin down by role",
+      "meaning": "one entry per role of this plugin the group holds a data level on, at that level, its accounts as positions in the group's read accounts; only this plugin's roles",
+      "not_meaning": "admin, which the table does not list; or an access decision: the sidecar checks each command itself",
+      "filled": "decided",
+      "filled_by": "conductor",
+      "since": "v15",
       "stability": "stable",
       "store": "sidecar"
     },
@@ -9598,6 +9850,25 @@
       "filled": "decided",
       "filled_by": "conductor",
       "since": "v2",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.PersonAccess.roles",
+      "type": "repeated message RoleAccess",
+      "bounds": {
+        "count": [
+          0,
+          13
+        ]
+      },
+      "empty": "empty for a plugin holding no role, and before v15",
+      "intent": "breaks the person's access to the plugin down by role",
+      "meaning": "one entry per role of this plugin the person holds a data level on through their groups' grants, at that level, its accounts as positions in the person's read accounts; only this plugin's roles",
+      "not_meaning": "admin, which the table does not list; or what a session of theirs reaches, which its button cuts",
+      "filled": "decided",
+      "filled_by": "conductor",
+      "since": "v15",
       "stability": "stable",
       "store": "sidecar"
     },
@@ -13934,6 +14205,256 @@
       "filled": "decided",
       "filled_by": "street",
       "since": "v14",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.ListActivitiesReply.re_resolutions",
+      "type": "repeated message ActivityReResolution",
+      "empty": "empty where no activity answered was re-resolved, and before v15",
+      "intent": "carries the re-resolutions beside the activities, so a reader sees each activity's first record and its latest resolution",
+      "meaning": "the re-resolutions of the activities answered, each naming its activity, in the order recorded; on a read since a watermark, every re-resolution recorded after it, whether or not its activity was",
+      "not_meaning": "a change to the activities answered, which stay as first recorded",
+      "filled": "decided",
+      "filled_by": "street",
+      "since": "v15",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.ReResolveActivityRequest.account_id",
+      "type": "identifier account",
+      "empty": "a plugin leaves it empty; the sidecar sets it from the link, and refuses the re-resolution when there is none (REFUSAL_REASON_EXTERNAL_ACCOUNT_NOT_LINKED)",
+      "intent": "names the account the activity is recorded against",
+      "meaning": "the deployment's account the external account is linked to (W6.4)",
+      "not_meaning": "anything a plugin sets",
+      "filled": "stamped",
+      "filled_by": "sidecar",
+      "since": "v15",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.ReResolveActivityRequest.external_account_id",
+      "type": "identifier external account",
+      "empty": "never empty",
+      "intent": "names the external account the activity is on",
+      "meaning": "as the plugin reported it (W2.8), which the sidecar translates",
+      "not_meaning": "an account of the deployment",
+      "filled": "as-reported",
+      "filled_by": "custody",
+      "since": "v15",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.ReResolveActivityRequest.source",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the source the activity was recorded from",
+      "meaning": "the source it was recorded under (W2.10); with the account and the custodian's identifier, the key that names the activity",
+      "not_meaning": "the institution holding the account",
+      "filled": "as-reported",
+      "filled_by": "custody",
+      "since": "v15",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.ReResolveActivityRequest.external_activity_id",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the recorded activity by the custodian's identifier",
+      "meaning": "the identifier it was recorded under (W2.10); no activity under it is a refusal, naming it",
+      "not_meaning": "the street's activity_id",
+      "filled": "as-reported",
+      "filled_by": "custody",
+      "since": "v15",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.ReResolveActivityRequest.instrument_id",
+      "type": "identifier instrument",
+      "empty": "empty where the link the activity had been resolved by was removed: unresolved again, its code as first reported",
+      "intent": "names the instrument the activity now resolves to",
+      "meaning": "the deployment's record, resolved as a holding's is (W3.1)",
+      "not_meaning": "an identifier of a scheme, or the custodian's own code",
+      "filled": "as-reported",
+      "filled_by": "custody",
+      "since": "v15",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.ReResolveActivityRequest.provenance",
+      "type": "message Provenance",
+      "empty": "never unset",
+      "intent": "says how the instrument was resolved this time",
+      "meaning": "supplied by the named person who set the link it resolves by, or derived by a named rule",
+      "not_meaning": "the custodian's word, which a re-resolution never is",
+      "filled": "as-reported",
+      "filled_by": "custody",
+      "since": "v15",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.ReResolveActivityRequest.resolved_at_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "never 0",
+      "intent": "says when what resolves the activity was made",
+      "meaning": "when the link was set, a table setting row's changed_at, or when the rule resolved it",
+      "not_meaning": "when the street records it, which it stamps",
+      "filled": "as-reported",
+      "filled_by": "custody",
+      "since": "v15",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.ReResolveActivityReply.activity_id",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the activity re-resolved",
+      "meaning": "the street's identifier for it (W2.10)",
+      "not_meaning": "an identifier for the re-resolution",
+      "filled": "decided",
+      "filled_by": "street",
+      "since": "v15",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.ReResolveActivityReply.already_recorded",
+      "type": "boolean",
+      "empty": "false for a re-resolution recorded now",
+      "intent": "says the activity's latest resolution already named this",
+      "meaning": "the instrument and provenance were the latest's, so nothing was recorded",
+      "not_meaning": "a refusal",
+      "filled": "decided",
+      "filled_by": "street",
+      "since": "v15",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.ActivityReResolvedEvent.account_id",
+      "type": "identifier account",
+      "empty": "never empty",
+      "intent": "names the account the re-resolved activity is on",
+      "meaning": "the deployment's account, by which the event is delivered only to a plugin whose read scope holds it",
+      "not_meaning": "the external account",
+      "filled": "decided",
+      "filled_by": "street",
+      "since": "v15",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.ActivityReResolvedEvent.re_resolution",
+      "type": "message ActivityReResolution",
+      "empty": "never unset",
+      "intent": "carries the re-resolution as the street recorded it",
+      "meaning": "the record kept beside the activity it names",
+      "not_meaning": "the activity, which stays as first recorded",
+      "filled": "decided",
+      "filled_by": "street",
+      "since": "v15",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.ActivityReResolvedEvent.cause",
+      "type": "message ChangeCause",
+      "empty": "never unset",
+      "intent": "says who caused the re-resolution",
+      "meaning": "the custody plugin's command that re-resolved it, and the person it was sent for where there was one",
+      "not_meaning": "who set the link, which the provenance names",
+      "filled": "decided",
+      "filled_by": "street",
+      "since": "v15",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.ActivityReResolution.activity_id",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the activity this re-resolution sits beside",
+      "meaning": "the street's identifier for the activity as first recorded (W2.10)",
+      "not_meaning": "an identifier of the re-resolution",
+      "filled": "decided",
+      "filled_by": "street",
+      "since": "v15",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.ActivityReResolution.instrument_id",
+      "type": "identifier instrument",
+      "empty": "empty where the link the activity had been resolved by was removed: unresolved again, its code as first reported",
+      "intent": "names the instrument the activity now resolves to",
+      "meaning": "the deployment's record, as the plugin resolved it later",
+      "not_meaning": "an identifier of a scheme, or the custodian's own code",
+      "filled": "as-reported",
+      "filled_by": "custody",
+      "since": "v15",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.ActivityReResolution.provenance",
+      "type": "message Provenance",
+      "empty": "never unset",
+      "intent": "says how the instrument was resolved this time",
+      "meaning": "supplied by the named person who set the link, or derived by a named rule",
+      "not_meaning": "the custodian's word",
+      "filled": "as-reported",
+      "filled_by": "custody",
+      "since": "v15",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.ActivityReResolution.resolved_at_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "never 0",
+      "intent": "says when what resolves the activity was made",
+      "meaning": "when the link was set or the rule resolved it, as the plugin sent it",
+      "not_meaning": "when the street recorded it",
+      "filled": "as-reported",
+      "filled_by": "custody",
+      "since": "v15",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.ActivityReResolution.recorded_at_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "never 0",
+      "intent": "records when the street recorded the re-resolution",
+      "meaning": "the deployment's clock when it was recorded, never back-dated",
+      "not_meaning": "when the activity was first recorded, or traded",
+      "filled": "decided",
+      "filled_by": "street",
+      "since": "v15",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.ActivityReResolution.journal",
+      "type": "message JournalRef",
+      "empty": "never unset",
+      "intent": "says where the re-resolution sits in the street's record",
+      "meaning": "its own number in the street's partition, chained per account with the re-resolutions before it, apart from the activities' chain",
+      "not_meaning": "the activity's own number",
+      "filled": "decided",
+      "filled_by": "street",
+      "since": "v15",
       "stability": "preview",
       "store": "street"
     },
