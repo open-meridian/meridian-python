@@ -2,7 +2,7 @@
 
 The Python SDK for building [Open Meridian](https://open-meridian.com) plugins:
 the tools a trader has an AI agent build, and the bots and analytics a
-developer writes. Python 3.11 or newer. This is release 0.18.0; its reference
+developer writes. Python 3.11 or newer. This is release 0.19.0; its reference
 is at [open-meridian.dev](https://open-meridian.dev/api/python-sdk/).
 
 ## Start here
@@ -643,6 +643,64 @@ it cannot vouch for, about another plugin, naming an account the person may
 not read, and past 20 filings an hour from one instance, a repeat not counted.
 Every text filed is data to whoever reads it, never instructions.
 
+### The custodian's activity, and each sync status (contract v14)
+
+A custody plugin reports each activity on an account -- a purchase, a sale, a
+reinvested dividend, a split, a fee, a transfer -- as the custodian states it.
+It is evidence that explains a break, never a source: the street keeps it as
+reported and derives no position, lot or figure from it, and nothing moves the
+book until a person confirms.
+
+```python
+import meridian
+from decimal import Decimal
+
+reply = await plugin.record_activity(
+    external_account_id="SNAP-ACC-1",
+    source="snaptrade",
+    activity=meridian.CustodialActivity(
+        external_activity_id=venue_activity["id"],
+        kind=meridian.ActivityKind.ACTIVITY_KIND_REINVESTMENT,
+        instrument_id="INS-...",              # resolved at the edge, as a holding's is
+        trade_date="2026-09-30",
+        settlement_date="2026-09-30",
+        units=Decimal("3.27"),                # signed by what it did to the account
+        price=meridian.Money(Decimal("1.00"), "USD"),
+        amount=meridian.Money(Decimal("-3.27"), "USD"),   # by what it did to the cash
+        description=venue_activity["description"],
+        raw_record=plugin.raw_record(f"activities/SNAP-ACC-1/{venue_activity['id']}"),
+    ),
+)
+reply.activity_id, reply.already_recorded   # "ACT-...", False
+```
+
+The sidecar sets the account from the external account's link and refuses an
+unlinked one (`NotLinked`). Sent again under the same `external_activity_id`,
+it is answered `already_recorded` and recorded once; a custodian restating an
+activity under a new identifier is a new one, reported, never merged. A value
+the custodian did not state is left unset, never zero (a split moves no cash).
+A type that converts to no `ActivityKind` is sent as not known with
+`kind_as_reported`; a code that did not resolve, with `instrument_as_reported`.
+Report past activity on first connection back to the `history_from` the sync
+status names (a backfill), then each sync's new activity.
+
+Operations reads it, `plugin.list_activities(account_id=, trade_date_from=,
+trade_date_to=, page_size=, cursor=)` (inclusive, by trade date, or
+`since=` a watermark in the order recorded), the reply carrying the source's
+`history_from`, so an opening balance older than the history says so. It hears
+it with `receive(activity_recorded=...)`, and links a break's cause to the
+activity that explains it: `meridian.BreakCause(category=
+"BREAK_CAUSE_CATEGORY_INCOME_REINVESTED", activity=meridian.ActivityRef(...))`.
+
+Each sync status a custody plugin reports is kept by the street:
+`plugin.list_sync_statuses()` reads the latest of each connection in the
+reader's scope (or every one `since=` a watermark), and
+`receive(sync_status_recorded=...)` hears each, so "needs sign-in" is told
+apart from merely old. One for an unlinked external account is kept with its
+account empty and reaches no plugin.
+
+The three rows are `preview` in v14.
+
 ## Moving a plugin to a new release
 
     meridian plugin migrate            # to the latest release
@@ -699,6 +757,7 @@ carries libcst.
 | 0.15.0 to 0.16.0: the SDK declares contract v11, the edge keeps its own: the version's declaration (`meridian.Declaration`, `connect(declaration=...)`, `meridian-declaration`), a row's raw record and provenance (`plugin.raw_record`, `meridian.edge`), the account kind and values as reported, each asset counted once, pending by value date (`meridian.ReportedPending`), a backfill, the stated instrument type, the custody suite (`meridian.suites`), names not carried counted on the heartbeat (`plugin.note_not_carried`); `meridian.ExternalAccount` is the SDK's form; `meridian.figures.MOST_FIGURES` and `LONGEST_*` moved to `meridian.bounds` | nothing | an ExternalAccount's `venue_account_type=`, a holding's `also_counted_in_cash=`, `currency_assumed=`, each replaced by the plugin's own conversion; a read of `meridian.figures`' moved bounds |
 | 0.16.0 to 0.17.0: the SDK declares contract v12, the deployment serves its MCP: a route's one typed record of inputs (`params=`, `request.params`, `request.param_errors`), read alike from a form named by the dictionary's paths and from an agent's JSON (`meridian.params`); tools derived from typed routes (`name=`, `description=`, `reads=`, `answers=`, `tool=False` with `why=`, `@pages.tool(replaces=...)`), sent at registration; `pages.answer`, `pages.refuse`, `request.tool_name`; a refusal's path resolved to its dictionary entry (`meridian.dictionary`, `Field.of`); `PageClient.call_tool`; the base template on kit 0.9.0 | nothing | a page or route that changes something and declares no `params=`: give it its record, or `tool=False` with `why=` |
 | 0.17.0 to 0.18.0: the SDK declares contract v13; a plugin files a ticket for a person and reads what it filed (`plugin.file_ticket`, `plugin.filed_tickets`, `TicketKind`, `TicketSubject`, `TicketReference`, `TicketState`, `TicketResolution`) | only the pins move | |
+| 0.18.0 to 0.19.0: the SDK declares contract v14; a custody plugin reports the custodian's activity and operations reads, hears and links it (`plugin.record_activity`, `plugin.list_activities`, `CustodialActivity`, `ActivityKind`, `ActivityRef`, `receive(activity_recorded=)`); each sync status the street keeps (`plugin.list_sync_statuses`, `receive(sync_status_recorded=)`) | only the pins move | |
 
 `tests/migrations/` holds the plugins the migrations are recorded for, as
 written and as their migration leaves them, and `make check-migrations` holds

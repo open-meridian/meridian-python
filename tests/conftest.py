@@ -15,6 +15,13 @@ It does keep the tickets filed on it (contract v13), folding a repeat under an
 open ticket's key as the dashboard does, so a filing can be followed through
 to what the plugin reads back; and, as the sidecar does, it refuses a filing
 or a read made for nobody, since the client's shape rests on that refusal.
+
+And it keeps the custodian's activity and each sync status reported on it
+(contract v14), as the street keeps them, so what one plugin reports another
+reads back and hears: an activity once per source, account and
+`external_activity_id`, a redelivery answered `already_recorded`; every sync
+status heard; each numbered in the street's partition, against the account
+`links` names for its external account, or none.
 """
 
 from __future__ import annotations
@@ -57,6 +64,13 @@ class FakeOperations(operations_pb2_grpc.PluginOperationsServicer):
     store: object | None = None
     reads: list[object] = field(default_factory=list)
 
+    # The custodian's activity and each sync status (W2.10 to W2.14), kept as
+    # the street keeps them; the account an external account is linked to.
+    links: dict[str, str] = field(default_factory=lambda: {"SNAP-ACC-1": "ACC-1"})
+    activities: list[operations_pb2.ActivityRecordedEvent] = field(default_factory=list)
+    sync_statuses: list[operations_pb2.SyncStatusRecordedEvent] = field(default_factory=list)
+    head: int = 0
+
     async def Receive(self, request, context):  # noqa: N802
         self.received.append(request)
         if self.receive_refused is not None:
@@ -92,8 +106,135 @@ class FakeOperations(operations_pb2_grpc.PluginOperationsServicer):
         )
 
     async def ReportSyncStatus(self, request, context):  # noqa: N802
+        if self.refuse is None:
+            status = operations_pb2.SyncStatusEvent.FromString(
+                request.SerializeToString(deterministic=True)
+            )
+            status.account_id = self.links.get(request.external_account_id, "")
+            journal, cause = self._numbered()
+            self.sync_statuses.append(
+                operations_pb2.SyncStatusRecordedEvent(
+                    status=status,
+                    recorded_at_ns=cause.committed_at_ns,
+                    journal=journal,
+                    cause=cause,
+                )
+            )
         return await self._answer(
             request, operations_pb2.Published(message_id="msg-1"), context
+        )
+
+    def _numbered(self) -> tuple[operations_pb2.JournalRef, operations_pb2.ChangeCause]:
+        """The next number in the street's partition, and its cause."""
+        previous, self.head = self.head, self.head + 1
+        journal = operations_pb2.JournalRef(
+            partition="street", sequence=self.head, previous_sequence=previous
+        )
+        cause = operations_pb2.ChangeCause(
+            instance_id="custody-snaptrade-1",
+            causation_id=f"msg-{self.head}",
+            committed_at_ns=1_791_100_800_000_000_000 + self.head,
+        )
+        return journal, cause
+
+    def _as_of(self) -> operations_pb2.Watermark:
+        return operations_pb2.Watermark(
+            partitions=[
+                operations_pb2.PartitionSequence(partition="street", sequence=self.head)
+            ]
+        )
+
+    async def RecordActivity(self, request, context):  # noqa: N802
+        account = self.links.get(request.external_account_id, "")
+        key = (request.source, account, request.activity.external_activity_id)
+        held = next(
+            (
+                a
+                for a in self.activities
+                if (a.source, a.account_id, a.activity.external_activity_id) == key
+            ),
+            None,
+        )
+        if held is not None:
+            answer = operations_pb2.RecordActivityResult(
+                activity_id=held.activity_id, already_recorded=True
+            )
+        else:
+            answer = operations_pb2.RecordActivityResult(
+                activity_id=f"ACT-{len(self.activities) + 1}"
+            )
+            if self.refuse is None:
+                journal, cause = self._numbered()
+                self.activities.append(
+                    operations_pb2.ActivityRecordedEvent(
+                        activity_id=answer.activity_id,
+                        account_id=account,
+                        external_account_id=request.external_account_id,
+                        source=request.source,
+                        activity=request.activity,
+                        recorded_at_ns=cause.committed_at_ns,
+                        journal=journal,
+                        cause=cause,
+                    )
+                )
+        return await self._answer(request, answer, context)
+
+    async def ListActivities(self, request, context):  # noqa: N802
+        """By trade date, inclusive, or since a watermark in the order
+        recorded; paged; with the named account's `history_from` as its
+        latest sync status said it."""
+        self.reads.append(request)
+        found = [
+            a
+            for a in self.activities
+            if (not request.account_id or a.account_id == request.account_id)
+            and (
+                not request.trade_date_from or a.activity.trade_date >= request.trade_date_from
+            )
+            and (not request.trade_date_to or a.activity.trade_date <= request.trade_date_to)
+        ]
+        if request.HasField("since"):
+            since = request.since.partitions[0].sequence
+            found = [a for a in found if a.journal.sequence > since]
+        else:
+            found.sort(key=lambda a: (a.activity.trade_date, a.journal.sequence))
+        page, following = _page(found, request.page_size, request.cursor)
+        history_from = next(
+            (
+                s.status.history_from
+                for s in reversed(self.sync_statuses)
+                if request.account_id and s.status.account_id == request.account_id
+            ),
+            "",
+        )
+        return operations_pb2.ListActivitiesResult(
+            activities=page,
+            next_cursor=following,
+            as_of=self._as_of(),
+            history_from=history_from,
+        )
+
+    async def ListSyncStatuses(self, request, context):  # noqa: N802
+        """The latest of each connection, or every one since a watermark in
+        the order recorded; paged."""
+        self.reads.append(request)
+        found = [
+            s
+            for s in self.sync_statuses
+            if not request.account_id or s.status.account_id == request.account_id
+        ]
+        if request.HasField("since"):
+            since = request.since.partitions[0].sequence
+            found = [s for s in found if s.journal.sequence > since]
+        else:
+            latest = {
+                (s.status.account_id, s.status.source, s.status.external_account_id): s
+                for s in found
+            }
+            found = [latest[connection] for connection in sorted(latest)]
+        page, following = _page(found, request.page_size, request.cursor)
+        return operations_pb2.ListSyncStatusesResult(
+            statuses=page, next_cursor=following, as_of=self._as_of()
         )
 
     async def RecordHoldingsStatement(self, request, context):  # noqa: N802
@@ -170,6 +311,14 @@ class FakeOperations(operations_pb2_grpc.PluginOperationsServicer):
             ]
         )
         return await self._answer(request, answer, context)
+
+
+def _page(found: list, size: int, cursor: str) -> tuple[list, str]:
+    """One page of what was found, 100 to a page unless asked, and the
+    cursor to the next, where there is one."""
+    start, size = int(cursor or 0), size or 100
+    following = str(start + size) if len(found) > start + size else ""
+    return found[start : start + size], following
 
 
 def _entry(kind: str) -> object:

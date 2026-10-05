@@ -70,10 +70,11 @@ if TYPE_CHECKING:
 #: statement naming its external account with its figures per segment, and the
 #: book of record's operations with their refusal codes, the fields an
 #: incomplete entry left out, and the delegation a person acted through, and
-#: from v13 a ticket filed for a person and what became of those it filed --
-#: and a newer sidecar still admits it. Raised with every contract revision
+#: from v13 a ticket filed for a person and what became of those it filed, and
+#: from v14 the custodian's activity recorded and read, and each sync status
+#: the street keeps -- and a newer sidecar still admits it. Raised with every contract revision
 #: that adds something a plugin can depend on.
-SCHEMA_VERSION = "v13"
+SCHEMA_VERSION = "v14"
 
 #: Where a sidecar listens. Loopback, always: a sidecar reachable from another
 #: host is a way around the boundary it exists to enforce.
@@ -969,7 +970,8 @@ class Plugin(Operations):
     async def _receive(
         self, handlers: dict[str, Callable[[Any], Awaitable[None]] | None], *, seed: bool
     ) -> None:
-        """What `receive` hears, seeded, followed and caught up (W4.3)."""
+        """What `receive` hears, seeded, followed and caught up (W4.3): the
+        rows given a handler, and no others."""
         self._check_open()
         from .receive import follow
 

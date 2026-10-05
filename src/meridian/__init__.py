@@ -53,6 +53,15 @@ serving, never as itself (`plugin.file_ticket(...)`, keyed by its own
 `idempotency_key`, `for_caller=` the person's `Caller`), about itself, a part
 of core or the platform (`TicketSubject`), and reads what became of those it
 filed (`plugin.filed_tickets(...)`).
+
+From contract v14 a custody plugin reports each activity on an account as
+the custodian states it (`plugin.record_activity(...)`, a `CustodialActivity`
+of an `ActivityKind`), answered as already recorded when sent again; and
+operations reads it (`plugin.list_activities(...)`, with the source's
+`history_from`), hears it (`activity_recorded=`), links a break's cause to it
+(`BreakCause(activity=ActivityRef(...))`, `BREAK_CAUSE_CATEGORY_INCOME_REINVESTED`),
+and reads and hears each sync status the street keeps
+(`plugin.list_sync_statuses(...)`, `sync_status_recorded=`).
 """
 
 from .asgi import CallerMiddleware
@@ -103,6 +112,7 @@ from .operations import (
     BreakCause,
     BreakDifference,
     BreakValue,
+    CustodialActivity,
     Encumbrance,
     ExternalAccount,
     LotTerms,
@@ -130,6 +140,8 @@ from .pages import Pages, Request, Response
 # The plugin-facing mirrors a typed operation takes, generated with it.
 from .plugin.v1.operations_pb2 import (
     AccountKind,
+    ActivityKind,
+    ActivityRef,
     AsReported,
     AssetClass,
     Backfill,
@@ -166,6 +178,8 @@ __all__ = [
     "AccessLevel",
     "AccountKind",
     "AccountScope",
+    "ActivityKind",
+    "ActivityRef",
     "AsReported",
     "Backfill",
     "Declaration",
@@ -187,6 +201,7 @@ __all__ = [
     "Choice",
     "CollateralDirection",
     "CommandRefused",
+    "CustodialActivity",
     "Encumbrance",
     "ExternalAccount",
     "Figure",

@@ -1479,17 +1479,18 @@ class Operations:
         store when `seed`; on a gap, a loss or a broken stream, caught up from
         it by each row's query, the handler told by `Heard.caught_up`. A row
         no role of the plugin hears raises NotGranted."""
+        handlers: dict[str, Callable[[Any], Awaitable[None]] | None] = {
+            "StatementRecorded": statement_recorded,
+            "CustodialPositionUpdated": custodial_position_updated,
+            "PositionChanged": position_changed,
+            "BreakChanged": break_changed,
+            "AccountFiguresRecorded": account_figures_recorded,
+            "AccountAttributeChanged": account_attribute_changed,
+            "ActivityRecorded": activity_recorded,
+            "SyncStatusRecorded": sync_status_recorded,
+        }
         await self._receive(
-            {
-                "StatementRecorded": statement_recorded,
-                "CustodialPositionUpdated": custodial_position_updated,
-                "PositionChanged": position_changed,
-                "BreakChanged": break_changed,
-                "AccountFiguresRecorded": account_figures_recorded,
-                "AccountAttributeChanged": account_attribute_changed,
-                "ActivityRecorded": activity_recorded,
-                "SyncStatusRecorded": sync_status_recorded,
-            },
+            {row: handler for row, handler in handlers.items() if handler is not None},
             seed=seed,
         )
 

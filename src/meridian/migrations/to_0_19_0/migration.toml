@@ -1,0 +1,27 @@
+# open-meridian 0.18.0 to 0.19.0: the SDK declares contract v14, the custodian's
+# activity recorded and read, and each sync status the street keeps
+# (sdk-contract/the-custodians-activity-contract;
+# plans/the-custodians-activity-explains-a-break). Nothing a plugin calls
+# changed, so only the pins move.
+from = "0.18.0"
+to = "0.19.0"
+summary = """
+The SDK declares contract v14 (meridian.SCHEMA_VERSION). A custody plugin reports
+each activity on an account as the custodian states it:
+plugin.record_activity(external_account_id=, source=, activity=) with a
+meridian.CustodialActivity of a meridian.ActivityKind (a kind that does not
+convert sent as not known, the custodian's type as reported beside it), its raw
+record referenced; sent again under the same external_activity_id it is
+answered already_recorded and recorded once. Operations reads it,
+plugin.list_activities(account_id=, trade_date_from=, trade_date_to=, ...), with
+the source's history_from; hears it with receive(activity_recorded=); and links
+a break's cause to it, meridian.BreakCause(activity=meridian.ActivityRef(...)),
+under BREAK_CAUSE_CATEGORY_INCOME_REINVESTED where the custodian reinvested
+income. Each sync status a custody plugin reports is kept by the street, read
+with plugin.list_sync_statuses(...) and heard with
+receive(sync_status_recorded=). A plugin built on 0.19.0 is refused at
+registration by a sidecar that accepts only v13, naming both. Nothing a plugin
+calls changed, so only the pins move; a test that stands in for the private
+Operations._receive is now handed only the rows given a handler.
+"""
+breaking = false

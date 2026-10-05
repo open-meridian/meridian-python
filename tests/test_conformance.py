@@ -264,3 +264,80 @@ async def test_a_filing_and_a_read_made_with_the_sdk_are_the_pinned_bytes(sideca
     assert sent.SerializeToString(deterministic=True) == filed_pin
     assert asked.SerializeToString(deterministic=True) == read_pin
     assert filed_for == read_for == ben
+
+
+async def test_activity_and_its_reads_made_with_the_sdk_are_the_pinned_bytes(sidecar) -> None:
+    """An activity reported through `plugin.record_activity`, its numbers put
+    on the wire by the SDK's own conversion, is the request the
+    record-activity fixture pins once the sidecar stamps its account from the
+    link; the reads of activity and of sync statuses are their fixtures'
+    requests as sent (W2.10, W2.11, W2.14, contract v14)."""
+    import meridian
+    from meridian.plugin.v1 import operations_pb2 as ops
+    from meridian.v1 import holdings_pb2
+
+    def pinned(name: str, section: str = "request") -> tuple[dict[str, Any], bytes]:
+        fixture = yaml.safe_load((fixtures_root() / _find(name)).read_text(encoding="utf-8"))
+        return (
+            fixture[section]["fields"],
+            base64.b64decode(fixture["expected_proto_bytes_b64"][section]),
+        )
+
+    recorded, recorded_pin = pinned("record-activity.yaml")
+    listed, listed_pin = pinned("list-activities.yaml")
+    statuses, statuses_pin = pinned("list-sync-statuses.yaml")
+    given = recorded["activity"]
+
+    service, address = sidecar
+    service.operations.links[recorded["external_account_id"]] = recorded["account_id"]
+    plugin = await meridian.connect(address, heartbeat=False)
+    try:
+        await plugin.record_activity(
+            external_account_id=recorded["external_account_id"],
+            source=recorded["source"],
+            activity=meridian.CustodialActivity(
+                external_activity_id=given["external_activity_id"],
+                kind=given["kind"],
+                instrument_id=given["instrument_id"],
+                trade_date=given["trade_date"],
+                settlement_date=given["settlement_date"],
+                units=Decimal(given["units"]),
+                price=meridian.Money(Decimal(given["price"]["amount"]), "USD"),
+                amount=meridian.Money(Decimal(given["amount"]["amount"]), "USD"),
+                description=given["description"],
+                raw_record=meridian.RawRecordRef(**given["raw_record"]),
+            ),
+        )
+        await plugin.list_activities(
+            account_id=listed["account_id"],
+            trade_date_from=listed["trade_date_from"],
+            trade_date_to=listed["trade_date_to"],
+            page_size=listed["page_size"],
+            cursor=listed["cursor"],
+        )
+        await plugin.list_sync_statuses(
+            account_id=statuses["account_id"],
+            page_size=statuses["page_size"],
+            cursor=statuses["cursor"],
+        )
+    finally:
+        await plugin.leave()
+
+    sent, read_activity, read_statuses = (
+        service.operations.sent[0],
+        *service.operations.reads,
+    )
+    # The sidecar's half: the account the link names (stamped.tsv).
+    stamped = holdings_pb2.RecordActivityRequest.FromString(sent.SerializeToString())
+    stamped.account_id = recorded["account_id"]
+    assert stamped.SerializeToString(deterministic=True) == recorded_pin
+    assert read_activity.SerializeToString(deterministic=True) == listed_pin
+    assert read_statuses.SerializeToString(deterministic=True) == statuses_pin
+
+    # And what the street answers reads back whole as the SDK's results.
+    for name, result in (
+        ("list-activities.yaml", ops.ListActivitiesResult),
+        ("list-sync-statuses.yaml", ops.ListSyncStatusesResult),
+    ):
+        _, reply_pin = pinned(name, "reply")
+        assert result.FromString(reply_pin).SerializeToString(deterministic=True) == reply_pin

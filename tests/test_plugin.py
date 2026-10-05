@@ -88,14 +88,19 @@ async def test_the_sdk_declares_the_contract_it_was_built_for(
     filed (sdk-contract/a-problem-reaches-someone-who-can-act-contract): a
     sidecar still at v12 answers neither call, so it refuses the plugin at
     registration, naming both versions.
+
+    v14 is the custodian's activity, recorded and read, and each sync status
+    the street keeps (sdk-contract/the-custodians-activity-contract): a
+    sidecar still at v13 serves neither, so it refuses the plugin at
+    registration, naming both versions.
     """
     service, address = sidecar
     plugin = await meridian.connect(address, heartbeat=False)
     await plugin.leave()
 
     (sent,) = service.registered
-    assert meridian.SCHEMA_VERSION == "v13"
-    assert sent.schema_version == "v13"
+    assert meridian.SCHEMA_VERSION == "v14"
+    assert sent.schema_version == "v14"
 
 
 async def test_identity_and_grants_come_back(sidecar: tuple[FakeSidecar, str]) -> None:
