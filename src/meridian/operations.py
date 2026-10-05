@@ -1098,6 +1098,23 @@ class Operations:
         )
         return await self._operate(self._operations().ListActivities, params)
 
+    async def list_sync_statuses(
+        self,
+        *,
+        account_id: str = "",
+        since: ops.Watermark | None = None,
+        page_size: int = 0,
+        cursor: str = "",
+    ) -> ops.ListSyncStatusesResult:
+        """W2.14: Read the latest sync status of each account in scope, or those recorded (preview)."""
+        params = ops.ListSyncStatusesParams(
+            account_id=account_id,
+            since=since,
+            page_size=page_size,
+            cursor=cursor,
+        )
+        return await self._operate(self._operations().ListSyncStatuses, params)
+
     async def resolve_identifier(
         self,
         *,
@@ -1454,6 +1471,7 @@ class Operations:
         account_figures_recorded: Callable[[Heard[ops.AccountFiguresRecordedEvent]], Awaitable[None]] | None = None,
         account_attribute_changed: Callable[[Heard[ops.AccountAttributeChangedEvent]], Awaitable[None]] | None = None,
         activity_recorded: Callable[[Heard[ops.ActivityRecordedEvent]], Awaitable[None]] | None = None,
+        sync_status_recorded: Callable[[Heard[ops.SyncStatusRecordedEvent]], Awaitable[None]] | None = None,
         seed: bool = True,
     ) -> None:
         """W4.3: hear the rows given a handler, each change once and in order,
@@ -1470,6 +1488,7 @@ class Operations:
                 "AccountFiguresRecorded": account_figures_recorded,
                 "AccountAttributeChanged": account_attribute_changed,
                 "ActivityRecorded": activity_recorded,
+                "SyncStatusRecorded": sync_status_recorded,
             },
             seed=seed,
         )
@@ -1591,5 +1610,18 @@ DELIVERED: tuple[DeliveredRow, ...] = (
         within="",
         record_journal="journal",
         record_account=("account_id",),
+    ),
+    DeliveredRow(
+        name="SyncStatusRecorded",
+        step="W2.13",
+        arm="sync_status_recorded",
+        message=ops.SyncStatusRecordedEvent,
+        account=("status", "account_id"),
+        caught_up_by="list_sync_statuses",
+        account_param="account_id",
+        records="statuses",
+        within="",
+        record_journal="journal",
+        record_account=("status", "account_id"),
     ),
 )

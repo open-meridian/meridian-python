@@ -130,6 +130,10 @@
           "intent": "an activity as the custodian stated it, kept as reported, on which nothing is derived"
         },
         {
+          "message": "meridian.v1.SyncStatusRecordedEvent",
+          "intent": "a sync status a custody plugin published, kept as published, so a connection needing a person is told apart from data merely old"
+        },
+        {
           "message": "meridian.v1.UnresolvedHolding",
           "intent": "a holding the deployment received and could not name, kept so nothing a custodian reported is dropped"
         }
@@ -162,6 +166,7 @@
     "ListCustodialPositions": "meridian.v1.ListCustodialPositionsRequest",
     "ListPositions": "meridian.v1.ListPositionsRequest",
     "ListStatements": "meridian.v1.ListStatementsRequest",
+    "ListSyncStatuses": "meridian.v1.ListSyncStatusesRequest",
     "ReadAccountsForLinking": "meridian.v1.AccountsRequest",
     "RecordAccountFigures": "meridian.v1.RecordAccountFiguresRequest",
     "RecordActivity": "meridian.v1.RecordActivityRequest",
@@ -10486,6 +10491,19 @@
       "store": "sidecar"
     },
     {
+      "name": "meridian.plugin.v1.Delivery.sync_status_recorded",
+      "type": "message SyncStatusRecordedEvent",
+      "empty": "unset unless the delivery is a sync status the street recorded",
+      "intent": "delivers a sync status the street recorded (W2.13)",
+      "meaning": "the sync status's whole record, within the plugin's read scope: never one for an unlinked external account",
+      "not_meaning": "a holding or a statement",
+      "filled": "decided",
+      "filled_by": "street",
+      "since": "v14",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
       "name": "meridian.plugin.v1.RecordHoldingsStatementParams.acting_for",
       "type": "message CallerAssertion",
       "empty": "unset, the plugin acts as itself",
@@ -13725,6 +13743,154 @@
       "intent": "says how far back the named account's history reaches",
       "meaning": "the first date the account's source can read activity from, as its sync status last said (W2.1): an opening balance older than it has no activity to explain it",
       "not_meaning": "the earliest activity listed, or a statement that the history is complete",
+      "filled": "decided",
+      "filled_by": "street",
+      "since": "v14",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.SyncStatusRecordedEvent.status",
+      "type": "message SyncStatusEvent",
+      "empty": "never unset",
+      "intent": "carries the sync status as recorded",
+      "meaning": "as the custody plugin published it (W2.1), its account as the sidecar stamped it: empty when the external account is not linked, and then delivered to no plugin",
+      "not_meaning": "anything the street concluded about the connection",
+      "filled": "as-reported",
+      "filled_by": "custody",
+      "since": "v14",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.SyncStatusRecordedEvent.recorded_at_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "never 0",
+      "intent": "records when the street recorded the sync status",
+      "meaning": "the deployment's clock when it was recorded",
+      "not_meaning": "when the source last synced, or when the plugin observed it",
+      "filled": "decided",
+      "filled_by": "street",
+      "since": "v14",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.SyncStatusRecordedEvent.journal",
+      "type": "message JournalRef",
+      "empty": "never unset",
+      "intent": "says where the record sits in the street's record",
+      "meaning": "its number in the street's partition, chained per account with the sync statuses before it",
+      "not_meaning": "an identifier of the connection",
+      "filled": "decided",
+      "filled_by": "street",
+      "since": "v14",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.SyncStatusRecordedEvent.cause",
+      "type": "message ChangeCause",
+      "empty": "never unset",
+      "intent": "says who caused the record",
+      "meaning": "the custody plugin whose sync status the street heard",
+      "not_meaning": "the rail, or a person",
+      "filled": "decided",
+      "filled_by": "street",
+      "since": "v14",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.ListSyncStatusesRequest.account_id",
+      "type": "identifier account",
+      "empty": "empty for every account in the reader's scope",
+      "intent": "names the account whose sync status to read",
+      "meaning": "an account in the plugin's read scope",
+      "not_meaning": "an external account",
+      "filled": "as-reported",
+      "since": "v14",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.ListSyncStatusesRequest.since",
+      "type": "message Watermark",
+      "empty": "unset for the latest sync status of each account",
+      "intent": "asks for every sync status recorded after a point",
+      "meaning": "a point in the street's record: set, every record after it, in the order recorded, not only the latest",
+      "not_meaning": "a time",
+      "filled": "as-reported",
+      "since": "v14",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.ListSyncStatusesRequest.page_size",
+      "type": "integer",
+      "unit": "records",
+      "bounds": {
+        "range": {
+          "least": "0",
+          "most": "500"
+        },
+        "past": "capped"
+      },
+      "empty": "0 is 100; past 500, answered at 500",
+      "intent": "bounds a page",
+      "meaning": "how many sync statuses a page holds at most",
+      "not_meaning": "a promise that a page is full",
+      "filled": "as-reported",
+      "since": "v14",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.ListSyncStatusesRequest.cursor",
+      "type": "text",
+      "empty": "empty for the first page",
+      "intent": "asks for the next page",
+      "meaning": "opaque: the previous reply's next_cursor",
+      "not_meaning": "anything a reader parses",
+      "filled": "as-reported",
+      "since": "v14",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.ListSyncStatusesReply.statuses",
+      "type": "repeated message SyncStatusRecordedEvent",
+      "empty": "empty when none was heard for an account in scope",
+      "intent": "answers the sync statuses recorded",
+      "meaning": "each as it was announced (W2.13): the latest per account, or, read since a watermark, every one after it in the order recorded",
+      "not_meaning": "a statement that a connection is healthy: an empty page says only that none was heard",
+      "filled": "decided",
+      "filled_by": "street",
+      "since": "v14",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.ListSyncStatusesReply.next_cursor",
+      "type": "text",
+      "empty": "empty on the last page",
+      "intent": "points at the next page",
+      "meaning": "opaque, passed back as cursor",
+      "not_meaning": "anything a reader parses",
+      "filled": "decided",
+      "filled_by": "street",
+      "since": "v14",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.ListSyncStatusesReply.as_of",
+      "type": "message Watermark",
+      "empty": "never unset",
+      "intent": "says the point in the street's record the page was read at",
+      "meaning": "what a reader passes as since",
+      "not_meaning": "a time",
       "filled": "decided",
       "filled_by": "street",
       "since": "v14",

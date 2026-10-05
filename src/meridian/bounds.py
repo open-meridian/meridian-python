@@ -265,3 +265,6 @@ closed rather than read came from"""
 
 LIST_ACTIVITIES_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=True)
 """meridian.v1.ListActivitiesRequest.page_size: bounds a page"""
+
+LIST_SYNC_STATUSES_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=True)
+"""meridian.v1.ListSyncStatusesRequest.page_size: bounds a page"""

@@ -944,6 +944,32 @@
               "sends": false
             }
           ]
+        },
+        {
+          "name": "reads-each-connections-sync-status-on-start",
+          "given": "an operations plugin starts with accounts in its read scope",
+          "expect": [
+            {
+              "row": "ListSyncStatuses"
+            }
+          ]
+        },
+        {
+          "name": "a-sync-status-books-nothing",
+          "given": "a sync status is recorded on an account saying a person must sign in again at the venue\n",
+          "expect": [
+            {
+              "row": "SyncStatusRecorded"
+            },
+            {
+              "row": "RecordBreak",
+              "sends": false
+            },
+            {
+              "row": "ResolveBreak",
+              "sends": false
+            }
+          ]
         }
       ]
     }
