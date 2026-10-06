@@ -74,6 +74,11 @@ class SidecarServiceStub(object):
                 request_serializer=meridian_dot_v1_dot_sidecar__pb2.ReadFiledTicketsRequest.SerializeToString,
                 response_deserializer=meridian_dot_v1_dot_sidecar__pb2.ReadFiledTicketsReply.FromString,
                 _registered_method=True)
+        self.RecordMove = channel.unary_unary(
+                '/meridian.v1.SidecarService/RecordMove',
+                request_serializer=meridian_dot_v1_dot_sidecar__pb2.RecordMoveRequest.SerializeToString,
+                response_deserializer=meridian_dot_v1_dot_sidecar__pb2.RecordMoveReply.FromString,
+                _registered_method=True)
 
 
 class SidecarServiceServicer(object):
@@ -140,6 +145,17 @@ class SidecarServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def RecordMove(self, request, context):
+        """W4.13, contract v16. Report one unit of a kind of raw record archived,
+        restored, returned or deleted, before anything is removed. As the
+        plugin itself for a window's move, or acting for a person, the call
+        carrying their assertion as its `meridian-caller` metadata; the sidecar
+        asks the conductor on the bus as itself, for the instance it serves.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_SidecarServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -182,6 +198,11 @@ def add_SidecarServiceServicer_to_server(servicer, server):
                     servicer.FiledTickets,
                     request_deserializer=meridian_dot_v1_dot_sidecar__pb2.ReadFiledTicketsRequest.FromString,
                     response_serializer=meridian_dot_v1_dot_sidecar__pb2.ReadFiledTicketsReply.SerializeToString,
+            ),
+            'RecordMove': grpc.unary_unary_rpc_method_handler(
+                    servicer.RecordMove,
+                    request_deserializer=meridian_dot_v1_dot_sidecar__pb2.RecordMoveRequest.FromString,
+                    response_serializer=meridian_dot_v1_dot_sidecar__pb2.RecordMoveReply.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -400,6 +421,33 @@ class SidecarService(object):
             '/meridian.v1.SidecarService/FiledTickets',
             meridian_dot_v1_dot_sidecar__pb2.ReadFiledTicketsRequest.SerializeToString,
             meridian_dot_v1_dot_sidecar__pb2.ReadFiledTicketsReply.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RecordMove(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.v1.SidecarService/RecordMove',
+            meridian_dot_v1_dot_sidecar__pb2.RecordMoveRequest.SerializeToString,
+            meridian_dot_v1_dot_sidecar__pb2.RecordMoveReply.FromString,
             options,
             channel_credentials,
             insecure,

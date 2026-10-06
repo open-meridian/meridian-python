@@ -54,6 +54,14 @@ class ProvenanceKind(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     PROVENANCE_KIND_SUPPLIED: _ClassVar[ProvenanceKind]
     PROVENANCE_KIND_DERIVED: _ClassVar[ProvenanceKind]
 
+class MoveOutcome(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    MOVE_OUTCOME_UNSPECIFIED: _ClassVar[MoveOutcome]
+    MOVE_OUTCOME_ARCHIVED: _ClassVar[MoveOutcome]
+    MOVE_OUTCOME_RESTORED: _ClassVar[MoveOutcome]
+    MOVE_OUTCOME_RETURNED: _ClassVar[MoveOutcome]
+    MOVE_OUTCOME_DELETED: _ClassVar[MoveOutcome]
+
 class TicketKind(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
     TICKET_KIND_UNSPECIFIED: _ClassVar[TicketKind]
@@ -104,6 +112,7 @@ class RefusalReason(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     REFUSAL_REASON_IDENTIFIER_HELD: _ClassVar[RefusalReason]
     REFUSAL_REASON_RECORD_CHANGED: _ClassVar[RefusalReason]
     REFUSAL_REASON_REFERENCE_UNAVAILABLE: _ClassVar[RefusalReason]
+    REFUSAL_REASON_WITHIN_HOLD: _ClassVar[RefusalReason]
 NOT_CARRIED_REASON_UNSPECIFIED: NotCarriedReason
 NOT_CARRIED_REASON_NO_CONTRACT_MEANING: NotCarriedReason
 NOT_CARRIED_REASON_NOT_CONVERTED: NotCarriedReason
@@ -134,6 +143,11 @@ PROVENANCE_KIND_REPORTED: ProvenanceKind
 PROVENANCE_KIND_SECOND_SOURCE: ProvenanceKind
 PROVENANCE_KIND_SUPPLIED: ProvenanceKind
 PROVENANCE_KIND_DERIVED: ProvenanceKind
+MOVE_OUTCOME_UNSPECIFIED: MoveOutcome
+MOVE_OUTCOME_ARCHIVED: MoveOutcome
+MOVE_OUTCOME_RESTORED: MoveOutcome
+MOVE_OUTCOME_RETURNED: MoveOutcome
+MOVE_OUTCOME_DELETED: MoveOutcome
 TICKET_KIND_UNSPECIFIED: TicketKind
 TICKET_KIND_DEFECT: TicketKind
 TICKET_KIND_DISCREPANCY: TicketKind
@@ -170,6 +184,7 @@ REFUSAL_REASON_INCOMPLETE: RefusalReason
 REFUSAL_REASON_IDENTIFIER_HELD: RefusalReason
 REFUSAL_REASON_RECORD_CHANGED: RefusalReason
 REFUSAL_REASON_REFERENCE_UNAVAILABLE: RefusalReason
+REFUSAL_REASON_WITHIN_HOLD: RefusalReason
 
 class RegisterRequest(_message.Message):
     __slots__ = ("schema_version", "interface", "settings", "reads_external_accounts", "declaration", "tools")
@@ -234,10 +249,24 @@ class NotCarried(_message.Message):
     def __init__(self, role: _Optional[str] = ..., scheme: _Optional[str] = ..., name: _Optional[str] = ..., reason: _Optional[_Union[NotCarriedReason, str]] = ...) -> None: ...
 
 class StorageDeclaration(_message.Message):
-    __slots__ = ("retention_days",)
+    __slots__ = ("retention_days", "record_kinds")
     RETENTION_DAYS_FIELD_NUMBER: _ClassVar[int]
+    RECORD_KINDS_FIELD_NUMBER: _ClassVar[int]
     retention_days: int
-    def __init__(self, retention_days: _Optional[int] = ...) -> None: ...
+    record_kinds: _containers.RepeatedCompositeFieldContainer[RawRecordKind]
+    def __init__(self, retention_days: _Optional[int] = ..., record_kinds: _Optional[_Iterable[_Union[RawRecordKind, _Mapping]]] = ...) -> None: ...
+
+class RawRecordKind(_message.Message):
+    __slots__ = ("name", "label", "window_days", "archivable")
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    LABEL_FIELD_NUMBER: _ClassVar[int]
+    WINDOW_DAYS_FIELD_NUMBER: _ClassVar[int]
+    ARCHIVABLE_FIELD_NUMBER: _ClassVar[int]
+    name: str
+    label: str
+    window_days: int
+    archivable: bool
+    def __init__(self, name: _Optional[str] = ..., label: _Optional[str] = ..., window_days: _Optional[int] = ..., archivable: bool = ...) -> None: ...
 
 class InterfaceDeclaration(_message.Message):
     __slots__ = ("loopback_port", "title", "pages")
@@ -346,16 +375,30 @@ class RegisterReply(_message.Message):
     def __init__(self, admitted: bool = ..., deployment_id: _Optional[str] = ..., refusal_reason: _Optional[str] = ..., publish_grants: _Optional[_Iterable[str]] = ..., subscribe_grants: _Optional[_Iterable[str]] = ..., instance_id: _Optional[str] = ..., roles: _Optional[_Iterable[str]] = ...) -> None: ...
 
 class HeartbeatRequest(_message.Message):
-    __slots__ = ("healthy", "detail", "figures", "not_carried_seen")
+    __slots__ = ("healthy", "detail", "figures", "not_carried_seen", "stored")
     HEALTHY_FIELD_NUMBER: _ClassVar[int]
     DETAIL_FIELD_NUMBER: _ClassVar[int]
     FIGURES_FIELD_NUMBER: _ClassVar[int]
     NOT_CARRIED_SEEN_FIELD_NUMBER: _ClassVar[int]
+    STORED_FIELD_NUMBER: _ClassVar[int]
     healthy: bool
     detail: str
     figures: _containers.RepeatedCompositeFieldContainer[PluginFigure]
     not_carried_seen: _containers.RepeatedCompositeFieldContainer[NotCarriedSeen]
-    def __init__(self, healthy: bool = ..., detail: _Optional[str] = ..., figures: _Optional[_Iterable[_Union[PluginFigure, _Mapping]]] = ..., not_carried_seen: _Optional[_Iterable[_Union[NotCarriedSeen, _Mapping]]] = ...) -> None: ...
+    stored: _containers.RepeatedCompositeFieldContainer[StoredSpan]
+    def __init__(self, healthy: bool = ..., detail: _Optional[str] = ..., figures: _Optional[_Iterable[_Union[PluginFigure, _Mapping]]] = ..., not_carried_seen: _Optional[_Iterable[_Union[NotCarriedSeen, _Mapping]]] = ..., stored: _Optional[_Iterable[_Union[StoredSpan, _Mapping]]] = ...) -> None: ...
+
+class StoredSpan(_message.Message):
+    __slots__ = ("record_kind", "record_count", "first_received_ns", "last_received_ns")
+    RECORD_KIND_FIELD_NUMBER: _ClassVar[int]
+    RECORD_COUNT_FIELD_NUMBER: _ClassVar[int]
+    FIRST_RECEIVED_NS_FIELD_NUMBER: _ClassVar[int]
+    LAST_RECEIVED_NS_FIELD_NUMBER: _ClassVar[int]
+    record_kind: str
+    record_count: int
+    first_received_ns: int
+    last_received_ns: int
+    def __init__(self, record_kind: _Optional[str] = ..., record_count: _Optional[int] = ..., first_received_ns: _Optional[int] = ..., last_received_ns: _Optional[int] = ...) -> None: ...
 
 class NotCarriedSeen(_message.Message):
     __slots__ = ("scheme", "name", "count")
@@ -594,6 +637,28 @@ class LinkedExternalAccount(_message.Message):
     account_id: str
     account_name: str
     def __init__(self, external_account_id: _Optional[str] = ..., account_id: _Optional[str] = ..., account_name: _Optional[str] = ...) -> None: ...
+
+class RecordMoveRequest(_message.Message):
+    __slots__ = ("record_kind", "unit", "record_count", "first_received_ns", "last_received_ns", "outcome", "rule")
+    RECORD_KIND_FIELD_NUMBER: _ClassVar[int]
+    UNIT_FIELD_NUMBER: _ClassVar[int]
+    RECORD_COUNT_FIELD_NUMBER: _ClassVar[int]
+    FIRST_RECEIVED_NS_FIELD_NUMBER: _ClassVar[int]
+    LAST_RECEIVED_NS_FIELD_NUMBER: _ClassVar[int]
+    OUTCOME_FIELD_NUMBER: _ClassVar[int]
+    RULE_FIELD_NUMBER: _ClassVar[int]
+    record_kind: str
+    unit: str
+    record_count: int
+    first_received_ns: int
+    last_received_ns: int
+    outcome: MoveOutcome
+    rule: str
+    def __init__(self, record_kind: _Optional[str] = ..., unit: _Optional[str] = ..., record_count: _Optional[int] = ..., first_received_ns: _Optional[int] = ..., last_received_ns: _Optional[int] = ..., outcome: _Optional[_Union[MoveOutcome, str]] = ..., rule: _Optional[str] = ...) -> None: ...
+
+class RecordMoveReply(_message.Message):
+    __slots__ = ()
+    def __init__(self) -> None: ...
 
 class FileTicketRequest(_message.Message):
     __slots__ = ("title", "seen", "kind", "concerns", "step", "operation", "reason", "paths", "references", "idempotency_key")

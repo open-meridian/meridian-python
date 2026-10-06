@@ -191,6 +191,7 @@
     "SidecarLeave": "meridian.v1.LeaveRequest",
     "SidecarPluginAccess": "meridian.v1.PluginAccessRequest",
     "SidecarReadFiledTickets": "meridian.v1.ReadFiledTicketsRequest",
+    "SidecarRecordMove": "meridian.v1.RecordMoveRequest",
     "SidecarRegister": "meridian.v1.RegisterRequest",
     "SidecarWatchAccountScope": "meridian.v1.WatchAccountScopeRequest",
     "SidecarWatchSettings": "meridian.v1.WatchSettingsRequest"
@@ -7692,11 +7693,18 @@
       ],
       "empty": "never empty on a reference that is sent",
       "intent": "names the raw record a row was converted from, in its plugin's own key",
-      "meaning": "opaque: the owning plugin's key for a record it keeps as received, which a person follows on that plugin's page; past its retention, following it says the record is gone, and the row stands",
+      "meaning": "opaque: the owning plugin's key for a record it keeps as received, which a person follows on that plugin's page; a record the plugin archived resolves to archived, restorable, and one deleted past its window says the record is gone, and the row stands",
       "not_meaning": "a location any other plugin or core may read: no plugin's storage is a channel to another",
       "filled": "as-reported",
       "filled_by": "custody",
       "since": "v11",
+      "changes": [
+        {
+          "version": "v16",
+          "kind": "clarified",
+          "what": "a record the plugin archived resolves to archived, restorable, never to nothing"
+        }
+      ],
       "stability": "stable",
       "store": "shared"
     },
@@ -8352,11 +8360,108 @@
       "unit": "days",
       "empty": "never 0 on storage asked for",
       "intent": "says how long the plugin keeps a raw record",
-      "meaning": "days from when the plugin received the record; the reach of a backfill, and what the deployment keeps the storage for",
+      "meaning": "days from when the plugin received the record; the reach of a backfill, and what the deployment keeps the storage for; from v16 the window of a version declaring no kinds, past which its records are archived or kept, never deleted",
       "not_meaning": "a regulator's period, which the firm sets; or a promise the deployment deletes anything",
       "filled": "as-reported",
       "filled_by": "plugin",
       "since": "v11",
+      "changes": [
+        {
+          "version": "v16",
+          "kind": "clarified",
+          "what": "the default window of a version declaring no kinds of raw record; each declared kind's window says it otherwise"
+        }
+      ],
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.StorageDeclaration.record_kinds",
+      "type": "repeated message RawRecordKind",
+      "bounds": {
+        "count": [
+          0,
+          16
+        ]
+      },
+      "empty": "empty keeps the behaviour before v16: records kept for retention_days, then archived or kept, never deleted",
+      "intent": "names each kind of raw record the version keeps (W4.1)",
+      "meaning": "each kind's name, label, default window and whether it can be archived; its window and what is done past it are the plugin admin's settings, which the SDK declares from it",
+      "not_meaning": "the windows themselves, which are settings and change without a new version; or object storage against a database schema, the storage's own kinds (decisions/028)",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v16",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.RawRecordKind.name",
+      "type": "text",
+      "bounds": {
+        "length": [
+          1,
+          40
+        ]
+      },
+      "empty": "never empty",
+      "intent": "names the kind in the plugin's code and settings",
+      "meaning": "lowercase letters, digits and underscores, beginning with a letter, once per declaration; its settings are <name>_window_days and <name>_past_window, which no other setting may take",
+      "not_meaning": "what a person reads, which label is",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v16",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.RawRecordKind.label",
+      "type": "text",
+      "bounds": {
+        "length": [
+          1,
+          40
+        ]
+      },
+      "empty": "never empty",
+      "intent": "names the kind for a person",
+      "meaning": "what the plugin's Summary and its settings form call it, such as Reported activity",
+      "not_meaning": "the key its settings take, which name is",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v16",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.RawRecordKind.window_days",
+      "type": "integer",
+      "bounds": {
+        "range": {
+          "least": "1",
+          "most": "36500"
+        }
+      },
+      "unit": "days",
+      "empty": "never 0",
+      "intent": "gives the kind's default window",
+      "meaning": "days from when a record was received that it stays in the plugin's storage, until the plugin's admin sets another",
+      "not_meaning": "how long the record is kept: past the window it is archived, kept or deleted as the admin chose, never inside a hold",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v16",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.RawRecordKind.archivable",
+      "type": "boolean",
+      "empty": "false: the kind is never archived, and is kept past its window unless an admin chose deleted",
+      "intent": "says whether a unit of the kind can be moved to an archive",
+      "meaning": "true for records kept as received; false for state read and updated in place, such as a FIX session's",
+      "not_meaning": "that the deployment has an archive, which a deployment admin allows per instance",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v16",
       "stability": "stable",
       "store": "sidecar"
     },
@@ -9110,6 +9215,86 @@
       "filled": "derived",
       "filled_by": "plugin",
       "since": "v11",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.HeartbeatRequest.stored",
+      "type": "repeated message StoredSpan",
+      "bounds": {
+        "count": [
+          0,
+          16
+        ]
+      },
+      "empty": "empty from a plugin declaring no kinds, or from a plugin before v16; each heartbeat replaces the last",
+      "intent": "reports what the plugin's storage holds of each kind of raw record (W4.5)",
+      "meaning": "one per declared kind at most, as the storage stands; the Summary draws it beside the archive's spans",
+      "not_meaning": "what the archive holds, which the moves the conductor recorded say",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v16",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.StoredSpan.record_kind",
+      "type": "text",
+      "bounds": {
+        "length": [
+          1,
+          40
+        ]
+      },
+      "empty": "never empty",
+      "intent": "names the kind the span is of",
+      "meaning": "a kind the version's declaration names",
+      "not_meaning": "a unit or a record's key",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v16",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.StoredSpan.record_count",
+      "type": "integer",
+      "unit": "records",
+      "empty": "0 when the storage holds none of the kind, and then no span",
+      "intent": "says how many records of the kind are held",
+      "meaning": "a count the plugin keeps of its own records",
+      "not_meaning": "a count of units, or of bytes",
+      "filled": "derived",
+      "filled_by": "plugin",
+      "since": "v16",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.StoredSpan.first_received_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "0 when none is held",
+      "intent": "says from when the held records reach",
+      "meaning": "when the earliest of them was received",
+      "not_meaning": "the date of what the record is about",
+      "filled": "derived",
+      "filled_by": "plugin",
+      "since": "v16",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.StoredSpan.last_received_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "0 when none is held",
+      "intent": "says to when the held records reach",
+      "meaning": "when the latest of them was received",
+      "not_meaning": "when the plugin last read its vendor",
+      "filled": "derived",
+      "filled_by": "plugin",
+      "since": "v16",
       "stability": "stable",
       "store": "sidecar"
     },
@@ -10564,6 +10749,146 @@
       "store": "sidecar"
     },
     {
+      "name": "meridian.v1.RecordMoveRequest.record_kind",
+      "type": "text",
+      "bounds": {
+        "length": [
+          1,
+          40
+        ]
+      },
+      "empty": "never empty",
+      "intent": "names the kind of raw record the unit is of",
+      "meaning": "a kind the version's declaration names; archived only of one declared archivable",
+      "not_meaning": "the storage's kind, object storage or a database schema",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v16",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.RecordMoveRequest.unit",
+      "type": "text",
+      "bounds": {
+        "length": [
+          1,
+          512
+        ]
+      },
+      "empty": "never empty",
+      "intent": "names the unit moved, in the plugin's own key",
+      "meaning": "opaque: how the plugin groups its records so it can find them again, such as a day's session or an account's month of responses",
+      "not_meaning": "a location any other plugin or core may read, or a record's content",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v16",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.RecordMoveRequest.record_count",
+      "type": "integer",
+      "bounds": {
+        "range": {
+          "least": "1",
+          "most": "1000000000"
+        }
+      },
+      "unit": "records",
+      "empty": "never 0",
+      "intent": "says how many records the unit holds",
+      "meaning": "a count the plugin's helper took when it moved the unit",
+      "not_meaning": "its size in bytes",
+      "filled": "derived",
+      "filled_by": "plugin",
+      "since": "v16",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.RecordMoveRequest.first_received_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "never 0",
+      "intent": "says from when the unit's records reach",
+      "meaning": "when the earliest record in it was received",
+      "not_meaning": "the date of what a record is about",
+      "filled": "derived",
+      "filled_by": "plugin",
+      "since": "v16",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.RecordMoveRequest.last_received_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "never 0, and never before first_received_ns",
+      "intent": "says to when the unit's records reach",
+      "meaning": "when the latest record in it was received; a deletion is refused while it is inside the hold over the instance",
+      "not_meaning": "when the unit was moved, which the conductor records",
+      "filled": "derived",
+      "filled_by": "plugin",
+      "since": "v16",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.RecordMoveRequest.outcome",
+      "type": "enum MoveOutcome",
+      "allowed": [
+        {
+          "value": "MOVE_OUTCOME_UNSPECIFIED",
+          "meaning": "not said; refused"
+        },
+        {
+          "value": "MOVE_OUTCOME_ARCHIVED",
+          "meaning": "moved from storage to the archive, and checked to have landed, before it is removed from storage"
+        },
+        {
+          "value": "MOVE_OUTCOME_RESTORED",
+          "meaning": "copied back from the archive to the restore area in storage, for a person with write who asked"
+        },
+        {
+          "value": "MOVE_OUTCOME_RETURNED",
+          "meaning": "removed from the restore area after the restore period; the archive still holds it"
+        },
+        {
+          "value": "MOVE_OUTCOME_DELETED",
+          "meaning": "deleted, from storage past its window or from the archive by an admin; reported before it is done, and refused inside a hold"
+        }
+      ],
+      "empty": "never unspecified",
+      "intent": "says what became of the unit",
+      "meaning": "one of the four moves, each its own record",
+      "not_meaning": "a tier the deployment chose: the plugin moves its own records",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v16",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.RecordMoveRequest.rule",
+      "type": "text",
+      "bounds": {
+        "length": [
+          0,
+          200
+        ]
+      },
+      "empty": "empty for a move done acting for a person, who is the assertion's",
+      "intent": "names the window that moved the unit",
+      "meaning": "the window setting and its value, such as activity_window_days 2555",
+      "not_meaning": "a person: the person a move is done for is read from their assertion, never written by the plugin",
+      "filled": "derived",
+      "filled_by": "plugin",
+      "since": "v16",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
       "name": "meridian.v1.Refusal.reason",
       "type": "enum RefusalReason",
       "allowed": [
@@ -10639,6 +10964,11 @@
           "value": "REFUSAL_REASON_REFERENCE_UNAVAILABLE",
           "meaning": "beside UNAVAILABLE, to be tried again: the book could not check a command because the instrument store did not answer in time; nothing recorded",
           "since": "v10"
+        },
+        {
+          "value": "REFUSAL_REASON_WITHIN_HOLD",
+          "meaning": "beside FAILED_PRECONDITION: a deletion of a unit whose last record was received inside the hold over the instance; nothing recorded, and the unit is kept",
+          "since": "v16"
         }
       ],
       "empty": "unspecified where the status says all there is",
