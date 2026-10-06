@@ -1,7 +1,12 @@
 # Publishing the SDK as `open-meridian`.
 #
-# By hand only. A release is a decision somebody makes, and a trigger on tags
-# or on main would make it a side effect of something else.
+# A release is a decision somebody makes, and it is made at the `pypi`
+# environment's approval, not at the trigger (ruled 2026-10-06: an agent starts
+# the release, the product owner approves it on GitHub). Pushing a tag
+# `v<version>` naming pyproject.toml's version starts a real upload, which then
+# waits there for a required reviewer; nothing reaches PyPI or GHCR before that
+# approval. By hand, the same workflow uploads to TestPyPI, or to PyPI through
+# the same approval.
 #
 # No token anywhere: PyPI's trusted publishing lets this one workflow, in this
 # one repository, prove who it is with GitHub's own identity, and the index
@@ -21,6 +26,8 @@
 name: publish
 
 on:
+  push:
+    tags: ["v*"]
   workflow_dispatch:
     inputs:
       index:
@@ -38,12 +45,27 @@ jobs:
     # PyPI's publisher names this environment and admits a token from no
     # other, so a real upload can be held for approval in the repository's
     # settings. A test upload runs in none: an empty name is no environment.
-    environment: ${{ inputs.index == 'pypi' && 'pypi' || '' }}
+    environment: ${{ (github.event_name == 'push' || inputs.index == 'pypi') && 'pypi' || '' }}
     permissions:
       contents: read
       id-token: write
     steps:
       - uses: actions/checkout@v4
+
+      # A tag is a request to release the version it names, so it must name the
+      # one this commit builds; a mistyped tag stops here, before the approval
+      # is asked for.
+      - name: The tag names pyproject.toml's version
+        if: github.event_name == 'push'
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version = "\(.*\)"$/\1/p' pyproject.toml)"
+          if [ "$TAG" != "v${version}" ]; then
+            echo "::error::tag $TAG does not name pyproject.toml's version ${version}"
+            exit 1
+          fi
 
       - name: The bundled wire bindings are the pinned schema revision
         run: make check-vendored
@@ -51,7 +73,7 @@ jobs:
       # Before anything is built, so the checks below run on the wheel that is
       # uploaded, version and all.
       - name: A test upload is a development version
-        if: inputs.index == 'testpypi'
+        if: github.event_name != 'push' && inputs.index == 'testpypi'
         env:
           RUN: ${{ github.run_number }}
         run: |
@@ -68,13 +90,13 @@ jobs:
         run: DOCKER_BUILDKIT=1 docker build -f Dockerfile.python --target dist --output type=local,dest=dist .
 
       - name: To TestPyPI
-        if: inputs.index == 'testpypi'
+        if: github.event_name != 'push' && inputs.index == 'testpypi'
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: https://test.pypi.org/legacy/
 
       - name: To PyPI
-        if: inputs.index == 'pypi'
+        if: github.event_name == 'push' || inputs.index == 'pypi'
         uses: pypa/gh-action-pypi-publish@release/v1
 
   # The plugin base image, `ghcr.io/open-meridian/plugin-python:<version>`, for
@@ -89,7 +111,7 @@ jobs:
   # give two plugins that say the same SDK two different ones.
   base-image:
     needs: publish
-    if: inputs.index == 'pypi'
+    if: github.event_name == 'push' || inputs.index == 'pypi'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -139,7 +161,29 @@ jobs:
             exit 1
           fi
 
-      - uses: docker/build-push-action@v6
+      # Served to the wait above is not served everywhere yet: 0.20.0's build
+      # found no 0.20.0 at PyPI seconds after the wait saw it, from another of
+      # PyPI's mirrors. So a failed build is tried once more, two minutes on.
+      - id: build
+        continue-on-error: true
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.python
+          target: plugin-base
+          platforms: linux/amd64,linux/arm64
+          build-args: |
+            SDK_VERSION=${{ steps.version.outputs.version }}
+            SDK_INSTALL=open-meridian==${{ steps.version.outputs.version }}
+          tags: ghcr.io/${{ github.repository_owner }}/plugin-python:${{ steps.version.outputs.version }}
+          push: true
+
+      - name: Two minutes for PyPI's mirrors, then once more
+        if: steps.build.outcome == 'failure'
+        run: sleep 120
+
+      - if: steps.build.outcome == 'failure'
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: Dockerfile.python
