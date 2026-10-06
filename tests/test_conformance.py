@@ -433,3 +433,127 @@ def test_the_pinned_claims_read_as_each_roles_level_and_accounts(
     assert caller.level_for(role) == sidecar_pb2.ACCESS_LEVEL_WRITE
     assert caller.read_for(role) == reads and caller.write_for(role) == writes
     assert (caller.read, caller.write) == (reads, writes), "equal to the whole, one role"
+
+
+async def test_a_move_made_with_the_sdk_is_the_pinned_bytes(
+    sidecar, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A unit archived through `plugin.archive_unit`, its rule the kind's
+    window setting and value as the SDK names it, is the request the
+    record-move fixture pins; the reply reads back whole (W4.13, contract
+    v16). The kind it names is declared as the register fixture's v16 case
+    declares it."""
+    import meridian
+    from meridian.v1 import sidecar_pb2
+
+    fixture = yaml.safe_load((fixtures_root() / _find("record-move.yaml")).read_text("utf-8"))
+    asked = fixture["request"]["fields"]
+    pins = fixture["expected_proto_bytes_b64"]
+    register = yaml.safe_load((fixtures_root() / _find("register.yaml")).read_text("utf-8"))
+    (v16,) = [
+        case
+        for case in register["cases"]
+        if case.get("request_fields", {}).get("schema_version") == "v16"
+    ]
+    declared = v16["request_fields"]["declaration"]["storage"]
+    storage = meridian.Storage(
+        retention_days=declared["retention_days"],
+        kinds=[meridian.RecordKind(**kind) for kind in declared["record_kinds"]],
+    )
+
+    granted, archive = tmp_path / "storage", tmp_path / "archive"
+    (granted / asked["unit"]).mkdir(parents=True)
+    (granted / asked["unit"] / "act-1.json").write_text("{}")
+    archive.mkdir()
+    monkeypatch.setenv("MERIDIAN_STORAGE_DIR", str(granted))
+    monkeypatch.setenv("MERIDIAN_ARCHIVE_DIR", str(archive))
+    window, value = asked["rule"].split(" ")
+
+    service, address = sidecar
+    service.settings = [
+        sidecar_pb2.SettingsDelivery(
+            values=[
+                sidecar_pb2.SettingValue(name=window, value=value),
+                sidecar_pb2.SettingValue(
+                    name=f"{asked['record_kind']}_past_window", value="archived"
+                ),
+            ]
+        )
+    ]
+    plugin = await meridian.connect(
+        address, heartbeat=False, declaration=meridian.Declaration(storage=storage)
+    )
+    try:
+        async for _ in plugin.settings():
+            break
+        await plugin.archive_unit(
+            asked["record_kind"],
+            asked["unit"],
+            record_count=asked["record_count"],
+            first_received_ns=asked["first_received_ns"],
+            last_received_ns=asked["last_received_ns"],
+        )
+    finally:
+        await plugin.leave()
+
+    ((sent, _, _),) = service.moves
+    assert sent.SerializeToString(deterministic=True) == base64.b64decode(pins["request"])
+    reply = sidecar_pb2.RecordMoveReply.FromString(base64.b64decode(pins["reply"]))
+    assert reply.SerializeToString() == base64.b64decode(pins["reply"])
+
+
+async def test_the_v16_declaration_and_heartbeat_cases_are_what_the_sdk_sends(sidecar) -> None:
+    """The register fixture's v16 case is the declaration the SDK sends, its
+    four window settings beside it; the heartbeat fixture's v16 case is what
+    `plugin.stored` puts on the heartbeat (W4.1, W4.5, W6.11)."""
+    from google.protobuf import json_format as _json
+
+    import meridian
+    from meridian.v1 import sidecar_pb2
+
+    register = yaml.safe_load((fixtures_root() / _find("register.yaml")).read_text("utf-8"))
+    (v16,) = [
+        case
+        for case in register["cases"]
+        if case.get("request_fields", {}).get("schema_version") == "v16"
+    ]
+    given = v16["request_fields"]["declaration"]
+    declaration = meridian.Declaration(
+        settings=[meridian.Setting(name, secret=True) for name in given["secret_settings"]],
+        storage=meridian.Storage(
+            retention_days=given["storage"]["retention_days"],
+            kinds=[meridian.RecordKind(**kind) for kind in given["storage"]["record_kinds"]],
+        ),
+    )
+    expected = sidecar_pb2.PluginDeclaration()
+    _json.ParseDict(given, expected)
+    beat = yaml.safe_load((fixtures_root() / _find("heartbeat.yaml")).read_text("utf-8"))
+    (stored,) = [
+        case["request_fields"]["stored"]
+        for case in beat["cases"]
+        if "status" not in case and "stored" in case.get("request_fields", {})
+    ]
+
+    service, address = sidecar
+    plugin = await meridian.connect(address, heartbeat=False, declaration=declaration)
+    try:
+        plugin.stored = [_json.ParseDict(span, sidecar_pb2.StoredSpan()) for span in stored]
+        await plugin.report(healthy=True)
+    finally:
+        await plugin.leave()
+
+    (sent,) = service.registered
+    assert sent.schema_version == "v16"
+    assert sent.declaration.SerializeToString(deterministic=True) == expected.SerializeToString(
+        deterministic=True
+    )
+    names = [s.name for s in sent.settings if not s.secret]
+    assert names == [
+        "activity_window_days",
+        "activity_past_window",
+        "responses_window_days",
+        "responses_past_window",
+    ]
+    heard = service.heartbeats[-1]
+    wanted = [_json.ParseDict(span, sidecar_pb2.StoredSpan()) for span in stored]
+    assert list(heard.stored) == wanted

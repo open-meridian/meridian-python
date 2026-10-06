@@ -72,6 +72,18 @@ A custody plugin re-resolves an activity it recorded once its instrument
 resolves (`plugin.re_resolve_activity(...)`), the activity kept as first
 recorded and the re-resolution beside it, which operations reads
 (`re_resolutions`) and hears (`activity_re_resolved=`).
+
+From contract v16 a plugin at the edge declares the kinds of raw record it
+keeps (`Storage(kinds=[RecordKind(...)])`), each kept for its window and,
+past it, archived, kept or deleted as its admin chose -- two settings per
+kind the SDK declares, `<kind>_window_days` and `<kind>_past_window`. It
+moves its records in units through `plugin.archive_unit`,
+`plugin.restore_unit` and `plugin.delete_unit`, each reported through the
+sidecar before anything is removed, and finds where a record's key stands
+(`plugin.find_record`); the archive is `meridian.edge.archive_dir()` where it
+is mounted. What each kind holds in storage goes on its heartbeat
+(`plugin.stored`, `StoredSpan`s), and every edge plugin with pages offers
+`POST /archive/restore`, derived as a tool.
 """
 
 from .asgi import CallerMiddleware
@@ -100,7 +112,7 @@ from .client import (
     TicketSubject,
     connect,
 )
-from .declaration import Declaration, NotCarried, Storage
+from .declaration import Declaration, NotCarried, RecordKind, Storage
 from .errors import (
     CallFailed,
     CommandRefused,
@@ -183,6 +195,9 @@ from .plugin.v1.operations_pb2 import (
 )
 from .receive import Heard
 
+# What a plugin at the edge says its storage holds of each kind (contract v16).
+from .v1.sidecar_pb2 import MoveOutcome, StoredSpan
+
 __all__ = [
     "DEFAULT_ADDRESS",
     "SCHEMA_VERSION",
@@ -234,6 +249,7 @@ __all__ = [
     "MeridianError",
     "MissReason",
     "Money",
+    "MoveOutcome",
     "MovementLine",
     "NoSidecar",
     "NotCarried",
@@ -256,6 +272,7 @@ __all__ = [
     "Provenance",
     "ProvenanceKind",
     "RawRecordRef",
+    "RecordKind",
     "Refused",
     "ReportedCollateral",
     "ReportedEncumbrance",
@@ -272,6 +289,7 @@ __all__ = [
     "StatementFigures",
     "StatementSegmentRef",
     "Storage",
+    "StoredSpan",
     "StreetRecordRef",
     "SyncState",
     "TicketKind",

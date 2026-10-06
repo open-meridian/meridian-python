@@ -22,12 +22,33 @@ it as JSON.
                                 "no_contract_meaning")],
         storage=Storage(retention_days=2555),
     )
+
+From contract v16 a plugin at the edge also declares the kinds of raw record
+it keeps (spec/an-edge-plugins-older-records-move-to-the-archive, W4.1):
+each a `RecordKind` with the name its code and settings use, the label a
+person reads, its default window in days, and whether a unit of it can be
+archived (a FIX session's state, read and updated in place, cannot):
+
+    storage=Storage(kinds=[
+        RecordKind("activity", "Reported activity", window_days=2555, archivable=True),
+        RecordKind("responses", "Raw responses", window_days=30, archivable=True),
+    ])
+
+For each kind the SDK declares two settings, the same for every edge plugin
+(W6.11): `<kind>_window_days`, its window, defaulting to the kind's, and
+`<kind>_past_window`, what is done with a record past it -- `archived`,
+`kept` or `deleted` -- defaulting to `archived` where the deployment gives
+the instance an archive and `kept` otherwise. Those names are the SDK's: a
+plugin declaring a setting of one of them itself is refused here, as the
+sidecar refuses its registration. A plugin declaring no kinds keeps the
+behaviour before v16 under `retention_days`.
 """
 
 from __future__ import annotations
 
 import importlib
 import json
+import re
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -38,6 +59,10 @@ from .bounds import (
     NOT_CARRIED_ROLE_LENGTH,
     NOT_CARRIED_SCHEME_LENGTH,
     PLUGIN_DECLARATION_NOT_CARRIED_COUNT,
+    RAW_RECORD_KIND_LABEL_LENGTH,
+    RAW_RECORD_KIND_NAME_LENGTH,
+    RAW_RECORD_KIND_WINDOW_DAYS_RANGE,
+    STORAGE_DECLARATION_RECORD_KINDS_COUNT,
     STORAGE_DECLARATION_RETENTION_DAYS_RANGE,
 )
 from .v1 import sidecar_pb2
@@ -83,17 +108,115 @@ class NotCarried:
             )
 
 
+#: A kind's name: lowercase letters, digits and underscores, beginning with a
+#: letter (RawRecordKind.name).
+_KIND_NAME = re.compile(r"[a-z][a-z0-9_]*")
+
+#: What is done with a record past its kind's window (W6.11): moved to the
+#: archive, left in storage, or deleted, which only an admin chooses.
+_PAST_WINDOW = ("archived", "kept", "deleted")
+
+
+@dataclass(frozen=True)
+class RecordKind:
+    """One kind of raw record a plugin at the edge keeps (contract v16): the
+    name its code and settings use, the label a person reads, its default
+    window in days from when a record was received, and whether a unit of it
+    can be moved to an archive."""
+
+    name: str
+    label: str
+    window_days: int
+    archivable: bool = True
+
+    def __post_init__(self) -> None:
+        if not RAW_RECORD_KIND_NAME_LENGTH.admits(len(self.name)) or not _KIND_NAME.fullmatch(
+            self.name
+        ):
+            raise ValueError(
+                f"a kind's name is {self.name!r}: 1 to {RAW_RECORD_KIND_NAME_LENGTH.most} "
+                "lowercase letters, digits and underscores, beginning with a letter"
+            )
+        if not RAW_RECORD_KIND_LABEL_LENGTH.admits(len(self.label)):
+            raise ValueError(
+                f"the kind {self.name}'s label is 1 to {RAW_RECORD_KIND_LABEL_LENGTH.most} "
+                "characters"
+            )
+        bound = RAW_RECORD_KIND_WINDOW_DAYS_RANGE
+        if not bound.least <= self.window_days <= bound.most:
+            raise ValueError(
+                f"the kind {self.name}'s window_days is {bound.least} to {bound.most}"
+            )
+
+    @property
+    def _window_setting(self) -> str:
+        """The name of its window's setting, which the SDK declares."""
+        return f"{self.name}_window_days"
+
+    @property
+    def _past_window_setting(self) -> str:
+        """The name of the setting saying what is done past its window."""
+        return f"{self.name}_past_window"
+
+
 @dataclass(frozen=True)
 class Storage:
     """The storage a plugin at the edge asks for, for its raw records, and
-    how many days it keeps one: the reach of a backfill."""
+    how many days it keeps one: the reach of a backfill.
 
-    retention_days: int
+    From contract v16, the kinds of raw record it keeps (`kinds`), each with
+    its own window; `retention_days` is then the longest of their windows
+    unless given, and a version declaring no kinds keeps one under it."""
+
+    retention_days: int = 0
+    kinds: Sequence[RecordKind] = ()
 
     def __post_init__(self) -> None:
+        kinds = tuple(self.kinds)
+        object.__setattr__(self, "kinds", kinds)
+        if not STORAGE_DECLARATION_RECORD_KINDS_COUNT.admits(len(kinds)):
+            raise ValueError(
+                f"at most {STORAGE_DECLARATION_RECORD_KINDS_COUNT.most} kinds of raw record"
+            )
+        names = [kind.name for kind in kinds]
+        twice = next((name for name in names if names.count(name) > 1), None)
+        if twice is not None:
+            raise ValueError(f"the kind {twice} is declared twice")
+        if self.retention_days == 0 and kinds:
+            object.__setattr__(self, "retention_days", max(kind.window_days for kind in kinds))
         bound = STORAGE_DECLARATION_RETENTION_DAYS_RANGE
         if not bound.least <= self.retention_days <= bound.most:
             raise ValueError(f"retention_days is {bound.least} to {bound.most}")
+
+    def _to_json(self) -> dict[str, Any]:
+        """As an upload carries it: the kinds only where it declares them,
+        so a version declaring none uploads what it did before v16."""
+        out: dict[str, Any] = {"retention_days": self.retention_days}
+        if self.kinds:
+            out["record_kinds"] = [
+                {
+                    "name": kind.name,
+                    "label": kind.label,
+                    "window_days": kind.window_days,
+                    "archivable": kind.archivable,
+                }
+                for kind in self.kinds
+            ]
+        return out
+
+    def _kind(self, name: str) -> RecordKind | None:
+        """The kind declared by `name`, or None."""
+        return next((kind for kind in self.kinds if kind.name == name), None)
+
+    @property
+    def _reserved(self) -> frozenset[str]:
+        """The settings' names the SDK declares for the kinds, and no other
+        setting may take."""
+        return frozenset(
+            name
+            for kind in self.kinds
+            for name in (kind._window_setting, kind._past_window_setting)
+        )
 
 
 @dataclass(frozen=True)
@@ -110,6 +233,62 @@ class Declaration:
             raise ValueError(
                 f"at most {PLUGIN_DECLARATION_NOT_CARRIED_COUNT.most} names not carried"
             )
+        reserved = self.storage._reserved if self.storage is not None else frozenset()
+        taken = next(
+            (setting.name for setting in self.settings if setting.name in reserved), None
+        )
+        if taken is not None:
+            raise ValueError(
+                f"the setting {taken} is named as a declared kind's window setting, which "
+                "the SDK declares; name it otherwise"
+            )
+
+    def _window_settings(self, archive: bool, roles: Sequence[str] = ()) -> list[Any]:
+        """The two settings the SDK declares for each kind (W6.11): its
+        window, and what is done past it, the same three choices for every
+        kind -- the deployment refuses `archived` for a kind not archivable
+        or an instance allowed no archive -- `archived` by default where the
+        instance is given an archive and the kind is archivable, `kept`
+        otherwise, never `deleted` unless an admin chooses it. `roles` the
+        edge roles they serve, on a plugin naming roles."""
+        from .client import Choice, Setting
+
+        if self.storage is None:
+            return []
+        made: list[Any] = []
+        for kind in self.storage.kinds:
+            choices = [
+                Choice("archived", "Archived", "Moved to the archive, and restorable."),
+                Choice("kept", "Kept", "Left in this plugin's storage."),
+                Choice("deleted", "Deleted", "Deleted, never inside the deployment's hold."),
+            ]
+            made.append(
+                Setting(
+                    kind._window_setting,
+                    kind=int,
+                    label=f"{kind.label}: window",
+                    default=kind.window_days,
+                    unit="days",
+                    description=(
+                        f"How long a record of {kind.label.lower()} stays in this plugin's "
+                        "storage, from when it was received. Never below the deployment's "
+                        "hold."
+                    ),
+                    roles=tuple(roles),
+                )
+            )
+            made.append(
+                Setting(
+                    kind._past_window_setting,
+                    label=f"{kind.label}: past the window",
+                    default="archived" if archive and kind.archivable else "kept",
+                    choices=tuple(choices),
+                    description=f"What is done with a record of {kind.label.lower()} past "
+                    "its window.",
+                    roles=tuple(roles),
+                )
+            )
+        return made
 
     @property
     def secret_settings(self) -> list[str]:
@@ -148,7 +327,18 @@ class Declaration:
             storage=(
                 None
                 if self.storage is None
-                else sidecar_pb2.StorageDeclaration(retention_days=self.storage.retention_days)
+                else sidecar_pb2.StorageDeclaration(
+                    retention_days=self.storage.retention_days,
+                    record_kinds=[
+                        sidecar_pb2.RawRecordKind(
+                            name=kind.name,
+                            label=kind.label,
+                            window_days=kind.window_days,
+                            archivable=kind.archivable,
+                        )
+                        for kind in self.storage.kinds
+                    ],
+                )
             ),
         )
 
@@ -165,11 +355,7 @@ class Declaration:
                 }
                 for held in self.not_carried
             ],
-            "storage": (
-                None
-                if self.storage is None
-                else {"retention_days": self.storage.retention_days}
-            ),
+            "storage": None if self.storage is None else self.storage._to_json(),
         }
 
 

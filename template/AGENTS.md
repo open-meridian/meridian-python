@@ -113,6 +113,33 @@ and subscribe to comes from the roles `pyproject.toml` declares under
   it; sent again naming the same instrument, it is answered
   `already_recorded`. Re-resolve an account's activities whenever what
   resolves them changes.
+- **A plugin at the edge declares the kinds of raw record it keeps, and
+  moves them past their window through the SDK.** A plugin holding `ccm`,
+  `custody`, `servicing`, `match`, `settlement`, `dgm` or `reporting` keeps
+  what its vendor sent in its own storage (`meridian.edge.storage_dir()`)
+  and declares each kind in its declaration: `Storage(kinds=[
+  meridian.RecordKind("activity", "Reported activity", window_days=2555)])`,
+  `archivable=False` for state read and updated in place. Declare no window
+  setting of your own: the SDK declares `<kind>_window_days` and
+  `<kind>_past_window` for every kind, and refuses a plugin that takes either
+  name. Keep each kind in units it can find again -- a file or directory per
+  account and month, say -- and name a record by its path within its unit
+  (`plugin.raw_record("activity/ACC-1/2019-03/act-77.json")`). When a unit's
+  last record is past the kind's window, do what `<kind>_past_window` says:
+  `archived`, `plugin.archive_unit(kind, unit, record_count=...,
+  first_received_ns=..., last_received_ns=...)`; `deleted`,
+  `plugin.delete_unit(...)` the same way; `kept`, nothing. Never delete a
+  unit any other way: the SDK reports each move before it removes anything,
+  and a deletion inside the deployment's hold is refused
+  (`CommandRefused`, `REFUSAL_REASON_WITHIN_HOLD`) and kept. Say what each
+  kind holds in storage on every change, `plugin.stored =
+  [meridian.StoredSpan(record_kind=..., record_count=...,
+  first_received_ns=..., last_received_ns=...)]`. On the plugin's own page,
+  resolve a row's record through `plugin.find_record(key)` (archived and
+  restorable, restored or deleted) and offer a restore at `write` as a form
+  posting `record_kind` and `unit` to `/archive/restore`, which the SDK
+  declares; `plugin.restore_unit` answers where a restored unit is readable,
+  for seven days.
 
 This file is for any coding agent working on the plugin, and is committed with
 it for whoever works on it next. It is the canonical one: `CLAUDE.md` and the

@@ -162,7 +162,7 @@ async def test_every_declaration_names_its_roles_and_registers_on_two_roles(
     ) as plugin:
         assert plugin.identity.roles == ROLES
     (sent,) = service.registered
-    assert sent.schema_version == "v15"
+    assert sent.schema_version == "v16"
     assert {p.path: list(p.roles) for p in sent.interface.pages} == {
         "/statements": ["custody"],
         "/balances": ["operations"],

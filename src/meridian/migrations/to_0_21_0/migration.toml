@@ -1,0 +1,36 @@
+# open-meridian 0.20.0 to 0.21.0: the SDK declares contract v16, an edge
+# plugin's older records moving to the archive
+# (sdk-contract/an-edge-plugins-older-records-move-to-the-archive;
+# plans/an-edge-plugins-older-records-move-to-the-archive; decisions/028).
+# Nothing a plugin calls changed, so only the pins move.
+from = "0.20.0"
+to = "0.21.0"
+summary = """
+The SDK declares contract v16 (meridian.SCHEMA_VERSION). A plugin at the edge
+declares the kinds of raw record it keeps, Storage(kinds=[RecordKind(name,
+label, window_days, archivable)]), and for each the SDK declares two settings,
+<kind>_window_days (its window, defaulting to the kind's) and
+<kind>_past_window (archived, kept or deleted; archived by default where the
+deployment gives the instance an archive, kept otherwise). Those names are the
+SDK's: a plugin declaring a setting of one of them is refused. The archive is
+meridian.edge.archive_dir() where it is mounted (MERIDIAN_ARCHIVE_DIR), or the
+bucket MERIDIAN_ARCHIVE_BUCKET names. The plugin moves its records in units,
+each a file or directory in its storage: plugin.archive_unit(kind, unit,
+record_count=, first_received_ns=, last_received_ns=),
+plugin.restore_unit(kind, unit, for_caller=), plugin.delete_unit(kind, unit,
+..., for_caller=) and plugin.find_record(key), each move reported through the
+sidecar before anything is removed and kept in an index in storage; a deletion
+inside the deployment's hold is refused, CommandRefused with
+REFUSAL_REASON_WITHIN_HOLD. plugin.stored (StoredSpan per kind) goes on every
+heartbeat. Every edge plugin with pages offers POST /archive/restore, derived
+as the restore_unit tool. A plugin built on 0.21.0 is refused at registration
+by a sidecar that accepts only v15, naming both.
+
+Nothing to rewrite: Storage(retention_days=...) stands, and a plugin declaring
+no kinds keeps its records under it as before. A plugin adopting kinds moves
+any setting of its own that held a window into its kind's window (SnapTrade's
+raw_retention_days and activity_retention_days, carried over by hand in its
+own release), and renames any setting it declared as <kind>_window_days or
+<kind>_past_window.
+"""
+breaking = false

@@ -33,6 +33,17 @@ page or setting naming a role it does not hold refuses the registration, and
 so, on a plugin built at v15 holding several roles, does one naming none;
 what it admits it keeps with its roles filled, as the sidecar reports them.
 Its access table carries one entry per role it was launched with.
+
+And from contract v16 it records the moves of raw records reported on it
+(W4.13), as the conductor records them: each with the person it was made
+for, or none for a window's move. It holds a move to the kinds the plugin
+declared, as the sidecar does, and enforces the hold over the instance
+(`hold_days`): a deletion whose last record was received inside it is
+refused FAILED_PRECONDITION with REFUSAL_REASON_WITHIN_HOLD, nothing
+recorded. A restore is for a person, and deleting an archived unit an
+admin's act: refused PERMISSION_DENIED for nobody. `read_moves` answers
+core's ReadMoves from what it recorded, newest first, with the archive's
+spans per kind summed from the moves.
 """
 
 from __future__ import annotations
@@ -443,6 +454,13 @@ class FakeSidecar(sidecar_pb2_grpc.SidecarServiceServicer):
         default_factory=list
     )
     ticket_refused: tuple[grpc.StatusCode, str] | None = None
+    # The moves recorded here (W4.13, contract v16), each with the person it
+    # was made for and when; the hold over the instance, in days; the clock
+    # the hold is read against.
+    moves: list[tuple[sidecar_pb2.RecordMoveRequest, str, int]] = field(default_factory=list)
+    hold_days: int = 0
+    now_ns: int = 0
+    move_refused: tuple[grpc.StatusCode, str] | None = None
     # Told of each heartbeat as it is heard, so a test waits for the beats it
     # asserts on instead of sleeping and counting what happened to arrive.
     beat: asyncio.Condition = field(default_factory=asyncio.Condition, repr=False)
@@ -649,6 +667,90 @@ class FakeSidecar(sidecar_pb2_grpc.SidecarServiceServicer):
         return sidecar_pb2.ReadFiledTicketsReply(
             tickets=page, next_cursor=page[-1].ticket_id if following else ""
         )
+
+    async def RecordMove(  # noqa: N802
+        self, request: sidecar_pb2.RecordMoveRequest, context: grpc.aio.ServicerContext
+    ) -> sidecar_pb2.RecordMoveReply:
+        """Recorded with its person, or refused as the sidecar refuses it:
+        a kind not declared, archived of a kind not archivable, a restore for
+        nobody, an archived unit deleted for nobody, a deletion inside the
+        hold."""
+        import time
+
+        caller = _caller(context)
+        if self.move_refused is not None:
+            await context.abort(*self.move_refused)
+        declared = {
+            kind.name: kind
+            for registered in self.registered[-1:]
+            for kind in registered.declaration.storage.record_kinds
+        }
+        kind = declared.get(request.record_kind)
+        archived = sidecar_pb2.MOVE_OUTCOME_ARCHIVED
+        if kind is None or (request.outcome == archived and not kind.archivable):
+            await context.abort(grpc.StatusCode.INVALID_ARGUMENT, "record_kind")
+        if request.outcome == sidecar_pb2.MOVE_OUTCOME_RESTORED and not caller:
+            await context.abort(
+                grpc.StatusCode.PERMISSION_DENIED, "a restore is for a person at write"
+            )
+        if request.outcome == sidecar_pb2.MOVE_OUTCOME_DELETED:
+            was_archived = any(
+                move.unit == request.unit and move.outcome == archived
+                for move, _, _ in self.moves
+            )
+            if was_archived and not caller:
+                await context.abort(
+                    grpc.StatusCode.PERMISSION_DENIED,
+                    "deleting an archived unit is an admin's act",
+                )
+            now = self.now_ns or time.time_ns()
+            if (
+                self.hold_days
+                and request.last_received_ns > now - self.hold_days * 86_400 * 10**9
+            ):
+                refusal = sidecar_pb2.Refusal(reason=sidecar_pb2.REFUSAL_REASON_WITHIN_HOLD)
+                await context.abort(
+                    grpc.StatusCode.FAILED_PRECONDITION,
+                    f"the unit's last record was received inside the hold of {self.hold_days} "
+                    "days",
+                    trailing_metadata=(("meridian-refusal-bin", refusal.SerializeToString()),),
+                )
+        kept = sidecar_pb2.RecordMoveRequest()
+        kept.CopyFrom(request)
+        self.moves.append((kept, caller, self.now_ns or time.time_ns()))
+        return sidecar_pb2.RecordMoveReply()
+
+    def read_moves(self, request: object) -> object:
+        """Core's ReadMoves (W6.9) over what was recorded here: the moves
+        newest first, each with its person, and per kind what the archive
+        holds -- the units archived and not deleted."""
+        from meridian.v1 import config_pb2
+
+        asked = config_pb2.ReadMovesRequest()
+        asked.CopyFrom(request)
+        reply = config_pb2.ReadMovesReply(
+            moves=[
+                config_pb2.MoveRecord(move=move, person=person, at_ns=at_ns)
+                for move, person, at_ns in reversed(self.moves)
+            ]
+        )
+        held: dict[str, sidecar_pb2.RecordMoveRequest] = {}
+        for move, _, _ in self.moves:
+            if move.outcome == sidecar_pb2.MOVE_OUTCOME_ARCHIVED:
+                held[move.unit] = move
+            elif move.outcome == sidecar_pb2.MOVE_OUTCOME_DELETED:
+                held.pop(move.unit, None)
+        for name in dict.fromkeys(move.record_kind for move in held.values()):
+            units = [move for move in held.values() if move.record_kind == name]
+            reply.archived.append(
+                sidecar_pb2.StoredSpan(
+                    record_kind=name,
+                    record_count=sum(move.record_count for move in units),
+                    first_received_ns=min(move.first_received_ns for move in units),
+                    last_received_ns=max(move.last_received_ns for move in units),
+                )
+            )
+        return reply
 
 
 def _caller(context: grpc.aio.ServicerContext) -> str:

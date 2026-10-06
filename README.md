@@ -2,7 +2,7 @@
 
 The Python SDK for building [Open Meridian](https://open-meridian.com) plugins:
 the tools a trader has an AI agent build, and the bots and analytics a
-developer writes. Python 3.11 or newer. This is release 0.20.0; its reference
+developer writes. Python 3.11 or newer. This is release 0.21.0; its reference
 is at [open-meridian.dev](https://open-meridian.dev/api/python-sdk/).
 
 ## Start here
@@ -639,6 +639,85 @@ async with await meridian.connect(settings=SETTINGS, declaration=DECLARATION) as
   sent; a plugin is verified for its role by passing every case. A resolve
   may state a money market fund (`stated_instrument_type`).
 
+### The archive (contract v16)
+
+A plugin at the edge declares the kinds of raw record it keeps, and past each
+kind's window its records are archived, kept or deleted, as its admin chose
+(sdk-contract/an-edge-plugins-older-records-move-to-the-archive;
+spec/an-edge-plugins-older-records-move-to-the-archive):
+
+```python
+import meridian
+from meridian.declaration import Declaration, RecordKind, Storage
+
+DECLARATION = Declaration(
+    settings=SETTINGS,
+    storage=Storage(kinds=[
+        RecordKind("activity", "Reported activity", window_days=2555),
+        RecordKind("responses", "Raw responses", window_days=30),
+        RecordKind("session", "Session state", window_days=7, archivable=False),
+    ]),
+)
+
+async with await meridian.connect(declaration=DECLARATION, interface=INTERFACE) as plugin:
+    async for settings in plugin.settings():
+        window = settings.values["activity_window_days"]   # days, the admin's
+        past = settings.values["activity_past_window"]     # archived, kept or deleted
+        for unit, count, first, last in units_past(window):  # the plugin's own units
+            if past == "archived":
+                await plugin.archive_unit("activity", unit, record_count=count,
+                                          first_received_ns=first, last_received_ns=last)
+            elif past == "deleted":
+                await plugin.delete_unit("activity", unit, record_count=count,
+                                         first_received_ns=first, last_received_ns=last)
+        plugin.stored = [meridian.StoredSpan(record_kind="activity", record_count=...,
+                                             first_received_ns=..., last_received_ns=...)]
+```
+
+- **The kinds** go on the declaration (`Storage(kinds=...)`; at most 16, each
+  name lowercase letters, digits and underscores, a label up to 40
+  characters, a window of 1 to 36,500 days, and whether a unit of it can be
+  archived). `retention_days` is the longest window unless given; a plugin
+  declaring no kinds keeps one retention, as before.
+- **The window settings** are the SDK's, two per kind for every edge plugin
+  alike: `<kind>_window_days`, defaulting to the kind's window, and
+  `<kind>_past_window`, `archived`, `kept` or `deleted`, defaulting to
+  `archived` where the instance has an archive and `kept` otherwise. A
+  plugin declaring a setting of either name is refused. The deployment
+  refuses a window below its hold.
+- **The archive** is the instance's own, where a deployment admin allowed it
+  one: `edge.archive_dir()` where it is mounted (`MERIDIAN_ARCHIVE_DIR`), or
+  in a cloud the bucket `MERIDIAN_ARCHIVE_BUCKET` names (an `s3://` URL, read
+  through boto3, which a plugin deployed with one installs), behind the same
+  interface. With neither, records past their window are kept.
+- **A unit** is a file or directory in the plugin's storage, named by its
+  path there; the records it holds are the paths within it, which rows name
+  as their `record_key`. `archive_unit` writes it to the archive, checks
+  each file landed (size and SHA-256), reports the move through the sidecar
+  with its rule (`activity_window_days 2555`), and only then removes it;
+  the move is refused before anything moves where the kind's
+  `<kind>_past_window` is not `archived`, or the settings have not arrived.
+  An index in the storage keeps what moved.
+- **Restoring** is a person's: `restore_unit(kind, unit, for_caller=)`
+  copies the unit back to a restore area in storage and answers its path,
+  readable there for seven days, after which it is removed and its return
+  reported. Every edge plugin with pages offers `POST /archive/restore`,
+  taking `record_kind` and `unit`, for a person at `write`; the deployment
+  derives it as the `restore_unit` tool, and the person is the claims'.
+- **Deleting** reports first and deletes after, so a refusal keeps the unit:
+  inside the deployment's hold, `CommandRefused` with
+  `REFUSAL_REASON_WITHIN_HOLD`. Deleting an archived unit is an admin's act,
+  `for_caller=` the person.
+- **Finding a record**: `plugin.find_record(key)` answers the last move of
+  the unit holding it, `outcome` archived (restorable), restored or deleted,
+  or None for a record never moved. A row's `record_key` on the plugin's own
+  page resolves through it, never to nothing.
+- **What is stored** is the plugin's to say, as its figures are:
+  `plugin.stored`, one `StoredSpan` per kind, on every heartbeat.
+
+The archive's bound, a deployment admin's, is the archive's own: a write past
+it fails, and the unit is kept.
+
 ### Figures on Summary
 
 Manage opens on the plugin's Summary, which core draws: its own status first
@@ -873,6 +952,7 @@ carries libcst.
 | 0.17.0 to 0.18.0: the SDK declares contract v13; a plugin files a ticket for a person and reads what it filed (`plugin.file_ticket`, `plugin.filed_tickets`, `TicketKind`, `TicketSubject`, `TicketReference`, `TicketState`, `TicketResolution`) | only the pins move | |
 | 0.18.0 to 0.19.0: the SDK declares contract v14; a custody plugin reports the custodian's activity and operations reads, hears and links it (`plugin.record_activity`, `plugin.list_activities`, `CustodialActivity`, `ActivityKind`, `ActivityRef`, `receive(activity_recorded=)`); each sync status the street keeps (`plugin.list_sync_statuses`, `receive(sync_status_recorded=)`); a table setting (`meridian.Setting(name, list, columns=...)`, `meridian.Column`) | only the pins move | |
 | 0.19.0 to 0.20.0: the SDK declares contract v15, a person's access granted per role: `roles=` on `@pages.page`, `@pages.route`, `@pages.tool`, `meridian.Setting` and `meridian.Page`; `Caller.roles`, `Caller.level_for`, `Caller.read_for`, `Caller.write_for`; `PageClient(..., roles=)` and `roles=` on its sessions; an activity re-resolved (`plugin.re_resolve_activity`, `re_resolutions`, `receive(activity_re_resolved=)`); a plugin holding one role or none names no role, and one coming to hold a second names `roles=` on every page, route, tool and setting, which `meridian plugin check` reports | only the pins move | |
+| 0.20.0 to 0.21.0: the SDK declares contract v16, an edge plugin's older records move to the archive: the kinds of raw record (`Storage(kinds=[RecordKind(...)])`) and the two settings the SDK declares per kind (`<kind>_window_days`, `<kind>_past_window`), reserved; the archive (`edge.archive_dir()`, `MERIDIAN_ARCHIVE_BUCKET`); the moves with their index (`plugin.archive_unit`, `plugin.restore_unit`, `plugin.delete_unit`, `plugin.find_record`), a deletion inside the hold a `CommandRefused` with `REFUSAL_REASON_WITHIN_HOLD`; what each kind holds in storage on the heartbeat (`plugin.stored`, `StoredSpan`); `POST /archive/restore` on every edge plugin's host, derived as the `restore_unit` tool. A plugin declaring no kinds keeps `retention_days` as before, so `meridian plugin migrate` needs no change in the command line | only the pins move | a setting of the plugin's own that held a window, moved into its kind's window by its own release (SnapTrade's two); a setting it declared as `<kind>_window_days` or `<kind>_past_window`, renamed |
 
 `tests/migrations/` holds the plugins the migrations are recorded for, as
 written and as their migration leaves them, and `make check-migrations` holds

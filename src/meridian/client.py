@@ -60,7 +60,9 @@ from .operations import Operations, _enum
 from .statements import checked
 
 if TYPE_CHECKING:
-    from .declaration import Declaration
+    from pathlib import Path
+
+    from .declaration import Declaration, Storage
     from .pages import Pages
 
 #: The contract version this SDK was built for, sent at registration (W4.1). A
@@ -77,9 +79,12 @@ if TYPE_CHECKING:
 #: from v14 the custodian's activity recorded and read, and each sync status
 #: the street keeps, and from v15 the roles each page, tool and setting
 #: serves, the person's level and accounts on each role in the claims, and an
-#: activity re-resolved -- and a newer sidecar still admits it. Raised with
-#: every contract revision that adds something a plugin can depend on.
-SCHEMA_VERSION = "v15"
+#: activity re-resolved, and from v16 the kinds of raw record in the
+#: declaration, what each holds in storage on the heartbeat, and a move of
+#: raw records reported and refused inside a hold -- and a newer sidecar
+#: still admits it. Raised with every contract revision that adds something
+#: a plugin can depend on.
+SCHEMA_VERSION = "v16"
 
 #: Where a sidecar listens. Loopback, always: a sidecar reachable from another
 #: host is a way around the boundary it exists to enforce.
@@ -121,7 +126,13 @@ _OPERATION_FAILURES = {
 
 #: The statuses a refusal with a code arrives beside: a component's refusal
 #: of its own, or one it could not check, to be tried again (contract v10).
-_CODED = (grpc.StatusCode.ABORTED, grpc.StatusCode.UNAVAILABLE)
+_CODED = (
+    grpc.StatusCode.ABORTED,
+    grpc.StatusCode.UNAVAILABLE,
+    # A deletion inside the hold over the instance, REFUSAL_REASON_WITHIN_HOLD
+    # (W4.13, contract v16): refused before it leaves the sidecar.
+    grpc.StatusCode.FAILED_PRECONDITION,
+)
 
 #: Where the sidecar sends a refusal's code, beside its status: a `Refusal`,
 #: encoded (spec/typed-sidecar-operations, section 7).
@@ -941,6 +952,13 @@ class Plugin(Operations):
     _healthy: bool = field(default=True, repr=False)
     _detail: str = field(default="", repr=False)
     _not_carried_seen: dict[tuple[str, str], int] = field(default_factory=dict, repr=False)
+    # The storage it declared, with its kinds of raw record (contract v16);
+    # the settings as last delivered, which a window's move names; what it
+    # says each kind holds in storage; and its moves.
+    _storage: Storage | None = field(default=None, repr=False)
+    _settings_now: dict[str, Any] | None = field(default=None, repr=False)
+    _stored: tuple[sidecar_pb2.StoredSpan, ...] = field(default=(), repr=False)
+    _mover: Any = field(default=None, repr=False)
 
     def raw_record(self, key: str) -> Any:
         """A reference to a raw record in this plugin's own storage, by its
@@ -993,7 +1011,7 @@ class Plugin(Operations):
             if setting.default is not None
         }
         async for delivered in self._stub.WatchSettings(sidecar_pb2.WatchSettingsRequest()):
-            yield Settings(
+            now = Settings(
                 values=defaults
                 | {
                     held.name: by_name[held.name]._parsed(held.value)
@@ -1002,6 +1020,8 @@ class Plugin(Operations):
                 },
                 missing_required=tuple(delivered.missing_required),
             )
+            self._settings_now = dict(now.values)
+            yield now
 
     async def account_scope(self) -> AsyncIterator[AccountScope]:
         """Its account scope and its links, now and again on every change
@@ -1133,6 +1153,112 @@ class Plugin(Operations):
         )
         return reply
 
+    # ── The archive (contract v16) ───────────────────────────────────────
+
+    @property
+    def stored(self) -> Sequence[sidecar_pb2.StoredSpan]:
+        """What this plugin's storage holds of each kind of raw record it
+        declared (W4.5, contract v16), as last set: one `StoredSpan` per kind,
+        its count and the span from the first received to the last, on every
+        heartbeat from the next on. Only the plugin knows its storage; what
+        the archive holds the deployment sums from the moves. Refused here,
+        as the sidecar would refuse it, for a kind not declared, a kind
+        twice or more than 16; nothing is set then."""
+        return self._stored
+
+    @stored.setter
+    def stored(self, spans: Sequence[sidecar_pb2.StoredSpan]) -> None:
+        from .edge import _stored
+
+        self._stored = _stored(spans, self._storage)
+
+    def _moves(self) -> Any:
+        from .edge import _Mover
+
+        if self._mover is None:
+            self._mover = _Mover(self)
+        return self._mover
+
+    async def archive_unit(
+        self,
+        record_kind: str,
+        unit: str,
+        *,
+        record_count: int,
+        first_received_ns: int,
+        last_received_ns: int,
+    ) -> None:
+        """Move one unit of a kind of raw record past its window to the
+        archive (W4.13, contract v16): written there, each file checked to
+        have landed (size and digest), the move reported through the sidecar
+        with its rule -- the kind's window setting and its value -- and only
+        then removed from storage, the index keeping it as archived and
+        restorable. `unit` is its path in the plugin's storage, a file or a
+        directory; `record_count` and the span are the records it holds.
+
+        Refused before anything moves for a kind not declared or declared
+        not archivable, an instance given no archive, a unit not in storage
+        or archived already, the settings not yet delivered, or the kind's
+        `<kind>_past_window` not `archived`; and by the sidecar, which
+        records nothing, the unit kept (`CallFailed`). An archive past its
+        bound refuses the write, and the unit is kept."""
+        self._check_open()
+        await self._moves().archive(
+            record_kind, unit, record_count, first_received_ns, last_received_ns
+        )
+
+    async def restore_unit(
+        self, record_kind: str, unit: str, *, for_caller: Caller | str
+    ) -> Path:
+        """Restore an archived unit for the person who asked (W4.13, W6.9):
+        copied back from the archive, each file checked against what was
+        archived, to the restore area in storage, the restore reported for
+        `for_caller` -- their `Caller` or the header it was read from, at
+        write on one of the plugin's edge roles. Answers where the unit is
+        readable, until the restore period (seven days) passes and it is
+        removed, its return reported; asked again meanwhile, the same path
+        and nothing reported. Refused for a unit not archived; by the
+        sidecar for a person without write (`NotGranted`), the copy
+        removed."""
+        self._check_open()
+        restored: Path = await self._moves().restore(record_kind, unit, for_caller)
+        return restored
+
+    async def delete_unit(
+        self,
+        record_kind: str,
+        unit: str,
+        *,
+        record_count: int = 0,
+        first_received_ns: int = 0,
+        last_received_ns: int = 0,
+        for_caller: Caller | str | None = None,
+    ) -> None:
+        """Delete one unit (W4.13, contract v16), the deletion reported
+        before anything is removed, so a refusal keeps it. A unit in storage
+        past its window, as the plugin itself, where the kind's
+        `<kind>_past_window` is `deleted`, its count and span given; or an
+        archived unit, which is an admin's act, `for_caller` the person at
+        admin on one of the plugin's edge roles, its count and span the
+        index's. Inside the deployment's hold the sidecar refuses it:
+        `CommandRefused` with REFUSAL_REASON_WITHIN_HOLD, nothing recorded
+        and nothing deleted."""
+        self._check_open()
+        await self._moves().delete(
+            record_kind, unit, record_count, first_received_ns, last_received_ns, for_caller
+        )
+
+    def find_record(self, key: str) -> sidecar_pb2.RecordMoveRequest | None:
+        """Where a raw record's key stands, by the index of what moved: the
+        last move of the unit holding it -- the unit itself or a path in it
+        -- whose `outcome` says archived and restorable (ARCHIVED),
+        readable in the restore area (RESTORED) or deleted (DELETED); None
+        for a record never moved, in storage where the plugin put it, or
+        unknown. What a row's `record_key` resolves to on the plugin's own
+        page (W4.13, requirement 6)."""
+        found: sidecar_pb2.RecordMoveRequest | None = self._moves().find(key)
+        return found
+
     async def _for_person(self, operation: str, call: Awaitable[_Answer]) -> _Answer:
         """A call sent for a person, its refusal in this package's terms as a
         typed operation's is."""
@@ -1231,6 +1357,12 @@ class Plugin(Operations):
             # would raise from a background task nobody awaited.
             with contextlib.suppress(grpc.aio.AioRpcError):
                 await self._stub.Heartbeat(self._heartbeat_request())
+            if self._storage is not None and self._storage.kinds:
+                # Restored units past the restore period, returned (W4.13);
+                # tried again on the next beat where it fails.
+                with contextlib.suppress(Exception):
+                    async with self._moves().lock:
+                        await self._moves().return_due()
 
     def _heartbeat_request(self) -> sidecar_pb2.HeartbeatRequest:
         """The health and figures as they stand: healthy, with no detail and
@@ -1243,6 +1375,7 @@ class Plugin(Operations):
                 sidecar_pb2.NotCarriedSeen(scheme=scheme, name=name, count=count)
                 for (scheme, name), count in sorted(self._not_carried_seen.items())
             ],
+            stored=self._stored,
         )
 
 
@@ -1324,6 +1457,22 @@ async def connect(
             not_carried=declaration.not_carried,
             storage=declaration.storage,
         )
+    # From contract v16, the two settings per kind of raw record, which the
+    # SDK declares for every edge plugin alike (W4.1, W6.11), and the restore
+    # route on its host (the names' choice b).
+    storage = declaration.storage
+    if storage is not None and storage.kinds:
+        from .edge import _archive, _restore_route
+
+        edge = _edge_roles(settings, interface)
+        settings = (
+            *settings,
+            *declaration._window_settings(archive=_archive() is not None, roles=edge),
+        )
+        from .pages import Pages as _Pages
+
+        if interface is not None and isinstance(interface.pages, _Pages):
+            _restore_route(interface.pages, edge)
     target = address or os.environ.get("MERIDIAN_SIDECAR_ADDRESS") or DEFAULT_ADDRESS
     channel = grpc.aio.insecure_channel(target)
     stub = sidecar_pb2_grpc.SidecarServiceStub(channel)
@@ -1370,6 +1519,7 @@ async def connect(
         _stub=stub,
         _operations_stub=operations_pb2_grpc.PluginOperationsStub(channel),
         _declared=tuple(settings),
+        _storage=storage,
     )
     if heartbeat:
         plugin._heartbeat = asyncio.create_task(plugin._beat())
@@ -1379,6 +1529,22 @@ async def connect(
 
     report_ready()
     return plugin
+
+
+def _edge_roles(settings: Sequence[Setting], interface: Interface | None) -> tuple[str, ...]:
+    """The edge roles the window settings and the restore route serve, on a
+    plugin naming roles (contract v15): those its own settings and pages
+    name; none on a plugin naming none, which serves its one role."""
+    from .declaration import EDGE_ROLES
+    from .pages import Pages as _Pages
+
+    named: list[str] = [role for setting in settings for role in setting.roles]
+    if interface is not None:
+        pages = (
+            interface.pages.declared if isinstance(interface.pages, _Pages) else interface.pages
+        )
+        named.extend(role for page in pages for role in page.roles)
+    return tuple(sorted({role for role in named if role in EDGE_ROLES}))
 
 
 def __getattr__(name: str) -> Any:

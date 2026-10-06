@@ -99,14 +99,21 @@ async def test_the_sdk_declares_the_contract_it_was_built_for(
     claims, and an activity re-resolved (sdk-contract/access-is-granted-per-
     role): a sidecar still at v14 holds no declaration to a role, so it
     refuses the plugin at registration, naming both versions.
+
+    v16 is an edge plugin's older records moving to the archive: the kinds
+    of raw record in the declaration, what each holds in storage on the
+    heartbeat, and a move reported and refused inside a hold
+    (sdk-contract/an-edge-plugins-older-records-move-to-the-archive): a
+    sidecar still at v15 answers no move, so it refuses the plugin at
+    registration, naming both versions.
     """
     service, address = sidecar
     plugin = await meridian.connect(address, heartbeat=False)
     await plugin.leave()
 
     (sent,) = service.registered
-    assert meridian.SCHEMA_VERSION == "v15"
-    assert sent.schema_version == "v15"
+    assert meridian.SCHEMA_VERSION == "v16"
+    assert sent.schema_version == "v16"
 
 
 async def test_identity_and_grants_come_back(sidecar: tuple[FakeSidecar, str]) -> None:

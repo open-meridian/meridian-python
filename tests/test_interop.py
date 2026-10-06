@@ -1472,3 +1472,113 @@ async def test_a_re_resolution_of_nothing_recorded_or_an_unlinked_account_is_ref
             provenance=linked_by("Ada Park"),
             resolved_at_ns=NOW,
         )
+
+
+# ── An edge plugin's older records move to the archive (contract v16) ───────
+
+ARCHIVE_KINDS = meridian.Storage(
+    kinds=[
+        meridian.RecordKind("activity", "Reported activity", window_days=2555),
+        meridian.RecordKind("session", "Session state", window_days=7, archivable=False),
+    ]
+)
+# A month of an account's activity received in 2019: past any hold a run sets.
+FIRST_RECEIVED, LAST_RECEIVED = 1_551_398_400_000_000_000, 1_554_076_799_000_000_000
+
+
+async def test_a_custody_plugin_declares_its_kinds_and_says_what_its_storage_holds() -> None:
+    """W4.1, W4.5, W6.11: the kinds on the declaration, the SDK's two window
+    settings per kind admitted beside them, and what each kind holds in
+    storage taken on the heartbeat; a kind the declaration does not name
+    refused there."""
+    async with await meridian.connect(
+        address(), heartbeat=False, declaration=meridian.Declaration(storage=ARCHIVE_KINDS)
+    ) as plugin:
+        stream = plugin.settings()
+        async with asyncio.timeout(10):
+            first = await anext(stream)
+        await stream.aclose()
+        assert first.values["activity_window_days"] == 2555
+        assert first.values["activity_past_window"] == "kept"
+        assert first.values["session_past_window"] == "kept"
+        plugin.stored = [
+            meridian.StoredSpan(
+                record_kind="activity",
+                record_count=3,
+                first_received_ns=FIRST_RECEIVED,
+                last_received_ns=LAST_RECEIVED,
+            )
+        ]
+        await plugin.report(healthy=True)
+        # Past the SDK's own check, as an older SDK might send it.
+        with pytest.raises(grpc.aio.AioRpcError) as refused:
+            await plugin._stub.Heartbeat(
+                sidecar_pb2.HeartbeatRequest(
+                    healthy=True,
+                    stored=[sidecar_pb2.StoredSpan(record_kind="statements", record_count=3)],
+                )
+            )
+        assert refused.value.code() is grpc.StatusCode.INVALID_ARGUMENT
+        assert "stored[0].record_kind" in (refused.value.details() or "")
+
+
+async def test_a_units_move_is_recorded_and_one_the_sidecar_refuses_is_named(
+    tmp_path, monkeypatch
+) -> None:
+    """W4.13 against the real sidecar and conductor: a kind the declaration
+    does not name, and archived of one declared not archivable, refused by
+    the sidecar naming record_kind; and a window's move to an archive the
+    instance was never allowed -- core's interop allows none, whatever the
+    plugin's environment says -- refused by the conductor naming record_kind,
+    the unit kept in storage and the archive's copy taken back. The move
+    recorded is `make e2e-archive`'s, on the harness, where an archive is
+    allowed."""
+    granted, archive = tmp_path / "storage", tmp_path / "archive"
+    unit = "activity/ACC-INTEROP/2019-03"
+    (granted / unit).mkdir(parents=True)
+    (granted / unit / "act-1.json").write_text('{"id": 1}')
+    archive.mkdir()
+    monkeypatch.setenv("MERIDIAN_STORAGE_DIR", str(granted))
+    monkeypatch.setenv("MERIDIAN_ARCHIVE_DIR", str(archive))
+    async with await meridian.connect(
+        address(), heartbeat=False, declaration=meridian.Declaration(storage=ARCHIVE_KINDS)
+    ) as plugin:
+        # What the SDK checks before sending, sent past it to the sidecar.
+        for kind, outcome in (
+            ("statements", sidecar_pb2.MOVE_OUTCOME_DELETED),
+            ("session", sidecar_pb2.MOVE_OUTCOME_ARCHIVED),
+        ):
+            with pytest.raises(grpc.aio.AioRpcError) as refused:
+                await plugin._stub.RecordMove(
+                    sidecar_pb2.RecordMoveRequest(
+                        record_kind=kind,
+                        unit=unit,
+                        record_count=1,
+                        first_received_ns=FIRST_RECEIVED,
+                        last_received_ns=LAST_RECEIVED,
+                        outcome=outcome,
+                        rule=f"{kind}_window_days 7",
+                    )
+                )
+            assert refused.value.code() is grpc.StatusCode.INVALID_ARGUMENT
+            assert "record_kind" in (refused.value.details() or "")
+
+        # Given an archive, archived past the window by default (W6.11).
+        stream = plugin.settings()
+        async with asyncio.timeout(10):
+            first = await anext(stream)
+        await stream.aclose()
+        assert first.values["activity_past_window"] == "archived"
+        with pytest.raises(CallFailed) as refused_move:
+            await plugin.archive_unit(
+                "activity",
+                unit,
+                record_count=1,
+                first_received_ns=FIRST_RECEIVED,
+                last_received_ns=LAST_RECEIVED,
+            )
+        assert "record_kind" in str(refused_move.value)
+        assert "allowed no archive" in str(refused_move.value)
+        assert plugin.find_record(unit) is None
+    assert (granted / unit / "act-1.json").read_text() == '{"id": 1}'
+    assert list(archive.rglob("*.json")) == []
