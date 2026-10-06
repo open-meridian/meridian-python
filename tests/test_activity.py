@@ -8,6 +8,11 @@ already recorded, the reads' paging and `history_from` handed back as sent,
 the rows heard typed, and a break's cause linked to an activity. What the
 sidecar stamps and refuses, and what the street derives nothing from, is
 meridian-core's to test, and the interop suite's.
+
+From contract v15 an activity recorded before its instrument resolved is
+re-resolved (W2.15, W2.16): the SDK's send, answered as already recorded when
+the latest resolution names it, read back beside the activity as first
+recorded, and heard typed.
 """
 
 from __future__ import annotations
@@ -21,7 +26,16 @@ import pytest
 
 import meridian
 from conftest import FakeSidecar
-from meridian import ActivityKind, ActivityRef, CustodialActivity, Heard, Money, RawRecordRef
+from meridian import (
+    ActivityKind,
+    ActivityRef,
+    CallFailed,
+    CustodialActivity,
+    Heard,
+    Money,
+    Provenance,
+    RawRecordRef,
+)
 from meridian.operations import Operations
 from meridian.plugin.v1 import operations_pb2 as ops
 
@@ -310,3 +324,117 @@ async def test_receive_hands_on_only_the_rows_given_a_handler() -> None:
 
     await Hearing().receive(statement_recorded=statement, seed=False)
     assert handed == {"StatementRecorded": statement, "seed": False}
+
+
+# ── An activity re-resolved (W2.15, W2.16, contract v15) ─────────────────
+
+#: The plan-code link a person set, which resolved OQKR to VIGIX.
+LINKED_BY = Provenance(
+    field="instrument_id",
+    kind="PROVENANCE_KIND_SUPPLIED",
+    person="Ada Park, in SnapTrade's plan-code links",
+)
+
+
+def unresolved(identifier: str) -> CustodialActivity:
+    """A 401(k) reinvestment under the plan's own code, which resolved to
+    nothing when it was recorded."""
+    return reinvestment(
+        identifier,
+        instrument_id="",
+        instrument_as_reported=meridian.AsReported(
+            scheme="snaptrade:symbol", code="OQKR", text="OQKR"
+        ),
+    )
+
+
+async def re_resolve(
+    plugin: meridian.Plugin, identifier: str, instrument_id: str = "INS-VIGIX"
+) -> ops.ReResolveActivityResult:
+    return await plugin.re_resolve_activity(
+        external_account_id=EXTERNAL,
+        source="snaptrade",
+        external_activity_id=identifier,
+        instrument_id=instrument_id,
+        provenance=LINKED_BY,
+        resolved_at_ns=1_791_158_400_000_000_000,
+    )
+
+
+async def test_an_activity_is_re_resolved_beside_its_first_record(sidecar) -> None:
+    service, _ = sidecar
+    plugin = await connected(sidecar)
+    try:
+        first = await plugin.record_activity(
+            external_account_id=EXTERNAL, source="snaptrade", activity=unresolved("401k-1")
+        )
+        done = await re_resolve(plugin, "401k-1")
+        again = await re_resolve(plugin, "401k-1")
+        moved = await re_resolve(plugin, "401k-1", "INS-VFIAX")
+        read = await plugin.list_activities(account_id="ACC-1")
+    finally:
+        await plugin.leave()
+    assert (done.activity_id, done.already_recorded) == (first.activity_id, False)
+    assert again.already_recorded, "naming what the latest resolution names"
+    assert not moved.already_recorded
+
+    sent = service.operations.sent[1]
+    assert isinstance(sent, ops.ReResolveActivityParams)
+    assert sent.provenance.kind == ops.PROVENANCE_KIND_SUPPLIED, "an enum by its name"
+    assert sent.provenance.person == LINKED_BY.person
+    assert not sent.HasField("acting_for"), "the plugin sends it as itself"
+
+    (kept,) = read.activities
+    assert kept.activity.instrument_id == "", "the activity as first recorded"
+    assert kept.activity.instrument_as_reported.code == "OQKR"
+    assert [(r.activity_id, r.instrument_id) for r in read.re_resolutions] == [
+        (first.activity_id, "INS-VIGIX"),
+        (first.activity_id, "INS-VFIAX"),
+    ], "each its own record; the activity's instrument is the latest's"
+    assert read.re_resolutions[0].account_id == "ACC-1"
+
+
+async def test_a_re_resolution_of_nothing_recorded_is_refused(sidecar) -> None:
+    plugin = await connected(sidecar)
+    try:
+        with pytest.raises(CallFailed) as refused:
+            await re_resolve(plugin, "never-sent")
+    finally:
+        await plugin.leave()
+    assert refused.value.kind == "handler error"
+    assert "no activity is recorded as never-sent" in str(refused.value)
+
+
+async def test_a_re_resolution_is_heard_typed_and_caught_up_from_a_read(sidecar) -> None:
+    _, address = sidecar
+    reporter = await meridian.connect(address, heartbeat=False)
+    try:
+        first = await reporter.record_activity(
+            external_account_id=EXTERNAL, source="snaptrade", activity=unresolved("401k-2")
+        )
+        await re_resolve(reporter, "401k-2")
+    finally:
+        await reporter.leave()
+
+    heard: list[Heard[ops.ActivityReResolvedEvent]] = []
+    one = asyncio.Event()
+
+    async def re_resolved(each: Heard[ops.ActivityReResolvedEvent]) -> None:
+        heard.append(each)
+        one.set()
+
+    plugin = await meridian.connect(address, heartbeat=False)
+    task = asyncio.create_task(plugin.receive(activity_re_resolved=re_resolved))
+    try:
+        await asyncio.wait_for(one.wait(), timeout=5)
+        await asyncio.sleep(0.1)
+    finally:
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        await plugin.leave()
+    (caught,) = heard
+    assert caught.caught_up and caught.row == "ActivityReResolved"
+    assert caught.message.re_resolution.activity_id == first.activity_id
+    assert caught.message.re_resolution.instrument_id == "INS-VIGIX"
+    assert caught.message.re_resolution.account_id == "ACC-1"

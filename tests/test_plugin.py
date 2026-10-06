@@ -93,14 +93,20 @@ async def test_the_sdk_declares_the_contract_it_was_built_for(
     the street keeps (sdk-contract/the-custodians-activity-contract): a
     sidecar still at v13 serves neither, so it refuses the plugin at
     registration, naming both versions.
+
+    v15 is a person's access granted per role: the roles each page, tool
+    and setting serves, the person's level and accounts on each role in the
+    claims, and an activity re-resolved (sdk-contract/access-is-granted-per-
+    role): a sidecar still at v14 holds no declaration to a role, so it
+    refuses the plugin at registration, naming both versions.
     """
     service, address = sidecar
     plugin = await meridian.connect(address, heartbeat=False)
     await plugin.leave()
 
     (sent,) = service.registered
-    assert meridian.SCHEMA_VERSION == "v14"
-    assert sent.schema_version == "v14"
+    assert meridian.SCHEMA_VERSION == "v15"
+    assert sent.schema_version == "v15"
 
 
 async def test_identity_and_grants_come_back(sidecar: tuple[FakeSidecar, str]) -> None:

@@ -21,7 +21,18 @@ And it keeps the custodian's activity and each sync status reported on it
 reads back and hears: an activity once per source, account and
 `external_activity_id`, a redelivery answered `already_recorded`; every sync
 status heard; each numbered in the street's partition, against the account
-`links` names for its external account, or none.
+`links` names for its external account, or none. From contract v15 it keeps
+each re-resolution beside the activity as first recorded, numbered apart from
+the activities, one naming what the latest resolution names answered
+`already_recorded`, and one of nothing recorded refused as the street refuses
+it; and reads them back in `re_resolutions`.
+
+And it holds what a plugin declares to the roles it was launched with, as the
+sidecar does at registration (W4.1, contract v15), in the sidecar's words: a
+page or setting naming a role it does not hold refuses the registration, and
+so, on a plugin built at v15 holding several roles, does one naming none;
+what it admits it keeps with its roles filled, as the sidecar reports them.
+Its access table carries one entry per role it was launched with.
 """
 
 from __future__ import annotations
@@ -70,6 +81,10 @@ class FakeOperations(operations_pb2_grpc.PluginOperationsServicer):
     activities: list[operations_pb2.ActivityRecordedEvent] = field(default_factory=list)
     sync_statuses: list[operations_pb2.SyncStatusRecordedEvent] = field(default_factory=list)
     head: int = 0
+    # Each re-resolution of an activity (W2.15, W2.16, contract v15), kept
+    # beside it: numbered in the street's partition, chained per account
+    # apart from the activities.
+    re_resolutions: list[operations_pb2.ActivityReResolution] = field(default_factory=list)
 
     async def Receive(self, request, context):  # noqa: N802
         self.received.append(request)
@@ -179,10 +194,70 @@ class FakeOperations(operations_pb2_grpc.PluginOperationsServicer):
                 )
         return await self._answer(request, answer, context)
 
+    async def ReResolveActivity(self, request, context):  # noqa: N802
+        """The activity named by source, the linked account and the
+        custodian's identifier, re-resolved beside its first record; one
+        naming what the latest resolution names is already recorded, and one
+        of nothing recorded is refused, ABORTED, as the street refuses it."""
+        account = self.links.get(request.external_account_id, "")
+        key = (request.source, account, request.external_activity_id)
+        held = next(
+            (
+                a
+                for a in self.activities
+                if (a.source, a.account_id, a.activity.external_activity_id) == key
+            ),
+            None,
+        )
+        self.sent.append(request)
+        if self.refuse is not None:
+            await context.abort(*self.refuse, trailing_metadata=self.refuse_metadata)
+        if held is None:
+            await context.abort(
+                grpc.StatusCode.ABORTED,
+                f"no activity is recorded as {request.external_activity_id} from "
+                f"{request.source} on {account}; a re-resolution re-resolves an activity "
+                "already recorded",
+            )
+        latest = next(
+            (
+                r.instrument_id
+                for r in reversed(self.re_resolutions)
+                if r.activity_id == held.activity_id
+            ),
+            held.activity.instrument_id,
+        )
+        if latest == request.instrument_id:
+            return operations_pb2.ReResolveActivityResult(
+                activity_id=held.activity_id, already_recorded=True
+            )
+        journal, cause = self._numbered()
+        journal.previous_sequence = next(
+            (
+                r.journal.sequence
+                for r in reversed(self.re_resolutions)
+                if r.account_id == account
+            ),
+            0,
+        )
+        self.re_resolutions.append(
+            operations_pb2.ActivityReResolution(
+                activity_id=held.activity_id,
+                account_id=account,
+                instrument_id=request.instrument_id,
+                provenance=request.provenance,
+                resolved_at_ns=request.resolved_at_ns,
+                recorded_at_ns=cause.committed_at_ns,
+                journal=journal,
+            )
+        )
+        return operations_pb2.ReResolveActivityResult(activity_id=held.activity_id)
+
     async def ListActivities(self, request, context):  # noqa: N802
         """By trade date, inclusive, or since a watermark in the order
         recorded; paged; with the named account's `history_from` as its
-        latest sync status said it."""
+        latest sync status said it; and the re-resolutions beside the
+        activities answered, or, since a watermark, every one after it."""
         self.reads.append(request)
         found = [
             a
@@ -196,9 +271,18 @@ class FakeOperations(operations_pb2_grpc.PluginOperationsServicer):
         if request.HasField("since"):
             since = request.since.partitions[0].sequence
             found = [a for a in found if a.journal.sequence > since]
+            re_resolved = [
+                r
+                for r in self.re_resolutions
+                if (not request.account_id or r.account_id == request.account_id)
+                and r.journal.sequence > since
+            ]
         else:
             found.sort(key=lambda a: (a.activity.trade_date, a.journal.sequence))
         page, following = _page(found, request.page_size, request.cursor)
+        if not request.HasField("since"):
+            answered = {a.activity_id for a in page}
+            re_resolved = [r for r in self.re_resolutions if r.activity_id in answered]
         history_from = next(
             (
                 s.status.history_from
@@ -212,6 +296,7 @@ class FakeOperations(operations_pb2_grpc.PluginOperationsServicer):
             next_cursor=following,
             as_of=self._as_of(),
             history_from=history_from,
+            re_resolutions=re_resolved,
         )
 
     async def ListSyncStatuses(self, request, context):  # noqa: N802
@@ -345,6 +430,8 @@ class FakeSidecar(sidecar_pb2_grpc.SidecarServiceServicer):
     # What the client actually sent, so a test can assert the client did not
     # supply something it must not be able to supply.
     registered: list[sidecar_pb2.RegisterRequest] = field(default_factory=list)
+    # What was admitted, each declaration's roles as served (contract v15).
+    reported: list[sidecar_pb2.RegisterRequest] = field(default_factory=list)
     heartbeats: list[sidecar_pb2.HeartbeatRequest] = field(default_factory=list)
     left: list[sidecar_pb2.LeaveRequest] = field(default_factory=list)
     operations: FakeOperations = field(default_factory=FakeOperations)
@@ -366,6 +453,9 @@ class FakeSidecar(sidecar_pb2_grpc.SidecarServiceServicer):
         self.registered.append(request)
         if not self.admitted:
             return sidecar_pb2.RegisterReply(admitted=False, refusal_reason=self.refusal_reason)
+        refused = self._roles_refused(request)
+        if refused:
+            return sidecar_pb2.RegisterReply(admitted=False, refusal_reason=refused)
         return sidecar_pb2.RegisterReply(
             admitted=True,
             deployment_id="dep-local-1",
@@ -374,6 +464,47 @@ class FakeSidecar(sidecar_pb2_grpc.SidecarServiceServicer):
             publish_grants=list(self.publish_grants),
             subscribe_grants=list(self.subscribe_grants),
         )
+
+    def _roles_refused(self, request: sidecar_pb2.RegisterRequest) -> str:
+        """Each page and setting held to the roles this sidecar was launched
+        with (W4.1, contract v15), as core's sidecar holds them and in its
+        words; filled where it names none and may, so `reported` carries
+        what was served. Empty when everything is admitted."""
+        built_at = int(request.schema_version.removeprefix("v") or 0)
+        launched = list(self.roles)
+        holds = f"it holds {' and '.join(launched)}" if launched else "it holds no role"
+
+        def served(named: list[str]) -> list[str] | str:
+            stranger = next((role for role in named if role not in launched), None)
+            if stranger is not None:
+                return f"serves {stranger}, which this plugin was not launched with: {holds}"
+            if named:
+                return list(dict.fromkeys(named))
+            if len(launched) > 1 and built_at >= 15:
+                return (
+                    f"names no role, and {holds}: on a plugin holding several roles each "
+                    "page, tool and setting names the roles it serves"
+                )
+            return launched
+
+        kept = sidecar_pb2.RegisterRequest()
+        kept.CopyFrom(request)
+        for page in kept.interface.pages:
+            roles = served(list(page.roles))
+            if isinstance(roles, str):
+                return f"the page {page.path} ({page.title}) {roles}"
+            page.roles[:] = roles
+        for setting in kept.settings:
+            roles = served(list(setting.roles))
+            if isinstance(roles, str):
+                return f"the setting {setting.name} {roles}"
+            setting.roles[:] = roles
+        for tool in kept.tools:
+            roles = served(list(tool.roles))
+            if not isinstance(roles, str):
+                tool.roles[:] = roles
+        self.reported.append(kept)
+        return ""
 
     async def WatchSettings(  # noqa: N802
         self, request: sidecar_pb2.WatchSettingsRequest, context: grpc.aio.ServicerContext
@@ -390,8 +521,27 @@ class FakeSidecar(sidecar_pb2_grpc.SidecarServiceServicer):
     async def PluginAccess(  # noqa: N802
         self, request: sidecar_pb2.PluginAccessRequest, context: grpc.aio.ServicerContext
     ) -> sidecar_pb2.PluginAccessReply:
+        # One group writing ACC-1 and reading ACC-2 through every role this
+        # sidecar was launched with, each role's entry its accounts as
+        # positions in the group's read accounts (W4.10, contract v15).
         return sidecar_pb2.PluginAccessReply(
-            user_groups=[sidecar_pb2.UserGroupAccess(user_group_id="UG-1", name="Operations")]
+            user_groups=[
+                sidecar_pb2.UserGroupAccess(
+                    user_group_id="UG-1",
+                    name="Operations",
+                    read_account_ids=["ACC-1", "ACC-2"],
+                    write_account_ids=["ACC-1"],
+                    roles=[
+                        sidecar_pb2.RoleAccess(
+                            role=role,
+                            level=sidecar_pb2.ACCESS_LEVEL_WRITE,
+                            read_positions=[0, 1],
+                            write_positions=[0],
+                        )
+                        for role in self.roles
+                    ],
+                )
+            ]
         )
 
     async def Heartbeat(  # noqa: N802

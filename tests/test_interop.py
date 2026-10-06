@@ -171,6 +171,40 @@ async def test_the_account_scope_and_access_table_come_from_the_conductor(plugin
     assert [group.user_group_id for group in table.user_groups] == ["ug-interop"]
 
 
+async def test_declarations_name_the_roles_they_serve_on_the_v15_sidecar() -> None:
+    """W4.1, contract v15: a page and a setting naming custody, the role this
+    sidecar was launched with, register; one naming a role it was not
+    launched with refuses the registration, naming that role and the
+    plugin's own."""
+    pages = meridian.Pages("Roles")
+
+    @pages.page("/", "Statements", roles=["custody"], levels=["write", "read"])
+    async def statements(request: meridian.Request) -> str:
+        return ""
+
+    async with await meridian.connect(
+        address(),
+        heartbeat=False,
+        interface=meridian.Interface(port=8000, title="Roles", pages=pages),
+        settings=[meridian.Setting("poll_minutes", int, default=15, roles=["custody"])],
+    ) as plugin:
+        assert plugin.identity.roles == ("custody",)
+
+    with pytest.raises(meridian.Refused) as refused:
+        await meridian.connect(
+            address(),
+            heartbeat=False,
+            interface=meridian.Interface(
+                port=8000,
+                title="Roles",
+                pages=[meridian.Page("/orders", "Orders", levels=["write"], roles=["oms"])],
+            ),
+        )
+    said = str(refused.value)
+    assert "serves oms, which this plugin was not launched with" in said, said
+    assert "it holds custody" in said, said
+
+
 async def test_a_ticket_reaches_the_v13_sidecar_only_for_a_person_it_vouches_for(
     plugin,
 ) -> None:

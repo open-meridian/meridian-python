@@ -341,3 +341,95 @@ async def test_activity_and_its_reads_made_with_the_sdk_are_the_pinned_bytes(sid
     ):
         _, reply_pin = pinned(name, "reply")
         assert result.FromString(reply_pin).SerializeToString(deterministic=True) == reply_pin
+
+
+async def test_a_re_resolution_made_with_the_sdk_is_the_pinned_bytes(sidecar) -> None:
+    """An activity re-resolved through `plugin.re_resolve_activity`, its
+    provenance put on the wire by the SDK's own conversion, is the request
+    the re-resolve-activity fixture pins once the sidecar stamps its account
+    from the link; the reply, and the event and record operations hears and
+    reads, read back whole as the SDK's types (W2.15, W2.16, contract v15)."""
+    import meridian
+    from meridian.plugin.v1 import operations_pb2 as ops
+    from meridian.v1 import holdings_pb2
+
+    def pinned(name: str, section: str = "request") -> tuple[dict[str, Any], bytes]:
+        fixture = yaml.safe_load((fixtures_root() / _find(name)).read_text(encoding="utf-8"))
+        return (
+            fixture[section]["fields"],
+            base64.b64decode(fixture["expected_proto_bytes_b64"][section]),
+        )
+
+    asked, asked_pin = pinned("re-resolve-activity.yaml")
+    _, reply_pin = pinned("re-resolve-activity.yaml", "reply")
+    heard, heard_pin = pinned("activity-re-resolved.yaml", "event")
+
+    service, address = sidecar
+    service.operations.links[asked["external_account_id"]] = asked["account_id"]
+    # The activity it names, recorded first, as the street holds it.
+    service.operations.activities.append(
+        ops.ActivityRecordedEvent(
+            activity_id="ACT-1",
+            account_id=asked["account_id"],
+            source=asked["source"],
+            activity=ops.CustodialActivity(external_activity_id=asked["external_activity_id"]),
+        )
+    )
+    plugin = await meridian.connect(address, heartbeat=False)
+    try:
+        await plugin.re_resolve_activity(
+            external_account_id=asked["external_account_id"],
+            source=asked["source"],
+            external_activity_id=asked["external_activity_id"],
+            instrument_id=asked["instrument_id"],
+            provenance=meridian.Provenance(**asked["provenance"]),
+            resolved_at_ns=asked["resolved_at_ns"],
+        )
+    finally:
+        await plugin.leave()
+
+    (sent,) = service.operations.sent
+    stamped = holdings_pb2.ReResolveActivityRequest.FromString(sent.SerializeToString())
+    stamped.account_id = asked["account_id"]
+    assert stamped.SerializeToString(deterministic=True) == asked_pin
+
+    reply = ops.ReResolveActivityResult.FromString(reply_pin)
+    assert reply.SerializeToString(deterministic=True) == reply_pin
+    event = ops.ActivityReResolvedEvent.FromString(heard_pin)
+    assert event.SerializeToString(deterministic=True) == heard_pin
+    assert event.re_resolution.account_id == heard["re_resolution"]["account_id"]
+    assert event.re_resolution.provenance.kind == ops.PROVENANCE_KIND_SUPPLIED
+
+
+@pytest.mark.parametrize(
+    ("name", "role", "reads", "writes"),
+    [
+        ("open-plugin-interface.yaml", "oms", {"ACC-1", "ACC-2"}, {"ACC-1"}),
+        ("act-for-person.yaml", "custody", {"ACC-GROWTH"}, {"ACC-GROWTH"}),
+    ],
+)
+def test_the_pinned_claims_read_as_each_roles_level_and_accounts(
+    name: str, role: str, reads: set[str], writes: set[str]
+) -> None:
+    """The claims the dashboard mints, as their fixtures pin them from
+    contract v15: each role's entry read by `Caller`, its accounts resolved
+    from their positions in the claims' read accounts (W6.9, W4.9)."""
+    from meridian import Caller
+    from meridian.v1 import sidecar_pb2
+
+    fixture = yaml.safe_load((fixtures_root() / _find(name)).read_text(encoding="utf-8"))
+    if name == "open-plugin-interface.yaml":
+        assertion = base64.b64decode(fixture["expected_proto_bytes_b64"]["request"])
+    else:
+        given = fixture["request"]["fields"]["acting_for"]
+        assertion = sidecar_pb2.CallerAssertion(
+            claims=base64.b64decode(given["claims"]),
+            signature=base64.b64decode(given["signature"]),
+            key_id=given["key_id"],
+        ).SerializeToString()
+    caller = Caller.from_header(base64.urlsafe_b64encode(assertion).decode().rstrip("="))
+    assert caller.level == sidecar_pb2.ACCESS_LEVEL_WRITE
+    assert caller.roles == {role: sidecar_pb2.ACCESS_LEVEL_WRITE}
+    assert caller.level_for(role) == sidecar_pb2.ACCESS_LEVEL_WRITE
+    assert caller.read_for(role) == reads and caller.write_for(role) == writes
+    assert (caller.read, caller.write) == (reads, writes), "equal to the whole, one role"

@@ -21,6 +21,17 @@ refuses it by the same declaration. One path may serve several levels, and
 adapts by `request.caller.level`. A session is opened at one level by the
 home's buttons: Manage `admin`, Open `write`, View `read`.
 
+From contract v15 a person holds a level on each role of a plugin, and a
+plugin holding several roles names the roles each page, route and tool
+serves (`roles=`): served when the person's level on one of them within the
+session's button is one of its levels, and adapting per role by
+`request.caller.level_for(role)`, `read_for(role)` and `write_for(role)`. A
+plugin holding one role, or none, names none, and nothing changes:
+
+    @pages.page("/statements", "Statements", roles=["custody"], levels=["write", "read"])
+    async def statements(request: meridian.Request) -> str:
+        rows = [...]  # cut to request.caller.read_for("custody")
+
 `render` renders a Jinja2 template from `templates`, autoescaped, with
 `caller` and `level` (admin, write or read) always in its context. A page's
 template extends the kit's one base template, `meridian/base.html`, which
@@ -107,7 +118,7 @@ from markupsafe import Markup
 
 from . import params as _params
 from .asgi import ASGIApp, CallerMiddleware, Receive, Scope, Send
-from .client import BUTTONS, Caller, Page, _levels
+from .client import BUTTONS, Caller, Page, _levels, _roles, _serves
 from .v1 import sidecar_pb2
 
 if TYPE_CHECKING:
@@ -294,6 +305,8 @@ class Tool:
     reads: bool
     params: Any = None
     answers: Any = None
+    # The roles it serves (contract v15): a derived tool takes its route's.
+    roles: tuple[str, ...] = ()
 
     def declared(self) -> sidecar_pb2.ToolDeclaration:
         inputs = (
@@ -319,6 +332,7 @@ class Tool:
             reads=self.reads,
             input_schema=json.dumps(inputs, separators=(",", ":")),
             output_schema=output,
+            roles=list(self.roles),
         )
 
 
@@ -342,6 +356,8 @@ class _Route:
     page: Page | None
     params: Any = None
     tool: Tool | None = None
+    # The roles it serves (contract v15); none on a plugin holding one or none.
+    roles: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -439,6 +455,7 @@ class Pages:
         title: str,
         *,
         levels: Sequence[str | int] | str | int,
+        roles: Sequence[str] | str = (),
         methods: Iterable[str] = ("GET",),
         params: Any = None,
         answers: Any = None,
@@ -452,9 +469,14 @@ class Pages:
 
         From contract v12 a page that declares the typed data it renders
         (`answers=`, and `params=` for its inputs) is also a read tool on the
-        deployment's MCP surface, answering that data (`answer`)."""
+        deployment's MCP surface, answering that data (`answer`).
+
+        From contract v15 `roles=` names the roles it serves, from those the
+        plugin was launched with: served when the person's level on one of
+        them within the session's button is one of `levels`. A plugin holding
+        one role, or none, names none."""
         levelled = _levels(levels, f"page {title!r}")
-        page = Page(path, title, levels=levelled)
+        page = Page(path, title, levels=levelled, roles=_roles(roles, f"page {title!r}"))
         page._declared()  # a path without its slash, or no level, refused now
         return self._add(
             path,
@@ -462,6 +484,7 @@ class Pages:
             methods,
             page,
             _Declared(params, answers, name, description, None, tool, why, title),
+            cast(tuple[str, ...], page.roles),
         )
 
     def route(
@@ -469,6 +492,7 @@ class Pages:
         path: str,
         *,
         levels: Sequence[str | int] | str | int,
+        roles: Sequence[str] | str = (),
         methods: Iterable[str] = ("GET",),
         params: Any = None,
         answers: Any = None,
@@ -489,7 +513,10 @@ class Pages:
         name), `description=` says what it does (else the view's docstring's
         first paragraph). `tool=False` with `why=` declares a route not
         offered to agents, which `meridian plugin check` reports and
-        verification refuses on a changing route."""
+        verification refuses on a changing route.
+
+        From contract v15 `roles=` names the roles it serves, as a page's do,
+        and its tool serves the same."""
         levelled = _levels(levels, f"route {path!r}")
         if not path.startswith("/"):
             raise ValueError(f"route {path!r} does not begin with /")
@@ -501,6 +528,7 @@ class Pages:
             methods,
             None,
             _Declared(params, answers, name, description, reads, tool, why, title),
+            _roles(roles, f"route {path!r}"),
         )
 
     def tool(
@@ -514,15 +542,20 @@ class Pages:
         description: str | None = None,
         reads: bool | None = None,
         title: str = "",
+        roles: Sequence[str] | str | None = None,
     ) -> Callable[[View], Guarded]:
         """A tool replacing the one derived from the route at `replaces` and
         `method` (or standing in for one the route could not derive): its view
         serves the calls naming it there, at the route's levels; a browser's
-        request still reaches the route's own view."""
+        request still reaches the route's own view. It serves the route's
+        roles, or those `roles=` names (contract v15)."""
         verb = method.upper()
         route = self._routes.get((replaces, verb))
         if route is None:
             raise ValueError(f"no route {verb} {replaces} for a tool to replace")
+        served = (
+            route.roles if roles is None else _roles(roles, f"the tool at {verb} {replaces}")
+        )
 
         def decorate(view: View) -> Guarded:
             made = self._tool_of(
@@ -531,6 +564,7 @@ class Pages:
                 verb,
                 route.levels,
                 _Declared(params, answers, name, description, reads, True, "", title),
+                served,
             )
             if made is None:
                 raise ValueError(f"the tool replacing {verb} {replaces} declares no params=")
@@ -539,7 +573,7 @@ class Pages:
             if made.name in self._tools:
                 raise ValueError(f"the tool {made.name} is declared twice")
             self._tools[made.name] = made
-            replacing = dataclasses.replace(route, tool=made, params=made.params)
+            replacing = dataclasses.replace(route, tool=made, params=made.params, roles=served)
             guarded = self._guard(view, replacing)
             self._replacing[(replaces, verb)] = (made, guarded)
             self.not_offered = [
@@ -558,6 +592,7 @@ class Pages:
         verb: str,
         levels: tuple[int, ...],
         declared: _Declared,
+        roles: tuple[str, ...] = (),
     ) -> Tool | None:
         """The tool a route declares, or None where it is not derivable."""
         if not declared.tool:
@@ -592,6 +627,7 @@ class Pages:
             reads=reads,
             params=declared.params,
             answers=declared.answers,
+            roles=roles,
         )
 
     def _add(
@@ -601,6 +637,7 @@ class Pages:
         methods: Iterable[str],
         page: Page | None,
         declared: _Declared,
+        roles: tuple[str, ...] = (),
     ) -> Callable[[View], Guarded]:
         verbs = tuple(dict.fromkeys(method.upper() for method in methods))
         for verb in verbs:
@@ -616,7 +653,7 @@ class Pages:
         def decorate(view: View) -> Guarded:
             guarded: Guarded | None = None
             for verb in verbs:
-                made = self._tool_of(view, path, verb, levels, declared)
+                made = self._tool_of(view, path, verb, levels, declared, roles)
                 if made is not None:
                     if made.name in self._tools:
                         # One view serving two methods: one tool, at the first.
@@ -625,7 +662,7 @@ class Pages:
                         self._tools[made.name] = made
                 if not declared.tool:
                     self.not_offered.append(NotOffered(verb, path, declared.why.strip()))
-                route = _Route(path, levels, None, page, declared.params, made)  # type: ignore[arg-type]
+                route = _Route(path, levels, None, page, declared.params, made, roles)  # type: ignore[arg-type]
                 serving = self._guard(view, route)
                 route = dataclasses.replace(route, guarded=serving)
                 self._routes[(path, verb)] = route
@@ -639,13 +676,14 @@ class Pages:
 
     def _guard(self, view: View, route: _Route) -> Guarded:
         """The view, served only in a session at one of the route's levels,
-        its form token checked for a browser, its record read."""
+        on one of its roles where it names them, its form token checked for a
+        browser, its record read."""
         path, levels = route.path, route.levels
 
         @functools.wraps(view)
         async def guarded(request: Request) -> Response:
-            if request.caller.level not in levels:
-                return _refusal(path, levels, request.caller.level)
+            if not _serves(levels, route.roles, request.caller):
+                return _refusal(path, levels, request.caller, route.roles)
             request = dataclasses.replace(request, csrf_token=self.csrf_token(request.caller))
             if request.tool_name:
                 # Only `/mcp` sets a tool's name, and the sidecar admits it at
@@ -867,7 +905,7 @@ class Pages:
         `meridian/base.html`. Called from a view, while it serves a request."""
         serving = _current()
         caller = serving.request.caller
-        tabs = [each for each in self._pages if caller.level in each.levels]
+        tabs = [each for each in self._pages if each.serves(caller)]
         at = _shown(serving.request, {each.path for each in tabs})
         # A route answering with a page is titled as the tab it marks.
         page = serving.route.page or next((each for each in tabs if each.path == at), None)
@@ -999,14 +1037,27 @@ def _current() -> _Serving:
         raise RuntimeError("render is called from a view, while it serves a request") from None
 
 
-def _refusal(path: str, levels: tuple[int, ...], level: int) -> Response:
+def _refusal(
+    path: str, levels: tuple[int, ...], caller: Caller, roles: tuple[str, ...] = ()
+) -> Response:
     served = " and ".join(BUTTONS[each] for each in levels)
+    level = caller.level
     if level == sidecar_pb2.ACCESS_LEVEL_UNSPECIFIED:
         said = "This session was opened at no level, and holds nothing here."
-    elif level in BUTTONS:
-        said = f"{path} is not served under {BUTTONS[level]}; it is for {served}."
-    else:
+    elif level not in BUTTONS:
         said = f"{path} is not served at level {level}; it is for {served}."
+    elif roles:
+        # Served by role (contract v15): say which, and what the session
+        # holds on each, as the sidecar's refusal does.
+        held = ", ".join(
+            f"{SPELLING.get(caller.level_for(role), 'nothing')} on {role}" for role in roles
+        )
+        said = (
+            f"{path} is for {' and '.join(roles)} under {served}; under "
+            f"{BUTTONS[level]} this session holds {held}."
+        )
+    else:
+        said = f"{path} is not served under {BUTTONS[level]}; it is for {served}."
     return Response(said, 403, "text/plain; charset=utf-8")
 
 

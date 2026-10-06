@@ -2,7 +2,7 @@
 
 The Python SDK for building [Open Meridian](https://open-meridian.com) plugins:
 the tools a trader has an AI agent build, and the bots and analytics a
-developer writes. Python 3.11 or newer. This is release 0.19.0; its reference
+developer writes. Python 3.11 or newer. This is release 0.20.0; its reference
 is at [open-meridian.dev](https://open-meridian.dev/api/python-sdk/).
 
 ## Start here
@@ -102,6 +102,59 @@ browser. The person stays the actor, and the sidecar stamps the delegation
 beside them on every command sent for them (contract v9).
 `meridian.TagAccess` and `Caller.access`, the same access tag by tag, are
 gone, and say so when reached for.
+
+### Access per role (contract v15)
+
+A person's level is granted on each role of a plugin (decisions/033): write on
+its `operations` and read on its `custody`, or admin on its `custody` alone.
+The home offers the same three buttons, and a session carries the person's
+entry for each role within its button: `caller.roles`, each role's level, and
+`caller.level_for(role)`, `caller.read_for(role)` and `caller.write_for(role)`
+-- under Open a role held at write is at write and one held at read at read,
+under View each at read, under Manage each role administered at admin with no
+account. `caller.level`, `read` and `write` stay the session's button and the
+union over its roles. The sidecar admits a command sent for the person only
+when they hold write on the role whose grants include it, the account among
+that role's write accounts, and otherwise refuses it naming the role
+("RecordHoldingsStatement is custody's, and Ada Park holds read on custody").
+
+```python
+@pages.page("/statements", "Statements", roles=["custody"], levels=["write", "read"])
+async def statements(request: meridian.Request) -> str:
+    caller = request.caller
+    rows = [...]  # cut to caller.read_for("custody")
+    return pages.render("statements.html", rows=rows,
+                        may_record=bool(caller.write_for("custody")))
+
+@pages.page("/blotter", "Blotter", roles=["custody", "operations"], levels=["write", "read"])
+async def blotter(request: meridian.Request) -> str: ...  # each role's rows by read_for(role)
+
+settings = [meridian.Setting("api_key", secret=True, roles=["custody", "operations"])]
+```
+
+A page, route, tool and setting names the roles it serves with `roles=`, from
+those the plugin was launched with: a page is served, and its tab shown, when
+the person's level on one of its roles within the button is one of its
+levels, and `Pages` answers 403 before the view otherwise, naming the roles
+and what the session holds on each; a derived tool takes its route's roles
+(`@pages.tool(..., roles=)` to name others); a setting is shown to an admin of
+any of its roles and set only by one holding admin on every one. **A plugin
+holding one role, or none, names none, and nothing changes**: the sidecar
+serves its declarations that role. A plugin holding several names roles on
+every declaration, and the sidecar refuses its registration for one naming
+none, or a role it was not launched with, naming it. A declaration's roles
+decide what is shown, never what is admitted. Claims carrying no per-role
+entry -- a plugin holding no role, or a dashboard before v15 -- read every
+role as the session's level and accounts.
+
+`PageClient(pages, roles=["custody", "operations"])` holds a two-role plugin
+to it in its tests: its person holds every level on each role,
+`caller(level, roles=...)`, `request`, `post` and `call_tool` take `roles=`
+to narrow a session (`{"operations": "write", "custody": "read"}` gives each
+role its own level within Open), and `every_page()` renders each page under
+each level for each role alone and for all of them together, which
+`assert_no_account_data` holds to under Manage. `caller_header(level,
+roles=...)` builds the header itself.
 
 ### Pages, declared and enforced in one place
 
@@ -239,7 +292,8 @@ a book's path to its dictionary entry). A call whose claims name its tool
 with `why=` declares a route not offered to agents, which `meridian plugin
 check` reports; `@pages.tool(replaces=path)` stands in for a derived tool.
 `PageClient.call_tool(name, arguments)` calls a tool in a plugin's tests as
-the surface would.
+the surface would. From contract v15 a tool serves its route's roles, and is
+listed to a person holding one of its levels on one of them.
 
 ### Linking external accounts
 
@@ -733,6 +787,34 @@ account empty and reaches no plugin.
 
 The three rows are `preview` in v14.
 
+**An activity recorded before its instrument resolved is re-resolved**
+(contract v15) -- a plan's own code linked to an instrument later, a symbol
+the security master completes later -- never sent again, since a redelivery
+is answered as already recorded and changes nothing:
+
+```python
+reply = await plugin.re_resolve_activity(
+    external_account_id="SNAP-ACC-401K",
+    source="snaptrade",
+    external_activity_id=activity_id,          # as first reported
+    instrument_id="INS-...",                   # empty where the link was removed
+    provenance=meridian.Provenance(field="instrument_id",
+                                   kind="PROVENANCE_KIND_SUPPLIED",
+                                   person="Ada Park, in the plan-code links"),
+    resolved_at_ns=link_set_at_ns,             # when the link was set or the rule ran
+)
+reply.activity_id, reply.already_recorded
+```
+
+The street keeps the activity as first recorded and each re-resolution beside
+it, its own record; one naming what the latest resolution names is answered
+`already_recorded`, and one of an activity never recorded is refused naming
+it. Operations reads them beside the activities, `list_activities(...)`'s
+`re_resolutions` (the activity's instrument is the latest's), and hears each
+with `receive(activity_re_resolved=...)`, caught up from that read after a
+gap. A custody plugin re-resolves an account's activities whenever what
+resolves them changes. Both rows are `preview` in v15.
+
 ## Moving a plugin to a new release
 
     meridian plugin migrate            # to the latest release
@@ -790,6 +872,7 @@ carries libcst.
 | 0.16.0 to 0.17.0: the SDK declares contract v12, the deployment serves its MCP: a route's one typed record of inputs (`params=`, `request.params`, `request.param_errors`), read alike from a form named by the dictionary's paths and from an agent's JSON (`meridian.params`); tools derived from typed routes (`name=`, `description=`, `reads=`, `answers=`, `tool=False` with `why=`, `@pages.tool(replaces=...)`), sent at registration; `pages.answer`, `pages.refuse`, `request.tool_name`; a refusal's path resolved to its dictionary entry (`meridian.dictionary`, `Field.of`); `PageClient.call_tool`; the base template on kit 0.9.0 | nothing | a page or route that changes something and declares no `params=`: give it its record, or `tool=False` with `why=` |
 | 0.17.0 to 0.18.0: the SDK declares contract v13; a plugin files a ticket for a person and reads what it filed (`plugin.file_ticket`, `plugin.filed_tickets`, `TicketKind`, `TicketSubject`, `TicketReference`, `TicketState`, `TicketResolution`) | only the pins move | |
 | 0.18.0 to 0.19.0: the SDK declares contract v14; a custody plugin reports the custodian's activity and operations reads, hears and links it (`plugin.record_activity`, `plugin.list_activities`, `CustodialActivity`, `ActivityKind`, `ActivityRef`, `receive(activity_recorded=)`); each sync status the street keeps (`plugin.list_sync_statuses`, `receive(sync_status_recorded=)`); a table setting (`meridian.Setting(name, list, columns=...)`, `meridian.Column`) | only the pins move | |
+| 0.19.0 to 0.20.0: the SDK declares contract v15, a person's access granted per role: `roles=` on `@pages.page`, `@pages.route`, `@pages.tool`, `meridian.Setting` and `meridian.Page`; `Caller.roles`, `Caller.level_for`, `Caller.read_for`, `Caller.write_for`; `PageClient(..., roles=)` and `roles=` on its sessions; an activity re-resolved (`plugin.re_resolve_activity`, `re_resolutions`, `receive(activity_re_resolved=)`); a plugin holding one role or none names no role, and one coming to hold a second names `roles=` on every page, route, tool and setting, which `meridian plugin check` reports | only the pins move | |
 
 `tests/migrations/` holds the plugins the migrations are recorded for, as
 written and as their migration leaves them, and `make check-migrations` holds

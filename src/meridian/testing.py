@@ -18,6 +18,16 @@ quantities, values and balances, say -- nothing technical keeps off a page,
 so the plugin's tests do. An account's identity is not its data: a Manage
 page may list every account of the deployment by name as a link target.
 
+From contract v15 a person holds a level on each role of a plugin, and the
+claims carry one entry per role within the session's button. A client made
+with the plugin's roles, `PageClient(pages, roles=["custody", "operations"])`,
+has its person hold every level on each; `caller(level, roles=...)` and each
+request's `roles=` narrow a session to some of them, or give each its own
+level within the button (`{"operations": "write", "custody": "read"}` under
+Open); `every_page` renders each page under each level for each role alone
+and for all of them together. A client made with no roles, as for a plugin
+holding one role or none, carries no entry, and pages serve as before.
+
 `heartbeat` is the heartbeat a plugin's sidecar receives, with the figures
 it reports on its Summary (W4.5), checked as the SDK checks them before
 sending: a test of the figures a plugin computes asserts on it, or on the
@@ -42,13 +52,48 @@ from typing import Any, cast
 
 from markupsafe import escape
 
-from .client import Caller, Page, _levels
+from .client import Caller, Page, _levels, _roles
 from .figures import Figure, wire
 from .pages import CSRF_FIELD, SPELLING, Pages, Request, Response, Tool
 from .v1 import sidecar_pb2
 
 #: The three levels, as the home's Manage, Open and View open a session.
 LEVELS = ("admin", "write", "read")
+
+#: The levels a person may hold on a role within each button (W6.9, contract
+#: v15): under Manage each role administered at admin, under Open each role at
+#: the data level held, under View each at read.
+_WITHIN: dict[int, frozenset[int]] = {
+    sidecar_pb2.ACCESS_LEVEL_ADMIN: frozenset({sidecar_pb2.ACCESS_LEVEL_ADMIN}),
+    sidecar_pb2.ACCESS_LEVEL_WRITE: frozenset(
+        {sidecar_pb2.ACCESS_LEVEL_WRITE, sidecar_pb2.ACCESS_LEVEL_READ}
+    ),
+    sidecar_pb2.ACCESS_LEVEL_READ: frozenset({sidecar_pb2.ACCESS_LEVEL_READ}),
+}
+
+#: The roles a session carries entries for: each at the session's level, or each
+#: at its own level within the button.
+_Roles = Iterable[str] | Mapping[str, str | int]
+
+
+def _entries(at: int, roles: _Roles) -> dict[str, int]:
+    """Each role's level within a session at `at`, refused where the button
+    could not carry it: Open carries write or read, View read, Manage admin."""
+    if isinstance(roles, str):
+        roles = (roles,)
+    if isinstance(roles, Mapping):
+        named = {role: _levels(level, f"the role {role}")[0] for role, level in roles.items()}
+    else:
+        named = dict.fromkeys(roles, at)
+    _roles(tuple(named), "the session")
+    for role, level in named.items():
+        if level not in _WITHIN.get(at, frozenset()):
+            raise ValueError(
+                f"a session at {SPELLING.get(at, 'no level')} carries no "
+                f"{SPELLING.get(level, str(level))} on {role}: under Open a role is at write "
+                "or read, under View at read, under Manage at admin"
+            )
+    return named
 
 
 def caller_header(
@@ -62,6 +107,7 @@ def caller_header(
     delegation_id: str = "",
     client_name: str = "",
     tool_name: str = "",
+    roles: _Roles = (),
 ) -> str:
     """The `Meridian-Caller` header a sidecar forwards for a session at
     `level`, with the accounts cut to it: `read` and `write` are those the
@@ -69,7 +115,14 @@ def caller_header(
     No level is a session that holds nothing. `delegation_id` and
     `client_name` are a person's who came through a client, such as the CLI,
     rather than a browser (contract v9). Unsigned: only a plugin's own tests
-    read it, never a sidecar."""
+    read it, never a sidecar.
+
+    `roles` are the plugin's roles the session carries an entry for
+    (contract v15): each at the session's level, or, as a mapping, each at
+    its own level within the button -- under Open write or read, under View
+    read, under Manage admin. A role at write reaches the read and write
+    accounts, one at read the read accounts, one at admin none; each as
+    positions in the claims' read accounts, as the dashboard mints them."""
     at = _levels(level, "the session")[0] if level else sidecar_pb2.ACCESS_LEVEL_UNSPECIFIED
     writes = sorted(set(write))
     reads = sorted(set(read) | set(writes))
@@ -77,6 +130,22 @@ def caller_header(
         reads, writes = [], []
     elif at == sidecar_pb2.ACCESS_LEVEL_READ:
         writes = []
+    held = set(writes)
+    entries = [
+        sidecar_pb2.RoleAccess(
+            role=role,
+            level=role_level,  # type: ignore[arg-type]
+            read_positions=(
+                list(range(len(reads))) if role_level != sidecar_pb2.ACCESS_LEVEL_ADMIN else []
+            ),
+            write_positions=(
+                [n for n, account in enumerate(reads) if account in held]
+                if role_level == sidecar_pb2.ACCESS_LEVEL_WRITE
+                else []
+            ),
+        )
+        for role, role_level in _entries(at, roles).items()
+    ]
     claims = sidecar_pb2.CallerClaims(
         subject=subject,
         display_name=display_name,
@@ -87,6 +156,7 @@ def caller_header(
         delegation_id=delegation_id,
         client_name=client_name,
         tool_name=tool_name,
+        roles=entries,
     )
     assertion = sidecar_pb2.CallerAssertion(claims=claims.SerializeToString())
     return base64.urlsafe_b64encode(assertion.SerializeToString()).decode().rstrip("=")
@@ -147,11 +217,13 @@ PICKED = ("write", "read", "admin")
 
 @dataclass(frozen=True)
 class Rendered:
-    """One declared page, asked in a session at one level, and its answer."""
+    """One declared page, asked in a session at one level, and its answer;
+    from contract v15, on the roles the session carried an entry for."""
 
     page: Page
     level: str
     response: Response
+    roles: tuple[str, ...] = ()
 
 
 class PageClient:
@@ -161,7 +233,9 @@ class PageClient:
     sidecar whose operations answer here. `read` and `write` are the accounts
     the person asking may read and write, cut to each session's level;
     `deployment_admin`, whether they are a deployment admin, which every
-    request this client sends says."""
+    request this client sends says. `roles` are the roles the plugin was
+    launched with (contract v15), each of which the person holds at every
+    level; none, for a plugin holding one role or none, carries no entry."""
 
     def __init__(
         self,
@@ -173,6 +247,7 @@ class PageClient:
         subject: str = "local|ada",
         display_name: str = "Ada Park",
         deployment_admin: bool = False,
+        roles: Iterable[str] = (),
     ) -> None:
         self.pages = pages
         self.plugin = plugin
@@ -181,6 +256,7 @@ class PageClient:
         self.subject = subject
         self.display_name = display_name
         self.deployment_admin = deployment_admin
+        self.roles = _roles(tuple(roles), "the plugin")
 
     def request(
         self,
@@ -191,12 +267,14 @@ class PageClient:
         form: Mapping[str, str] | None = None,
         query: Mapping[str, str] | None = None,
         headers: Mapping[str, str] | None = None,
+        roles: _Roles | None = None,
     ) -> Response:
-        """The request as given: no token is added."""
+        """The request as given: no token is added. `roles` narrows the
+        session as `caller` does."""
         request = Request(
             method=method.upper(),
             path=path,
-            caller=self.caller(level),
+            caller=self.caller(level, roles=roles),
             plugin=cast(Any, self.plugin),
             query=dict(query or {}),
             form=dict(form or {}),
@@ -205,9 +283,18 @@ class PageClient:
         )
         return asyncio.run(self.pages.dispatch(request))
 
-    def caller(self, level: str | int, *, deployment_admin: bool | None = None) -> Caller:
+    def caller(
+        self,
+        level: str | int,
+        *,
+        roles: _Roles | None = None,
+        deployment_admin: bool | None = None,
+    ) -> Caller:
         """This client's person, in a session at `level`: a deployment admin
-        as the client was made, unless `deployment_admin` says."""
+        as the client was made, unless `deployment_admin` says. The session
+        carries an entry for each of the client's roles at `level`, or for
+        those `roles` names (contract v15): each at the session's level, or,
+        as a mapping, each at its own level within the button."""
         return Caller.from_header(
             caller_header(
                 level,
@@ -218,8 +305,23 @@ class PageClient:
                 deployment_admin=(
                     self.deployment_admin if deployment_admin is None else deployment_admin
                 ),
+                roles=self._held(roles),
             )
         )
+
+    def _held(self, roles: _Roles | None) -> _Roles:
+        """The roles a session carries: the client's unless named, and only
+        roles the plugin was launched with."""
+        if roles is None:
+            return self.roles
+        named = (roles,) if isinstance(roles, str) else tuple(roles)
+        strangers = [role for role in named if role not in self.roles]
+        if strangers:
+            raise ValueError(
+                f"the plugin holds {', '.join(self.roles) or 'no role'}, not "
+                f"{', '.join(strangers)}: make the client with roles=[...]"
+            )
+        return roles
 
     def tool(self, name: str) -> Tool:
         """The tool of that name, as registration declares it."""
@@ -239,13 +341,16 @@ class PageClient:
         delegation_id: str = "del-test",
         client_name: str = "a test's client",
         body: bytes | None = None,
+        roles: _Roles | None = None,
     ) -> ToolAnswer:
         """Call a tool as the deployment's MCP surface would (contract v12):
         at `level`, or the highest of the tool's this client's person holds
         -- write, then read, then admin -- with claims naming the delegation,
         its client and the tool; the arguments as JSON to the tool's method
         and path; no form token. `body` sends bytes as they are, for a test
-        that arguments which are not JSON are refused."""
+        that arguments which are not JSON are refused. The claims carry an
+        entry for each of the client's roles, or those `roles` names, as a
+        page's request does (contract v15)."""
         tool = self.tool(name)
         served = {SPELLING[each] for each in tool.levels}
         if level is None:
@@ -260,6 +365,7 @@ class PageClient:
             delegation_id=delegation_id,
             client_name=client_name,
             tool_name=tool.name,
+            roles=self._held(roles),
         )
         sent = body if body is not None else json.dumps(dict(arguments or {})).encode()
         request = Request(
@@ -294,21 +400,39 @@ class PageClient:
         form: Mapping[str, str] | None = None,
         *,
         headers: Mapping[str, str] | None = None,
+        roles: _Roles | None = None,
     ) -> Response:
         """A form posted from the plugin's page: its CSRF token carried back,
-        unless `form` gives one of its own."""
-        token = self.pages.csrf_token(self.caller(level))
+        unless `form` gives one of its own. `roles` narrows the session as
+        `caller` does."""
+        token = self.pages.csrf_token(self.caller(level, roles=roles))
         return self.request(
-            "POST", path, level, form={CSRF_FIELD: token, **(form or {})}, headers=headers
+            "POST",
+            path,
+            level,
+            form={CSRF_FIELD: token, **(form or {})},
+            headers=headers,
+            roles=roles,
         )
 
+    def _sessions(self) -> list[tuple[str, tuple[str, ...]]]:
+        """Each session `every_page` asks in: each level, and from contract
+        v15, on a client with roles, each role alone and all of them
+        together."""
+        combinations: list[tuple[str, ...]] = [(role,) for role in self.roles]
+        if len(self.roles) != 1:
+            combinations.append(self.roles)
+        return [(level, roles) for level in LEVELS for roles in combinations]
+
     def every_page(self) -> list[Rendered]:
-        """Each declared page, in order, under Manage, Open and View: 200
-        where its levels include the session's, 403 where they do not."""
+        """Each declared page, in order, under Manage, Open and View, and on a
+        client with roles under each for each role alone and for all of them
+        together: 200 where the page serves the session, 403 where it does
+        not."""
         return [
-            Rendered(page, level, self.get(page.path, level))
+            Rendered(page, level, self.request("GET", page.path, level, roles=roles), roles)
             for page in self.pages.declared
-            for level in LEVELS
+            for level, roles in self._sessions()
         ]
 
     def assert_no_account_data(self, *held: str) -> None:
@@ -334,20 +458,23 @@ class PageClient:
         for rendered in self.every_page():
             if rendered.level != SPELLING[sidecar_pb2.ACCESS_LEVEL_ADMIN]:
                 continue
-            if sidecar_pb2.ACCESS_LEVEL_ADMIN not in rendered.page.levels:
+            on = f" on {' and '.join(rendered.roles)}" if rendered.roles else ""
+            session = self.caller(rendered.level, roles=rendered.roles)
+            if not rendered.page.serves(session):
                 if rendered.response.status != 403:
                     raise AssertionError(
                         f"{rendered.page.path} answered {rendered.response.status} "
-                        "under Manage, which it does not serve"
+                        f"under Manage{on}, which it does not serve"
                     )
                 continue
             if rendered.response.status != 200:
                 raise AssertionError(
-                    f"{rendered.page.path} answered {rendered.response.status} under Manage"
+                    f"{rendered.page.path} answered {rendered.response.status} under Manage{on}"
                 )
             page = rendered.response.text
             found = sorted(t for t, forms in shown.items() if any(f in page for f in forms))
             if found:
                 raise AssertionError(
-                    f"{rendered.page.path} shows account data under Manage: {', '.join(found)}"
+                    f"{rendered.page.path} shows account data under Manage{on}: "
+                    f"{', '.join(found)}"
                 )

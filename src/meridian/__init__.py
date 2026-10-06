@@ -62,6 +62,16 @@ operations reads it (`plugin.list_activities(...)`, with the source's
 (`BreakCause(activity=ActivityRef(...))`, `BREAK_CAUSE_CATEGORY_INCOME_REINVESTED`),
 and reads and hears each sync status the street keeps
 (`plugin.list_sync_statuses(...)`, `sync_status_recorded=`).
+
+From contract v15 a person's access to a plugin is granted per role: a page,
+route, tool and setting names the roles it serves (`roles=`; none on a plugin
+holding one role or none), and the session carries the person's level and
+accounts on each role within its button (`caller.roles`,
+`caller.level_for(role)`, `caller.read_for(role)`, `caller.write_for(role)`).
+A custody plugin re-resolves an activity it recorded once its instrument
+resolves (`plugin.re_resolve_activity(...)`), the activity kept as first
+recorded and the re-resolution beside it, which operations reads
+(`re_resolutions`) and hears (`activity_re_resolved=`).
 """
 
 from .asgi import CallerMiddleware

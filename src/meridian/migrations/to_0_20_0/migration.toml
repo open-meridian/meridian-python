@@ -1,0 +1,38 @@
+# open-meridian 0.19.0 to 0.20.0: the SDK declares contract v15, a person's
+# access to a plugin granted per role, and an activity re-resolved
+# (sdk-contract/access-is-granted-per-role; plans/access-is-granted-per-role;
+# decisions/033). Nothing a plugin calls changed, so only the pins move.
+from = "0.19.0"
+to = "0.20.0"
+summary = """
+The SDK declares contract v15 (meridian.SCHEMA_VERSION). A person holds a level
+on each role of a plugin, and a page, route, tool and setting names the roles it
+serves: @pages.page(..., roles=[...]), @pages.route(..., roles=[...]),
+@pages.tool(..., roles=[...]) (a derived tool takes its route's roles),
+meridian.Setting(..., roles=[...]) and meridian.Page(..., roles=[...]). A page
+naming roles is served when the person's level on one of them within the
+session's button is one of its levels, and refused 403 before the view
+otherwise. The session carries the person's entry for each role within its
+button: Caller.roles (each role's level), Caller.level_for(role),
+Caller.read_for(role) and Caller.write_for(role); level, read and write stay
+the session's button and the union over its roles. The test client takes the
+plugin's roles, PageClient(..., roles=[...]), narrows a session with
+caller(level, roles=...), request(..., roles=...), post(..., roles=...) and
+call_tool(..., roles=...), a mapping giving each role its own level within the
+button, and every_page() renders each page under each level for each role alone
+and for all together. A custody plugin re-resolves an activity it recorded once
+its instrument resolves, plugin.re_resolve_activity(external_account_id=,
+source=, external_activity_id=, instrument_id=, provenance=, resolved_at_ns=),
+answered already_recorded when the latest resolution names it; the activity as
+first recorded never changes, and operations reads each re-resolution beside it
+(ListActivitiesResult.re_resolutions) and hears it with
+receive(activity_re_resolved=). A plugin built on 0.20.0 is refused at
+registration by a sidecar that accepts only v14, naming both.
+
+Nothing to rewrite for a plugin holding one role or none: it names no role
+anywhere, and its pages, tools and settings serve that role as before. A plugin
+that comes to hold a second role names roles= on every page, route, tool and
+setting; the sidecar refuses its registration otherwise, naming the
+declaration, and `meridian plugin check` says where (roles-declared).
+"""
+breaking = false

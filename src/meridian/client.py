@@ -25,8 +25,9 @@ import base64
 import contextlib
 import json
 import os
+import re
 import warnings
-from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
 from types import TracebackType
@@ -41,6 +42,7 @@ from .bounds import (
     FILE_TICKET_REQUEST_REFERENCES_COUNT,
     FILE_TICKET_REQUEST_SEEN_LENGTH,
     FILE_TICKET_REQUEST_TITLE_LENGTH,
+    PAGE_DECLARATION_ROLES_COUNT,
     TICKET_REFERENCE_VALUE_LENGTH,
     Length,
 )
@@ -73,9 +75,11 @@ if TYPE_CHECKING:
 #: incomplete entry left out, and the delegation a person acted through, and
 #: from v13 a ticket filed for a person and what became of those it filed, and
 #: from v14 the custodian's activity recorded and read, and each sync status
-#: the street keeps -- and a newer sidecar still admits it. Raised with every contract revision
-#: that adds something a plugin can depend on.
-SCHEMA_VERSION = "v14"
+#: the street keeps, and from v15 the roles each page, tool and setting
+#: serves, the person's level and accounts on each role in the claims, and an
+#: activity re-resolved -- and a newer sidecar still admits it. Raised with
+#: every contract revision that adds something a plugin can depend on.
+SCHEMA_VERSION = "v15"
 
 #: Where a sidecar listens. Loopback, always: a sidecar reachable from another
 #: host is a way around the boundary it exists to enforce.
@@ -212,6 +216,45 @@ def _levels(given: Sequence[str | int] | str | int, where: str) -> tuple[int, ..
     return tuple(levels)
 
 
+#: A role's spelling in the deployment's fixed list (matrix/roles.tsv):
+#: lower-case letters.
+_ROLE = re.compile(r"[a-z]+")
+
+
+def _roles(given: Sequence[str] | str, where: str) -> tuple[str, ...]:
+    """Roles as a declaration names them (contract v15): one given alone is
+    taken as one, each named once, in the order given. A role is one the
+    plugin was launched with, which only its sidecar knows, so a role it
+    does not hold is refused at registration, naming it; here only a name no
+    role could have, and more than a declaration carries, is refused."""
+    if isinstance(given, str):
+        given = (given,)
+    roles: list[str] = []
+    for each in given:
+        if not isinstance(each, str) or not _ROLE.fullmatch(each):
+            raise ValueError(
+                f"{where} names {each!r}, which is no role: a role is one the plugin was "
+                "launched with, such as custody or operations"
+            )
+        if each not in roles:
+            roles.append(each)
+    if not PAGE_DECLARATION_ROLES_COUNT.admits(len(roles)):
+        raise ValueError(
+            f"{where} names {len(roles)} roles; at most {PAGE_DECLARATION_ROLES_COUNT.most}"
+        )
+    return tuple(roles)
+
+
+def _serves(levels: Sequence[int], roles: Sequence[str], caller: Caller) -> bool:
+    """Whether a declaration at `levels` serving `roles` is served in the
+    caller's session (W6.9): naming no role, its level is one of them; naming
+    roles, the caller's level on one of them within the session's button is
+    (contract v15). A session at no level is served nothing."""
+    if not roles:
+        return caller.level in levels
+    return any(caller.level_for(role) in levels for role in roles)
+
+
 @dataclass(frozen=True)
 class Page:
     """One of the plugin's pages, at a path on its own host, and the levels it
@@ -224,19 +267,30 @@ class Page:
     `Interface.pages` names at least one. `Pages` declares a page where its
     view is and refuses a session at a level it does not serve; a plugin on
     another framework asks `page.serves(caller)` itself.
+
+    `roles` are the roles it serves, from those the plugin was launched with
+    (contract v15): its tab shows under a button when the person's level on
+    one of them within that button is one of `levels`. A plugin holding one
+    role, or none, names none, and its pages serve that role as before; a
+    plugin holding several names them on every page, and the sidecar refuses
+    its registration otherwise, or for a role it was not launched with.
     """
 
     path: str
     title: str
     levels: Sequence[str | int] = ()
+    roles: Sequence[str] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "levels", _levels(self.levels, f"page {self.title!r}"))
+        object.__setattr__(self, "roles", _roles(self.roles, f"page {self.title!r}"))
 
     def serves(self, caller: Caller) -> bool:
         """Whether this page is served in the caller's session: its level is
-        one the page declares. A session at no level is served nothing."""
-        return caller.level in self.levels
+        one the page declares, or, for a page naming its roles, the caller's
+        level on one of them is (contract v15). A session at no level is
+        served nothing."""
+        return _serves(cast(tuple[int, ...], self.levels), self.roles, caller)
 
     def _declared(self) -> sidecar_pb2.PageDeclaration:
         if not self.path.startswith("/"):
@@ -250,6 +304,7 @@ class Page:
             path=self.path,
             title=self.title,
             levels=cast(Any, list(self.levels)),
+            roles=list(self.roles),
         )
 
 
@@ -393,6 +448,12 @@ class Setting:
     setting with a `default` is unset, `Settings.values` holds the default, so
     the plugin uses what the form showed. A `developer` setting is shown only
     on a development deployment.
+
+    `roles` are the roles it serves, from those the plugin was launched with
+    (contract v15): it is shown to an admin of any of them and set only by a
+    person holding admin on every one. A plugin holding one role, or none,
+    names none; one holding several names them on every setting. Not who may
+    read the value: the plugin reads every setting it declared.
     """
 
     name: str
@@ -408,6 +469,10 @@ class Setting:
     developer: bool = False
     columns: tuple[Column, ...] = ()
     most_rows: int = 0
+    roles: Sequence[str] = ()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "roles", _roles(self.roles, f"setting {self.name}"))
 
     def _declared(self) -> sidecar_pb2.SettingDeclaration:
         if self.kind not in _SETTING_TYPES:
@@ -461,6 +526,7 @@ class Setting:
             developer=self.developer,
             columns=[column._declared(self.name) for column in self.columns],
             most_rows=self.most_rows,
+            roles=list(self.roles),
         )
 
     def _parsed(self, text: str) -> str | int | bool | list[dict[str, str]]:
@@ -563,6 +629,18 @@ class Caller:
     View, and neither under Manage, which sees no account's data. The levels
     are the same for every plugin, and a plugin names no parts of itself
     (decisions/026, 027).
+
+    From contract v15 a person holds a level on each role of a plugin
+    (decisions/033), and the session carries one entry per role they hold
+    something on within its button: `roles`, each role's level, which
+    `level_for(role)` reads, and the accounts it reaches, `read_for(role)`
+    and `write_for(role)` -- under Open a role held at write is at write and
+    one held at read at read, under View each at read, under Manage each role
+    administered at admin with no account. `level`, `read` and `write` stay
+    the session's: its button, and the union over its roles. Claims carrying
+    no entry -- a plugin holding no role, or a dashboard before v15 -- read
+    every role as the session's level and accounts, as the sidecar reads them
+    on a plugin holding one.
     """
 
     subject: str
@@ -587,24 +665,80 @@ class Caller:
     # v12): set only by the dashboard's `/mcp`, and the sidecar admits it at
     # that tool's route alone. Empty for every browser's request.
     tool_name: str = ""
+    # Each role's level within the session's button (contract v15), and the
+    # accounts it reaches, read and write; empty where the claims carry no
+    # entry. `level_for`, `read_for` and `write_for` read them.
+    roles: Mapping[str, int] = field(default_factory=dict, hash=False)
+    _reach: Mapping[str, tuple[frozenset[str], frozenset[str]]] = field(
+        default_factory=dict, hash=False, repr=False
+    )
 
     @classmethod
     def from_header(cls, header: str) -> Caller:
         padded = header + "=" * (-len(header) % 4)
         assertion = sidecar_pb2.CallerAssertion.FromString(base64.urlsafe_b64decode(padded))
         claims = sidecar_pb2.CallerClaims.FromString(assertion.claims)
+        reads = list(claims.read_account_ids)
+
+        def accounts(positions: Sequence[int], role: str) -> frozenset[str]:
+            # Positions in the claims' read accounts (contract v15, the plan's
+            # Q2); one past them is a header that does not read.
+            if any(at >= len(reads) for at in positions):
+                raise ValueError(
+                    f"the caller's entry for {role} names an account past the "
+                    f"{len(reads)} the claims carry"
+                )
+            return frozenset(reads[at] for at in positions)
+
+        roles: dict[str, int] = {}
+        reach: dict[str, tuple[frozenset[str], frozenset[str]]] = {}
+        for entry in claims.roles:
+            roles[entry.role] = entry.level
+            reach[entry.role] = (
+                accounts(entry.read_positions, entry.role),
+                accounts(entry.write_positions, entry.role),
+            )
         return cls(
             subject=claims.subject,
             display_name=claims.display_name,
             header=header,
-            read=frozenset(claims.read_account_ids),
+            read=frozenset(reads),
             write=frozenset(claims.write_account_ids),
             deployment_admin=claims.deployment_admin,
             level=claims.level,
             delegation_id=claims.delegation_id,
             client_name=claims.client_name,
             tool_name=claims.tool_name,
+            roles=roles,
+            _reach=reach,
         )
+
+    def level_for(self, role: str) -> int:
+        """The caller's level on `role` within the session's button
+        (contract v15): an `AccessLevel`, unspecified for a role they hold
+        nothing on here. Claims carrying no per-role entry read every role
+        at the session's level."""
+        if not self.roles:
+            return self.level
+        return self.roles.get(role, sidecar_pb2.ACCESS_LEVEL_UNSPECIFIED)
+
+    def read_for(self, role: str) -> frozenset[str]:
+        """The accounts the plugin may show the caller for `role`: within
+        `read`, empty under Manage and for a role they hold nothing on.
+        Claims carrying no per-role entry read every role as `read`."""
+        if not self.roles:
+            return self.read
+        return self._reach.get(role, (frozenset(), frozenset()))[0]
+
+    def write_for(self, role: str) -> frozenset[str]:
+        """The accounts the plugin may act on for the caller in `role`: those
+        the sidecar admits a command of that role for, on their behalf.
+        Within `read_for(role)`; empty under View and Manage, and for a role
+        held at read. Claims carrying no per-role entry read every role as
+        `write`."""
+        if not self.roles:
+            return self.write
+        return self._reach.get(role, (frozenset(), frozenset()))[1]
 
     @property
     def through_a_client(self) -> bool:
