@@ -5221,6 +5221,12 @@
     {
       "name": "meridian.v1.KnownPluginRoles.roles",
       "type": "repeated text",
+      "bounds": {
+        "count": [
+          0,
+          13
+        ]
+      },
       "empty": "empty for a plugin holding no role",
       "intent": "lists the roles the plugin was launched with",
       "meaning": "roles from the deployment's fixed list, as the plugin's sidecar last reported them",
