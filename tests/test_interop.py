@@ -1301,3 +1301,140 @@ async def test_an_unlinked_accounts_activity_is_refused_and_its_sync_status_reac
     assert len((await unscoped.list_sync_statuses()).statuses) == 0
     with pytest.raises(meridian.NotGranted):
         await unscoped.list_activities(account_id=ACCOUNT)
+
+
+# ── Contract v15: an activity re-resolved ───────────────────────────────────
+#
+# A custody plugin re-resolves an activity it recorded under a plan's own
+# code once a person links the code; the street keeps the re-resolution
+# beside the activity as first recorded, and the operations plugin hears it
+# typed and reads it beside the activity, caught up from a read when it
+# missed it (W2.15, W2.16; sdk-contract/access-is-granted-per-role, the two
+# names ruled 2026-10-06).
+
+
+def linked_by(person: str) -> meridian.Provenance:
+    return meridian.Provenance(
+        field="instrument_id", kind="PROVENANCE_KIND_SUPPLIED", person=person
+    )
+
+
+async def report_plan_activity(plugin, external_activity_id: str):
+    """A reinvestment under the plan's code OQKR, which nothing resolves yet."""
+    activity = reinvestment(plugin, external_activity_id)
+    return await plugin.record_activity(
+        external_account_id=LINKED,
+        source="interop",
+        activity=CustodialActivity(
+            external_activity_id=activity.external_activity_id,
+            kind=activity.kind,
+            instrument_as_reported=operations_pb2.AsReported(
+                scheme="interop:plan-code", code="OQKR", text="OQKR"
+            ),
+            trade_date=activity.trade_date,
+            units=activity.units,
+            amount=activity.amount,
+            description="REINVESTMENT OQKR",
+        ),
+    )
+
+
+async def re_resolve(
+    plugin, external_activity_id: str, instrument_id: str = "INS-interop-vigix"
+):
+    return await plugin.re_resolve_activity(
+        external_account_id=LINKED,
+        source="interop",
+        external_activity_id=external_activity_id,
+        instrument_id=instrument_id,
+        provenance=linked_by("Ada Park, in the plan-code links"),
+        resolved_at_ns=NOW,
+    )
+
+
+async def test_an_activity_is_re_resolved_beside_its_first_record_heard_and_read(
+    plugin, operations
+) -> None:
+    """W2.15, W2.16: recorded beside the activity, which stays as first
+    recorded; sent again, answered as already recorded and not heard twice;
+    heard typed with its cause and read beside the activity."""
+    identifier = f"interop-{uuid.uuid4()}"
+    first = await report_plan_activity(plugin, identifier)
+    heard = Heard()
+    task = asyncio.create_task(operations.receive(activity_re_resolved=heard.hear, seed=False))
+    try:
+        await asyncio.sleep(1)  # the stream is open and the sidecar subscribed
+        done = await re_resolve(plugin, identifier)
+        assert done.activity_id == first.activity_id and not done.already_recorded
+        again = await re_resolve(plugin, identifier)
+        assert again.already_recorded and again.activity_id == first.activity_id
+        one = await heard.until(
+            lambda h: (
+                h.row == "ActivityReResolved"
+                and h.message.re_resolution.activity_id == first.activity_id
+            )
+        )
+        await asyncio.sleep(1)
+    finally:
+        await stopped(task)
+
+    assert not one.own and one.cause.instance_id == plugin.identity.instance_id
+    re = one.message.re_resolution
+    assert re.account_id == ACCOUNT and one.message.account_id == ACCOUNT
+    assert re.instrument_id == "INS-interop-vigix"
+    assert re.provenance.person == "Ada Park, in the plan-code links"
+    assert re.resolved_at_ns == NOW and re.recorded_at_ns > 0
+    assert [h.message.re_resolution.activity_id for h in heard.items].count(
+        first.activity_id
+    ) == 1, "answered as already recorded, and heard once"
+
+    read = await operations.list_activities(account_id=ACCOUNT, page_size=500)
+    kept = [each for each in read.activities if each.activity_id == first.activity_id]
+    assert len(kept) == 1 and kept[0].activity.instrument_id == "", "as first recorded"
+    assert kept[0].activity.instrument_as_reported.code == "OQKR"
+    mine = [each for each in read.re_resolutions if each.activity_id == first.activity_id]
+    assert [each.instrument_id for each in mine] == ["INS-interop-vigix"]
+
+
+async def test_a_re_resolution_missed_is_caught_up_from_a_read(plugin, operations) -> None:
+    """W2.16 caught up by W2.11: one recorded while nothing listened is read
+    from re_resolutions when the plugin starts listening with a seed."""
+    identifier = f"interop-{uuid.uuid4()}"
+    first = await report_plan_activity(plugin, identifier)
+    await re_resolve(plugin, identifier, "INS-interop-vfiax")
+
+    heard = Heard()
+    task = asyncio.create_task(operations.receive(activity_re_resolved=heard.hear, seed=True))
+    try:
+        caught = await heard.until(
+            lambda h: (
+                h.row == "ActivityReResolved"
+                and h.message.re_resolution.activity_id == first.activity_id
+            )
+        )
+    finally:
+        await stopped(task)
+    assert caught.caught_up
+    assert caught.message.re_resolution.instrument_id == "INS-interop-vfiax"
+    assert caught.message.re_resolution.account_id == ACCOUNT
+
+
+async def test_a_re_resolution_of_nothing_recorded_or_an_unlinked_account_is_refused(
+    plugin, operations
+) -> None:
+    """W2.15: a re-resolution resolves no activity into existence, refused by
+    the street naming it; an unlinked external account is refused by the
+    sidecar as W2.10 is (W4.4); nothing refused is kept."""
+    identifier = f"interop-{uuid.uuid4()}"
+    with pytest.raises(CallFailed) as refused:
+        await re_resolve(plugin, identifier)
+    assert identifier in str(refused.value) and "no activity is recorded" in str(refused.value)
+    with pytest.raises(NotLinked):
+        await plugin.re_resolve_activity(
+            external_account_id="ext-nobody-linked",
+            source="interop",
+            external_activity_id=identifier,
+            instrument_id="INS-interop-vigix",
+            provenance=linked_by("Ada Park"),
+            resolved_at_ns=NOW,
+        )
