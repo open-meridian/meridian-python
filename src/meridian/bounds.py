@@ -306,5 +306,9 @@ closed rather than read came from"""
 LIST_ACTIVITIES_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=True)
 """meridian.v1.ListActivitiesRequest.page_size: bounds a page"""
 
+RE_RESOLVE_ACTIVITY_REQUEST_EXTERNAL_ACTIVITY_ID_LENGTH = Length(least=1, most=200)
+"""meridian.v1.ReResolveActivityRequest.external_activity_id: names the
+recorded activity by the custodian's identifier"""
+
 LIST_SYNC_STATUSES_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=True)
 """meridian.v1.ListSyncStatusesRequest.page_size: bounds a page"""

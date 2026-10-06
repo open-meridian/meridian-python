@@ -834,6 +834,28 @@
           ]
         },
         {
+          "name": "activity-re-resolved-when-a-plan-code-is-linked-later",
+          "given": "an activity was recorded with a plan's own fund code unresolved, and a person then links the code to an instrument in the plugin's settings",
+          "since": "v15",
+          "expect": [
+            {
+              "row": "ReResolveActivity",
+              "fields": {
+                "external_account_id": "<set>",
+                "source": "<set>",
+                "external_activity_id": "<set>",
+                "instrument_id": "<set>",
+                "provenance": {
+                  "field": "instrument_id",
+                  "kind": "PROVENANCE_KIND_SUPPLIED",
+                  "person": "<set>"
+                },
+                "resolved_at_ns": "<set>"
+              }
+            }
+          ]
+        },
+        {
           "name": "history-from-stated",
           "given": "the venue states the first date it can read an account's activity from",
           "since": "v14",

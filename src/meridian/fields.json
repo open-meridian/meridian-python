@@ -130,6 +130,10 @@
           "intent": "an activity as the custodian stated it, kept as reported, on which nothing is derived"
         },
         {
+          "message": "meridian.v1.ActivityReResolution",
+          "intent": "a later resolution of a recorded activity's instrument, kept beside the activity as first recorded, which it never changes"
+        },
+        {
           "message": "meridian.v1.SyncStatusRecordedEvent",
           "intent": "a sync status a custody plugin published, kept as published, so a connection needing a person is told apart from data merely old"
         },
@@ -167,6 +171,7 @@
     "ListPositions": "meridian.v1.ListPositionsRequest",
     "ListStatements": "meridian.v1.ListStatementsRequest",
     "ListSyncStatuses": "meridian.v1.ListSyncStatusesRequest",
+    "ReResolveActivity": "meridian.v1.ReResolveActivityRequest",
     "ReadAccountsForLinking": "meridian.v1.AccountsRequest",
     "RecordAccountFigures": "meridian.v1.RecordAccountFiguresRequest",
     "RecordActivity": "meridian.v1.RecordActivityRequest",
@@ -10969,6 +10974,19 @@
       "store": "sidecar"
     },
     {
+      "name": "meridian.plugin.v1.Delivery.activity_re_resolved",
+      "type": "message ActivityReResolvedEvent",
+      "empty": "unset unless the delivery is a re-resolution the street recorded",
+      "intent": "delivers a re-resolution of an activity the street recorded (W2.16)",
+      "meaning": "the re-resolution's whole record, within the plugin's read scope",
+      "not_meaning": "a change to the activity as first recorded, which stays as it was",
+      "filled": "decided",
+      "filled_by": "street",
+      "since": "v15",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
       "name": "meridian.plugin.v1.RecordHoldingsStatementParams.acting_for",
       "type": "message CallerAssertion",
       "empty": "unset, the plugin acts as itself",
@@ -11004,6 +11022,19 @@
       "filled": "as-reported",
       "filled_by": "plugin",
       "since": "v14",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.plugin.v1.ReResolveActivityParams.acting_for",
+      "type": "message CallerAssertion",
+      "empty": "unset, the plugin acts as itself",
+      "intent": "names the person ReResolveActivity is sent for",
+      "meaning": "the assertion the plugin was handed for them, the same bytes, never altered; set, the sidecar admits the command only in a session at write, when the person may write the account it names, and stamps them on it (W4.9)",
+      "not_meaning": "the plugin's own identity, which the sidecar knows",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v15",
       "stability": "preview",
       "store": "sidecar"
     },
@@ -14243,6 +14274,12 @@
     {
       "name": "meridian.v1.ReResolveActivityRequest.external_account_id",
       "type": "identifier external account",
+      "required": [
+        {
+          "row": "ReResolveActivity",
+          "since": "v15"
+        }
+      ],
       "empty": "never empty",
       "intent": "names the external account the activity is on",
       "meaning": "as the plugin reported it (W2.8), which the sidecar translates",
@@ -14256,6 +14293,12 @@
     {
       "name": "meridian.v1.ReResolveActivityRequest.source",
       "type": "text",
+      "required": [
+        {
+          "row": "ReResolveActivity",
+          "since": "v15"
+        }
+      ],
       "empty": "never empty",
       "intent": "names the source the activity was recorded from",
       "meaning": "the source it was recorded under (W2.10); with the account and the custodian's identifier, the key that names the activity",
@@ -14269,6 +14312,18 @@
     {
       "name": "meridian.v1.ReResolveActivityRequest.external_activity_id",
       "type": "text",
+      "bounds": {
+        "length": [
+          1,
+          200
+        ]
+      },
+      "required": [
+        {
+          "row": "ReResolveActivity",
+          "since": "v15"
+        }
+      ],
       "empty": "never empty",
       "intent": "names the recorded activity by the custodian's identifier",
       "meaning": "the identifier it was recorded under (W2.10); no activity under it is a refusal, naming it",
@@ -14295,6 +14350,12 @@
     {
       "name": "meridian.v1.ReResolveActivityRequest.provenance",
       "type": "message Provenance",
+      "required": [
+        {
+          "row": "ReResolveActivity",
+          "since": "v15"
+        }
+      ],
       "empty": "never unset",
       "intent": "says how the instrument was resolved this time",
       "meaning": "supplied by the named person who set the link it resolves by, or derived by a named rule",
@@ -14309,6 +14370,12 @@
       "name": "meridian.v1.ReResolveActivityRequest.resolved_at_ns",
       "type": "moment",
       "unit": "nanoseconds since the epoch",
+      "required": [
+        {
+          "row": "ReResolveActivity",
+          "since": "v15"
+        }
+      ],
       "empty": "never 0",
       "intent": "says when what resolves the activity was made",
       "meaning": "when the link was set, a table setting row's changed_at, or when the rule resolved it",
@@ -14350,7 +14417,7 @@
       "type": "identifier account",
       "empty": "never empty",
       "intent": "names the account the re-resolved activity is on",
-      "meaning": "the deployment's account, by which the event is delivered only to a plugin whose read scope holds it",
+      "meaning": "the deployment's account, as its re-resolution names it, by which the event is delivered only to a plugin whose read scope holds it",
       "not_meaning": "the external account",
       "filled": "decided",
       "filled_by": "street",
@@ -14378,6 +14445,19 @@
       "intent": "says who caused the re-resolution",
       "meaning": "the custody plugin's command that re-resolved it, and the person it was sent for where there was one",
       "not_meaning": "who set the link, which the provenance names",
+      "filled": "decided",
+      "filled_by": "street",
+      "since": "v15",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.ActivityReResolvedEvent.journal",
+      "type": "message JournalRef",
+      "empty": "never unset",
+      "intent": "says where the re-resolution sits in the street's record, at the top of what is delivered",
+      "meaning": "the re-resolution's own number, as its record's journal says it: chained per account with the re-resolutions before it, apart from the activities' chain",
+      "not_meaning": "the activity's own number",
       "filled": "decided",
       "filled_by": "street",
       "since": "v15",
@@ -14458,6 +14538,19 @@
       "intent": "says where the re-resolution sits in the street's record",
       "meaning": "its own number in the street's partition, chained per account with the re-resolutions before it, apart from the activities' chain",
       "not_meaning": "the activity's own number",
+      "filled": "decided",
+      "filled_by": "street",
+      "since": "v15",
+      "stability": "preview",
+      "store": "street"
+    },
+    {
+      "name": "meridian.v1.ActivityReResolution.account_id",
+      "type": "identifier account",
+      "empty": "never empty",
+      "intent": "names the account the re-resolved activity is on",
+      "meaning": "the account the activity was recorded against, so a read since a watermark is applied by account as the event is delivered",
+      "not_meaning": "the external account",
       "filled": "decided",
       "filled_by": "street",
       "since": "v15",

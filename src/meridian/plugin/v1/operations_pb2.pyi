@@ -587,16 +587,44 @@ class ListActivitiesParams(_message.Message):
     def __init__(self, account_id: _Optional[str] = ..., trade_date_from: _Optional[str] = ..., trade_date_to: _Optional[str] = ..., since: _Optional[_Union[Watermark, _Mapping]] = ..., page_size: _Optional[int] = ..., cursor: _Optional[str] = ...) -> None: ...
 
 class ListActivitiesResult(_message.Message):
-    __slots__ = ("activities", "next_cursor", "as_of", "history_from")
+    __slots__ = ("activities", "next_cursor", "as_of", "history_from", "re_resolutions")
     ACTIVITIES_FIELD_NUMBER: _ClassVar[int]
     NEXT_CURSOR_FIELD_NUMBER: _ClassVar[int]
     AS_OF_FIELD_NUMBER: _ClassVar[int]
     HISTORY_FROM_FIELD_NUMBER: _ClassVar[int]
+    RE_RESOLUTIONS_FIELD_NUMBER: _ClassVar[int]
     activities: _containers.RepeatedCompositeFieldContainer[ActivityRecordedEvent]
     next_cursor: str
     as_of: Watermark
     history_from: str
-    def __init__(self, activities: _Optional[_Iterable[_Union[ActivityRecordedEvent, _Mapping]]] = ..., next_cursor: _Optional[str] = ..., as_of: _Optional[_Union[Watermark, _Mapping]] = ..., history_from: _Optional[str] = ...) -> None: ...
+    re_resolutions: _containers.RepeatedCompositeFieldContainer[ActivityReResolution]
+    def __init__(self, activities: _Optional[_Iterable[_Union[ActivityRecordedEvent, _Mapping]]] = ..., next_cursor: _Optional[str] = ..., as_of: _Optional[_Union[Watermark, _Mapping]] = ..., history_from: _Optional[str] = ..., re_resolutions: _Optional[_Iterable[_Union[ActivityReResolution, _Mapping]]] = ...) -> None: ...
+
+class ReResolveActivityParams(_message.Message):
+    __slots__ = ("external_account_id", "source", "external_activity_id", "instrument_id", "provenance", "resolved_at_ns", "acting_for")
+    EXTERNAL_ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
+    SOURCE_FIELD_NUMBER: _ClassVar[int]
+    EXTERNAL_ACTIVITY_ID_FIELD_NUMBER: _ClassVar[int]
+    INSTRUMENT_ID_FIELD_NUMBER: _ClassVar[int]
+    PROVENANCE_FIELD_NUMBER: _ClassVar[int]
+    RESOLVED_AT_NS_FIELD_NUMBER: _ClassVar[int]
+    ACTING_FOR_FIELD_NUMBER: _ClassVar[int]
+    external_account_id: str
+    source: str
+    external_activity_id: str
+    instrument_id: str
+    provenance: Provenance
+    resolved_at_ns: int
+    acting_for: _sidecar_pb2.CallerAssertion
+    def __init__(self, external_account_id: _Optional[str] = ..., source: _Optional[str] = ..., external_activity_id: _Optional[str] = ..., instrument_id: _Optional[str] = ..., provenance: _Optional[_Union[Provenance, _Mapping]] = ..., resolved_at_ns: _Optional[int] = ..., acting_for: _Optional[_Union[_sidecar_pb2.CallerAssertion, _Mapping]] = ...) -> None: ...
+
+class ReResolveActivityResult(_message.Message):
+    __slots__ = ("activity_id", "already_recorded")
+    ACTIVITY_ID_FIELD_NUMBER: _ClassVar[int]
+    ALREADY_RECORDED_FIELD_NUMBER: _ClassVar[int]
+    activity_id: str
+    already_recorded: bool
+    def __init__(self, activity_id: _Optional[str] = ..., already_recorded: bool = ...) -> None: ...
 
 class ListSyncStatusesParams(_message.Message):
     __slots__ = ("account_id", "since", "page_size", "cursor")
@@ -1085,7 +1113,7 @@ class ReceiveRequest(_message.Message):
     def __init__(self, rows: _Optional[_Iterable[str]] = ...) -> None: ...
 
 class Delivery(_message.Message):
-    __slots__ = ("meta", "lost", "statement_recorded", "custodial_position_updated", "position_changed", "break_changed", "account_figures_recorded", "account_attribute_changed", "activity_recorded", "sync_status_recorded")
+    __slots__ = ("meta", "lost", "statement_recorded", "custodial_position_updated", "position_changed", "break_changed", "account_figures_recorded", "account_attribute_changed", "activity_recorded", "sync_status_recorded", "activity_re_resolved")
     META_FIELD_NUMBER: _ClassVar[int]
     LOST_FIELD_NUMBER: _ClassVar[int]
     STATEMENT_RECORDED_FIELD_NUMBER: _ClassVar[int]
@@ -1096,6 +1124,7 @@ class Delivery(_message.Message):
     ACCOUNT_ATTRIBUTE_CHANGED_FIELD_NUMBER: _ClassVar[int]
     ACTIVITY_RECORDED_FIELD_NUMBER: _ClassVar[int]
     SYNC_STATUS_RECORDED_FIELD_NUMBER: _ClassVar[int]
+    ACTIVITY_RE_RESOLVED_FIELD_NUMBER: _ClassVar[int]
     meta: DeliveryMeta
     lost: Lost
     statement_recorded: StatementRecordedEvent
@@ -1106,7 +1135,8 @@ class Delivery(_message.Message):
     account_attribute_changed: AccountAttributeChangedEvent
     activity_recorded: ActivityRecordedEvent
     sync_status_recorded: SyncStatusRecordedEvent
-    def __init__(self, meta: _Optional[_Union[DeliveryMeta, _Mapping]] = ..., lost: _Optional[_Union[Lost, _Mapping]] = ..., statement_recorded: _Optional[_Union[StatementRecordedEvent, _Mapping]] = ..., custodial_position_updated: _Optional[_Union[CustodialPositionUpdatedEvent, _Mapping]] = ..., position_changed: _Optional[_Union[PositionChangedEvent, _Mapping]] = ..., break_changed: _Optional[_Union[BreakChangedEvent, _Mapping]] = ..., account_figures_recorded: _Optional[_Union[AccountFiguresRecordedEvent, _Mapping]] = ..., account_attribute_changed: _Optional[_Union[AccountAttributeChangedEvent, _Mapping]] = ..., activity_recorded: _Optional[_Union[ActivityRecordedEvent, _Mapping]] = ..., sync_status_recorded: _Optional[_Union[SyncStatusRecordedEvent, _Mapping]] = ...) -> None: ...
+    activity_re_resolved: ActivityReResolvedEvent
+    def __init__(self, meta: _Optional[_Union[DeliveryMeta, _Mapping]] = ..., lost: _Optional[_Union[Lost, _Mapping]] = ..., statement_recorded: _Optional[_Union[StatementRecordedEvent, _Mapping]] = ..., custodial_position_updated: _Optional[_Union[CustodialPositionUpdatedEvent, _Mapping]] = ..., position_changed: _Optional[_Union[PositionChangedEvent, _Mapping]] = ..., break_changed: _Optional[_Union[BreakChangedEvent, _Mapping]] = ..., account_figures_recorded: _Optional[_Union[AccountFiguresRecordedEvent, _Mapping]] = ..., account_attribute_changed: _Optional[_Union[AccountAttributeChangedEvent, _Mapping]] = ..., activity_recorded: _Optional[_Union[ActivityRecordedEvent, _Mapping]] = ..., sync_status_recorded: _Optional[_Union[SyncStatusRecordedEvent, _Mapping]] = ..., activity_re_resolved: _Optional[_Union[ActivityReResolvedEvent, _Mapping]] = ...) -> None: ...
 
 class DeliveryMeta(_message.Message):
     __slots__ = ("message_id", "correlation_id", "causation_id", "published_at_ns", "row", "journal", "cause", "own")
@@ -1497,6 +1527,24 @@ class ActivityRecordedEvent(_message.Message):
     journal: JournalRef
     cause: ChangeCause
     def __init__(self, activity_id: _Optional[str] = ..., account_id: _Optional[str] = ..., external_account_id: _Optional[str] = ..., source: _Optional[str] = ..., activity: _Optional[_Union[CustodialActivity, _Mapping]] = ..., recorded_at_ns: _Optional[int] = ..., journal: _Optional[_Union[JournalRef, _Mapping]] = ..., cause: _Optional[_Union[ChangeCause, _Mapping]] = ...) -> None: ...
+
+class ActivityReResolution(_message.Message):
+    __slots__ = ("activity_id", "account_id", "instrument_id", "provenance", "resolved_at_ns", "recorded_at_ns", "journal")
+    ACTIVITY_ID_FIELD_NUMBER: _ClassVar[int]
+    ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
+    INSTRUMENT_ID_FIELD_NUMBER: _ClassVar[int]
+    PROVENANCE_FIELD_NUMBER: _ClassVar[int]
+    RESOLVED_AT_NS_FIELD_NUMBER: _ClassVar[int]
+    RECORDED_AT_NS_FIELD_NUMBER: _ClassVar[int]
+    JOURNAL_FIELD_NUMBER: _ClassVar[int]
+    activity_id: str
+    account_id: str
+    instrument_id: str
+    provenance: Provenance
+    resolved_at_ns: int
+    recorded_at_ns: int
+    journal: JournalRef
+    def __init__(self, activity_id: _Optional[str] = ..., account_id: _Optional[str] = ..., instrument_id: _Optional[str] = ..., provenance: _Optional[_Union[Provenance, _Mapping]] = ..., resolved_at_ns: _Optional[int] = ..., recorded_at_ns: _Optional[int] = ..., journal: _Optional[_Union[JournalRef, _Mapping]] = ...) -> None: ...
 
 class SyncStatusRecordedEvent(_message.Message):
     __slots__ = ("status", "recorded_at_ns", "journal", "cause")
@@ -2223,3 +2271,15 @@ class AccountAttributeChangedEvent(_message.Message):
     journal: JournalRef
     cause: ChangeCause
     def __init__(self, attributes: _Optional[_Union[AccountAttributes, _Mapping]] = ..., entry: _Optional[_Union[EntryMeta, _Mapping]] = ..., journal: _Optional[_Union[JournalRef, _Mapping]] = ..., cause: _Optional[_Union[ChangeCause, _Mapping]] = ...) -> None: ...
+
+class ActivityReResolvedEvent(_message.Message):
+    __slots__ = ("account_id", "re_resolution", "cause", "journal")
+    ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
+    RE_RESOLUTION_FIELD_NUMBER: _ClassVar[int]
+    CAUSE_FIELD_NUMBER: _ClassVar[int]
+    JOURNAL_FIELD_NUMBER: _ClassVar[int]
+    account_id: str
+    re_resolution: ActivityReResolution
+    cause: ChangeCause
+    journal: JournalRef
+    def __init__(self, account_id: _Optional[str] = ..., re_resolution: _Optional[_Union[ActivityReResolution, _Mapping]] = ..., cause: _Optional[_Union[ChangeCause, _Mapping]] = ..., journal: _Optional[_Union[JournalRef, _Mapping]] = ...) -> None: ...

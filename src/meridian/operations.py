@@ -1098,6 +1098,29 @@ class Operations:
         )
         return await self._operate(self._operations().ListActivities, params)
 
+    async def re_resolve_activity(
+        self,
+        *,
+        external_account_id: str = "",
+        source: str = "",
+        external_activity_id: str = "",
+        instrument_id: str = "",
+        provenance: Provenance | None = None,
+        resolved_at_ns: int = 0,
+        acting_for: str | None = None,
+    ) -> ops.ReResolveActivityResult:
+        """W2.15: Re-resolve a recorded activity (W2.15): its instrument resolved later, or (preview)."""
+        params = ops.ReResolveActivityParams(
+            external_account_id=external_account_id,
+            source=source,
+            external_activity_id=external_activity_id,
+            instrument_id=instrument_id,
+            provenance=None if provenance is None else _provenance(provenance, "provenance"),
+            resolved_at_ns=resolved_at_ns,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().ReResolveActivity, params)
+
     async def list_sync_statuses(
         self,
         *,
@@ -1472,6 +1495,7 @@ class Operations:
         account_attribute_changed: Callable[[Heard[ops.AccountAttributeChangedEvent]], Awaitable[None]] | None = None,
         activity_recorded: Callable[[Heard[ops.ActivityRecordedEvent]], Awaitable[None]] | None = None,
         sync_status_recorded: Callable[[Heard[ops.SyncStatusRecordedEvent]], Awaitable[None]] | None = None,
+        activity_re_resolved: Callable[[Heard[ops.ActivityReResolvedEvent]], Awaitable[None]] | None = None,
         seed: bool = True,
     ) -> None:
         """W4.3: hear the rows given a handler, each change once and in order,
@@ -1488,6 +1512,7 @@ class Operations:
             "AccountAttributeChanged": account_attribute_changed,
             "ActivityRecorded": activity_recorded,
             "SyncStatusRecorded": sync_status_recorded,
+            "ActivityReResolved": activity_re_resolved,
         }
         await self._receive(
             {row: handler for row, handler in handlers.items() if handler is not None},
@@ -1624,5 +1649,18 @@ DELIVERED: tuple[DeliveredRow, ...] = (
         within="",
         record_journal="journal",
         record_account=("status", "account_id"),
+    ),
+    DeliveredRow(
+        name="ActivityReResolved",
+        step="W2.16",
+        arm="activity_re_resolved",
+        message=ops.ActivityReResolvedEvent,
+        account=("re_resolution", "account_id"),
+        caught_up_by="list_activities",
+        account_param="account_id",
+        records="re_resolutions",
+        within="re_resolution",
+        record_journal="journal",
+        record_account=("account_id",),
     ),
 )
