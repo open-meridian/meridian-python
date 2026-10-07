@@ -140,6 +140,20 @@ and subscribe to comes from the roles `pyproject.toml` declares under
   posting `record_kind` and `unit` to `/archive/restore`, which the SDK
   declares; `plugin.restore_unit` answers where a restored unit is readable,
   for seven days.
+- **A custody plugin keeps each activity's raw record at least as long as
+  the history it reported.** Declare the record of each activity the
+  custodian reported as a kind of its own, with a long window
+  (`RecordKind("activity", "Reported activity", window_days=2555)`, seven
+  years), and what each read answered as another with a short one
+  (`RecordKind("responses", "Raw responses", window_days=30)`); both are
+  archivable, since the custodian keeps no past copy of what it answered.
+  An admin lengthens a window in the dashboard's Settings form. Where
+  `activity_window_days` is set shorter than the history the custodian
+  reported reaches back (its `history_from`), hold the activity's records to
+  that history anyway: delete no unit of it inside the history, whatever
+  `activity_past_window` says, and say on the plugin's page how long they
+  are kept, as set and as kept. So each activity the street holds can have
+  its record read back, from storage or restored from the archive.
 
 This file is for any coding agent working on the plugin, and is committed with
 it for whoever works on it next. It is the canonical one: `CLAUDE.md` and the
