@@ -502,10 +502,15 @@ async def test_a_move_made_with_the_sdk_is_the_pinned_bytes(
     assert reply.SerializeToString() == base64.b64decode(pins["reply"])
 
 
-async def test_the_v16_declaration_and_heartbeat_cases_are_what_the_sdk_sends(sidecar) -> None:
+async def test_the_v16_declaration_and_heartbeat_cases_are_what_the_sdk_sends(
+    sidecar, tmp_path, monkeypatch
+) -> None:
     """The register fixture's v16 case is the declaration the SDK sends, its
-    four window settings beside it; the heartbeat fixture's v16 case is what
-    `plugin.stored` puts on the heartbeat (W4.1, W4.5, W6.11)."""
+    four window settings beside it; the heartbeat fixture's v16 cases are what
+    `plugin.stored` puts on the heartbeat (W4.1, W4.5, W6.11), each kind's
+    `bytes` the SDK's, from an index holding that much archived."""
+    import json
+
     from google.protobuf import json_format as _json
 
     import meridian
@@ -528,17 +533,44 @@ async def test_the_v16_declaration_and_heartbeat_cases_are_what_the_sdk_sends(si
     expected = sidecar_pb2.PluginDeclaration()
     _json.ParseDict(given, expected)
     beat = yaml.safe_load((fixtures_root() / _find("heartbeat.yaml")).read_text("utf-8"))
-    (stored,) = [
+    accepted = [
         case["request_fields"]["stored"]
         for case in beat["cases"]
         if "status" not in case and "stored" in case.get("request_fields", {})
     ]
+    assert len(accepted) == 2, "the fixture's two accepted v16 cases"
+
+    # The SDK's index, holding as many bytes archived of each kind as the
+    # fixture says: the bytes are its, never the plugin's.
+    monkeypatch.setenv("MERIDIAN_STORAGE_DIR", str(tmp_path))
+    index = tmp_path / ".meridian" / "archive" / "index.json"
+    index.parent.mkdir(parents=True)
+    units = {}
+    for span in accepted[0]:
+        if int(span.get("bytes", 0)):
+            unit = f"{span['record_kind']}/archived"
+            units[unit] = {
+                "record_kind": span["record_kind"],
+                "unit": unit,
+                "record_count": 1,
+                "first_received_ns": 1,
+                "last_received_ns": 1,
+                "state": "archived",
+                "files": {"": [int(span["bytes"]), "0" * 64]},
+            }
+    index.write_text(json.dumps({"units": units}))
 
     service, address = sidecar
     plugin = await meridian.connect(address, heartbeat=False, declaration=declaration)
+    heard = []
     try:
-        plugin.stored = [_json.ParseDict(span, sidecar_pb2.StoredSpan()) for span in stored]
-        await plugin.report(healthy=True)
+        for stored in accepted:
+            plugin.stored = [
+                _json.ParseDict({**span, "bytes": "0"}, sidecar_pb2.StoredSpan())
+                for span in stored
+            ]
+            await plugin.report(healthy=True)
+            heard.append(list(service.heartbeats[-1].stored))
     finally:
         await plugin.leave()
 
@@ -554,6 +586,6 @@ async def test_the_v16_declaration_and_heartbeat_cases_are_what_the_sdk_sends(si
         "responses_window_days",
         "responses_past_window",
     ]
-    heard = service.heartbeats[-1]
-    wanted = [_json.ParseDict(span, sidecar_pb2.StoredSpan()) for span in stored]
-    assert list(heard.stored) == wanted
+    for stored, beat_heard in zip(accepted, heard, strict=True):
+        wanted = [_json.ParseDict(span, sidecar_pb2.StoredSpan()) for span in stored]
+        assert beat_heard == wanted

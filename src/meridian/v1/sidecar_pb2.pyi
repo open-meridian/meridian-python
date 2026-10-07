@@ -389,16 +389,18 @@ class HeartbeatRequest(_message.Message):
     def __init__(self, healthy: bool = ..., detail: _Optional[str] = ..., figures: _Optional[_Iterable[_Union[PluginFigure, _Mapping]]] = ..., not_carried_seen: _Optional[_Iterable[_Union[NotCarriedSeen, _Mapping]]] = ..., stored: _Optional[_Iterable[_Union[StoredSpan, _Mapping]]] = ...) -> None: ...
 
 class StoredSpan(_message.Message):
-    __slots__ = ("record_kind", "record_count", "first_received_ns", "last_received_ns")
+    __slots__ = ("record_kind", "record_count", "first_received_ns", "last_received_ns", "bytes")
     RECORD_KIND_FIELD_NUMBER: _ClassVar[int]
     RECORD_COUNT_FIELD_NUMBER: _ClassVar[int]
     FIRST_RECEIVED_NS_FIELD_NUMBER: _ClassVar[int]
     LAST_RECEIVED_NS_FIELD_NUMBER: _ClassVar[int]
+    BYTES_FIELD_NUMBER: _ClassVar[int]
     record_kind: str
     record_count: int
     first_received_ns: int
     last_received_ns: int
-    def __init__(self, record_kind: _Optional[str] = ..., record_count: _Optional[int] = ..., first_received_ns: _Optional[int] = ..., last_received_ns: _Optional[int] = ...) -> None: ...
+    bytes: int
+    def __init__(self, record_kind: _Optional[str] = ..., record_count: _Optional[int] = ..., first_received_ns: _Optional[int] = ..., last_received_ns: _Optional[int] = ..., bytes: _Optional[int] = ...) -> None: ...
 
 class NotCarriedSeen(_message.Message):
     __slots__ = ("scheme", "name", "count")

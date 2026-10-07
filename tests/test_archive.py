@@ -304,6 +304,56 @@ async def test_archived_is_refused_before_anything_moves_where_it_cannot_be(
     assert (storage / UNIT / "act-77.json").exists()
 
 
+async def test_an_archive_write_past_its_bound_is_refused_and_nothing_moves(
+    sidecar: Any, storage: Path, archive: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """MERIDIAN_ARCHIVE_MOST_BYTES (W8.3, named 2026-10-07): a unit that
+    would take the archive past its bound is refused before anything is
+    written or reported, saying what the archive holds, its bound and the
+    unit's size; under it, and with no bound, the unit moves."""
+    service, address = sidecar
+    size = sum(p.stat().st_size for p in (storage / UNIT).iterdir())  # 32 bytes
+    second = storage / "activity" / "ACC-1" / "2019-04"
+    second.mkdir(parents=True)
+    (second / "act-90.json").write_text('{"id": "act-90"}')
+    plugin = await _connected(
+        service, address, activity_window_days="2555", activity_past_window="archived"
+    )
+    args = {"record_count": 2, "first_received_ns": FIRST, "last_received_ns": LAST}
+    try:
+        monkeypatch.setenv("MERIDIAN_ARCHIVE_MOST_BYTES", str(size - 1))
+        with pytest.raises(RuntimeError) as refused:
+            await plugin.archive_unit("activity", UNIT, **args)
+        said = str(refused.value)
+        bound = f"{size - 1:,} bytes (MERIDIAN_ARCHIVE_MOST_BYTES)"
+        assert f"the archive holds 0 of its {bound}" in said
+        assert f"the unit {UNIT} ({size:,} bytes) would take it past" in said
+        assert "it stays in storage, and no move is recorded" in said
+        assert service.moves == [] and list(archive.rglob("*.json")) == []
+        assert (storage / UNIT / "act-77.json").exists()
+        assert plugin.find_record(UNIT) is None
+
+        # Exactly to the bound: moved. Past it with what is held: refused.
+        monkeypatch.setenv("MERIDIAN_ARCHIVE_MOST_BYTES", str(size + 10))
+        await plugin.archive_unit("activity", UNIT, **args)
+        with pytest.raises(RuntimeError, match=f"the archive holds {size:,} of its"):
+            await plugin.archive_unit("activity", "activity/ACC-1/2019-04", **args)
+        assert len(service.moves) == 1 and second.is_dir()
+
+        # No bound, or 0: anything fits.
+        monkeypatch.setenv("MERIDIAN_ARCHIVE_MOST_BYTES", "0")
+        await plugin.archive_unit("activity", "activity/ACC-1/2019-04", **args)
+        assert len(service.moves) == 2 and not second.exists()
+
+        monkeypatch.setenv("MERIDIAN_ARCHIVE_MOST_BYTES", "50GiB")
+        (storage / "activity" / "ACC-1" / "2019-05").mkdir()
+        (storage / "activity" / "ACC-1" / "2019-05" / "a.json").write_text("{}")
+        with pytest.raises(ValueError, match="a whole number of bytes"):
+            await plugin.archive_unit("activity", "activity/ACC-1/2019-05", **args)
+    finally:
+        await plugin.leave()
+
+
 async def test_a_move_before_the_settings_arrived_is_refused_it_names_its_window(
     sidecar: Any, storage: Path, archive: Path
 ) -> None:
@@ -578,6 +628,81 @@ async def test_what_each_kind_holds_in_storage_goes_on_every_heartbeat(sidecar: 
         ("responses", 0),
     ]
     assert len(plugin.stored) == 2  # what was refused left the last standing
+
+
+async def test_the_bytes_each_kind_uses_of_the_archive_are_the_sdks_on_the_heartbeat(
+    sidecar: Any, storage: Path, archive: Path
+) -> None:
+    """StoredSpan.bytes (named 2026-10-07): summed from the index on each
+    heartbeat, in place of the plugin's, a restored unit still counted, a
+    deleted one not; a kind the plugin left out that the archive holds some
+    of is added with no records; nothing moved, the spans as set."""
+    service, address = sidecar
+    plugin = await _connected(
+        service,
+        address,
+        activity_window_days="2555",
+        activity_past_window="archived",
+        responses_window_days="30",
+        responses_past_window="archived",
+    )
+    size = sum(p.stat().st_size for p in (storage / UNIT).iterdir())
+    responses = storage / "responses" / "ACC-1" / "2019-03-01.json"
+    responses.parent.mkdir(parents=True)
+    responses.write_text('{"read": 1, "pad": "' + "x" * 100 + '"}')
+    responses_size = responses.stat().st_size
+    try:
+        plugin.stored = [
+            meridian.StoredSpan(
+                record_kind="activity",
+                record_count=3,
+                bytes=999,
+                first_received_ns=FIRST,
+                last_received_ns=LAST,
+            ),
+        ]
+        await plugin.report(healthy=True)
+        before = service.heartbeats[-1].stored
+        assert [(s.record_kind, s.bytes) for s in before] == [("activity", 0)], (
+            "nothing archived: none, whatever the plugin set"
+        )
+        await plugin.archive_unit(
+            "activity", UNIT, record_count=2, first_received_ns=FIRST, last_received_ns=LAST
+        )
+        await plugin.archive_unit(
+            "responses",
+            "responses/ACC-1/2019-03-01.json",
+            record_count=1,
+            first_received_ns=FIRST,
+            last_received_ns=FIRST,
+        )
+        await plugin.report(healthy=True)
+        beat = {s.record_kind: s for s in service.heartbeats[-1].stored}
+        assert beat["activity"].bytes == size
+        assert beat["activity"].record_count == 3, "the plugin's count stands"
+        assert beat["responses"].bytes == responses_size
+        assert beat["responses"].record_count == 0 and beat["responses"].first_received_ns == 0
+        assert "session" not in beat
+        assert [s.bytes for s in plugin.stored] == [999], "what the plugin set is not rewritten"
+
+        # Restored, still in the archive; deleted, gone from it.
+        await plugin.restore_unit("activity", UNIT, for_caller="ben@example.com")
+        await plugin.delete_unit(
+            "responses",
+            "responses/ACC-1/2019-03-01.json",
+            record_count=1,
+            first_received_ns=FIRST,
+            last_received_ns=FIRST,
+            for_caller="ada@example.com",
+        )
+        await plugin.report(healthy=True)
+        beat = {s.record_kind: s for s in service.heartbeats[-1].stored}
+        assert beat["activity"].bytes == size
+        assert "responses" not in beat
+        # The fake sidecar held it as core's does, for the plugin's report.
+        assert [(s.record_kind, s.bytes) for s in service.report_stored] == [("activity", size)]
+    finally:
+        await plugin.leave()
 
 
 # ── The restore route ───────────────────────────────────────────────────────

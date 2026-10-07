@@ -259,6 +259,30 @@ def test_a_form_answered_with_a_page_marks_the_tab_it_was_sent_from(templates: P
     assert on_history in row(client.get("/history", "write", notice="done").text)
 
 
+def test_a_page_under_a_tabs_path_marks_that_tab(templates: Path) -> None:
+    """A route at "/history/archive" is a view of History: History is marked,
+    and the page titled as it. "/" marks only itself, and "/historic" is not
+    under "/history"."""
+    pages = build(templates)
+
+    @pages.page("/history", "History", levels="read")
+    def history(request: Request) -> str:
+        return pages.render("setup.html", note="")
+
+    for path in ("/history/archive", "/historic"):
+
+        @pages.route(path, levels="read", tool=False, why="a test's page")
+        def under(request: Request) -> str:
+            return pages.render("setup.html", note="")
+
+    client = PageClient(pages)
+    shown = client.get("/history/archive", "read").text
+    assert '<a class="tab on" href="/history" aria-current="page">History</a>' in shown
+    assert 'class="tab on" href="/"' not in shown
+    assert "<title>History · Ledger</title>" in shown
+    assert 'class="tab on"' not in client.get("/historic", "read").text
+
+
 def test_what_a_template_shows_is_escaped_and_its_data_cannot_close_its_script(
     templates: Path,
 ) -> None:

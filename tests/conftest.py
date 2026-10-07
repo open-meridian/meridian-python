@@ -43,7 +43,13 @@ refused FAILED_PRECONDITION with REFUSAL_REASON_WITHIN_HOLD, nothing
 recorded. A restore is for a person, and deleting an archived unit an
 admin's act: refused PERMISSION_DENIED for nobody. `read_moves` answers
 core's ReadMoves from what it recorded, newest first, with the archive's
-spans per kind summed from the moves.
+spans per kind summed from the moves, which carry no bytes, as the
+conductor's carry none. A heartbeat's `stored` is held as core's sidecar
+holds it: one entry per declared kind, at most 16, no span without records,
+refused INVALID_ARGUMENT naming the field otherwise; any `bytes` (what the
+kind uses of the archive) accepted, with records in storage or none; and
+`report_stored` answers what the last accepted one said, as the plugin's
+report carries it to the Summary.
 """
 
 from __future__ import annotations
@@ -444,6 +450,8 @@ class FakeSidecar(sidecar_pb2_grpc.SidecarServiceServicer):
     # What was admitted, each declaration's roles as served (contract v15).
     reported: list[sidecar_pb2.RegisterRequest] = field(default_factory=list)
     heartbeats: list[sidecar_pb2.HeartbeatRequest] = field(default_factory=list)
+    # What the last accepted heartbeat said each kind holds (PluginReport.stored).
+    report_stored: list[sidecar_pb2.StoredSpan] = field(default_factory=list)
     left: list[sidecar_pb2.LeaveRequest] = field(default_factory=list)
     operations: FakeOperations = field(default_factory=FakeOperations)
     # The tickets filed here (W4.12), each filing with the person it was
@@ -568,7 +576,38 @@ class FakeSidecar(sidecar_pb2_grpc.SidecarServiceServicer):
         self.heartbeats.append(request)
         async with self.beat:
             self.beat.notify_all()
+        refused = self._stored_refused(request.stored)
+        if refused:
+            await context.abort(grpc.StatusCode.INVALID_ARGUMENT, refused)
+        self.report_stored = list(request.stored)
         return sidecar_pb2.HeartbeatReply()
+
+    def _stored_refused(self, stored: object) -> str:
+        """Why a heartbeat's `stored` cannot stand, naming the field, as
+        core's sidecar says it (W4.5, contract v16); or nothing."""
+        spans = list(stored)  # type: ignore[call-overload]
+        if not spans:
+            return ""
+        if len(spans) > 16:
+            return f"stored: stored names {len(spans)} kinds; at most 16"
+        declared = {
+            kind.name
+            for registered in self.registered[-1:]
+            for kind in registered.declaration.storage.record_kinds
+        }
+        seen: set[str] = set()
+        for n, span in enumerate(spans):
+            if span.record_kind not in declared:
+                return (
+                    f"stored[{n}].record_kind: a kind this version's declaration does not name"
+                )
+            if span.record_kind in seen:
+                return f"stored: stored names {span.record_kind} twice; one entry per kind"
+            seen.add(span.record_kind)
+            if not span.record_count and (span.first_received_ns or span.last_received_ns):
+                at = f"stored[{n}]"
+                return f"{at}.first_received_ns: {at} holds no record, and so no span"
+        return ""
 
     def mark(self) -> int:
         """Where the heartbeats built from now on begin.

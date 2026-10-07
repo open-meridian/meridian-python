@@ -227,7 +227,8 @@ HEAD is answered for every path that takes GET, by its GET view, with the
 headers and no body. A request whose body is over `Pages(max_body=...)` bytes,
 1 MiB unless said (or `pages.serve(..., max_body=...)`), is answered 413
 before any view runs, so a view need not measure what it is sent. The tab row
-marks the tab the request is for, or, for a form's action that answers by
+marks the tab the request is for, or the one its path is under
+(`/raw/archive` marks `/raw`), or, for a form's action that answers by
 rendering a page, the tab it was posted from.
 
 `meridian.testing.PageClient` asks the pages in a plugin's tests as the
@@ -713,10 +714,18 @@ async with await meridian.connect(declaration=DECLARATION, interface=INTERFACE) 
   or None for a record never moved. A row's `record_key` on the plugin's own
   page resolves through it, never to nothing.
 - **What is stored** is the plugin's to say, as its figures are:
-  `plugin.stored`, one `StoredSpan` per kind, on every heartbeat.
+  `plugin.stored`, one `StoredSpan` per kind, on every heartbeat. The bytes
+  each kind uses of the archive (`StoredSpan.bytes`) are the SDK's: it sums
+  them from its index on every heartbeat, in place of any the plugin set,
+  and adds a kind the plugin left out that the archive holds some of. The
+  deployment's Summary draws them against the archive's bound.
 
-The archive's bound, a deployment admin's, is the archive's own: a write past
-it fails, and the unit is kept.
+**The archive's bound**, a deployment admin's, reaches the plugin as
+`MERIDIAN_ARCHIVE_MOST_BYTES`, in bytes, unset where there is none.
+`archive_unit` refuses a unit that would take the archive past it, with a
+`RuntimeError` saying how much the archive holds, its bound and the unit's
+size, before anything is written or reported: the unit stays in storage and
+no move is recorded, so the plugin keeps it and tries again on a later pass.
 
 ### Figures on Summary
 
@@ -952,7 +961,7 @@ carries libcst.
 | 0.17.0 to 0.18.0: the SDK declares contract v13; a plugin files a ticket for a person and reads what it filed (`plugin.file_ticket`, `plugin.filed_tickets`, `TicketKind`, `TicketSubject`, `TicketReference`, `TicketState`, `TicketResolution`) | only the pins move | |
 | 0.18.0 to 0.19.0: the SDK declares contract v14; a custody plugin reports the custodian's activity and operations reads, hears and links it (`plugin.record_activity`, `plugin.list_activities`, `CustodialActivity`, `ActivityKind`, `ActivityRef`, `receive(activity_recorded=)`); each sync status the street keeps (`plugin.list_sync_statuses`, `receive(sync_status_recorded=)`); a table setting (`meridian.Setting(name, list, columns=...)`, `meridian.Column`) | only the pins move | |
 | 0.19.0 to 0.20.0: the SDK declares contract v15, a person's access granted per role: `roles=` on `@pages.page`, `@pages.route`, `@pages.tool`, `meridian.Setting` and `meridian.Page`; `Caller.roles`, `Caller.level_for`, `Caller.read_for`, `Caller.write_for`; `PageClient(..., roles=)` and `roles=` on its sessions; an activity re-resolved (`plugin.re_resolve_activity`, `re_resolutions`, `receive(activity_re_resolved=)`); a plugin holding one role or none names no role, and one coming to hold a second names `roles=` on every page, route, tool and setting, which `meridian plugin check` reports | only the pins move | |
-| 0.20.0 to 0.21.0: the SDK declares contract v16, an edge plugin's older records move to the archive: the kinds of raw record (`Storage(kinds=[RecordKind(...)])`) and the two settings the SDK declares per kind (`<kind>_window_days`, `<kind>_past_window`), reserved; the archive (`edge.archive_dir()`, `MERIDIAN_ARCHIVE_BUCKET`); the moves with their index (`plugin.archive_unit`, `plugin.restore_unit`, `plugin.delete_unit`, `plugin.find_record`), a deletion inside the hold a `CommandRefused` with `REFUSAL_REASON_WITHIN_HOLD`; what each kind holds in storage on the heartbeat (`plugin.stored`, `StoredSpan`); `POST /archive/restore` on every edge plugin's host, derived as the `restore_unit` tool. A plugin declaring no kinds keeps `retention_days` as before, so `meridian plugin migrate` needs no change in the command line | only the pins move | a setting of the plugin's own that held a window, moved into its kind's window by its own release (SnapTrade's two); a setting it declared as `<kind>_window_days` or `<kind>_past_window`, renamed |
+| 0.20.0 to 0.21.0: the SDK declares contract v16, an edge plugin's older records move to the archive: the kinds of raw record (`Storage(kinds=[RecordKind(...)])`) and the two settings the SDK declares per kind (`<kind>_window_days`, `<kind>_past_window`), reserved; the archive (`edge.archive_dir()`, `MERIDIAN_ARCHIVE_BUCKET`); the moves with their index (`plugin.archive_unit`, `plugin.restore_unit`, `plugin.delete_unit`, `plugin.find_record`), a deletion inside the hold a `CommandRefused` with `REFUSAL_REASON_WITHIN_HOLD`; what each kind holds in storage on the heartbeat (`plugin.stored`, `StoredSpan`), with the bytes each uses of the archive (`StoredSpan.bytes`), which the SDK fills in; the archive's bound (`MERIDIAN_ARCHIVE_MOST_BYTES`), past which `archive_unit` refuses; `POST /archive/restore` on every edge plugin's host, derived as the `restore_unit` tool. A plugin declaring no kinds keeps `retention_days` as before, so `meridian plugin migrate` needs no change in the command line | only the pins move | a setting of the plugin's own that held a window, dropped, its release notes naming the kind's window it maps to for the admin to set once at upgrade (SnapTrade's two); a setting it declared as `<kind>_window_days` or `<kind>_past_window`, renamed |
 
 `tests/migrations/` holds the plugins the migrations are recorded for, as
 written and as their migration leaves them, and `make check-migrations` holds

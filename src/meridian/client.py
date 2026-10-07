@@ -1161,7 +1161,9 @@ class Plugin(Operations):
         declared (W4.5, contract v16), as last set: one `StoredSpan` per kind,
         its count and the span from the first received to the last, on every
         heartbeat from the next on. Only the plugin knows its storage; what
-        the archive holds the deployment sums from the moves. Refused here,
+        the archive holds the deployment sums from the moves, and the bytes
+        each kind uses of it (`StoredSpan.bytes`) the SDK fills in on each
+        heartbeat from its index, in place of any the plugin set. Refused here,
         as the sidecar would refuse it, for a kind not declared, a kind
         twice or more than 16; nothing is set then."""
         return self._stored
@@ -1375,8 +1377,15 @@ class Plugin(Operations):
                 sidecar_pb2.NotCarriedSeen(scheme=scheme, name=name, count=count)
                 for (scheme, name), count in sorted(self._not_carried_seen.items())
             ],
-            stored=self._stored,
+            stored=self._stored_with_bytes(),
         )
+
+    def _stored_with_bytes(self) -> tuple[sidecar_pb2.StoredSpan, ...]:
+        """What the plugin set as stored, each kind with the bytes it uses of
+        the archive as the SDK's index sums them."""
+        from .edge import _with_bytes
+
+        return _with_bytes(self._stored, self._storage)
 
 
 def _translated(operation: str, failed: grpc.aio.AioRpcError) -> NoReturn:

@@ -73,8 +73,9 @@ HMAC of the person and the session's level under a secret this process makes
 at start, checked before the view runs and answered 403 when it is missing or
 wrong. A restart makes a page open before it stale, which a reload mends.
 
-The tab row marks the tab whose path the request is for. A request for a
-path that is no tab -- a form's action that answers by rendering a page --
+The tab row marks the tab whose path the request is for, or the tab whose
+path it is under ("/raw/archive", a view of "/raw"). A request for a path
+that is neither -- a form's action that answers by rendering a page --
 marks the tab it was sent from, its `Referer`'s path, when it carried this
 plugin's token, so came from one of its pages.
 
@@ -997,11 +998,18 @@ def _presented(request: Request) -> bool:
 
 
 def _shown(request: Request, tabs: set[str]) -> str:
-    """The tab a page rendered for `request` marks: the one at its path, or,
-    for a request that carried this plugin's token and so was sent from one
-    of its pages, the one it was sent from. Otherwise none."""
+    """The tab a page rendered for `request` marks: the one at its path; or
+    the one whose path its own is under -- "/raw/archive" under "/raw", the
+    longest such, never "/" alone, which every path is under; or, for a
+    request that carried this plugin's token and so was sent from one of its
+    pages, the one it was sent from. Otherwise none."""
     if request.path in tabs:
         return request.path
+    under = [
+        tab for tab in tabs if tab != "/" and request.path.startswith(tab.rstrip("/") + "/")
+    ]
+    if under:
+        return max(under, key=len)
     if request.method.upper() in SAFE_METHODS:
         return ""
     sent_from = urllib.parse.urlsplit(request.headers.get("referer", "")).path

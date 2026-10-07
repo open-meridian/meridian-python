@@ -21,16 +21,21 @@ plugin.restore_unit(kind, unit, for_caller=), plugin.delete_unit(kind, unit,
 ..., for_caller=) and plugin.find_record(key), each move reported through the
 sidecar before anything is removed and kept in an index in storage; a deletion
 inside the deployment's hold is refused, CommandRefused with
-REFUSAL_REASON_WITHIN_HOLD. plugin.stored (StoredSpan per kind) goes on every
-heartbeat. Every edge plugin with pages offers POST /archive/restore, derived
+REFUSAL_REASON_WITHIN_HOLD. The archive's bound is MERIDIAN_ARCHIVE_MOST_BYTES,
+in bytes, unset for none: archive_unit refuses a unit that would take the
+archive past it, a RuntimeError, nothing written or recorded.
+plugin.stored (StoredSpan per kind) goes on every heartbeat, each kind with
+the bytes it uses of the archive (StoredSpan.bytes), which the SDK fills in
+from its index. Every edge plugin with pages offers POST /archive/restore, derived
 as the restore_unit tool. A plugin built on 0.21.0 is refused at registration
 by a sidecar that accepts only v15, naming both.
 
 Nothing to rewrite: Storage(retention_days=...) stands, and a plugin declaring
-no kinds keeps its records under it as before. A plugin adopting kinds moves
-any setting of its own that held a window into its kind's window (SnapTrade's
-raw_retention_days and activity_retention_days, carried over by hand in its
-own release), and renames any setting it declared as <kind>_window_days or
+no kinds keeps its records under it as before. A plugin adopting kinds drops
+any setting of its own that held a window, and its release notes name it and
+the kind's window it maps to, for the admin to set once at upgrade
+(SnapTrade's raw_retention_days and activity_retention_days: the ruling of
+2026-10-07); and renames any setting it declared as <kind>_window_days or
 <kind>_past_window.
 """
 breaking = false

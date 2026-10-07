@@ -45,7 +45,10 @@ declares). The archive is the instance's own, where a deployment admin
 allowed it one: `archive_dir()` where it is mounted, or in a cloud the
 bucket `MERIDIAN_ARCHIVE_BUCKET` names, reached through the same interface
 (put, get, list by prefix, delete); neither, and records past their window
-are kept.
+are kept. Its bound, where a deployment admin gave one, is
+`MERIDIAN_ARCHIVE_MOST_BYTES` (unset, or 0, for none):
+`archive_unit` refuses a unit that would take the archive past it, before
+anything is written or reported, and the unit stays in storage.
 
 The plugin moves its own records, in units it can find again: a unit is a
 file or a directory in its storage, named by its path there
@@ -72,7 +75,10 @@ hold -- keeps the unit; deleting an archived unit is an admin's act. Nothing
 of a record's content is ever in a move: a count, two times and the key.
 
 What each kind holds in storage is the plugin's to say, as its figures are
-(`plugin.stored`, one `StoredSpan` per kind), on every heartbeat. Every edge
+(`plugin.stored`, one `StoredSpan` per kind), on every heartbeat; the bytes
+each kind uses of the archive (`StoredSpan.bytes`) are the SDK's, summed
+from its index on every heartbeat, and the deployment's Summary draws them
+against the bound. Every edge
 plugin with pages offers `POST /archive/restore`, which the SDK declares on
 its host and the deployment derives as a tool: the kind and the unit, for a
 person at `write`, the person read from the claims.
@@ -222,6 +228,10 @@ def within_retention(received_at_ns: int, now_ns: int, retention_days: int) -> b
 _ARCHIVE_DIR = "MERIDIAN_ARCHIVE_DIR"
 _ARCHIVE_BUCKET = "MERIDIAN_ARCHIVE_BUCKET"
 
+#: The archive's bound in bytes, beside where it is (W8.3; named
+#: 2026-10-07): unset, or 0, for none.
+_ARCHIVE_MOST_BYTES = "MERIDIAN_ARCHIVE_MOST_BYTES"
+
 #: How long a restored unit stays readable in the restore area before it is
 #: removed and its return reported: the deployment's restore period, seven
 #: days (the plan's question 2, ruled 2026-10-05).
@@ -248,6 +258,21 @@ def archive_dir() -> Path | None:
     a test, an instance allowed none, or a cloud's bucket instead."""
     given = os.environ.get(_ARCHIVE_DIR, "")
     return Path(given) if given else None
+
+
+def _archive_most_bytes() -> int:
+    """The archive's bound, in bytes, as the deployment gave it
+    (`MERIDIAN_ARCHIVE_MOST_BYTES`, W8.3), or 0 where it gave none. A value
+    that is not a whole number of bytes is refused: the bound is not guessed."""
+    given = os.environ.get(_ARCHIVE_MOST_BYTES, "").strip()
+    if not given:
+        return 0
+    if not given.isdigit():
+        raise ValueError(
+            f"{_ARCHIVE_MOST_BYTES} is {given!r}: the archive's bound is a whole number of "
+            "bytes, or unset for none"
+        )
+    return int(given)
 
 
 class _Objects(Protocol):
@@ -474,6 +499,14 @@ class _Moved:
     restored_at_ns: int = 0
     rule: str = ""
 
+    @property
+    def archive_bytes(self) -> int:
+        """What the unit uses of the archive: its files' sizes while the
+        archive holds it, a restored unit still counted; none once deleted."""
+        if self.state not in ("archived", "restored"):
+            return 0
+        return sum(int(held[0]) for held in self.files.values())
+
     def move(self, outcome: str, rule: str = "") -> sidecar_pb2.RecordMoveRequest:
         return sidecar_pb2.RecordMoveRequest(
             record_kind=self.record_kind,
@@ -504,6 +537,14 @@ class _Index:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         body = {"units": {unit: dataclasses.asdict(moved) for unit, moved in units.items()}}
         _write_whole(self.path, json.dumps(body, sort_keys=True, indent=1).encode())
+
+    def archive_bytes(self) -> dict[str, int]:
+        """The bytes each kind uses of the archive, as this index holds it."""
+        used: dict[str, int] = {}
+        for moved in self.read().values():
+            if moved.archive_bytes:
+                used[moved.record_kind] = used.get(moved.record_kind, 0) + moved.archive_bytes
+        return used
 
     def holding(self, key: str) -> _Moved | None:
         """The unit a record's key is in: the unit itself, or a path in it."""
@@ -639,6 +680,16 @@ class _Mover:
             if not source.exists():
                 raise FileNotFoundError(f"the unit {unit} is not in the plugin's storage")
             rule = self.window_rule(kind, "archived")
+            most = _archive_most_bytes()
+            if most:
+                size = await asyncio.to_thread(_size, source)
+                used = sum(moved.archive_bytes for moved in units.values())
+                if used + size > most:
+                    raise RuntimeError(
+                        f"the archive holds {used:,} of its {most:,} bytes "
+                        f"({_ARCHIVE_MOST_BYTES}), and the unit {unit} ({size:,} bytes) would "
+                        "take it past: it stays in storage, and no move is recorded"
+                    )
             files = await asyncio.to_thread(_copy_out, archive, unit, source)
             moved = _Moved(
                 record_kind=record_kind,
@@ -781,6 +832,11 @@ class _Mover:
         return held.move(held.state, held.rule if held.state in ("archived", "deleted") else "")
 
 
+def _size(source: Path) -> int:
+    """A unit's bytes in storage: its files' sizes."""
+    return sum(path.stat().st_size for _, path in _files(source))
+
+
 def _copy_out(archive: _Objects, unit: str, source: Path) -> dict[str, list[Any]]:
     """The unit written to the archive, each file checked to have landed;
     every file it wrote taken back where one did not."""
@@ -835,6 +891,37 @@ def _remove(path: Path, root: Path | None = None) -> None:
         path.unlink(missing_ok=True)
     if root is not None:
         _prune(path.parent, root)
+
+
+def _with_bytes(
+    spans: tuple[sidecar_pb2.StoredSpan, ...], storage: Any
+) -> tuple[sidecar_pb2.StoredSpan, ...]:
+    """What the plugin set, each kind given the bytes it uses of the archive
+    from the SDK's index (`StoredSpan.bytes`, named 2026-10-07), and a kind
+    the plugin left out that the archive holds some of added with no records
+    in storage. The plugin's own `bytes` is not taken: the index is what
+    knows the archive. As set, where nothing has moved."""
+    granted = storage_dir()
+    if granted is None or storage is None or not storage.kinds:
+        return spans
+    try:
+        used = _Index(granted).archive_bytes()
+    except (OSError, ValueError, TypeError) as unread:
+        log.warning("the archive's index could not be read for the heartbeat: %s", unread)
+        return spans
+    if not used and not any(span.bytes for span in spans):
+        return spans
+    given = []
+    for span in spans:
+        filled = sidecar_pb2.StoredSpan()
+        filled.CopyFrom(span)
+        filled.bytes = used.get(span.record_kind, 0)
+        given.append(filled)
+    named = {span.record_kind for span in spans}
+    for kind in storage.kinds:
+        if kind.name not in named and used.get(kind.name):
+            given.append(sidecar_pb2.StoredSpan(record_kind=kind.name, bytes=used[kind.name]))
+    return tuple(given)
 
 
 def _stored(spans: Any, storage: Any) -> tuple[sidecar_pb2.StoredSpan, ...]:
