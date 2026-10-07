@@ -297,11 +297,12 @@ async def test_the_scaffold_registers_with_a_real_sidecar() -> None:
 
     assert page["without a caller"] == 401
     assert page["as Ada"][0] == 200 and "Ada Park" in page["as Ada"][1]
-    # The page's one write is for an external account the plugin linked. It
-    # reported its own at start, and nobody here has linked it, so the page
-    # offers no statement and says to link one first, sending nothing.
-    assert "Link an account first" in page["as Ada"][1]
-    assert "Link an account first" in page["writing for Ada"], page["writing for Ada"]
+    # The page's one write is for an external account the plugin has linked:
+    # here LINKED, which core's `make interop` links before the suite. It goes
+    # to the sidecar for her; the sidecar holds no key that signed this
+    # assertion, so it refuses, and the page says so.
+    assert f"<code>{LINKED}</code>" in page["as Ada"][1]
+    assert "Refused" in page["writing for Ada"], page["writing for Ada"]
     assert page["writing without the token"] == 403
 
     assert any("reported 1 external account(s) to link" in line for line in said), said
