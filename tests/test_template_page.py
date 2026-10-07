@@ -14,6 +14,7 @@ import importlib.util
 import json
 import re
 import sys
+from collections.abc import AsyncIterator
 from pathlib import Path
 from types import ModuleType
 
@@ -33,11 +34,16 @@ def load_page() -> ModuleType:
 
 
 class Stand:
-    """What the pages reach of the plugin: who it was launched as, and a
-    statement opened, which this sidecar refuses."""
+    """What the pages reach of the plugin: who it was launched as, its one
+    link, and a statement opened, which this sidecar refuses."""
 
     identity = meridian.Identity("reference-1", roles=("custody",))
     grants = meridian.Grants()
+
+    async def account_scope(self) -> AsyncIterator[meridian.AccountScope]:
+        # The external account it reaches, linked to the account Ada writes.
+        link = meridian.LinkedExternalAccount("reference-1", "</script><b>x", "Ada's account")
+        yield meridian.AccountScope(links=(link,))
 
     async def record_holdings_statement(self, **_: object) -> None:
         raise meridian.NotGranted("RecordHoldingsStatement", "no sidecar here")
