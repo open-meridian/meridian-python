@@ -50,6 +50,29 @@ refused INVALID_ARGUMENT naming the field otherwise; any `bytes` (what the
 kind uses of the archive) accepted, with records in storage or none; and
 `report_stored` answers what the last accepted one said, as the plugin's
 report carries it to the Summary.
+
+And from contract v18 it mirrors the lake (W10), as core's sidecar and lake
+answer it. A `dgm`'s catalogue is held from its registration, refused from a
+plugin not launched with `dgm`. A batch of prices or bars is recorded whole
+or refused, INVALID_ARGUMENT naming the item and field, as the sidecar
+refuses one: 1 to 500 rows; a dataset the instance's catalogue does not
+declare; no subject, no row key; a date that is no date; a venue the
+deployment does not hold; a Money naming no asset, a code that is no ISO
+4217 code it holds (a token's), or a code and an instrument naming two
+assets; a bar's amounts in two assets. Each Money is resolved, dated, to its
+cash instrument (`cash`, each code's instruments by the date from which it
+holds), and kept naming it. A row is recorded once per dataset and row key:
+the same values again (by decimal value, 764.2 equal to 764.20) change
+nothing, a changed one is the next version; each is stamped with the
+instance, sequenced in its dataset from 1, chained per subject, data type and
+dataset, and given the time it was recorded (`clock`), and published
+(`published`, as PricesRecorded and BarsRecorded, for a test to deliver). The
+reads answer by business date, at a valid time (the latest in force) or over
+a range, as of a recorded time, from the default dataset per subject (the
+first in `priority`, then the catalogue's order, that holds one), named
+datasets in order, or side by side; with each dataset named once and each
+subject no dataset covers unanswered. Venues resolve by their identifiers
+(`venues`); a miss is reported. A want's decline is kept (`declined`).
 """
 
 from __future__ import annotations
@@ -57,6 +80,8 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
+from datetime import date
+from decimal import Decimal
 
 import grpc
 import pytest
@@ -102,6 +127,66 @@ class FakeOperations(operations_pb2_grpc.PluginOperationsServicer):
     # beside it: numbered in the street's partition, chained per account
     # apart from the activities.
     re_resolutions: list[operations_pb2.ActivityReResolution] = field(default_factory=list)
+    # The lake (W10, contract v18).
+    lake: FakeLake = field(default_factory=lambda: FakeLake())
+
+    async def _lake(self, params, context, answer):
+        """A lake call kept as sent and answered, or refused as the sidecar
+        refuses it: INVALID_ARGUMENT, naming the field."""
+        self.sent.append(params)
+        if self.refuse is not None:
+            await context.abort(*self.refuse, trailing_metadata=self.refuse_metadata)
+        try:
+            return answer()
+        except LakeRefused as refused:
+            await context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(refused))
+
+    async def RecordPrices(self, request, context):  # noqa: N802
+        return await self._lake(
+            request, context, lambda: self.lake.record(list(request.prices), "prices")
+        )
+
+    async def RecordBars(self, request, context):  # noqa: N802
+        return await self._lake(
+            request, context, lambda: self.lake.record(list(request.bars), "bars")
+        )
+
+    async def ListPrices(self, request, context):  # noqa: N802
+        self.reads.append(request)
+        return await self._lake(
+            request, context, lambda: self.lake.read(request, operations_pb2.Price, "prices")
+        )
+
+    async def ListBars(self, request, context):  # noqa: N802
+        self.reads.append(request)
+        return await self._lake(
+            request, context, lambda: self.lake.read(request, operations_pb2.Bar, "bars")
+        )
+
+    async def ListDatasets(self, request, context):  # noqa: N802
+        self.reads.append(request)
+        return await self._lake(request, context, self.lake.listing)
+
+    async def DeclineWant(self, request, context):  # noqa: N802
+        def declined() -> object:
+            if not 1 <= len(request.subjects) <= 500:
+                raise LakeRefused("subjects: a decline names 1 to 500 subjects")
+            self.lake.declined.append(request)
+            return operations_pb2.DeclineWantResult()
+
+        return await self._lake(request, context, declined)
+
+    async def ResolveVenue(self, request, context):  # noqa: N802
+        return await self._lake(request, context, lambda: self.lake.resolve_venue(request))
+
+    async def ReportMissingVenue(self, request, context):  # noqa: N802
+        def missed() -> object:
+            self.lake.missed_venues.append(request)
+            return operations_pb2.Published(
+                message_id=f"msg-venue-{len(self.lake.missed_venues)}"
+            )
+
+        return await self._lake(request, context, missed)
 
     async def Receive(self, request, context):  # noqa: N802
         self.received.append(request)
@@ -415,6 +500,379 @@ class FakeOperations(operations_pb2_grpc.PluginOperationsServicer):
         return await self._answer(request, answer, context)
 
 
+# ── The lake (contract v18) ───────────────────────────────────────────────
+
+
+def _venue(venue_id: str, name: str, mic: str, kind: int, zone: str) -> object:
+    return operations_pb2.VenueRecord(
+        venue_id=venue_id,
+        name=name,
+        country_code="US",
+        kind=kind,
+        identifiers=[operations_pb2.Identifier(scheme="iso10383", value=mic)],
+        time_zone=zone,
+    )
+
+
+#: The venues the fake deployment holds, by ID.
+VENUES = {
+    venue.venue_id: venue
+    for venue in (
+        _venue("VEN-01JA00000000000000XNAS", "Nasdaq", "XNAS", 1, "America/New_York"),
+        _venue(
+            "VEN-01JA00000000000000XNYS",
+            "New York Stock Exchange",
+            "XNYS",
+            1,
+            "America/New_York",
+        ),
+        _venue("VEN-01JA0000000000000CBEXC", "Coinbase Exchange", "CBSX", 3, "Etc/UTC"),
+    )
+}
+
+#: Each ISO 4217 code's cash instrument, by the date from which it holds: a
+#: currency's instrument is resolved for the date a row is about.
+CASH = {
+    "USD": [("1792-04-02", "LCL-CASH-USD")],
+    "EUR": [("1999-01-01", "LCL-CASH-EUR")],
+    "CHF": [("1850-05-07", "LCL-CASH-CHF")],
+    # A redenomination: the same code, a new instrument from its date.
+    "XTS": [("2000-01-01", "LCL-CASH-XTS-1"), ("2026-07-01", "LCL-CASH-XTS-2")],
+}
+
+#: What a token's code would be, which a Money's currency_code never holds.
+TOKENS = {"USDC", "USDT", "BTC", "ETH"}
+
+
+class LakeRefused(Exception):
+    """A batch or a read refused, naming the field, as the sidecar names it."""
+
+
+def _when(meta: object) -> str:
+    """The date a row is about, which its Money is resolved for: its business
+    date, else its valid time's date in UTC."""
+    import datetime as _dt
+
+    if meta.business_date:
+        return meta.business_date
+    at = meta.valid_from_ns or 0
+    return _dt.datetime.fromtimestamp(at / 1e9, tz=_dt.UTC).date().isoformat()
+
+
+def _a_date(text: str) -> bool:
+    try:
+        return date.fromisoformat(text).isoformat() == text
+    except ValueError:
+        return False
+
+
+def _value(money: object) -> tuple[Decimal, str]:
+    from meridian.operations import as_decimal
+
+    return as_decimal(money.amount), money.instrument_id
+
+
+@dataclass
+class FakeLake:
+    """The lake behind the fake sidecar: what was recorded, as kept."""
+
+    instance_id: str = "dgm-coinbase-1"
+    # The datasets the registered catalogue declares, by their ID.
+    datasets: dict[str, object] = field(default_factory=dict)
+    cash: dict[str, list[tuple[str, str]]] = field(default_factory=lambda: dict(CASH))
+    venues: dict[str, object] = field(default_factory=lambda: dict(VENUES))
+    # Every version recorded, prices and bars, in order.
+    rows: list[object] = field(default_factory=list)
+    published: list[object] = field(default_factory=list)
+    heads: dict[str, int] = field(default_factory=dict)
+    clock: int = 1_791_417_600_000_000_000
+    # The deployment's default order per data type, by dataset ID.
+    priority: dict[str, list[str]] = field(default_factory=dict)
+    declined: list[object] = field(default_factory=list)
+    missed_venues: list[object] = field(default_factory=list)
+
+    def declare(self, instance_id: str, catalogue: object) -> None:
+        self.instance_id = instance_id
+        self.datasets = {f"{instance_id}:{each.key}": each for each in catalogue.datasets}
+
+    def _money(self, money: object, at: str, when: str) -> None:
+        """Resolved, dated, to its cash instrument, or refused naming `at`."""
+        code, held = money.currency_code, money.instrument_id
+        if not code and not held:
+            raise LakeRefused(f"{at}: names no asset: a currency_code or an instrument_id")
+        if code:
+            if code in TOKENS or code not in self.cash:
+                raise LakeRefused(
+                    f"{at}.currency_code: {code} is no ISO 4217 code the deployment holds; "
+                    "an asset with none is named by its instrument_id"
+                )
+            resolved = [i for since, i in self.cash[code] if since <= when][-1:]
+            if not resolved:
+                raise LakeRefused(f"{at}.currency_code: {code} names no instrument on {when}")
+            if held and held != resolved[0]:
+                raise LakeRefused(f"{at}: {code} and {held} name two assets")
+            money.instrument_id = resolved[0]
+
+    def _meta(self, meta: object, at: str) -> None:
+        if not meta.row_key:
+            raise LakeRefused(f"{at}.row_key: a row is keyed by its source's record")
+        if not 1 <= len(meta.subjects) <= 8:
+            raise LakeRefused(f"{at}.subjects: a row is about 1 to 8 subjects")
+        if meta.source.dataset not in self.datasets:
+            raise LakeRefused(
+                f"{at}.source.dataset: {meta.source.dataset!r} is no dataset this "
+                "instance's catalogue declares"
+            )
+        venue = meta.source.venue_id
+        if venue and venue not in self.venues:
+            raise LakeRefused(f"{at}.source.venue_id: {venue} is no venue the deployment holds")
+        if meta.business_date and not _a_date(meta.business_date):
+            raise LakeRefused(f"{at}.business_date: {meta.business_date!r} is no date")
+
+    def record(self, rows: list[object], kind: str) -> object:
+        """A batch recorded whole, or refused naming the item and field."""
+        if not 1 <= len(rows) <= 500:
+            raise LakeRefused(f"{kind}: holds {len(rows)} rows; a batch is 1 to 500")
+        kept = []
+        for i, row in enumerate(rows):
+            at = f"{kind}[{i}]"
+            self._meta(row.meta, f"{at}.meta")
+            when = _when(row.meta)
+            copy = type(row)()
+            copy.CopyFrom(row)
+            if kind == "prices":
+                self._money(copy.price, f"{at}.price", when)
+            else:
+                amounts = ["open", "high", "low", "close"] + (
+                    ["vwap"] if copy.HasField("vwap") else []
+                )
+                for name in amounts:
+                    self._money(getattr(copy, name), f"{at}.{name}", when)
+                assets = {getattr(copy, name).instrument_id for name in amounts}
+                if len(assets) > 1:
+                    raise LakeRefused(f"{at}: a bar's amounts are in one asset")
+            kept.append(copy)
+        recorded = restated = unchanged = 0
+        dataset = ""
+        for copy in kept:
+            meta = copy.meta
+            dataset = meta.source.dataset
+            held = self._version(type(copy), dataset, meta.row_key, 0)
+            if held is not None and self._same(held, copy):
+                unchanged += 1
+                continue
+            meta.source.instance = self.instance_id
+            meta.version = 1 if held is None else held.meta.version + 1
+            self.heads[dataset] = self.heads.get(dataset, 0) + 1
+            meta.sequence = self.heads[dataset]
+            meta.previous_sequence = next(
+                (
+                    r.meta.sequence
+                    for r in reversed(self.rows)
+                    if type(r) is type(copy)
+                    and r.meta.source.dataset == dataset
+                    and [s.entity_id for s in r.meta.subjects]
+                    == [s.entity_id for s in meta.subjects]
+                ),
+                0,
+            )
+            self.clock += 1_000_000_000
+            meta.recorded_at_ns = self.clock
+            self.rows.append(copy)
+            if kind == "prices":
+                self.published.append(operations_pb2.PricesRecordedEvent(price=copy))
+            else:
+                self.published.append(operations_pb2.BarsRecordedEvent(bar=copy))
+            if held is None:
+                recorded += 1
+            else:
+                restated += 1
+        result = (
+            operations_pb2.RecordPricesResult
+            if kind == "prices"
+            else operations_pb2.RecordBarsResult
+        )
+        return result(
+            recorded=recorded,
+            restated=restated,
+            unchanged=unchanged,
+            watermark=operations_pb2.Watermark(
+                partitions=[
+                    operations_pb2.PartitionSequence(
+                        partition=dataset, sequence=self.heads.get(dataset, 0)
+                    )
+                ]
+            ),
+        )
+
+    def _version(self, kind: type, dataset: str, row_key: str, as_of: int) -> object | None:
+        """The latest version of a row key, as of a recorded time (0 for now)."""
+        return next(
+            (
+                r
+                for r in reversed(self.rows)
+                if type(r) is kind
+                and r.meta.source.dataset == dataset
+                and r.meta.row_key == row_key
+                and (not as_of or r.meta.recorded_at_ns <= as_of)
+            ),
+            None,
+        )
+
+    @staticmethod
+    def _same(held: object, copy: object) -> bool:
+        """Whether a row says what the version in force says: by decimal
+        value, each Money and number compared as numbers."""
+
+        def said(row: object) -> tuple[object, ...]:
+            if isinstance(row, operations_pb2.Price):
+                return (row.kind, _value(row.price), row.meta.valid_until_ns)
+            return (
+                *(_value(getattr(row, n)) for n in ("open", "high", "low", "close")),
+                _value(row.vwap) if row.HasField("vwap") else None,
+                row.meta.valid_until_ns,
+            )
+
+        return said(held) == said(copy)
+
+    def _ref(self, dataset: str, declared: bool = False) -> object:
+        held = self.datasets.get(dataset)
+        ref = operations_pb2.DatasetRef(dataset=dataset, instance=dataset.split(":", 1)[0])
+        if held is not None:
+            ref.vendor = held.vendor
+            ref.aggregator = held.aggregator
+            if declared:
+                ref.declaration.CopyFrom(
+                    operations_pb2.DatasetDeclaration.FromString(held.SerializeToString())
+                )
+        return ref
+
+    def read(self, request: object, kind: type, records: str) -> object:
+        """A read of prices or bars, as the lake answers it."""
+        if not 1 <= len(request.subjects) <= 500:
+            raise LakeRefused("subjects: a read names 1 to 500 subjects")
+        if request.business_date and not _a_date(request.business_date):
+            raise LakeRefused(f"business_date: {request.business_date!r} is no date")
+        as_of = request.as_of_ns
+        latest = {}
+        for row in self.rows:
+            if type(row) is not kind:
+                continue
+            held = self._version(kind, row.meta.source.dataset, row.meta.row_key, as_of)
+            if held is not None:
+                latest[(row.meta.source.dataset, row.meta.row_key)] = held
+        wanted = [s.entity_id for s in request.subjects]
+        choice = request.sources
+        found: list[object] = []
+        unanswered = []
+        for entity in wanted:
+            mine = [
+                r
+                for r in latest.values()
+                if entity in [s.entity_id for s in r.meta.subjects]
+                and self._in_time(r, request)
+            ]
+            if kind is operations_pb2.Price and request.kinds:
+                mine = [r for r in mine if r.kind in request.kinds]
+            if kind is operations_pb2.Bar and request.interval_ns:
+                mine = [
+                    r
+                    for r in mine
+                    if r.meta.valid_until_ns - r.meta.valid_from_ns == request.interval_ns
+                ]
+            if choice.named:
+                order = list(choice.named)
+            elif choice.side_by_side:
+                order = list(self.datasets)
+            else:
+                order = self.priority.get(kind.DESCRIPTOR.full_name.replace("plugin.", ""), [])
+                order = [*order, *(d for d in self.datasets if d not in order)]
+            chosen = [r for r in mine if r.meta.source.dataset in order]
+            if not choice.side_by_side and chosen:
+                first = next(
+                    d for d in order if any(r.meta.source.dataset == d for r in chosen)
+                )
+                chosen = [r for r in chosen if r.meta.source.dataset == first]
+            if not request.business_date and not request.valid_from_ns:
+                # At a valid time: the latest in force per dataset, kind and venue.
+                newest: dict[tuple[object, ...], object] = {}
+                for r in sorted(chosen, key=lambda r: r.meta.valid_from_ns):
+                    k = (r.meta.source.dataset, getattr(r, "kind", 0), r.meta.source.venue_id)
+                    newest[k] = r
+                chosen = list(newest.values())
+            if not chosen:
+                unanswered.append(
+                    operations_pb2.Unanswered(
+                        subject=operations_pb2.SubjectRef(entity_id=entity),
+                        reason=operations_pb2.UNANSWERED_REASON_NOT_COVERED,
+                    )
+                )
+            found.extend(chosen)
+        found.sort(key=lambda r: (r.meta.source.dataset, r.meta.sequence))
+        page, following = _page(found, request.page_size, request.cursor)
+        named = list(dict.fromkeys(r.meta.source.dataset for r in page))
+        result = (
+            operations_pb2.ListPricesResult
+            if kind is operations_pb2.Price
+            else operations_pb2.ListBarsResult
+        )
+        return result(
+            **{records: page},
+            unanswered=unanswered,
+            datasets=[self._ref(d) for d in named],
+            watermark=operations_pb2.Watermark(
+                partitions=[
+                    operations_pb2.PartitionSequence(partition=d, sequence=self.heads.get(d, 0))
+                    for d in named
+                ]
+            ),
+            next_cursor=following,
+        )
+
+    @staticmethod
+    def _in_time(row: object, request: object) -> bool:
+        meta = row.meta
+        if request.business_date:
+            return bool(meta.business_date == request.business_date)
+        if request.valid_from_ns:
+            until = request.valid_until_ns or 2**63 - 1
+            return bool(request.valid_from_ns <= meta.valid_from_ns < until)
+        if request.at_ns:
+            return bool(meta.valid_from_ns <= request.at_ns)
+        return True
+
+    def listing(self) -> object:
+        licences = []
+        for dataset, held in self.datasets.items():
+            if held.HasField("licence_default"):
+                licence = operations_pb2.DatasetLicence.FromString(
+                    held.licence_default.SerializeToString()
+                )
+                licence.dataset = dataset
+                licences.append(licence)
+        return operations_pb2.ListDatasetsResult(
+            datasets=[self._ref(d, declared=True) for d in self.datasets], licences=licences
+        )
+
+    def resolve_venue(self, request: object) -> object:
+        asked = {(i.scheme, i.value) for i in request.identifiers}
+        found = [
+            v
+            for v in self.venues.values()
+            if asked & {(i.scheme, i.value) for i in v.identifiers}
+        ]
+        if len(found) == 1:
+            return operations_pb2.ResolveVenueResult(found=True, venue=found[0])
+        return operations_pb2.ResolveVenueResult(
+            found=False,
+            miss_reason=(
+                operations_pb2.MISS_REASON_AMBIGUOUS
+                if found
+                else operations_pb2.MISS_REASON_NOT_FOUND
+            ),
+        )
+
+
 def _page(found: list, size: int, cursor: str) -> tuple[list, str]:
     """One page of what was found, 100 to a page unless asked, and the
     cursor to the next, where there is one."""
@@ -482,6 +940,14 @@ class FakeSidecar(sidecar_pb2_grpc.SidecarServiceServicer):
         refused = self._roles_refused(request)
         if refused:
             return sidecar_pb2.RegisterReply(admitted=False, refusal_reason=refused)
+        if request.declaration.HasField("catalogue"):
+            if "dgm" not in self.roles:
+                return sidecar_pb2.RegisterReply(
+                    admitted=False,
+                    refusal_reason="declaration.catalogue: only a plugin holding dgm serves "
+                    "the lake",
+                )
+            self.operations.lake.declare(self.instance_id, request.declaration.catalogue)
         return sidecar_pb2.RegisterReply(
             admitted=True,
             deployment_id="dep-local-1",
@@ -839,4 +1305,4 @@ def anyio_backend() -> str:
     return "asyncio"
 
 
-__all__ = ["FakeOperations", "FakeSidecar", "Stream", "asyncio", "sidecar"]
+__all__ = ["FakeLake", "FakeOperations", "FakeSidecar", "Stream", "asyncio", "sidecar"]

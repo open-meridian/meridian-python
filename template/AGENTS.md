@@ -168,6 +168,28 @@ and subscribe to comes from the roles `pyproject.toml` declares under
   `activity_past_window` says, and say on the plugin's page how long they
   are kept, as set and as kept. So each activity the street holds can have
   its record read back, from storage or restored from the archive.
+- **A `dgm` plugin puts its source's prices into the lake, converted at the
+  edge, and shows none.** Declare each dataset in the declaration's
+  catalogue, from code: `Declaration(catalogue=[meridian.DatasetDeclaration(
+  key="daily", vendor=..., data_types=["meridian.v1.Price"], modes=["pull"],
+  licence_default=meridian.DatasetLicence(...), day_time_zone="Etc/UTC",
+  venue_id=...)])`, a daily dataset and a live one apart. Resolve every
+  subject (`resolve_identifier`) and venue (`resolve_venue`) before recording,
+  and report what does not resolve (`report_missing_instrument`,
+  `report_missing_venue`); keep the vendor's product map in storage, never a
+  vendor's code as a key. Record in batches of at most 500
+  (`plugin.record_prices`, `plugin.record_bars`), each row's `row_key` made
+  from its raw record so a repeat changes nothing and the day still forming is
+  restated under the same key, its `business_date` a `datetime.date` in the
+  dataset's declared day, its number parsed from the vendor's text as a
+  `Decimal` (never through a `float`), and a price in a stablecoin on the
+  token's own cash instrument (`Money(amount, instrument_id=...)`), never a
+  fiat code. Hear wants with `plugin.receive(observations_wanted=...,
+  want_withdrawn=...)`, record against each (`want_id=`) or decline it per
+  subject (`plugin.decline_want`). Its pages show its connection and its
+  datasets, never a price: prices are the reading roles'. Hold it to the
+  suite: `meridian.suites.run("dgm", producers)` on synthetic exchanges, each
+  case mapped to the plugin's own conversion.
 
 This file is for any coding agent working on the plugin, and is committed with
 it for whoever works on it next. It is the canonical one: `CLAUDE.md` and the

@@ -106,14 +106,22 @@ async def test_the_sdk_declares_the_contract_it_was_built_for(
     (sdk-contract/an-edge-plugins-older-records-move-to-the-archive): a
     sidecar still at v15 answers no move, so it refuses the plugin at
     registration, naming both versions.
+
+    v18 is the lake's 1a (v17 numbered a design revision and no contract): a
+    dgm's catalogue in the declaration, prices and bars recorded in batches
+    and heard latest value first, wants, the lake's reads, venues resolved, a
+    Money naming its instrument and a date refused where it is no date
+    (sdk-contract/the-lake-prices-the-book-contract): a sidecar still at v16
+    holds no catalogue and answers no lake, so it refuses the plugin at
+    registration, naming both versions.
     """
     service, address = sidecar
     plugin = await meridian.connect(address, heartbeat=False)
     await plugin.leave()
 
     (sent,) = service.registered
-    assert meridian.SCHEMA_VERSION == "v16"
-    assert sent.schema_version == "v16"
+    assert meridian.SCHEMA_VERSION == "v18"
+    assert sent.schema_version == "v18"
 
 
 async def test_identity_and_grants_come_back(sidecar: tuple[FakeSidecar, str]) -> None:

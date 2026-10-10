@@ -81,10 +81,14 @@ if TYPE_CHECKING:
 #: serves, the person's level and accounts on each role in the claims, and an
 #: activity re-resolved, and from v16 the kinds of raw record in the
 #: declaration, what each holds in storage on the heartbeat, and a move of
-#: raw records reported and refused inside a hold -- and a newer sidecar
+#: raw records reported and refused inside a hold, and from v18 (v17 numbered
+#: a design revision and no contract) a dgm's catalogue in the declaration,
+#: prices and bars recorded in batches and heard latest value first, wants
+#: heard and declined, the lake's reads, venues resolved, a Money naming its
+#: instrument and a date refused where it is no date -- and a newer sidecar
 #: still admits it. Raised with every contract revision that adds something
 #: a plugin can depend on.
-SCHEMA_VERSION = "v16"
+SCHEMA_VERSION = "v18"
 
 #: Where a sidecar listens. Loopback, always: a sidecar reachable from another
 #: host is a way around the boundary it exists to enforce.
@@ -1326,14 +1330,19 @@ class Plugin(Operations):
         return self._operations_stub
 
     async def _receive(
-        self, handlers: dict[str, Callable[[Any], Awaitable[None]] | None], *, seed: bool
+        self,
+        handlers: dict[str, Callable[[Any], Awaitable[None]] | None],
+        *,
+        seed: bool,
+        subjects: Sequence[str] = (),
     ) -> None:
         """What `receive` hears, seeded, followed and caught up (W4.3): the
-        rows given a handler, and no others."""
+        rows given a handler, and no others; the rows delivered latest value
+        first for `subjects` (contract v18)."""
         self._check_open()
         from .receive import follow
 
-        await follow(self, handlers, seed=seed)
+        await follow(self, handlers, seed=seed, subjects=subjects)
 
     async def _operate(
         self, method: Callable[[Any], Awaitable[_Answer]], params: Any
@@ -1465,6 +1474,7 @@ async def connect(
             settings=tuple(settings),
             not_carried=declaration.not_carried,
             storage=declaration.storage,
+            catalogue=declaration.catalogue,
         )
     # From contract v16, the two settings per kind of raw record, which the
     # SDK declares for every edge plugin alike (W4.1, W6.11), and the restore

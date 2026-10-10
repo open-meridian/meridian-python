@@ -84,6 +84,31 @@ sidecar before anything is removed, and finds where a record's key stands
 is mounted. What each kind holds in storage goes on its heartbeat
 (`plugin.stored`, `StoredSpan`s), and every edge plugin with pages offers
 `POST /archive/restore`, derived as a tool.
+
+From contract v18 the lake holds what sources say about prices. A `dgm`
+declares its catalogue in its declaration
+(`Declaration(catalogue=[DatasetDeclaration(...)])`: each dataset's key,
+vendor, data types, modes, cadence, the terms its vendor imposes
+(`DatasetLicence`), the day its business dates are in -- `day_time_zone`,
+`day_end_minute` -- and the venue it is, `venue_id`), and records prices and
+bars in batches of 1 to 500 (`plugin.record_prices`, `plugin.record_bars`,
+each a `Price` or `Bar` under an `ObservationMeta` naming its dataset, its
+subjects, its business date and its raw record), every subject resolved
+first (`resolve_identifier`, `report_missing_instrument`) and every venue
+(`resolve_venue`, `report_missing_venue`). It hears what the lake wants of it
+(`receive(observations_wanted=..., want_withdrawn=...)`), recording against
+a want (`want_id=`) or declining it per subject (`plugin.decline_want`). A
+reading role reads prices and bars by business date, as of a recorded time,
+or side by side (`list_prices`, `list_bars`, with `business_date=`,
+`as_of_ns=` and `sources=SourceChoice(...)`), learns the datasets it may read
+(`list_datasets`), and hears what is recorded after for the subjects it names
+(`receive(prices_recorded=..., subjects=[...])`), each row with its dataset
+(`Heard.dataset`). A `Money` names the asset's cash instrument:
+`Money("12.50", "USD")` still works, core resolving the ISO 4217 code, dated;
+an asset with no ISO 4217 code, a stablecoin's say, is named by its
+instrument alone (`Money(amount, instrument_id=...)`). A date is a
+`datetime.date`, or its ISO 8601 text, and one that is no date is refused
+naming the field before anything is sent.
 """
 
 from .asgi import CallerMiddleware
@@ -112,7 +137,14 @@ from .client import (
     TicketSubject,
     connect,
 )
-from .declaration import Declaration, NotCarried, RecordKind, Storage
+from .declaration import (
+    DatasetDeclaration,
+    DatasetLicence,
+    Declaration,
+    NotCarried,
+    RecordKind,
+    Storage,
+)
 from .errors import (
     CallFailed,
     CommandRefused,
@@ -131,6 +163,7 @@ from .figures import Figure, FigureState
 from .operations import (
     Adjustment,
     AgreementFigures,
+    Bar,
     BasisAdjustment,
     BreakCause,
     BreakDifference,
@@ -141,6 +174,7 @@ from .operations import (
     LotTerms,
     Money,
     MovementLine,
+    ObservationMeta,
     OpeningLot,
     OpeningPosition,
     OpeningSource,
@@ -148,12 +182,14 @@ from .operations import (
     PendingSettlementRef,
     PositionEncumbrances,
     PositionKey,
+    Price,
     Provenance,
     ReportedCollateral,
     ReportedEncumbrance,
     ReportedLot,
     ReportedPending,
     ReportedPositionValue,
+    SourceTime,
     StatementFigures,
     as_decimal,
     as_money,
@@ -173,6 +209,7 @@ from .plugin.v1.operations_pb2 import (
     BreakHandling,
     BreakState,
     CollateralDirection,
+    DatasetRef,
     FigureKey,
     HoldingSide,
     Identifier,
@@ -184,19 +221,30 @@ from .plugin.v1.operations_pb2 import (
     OpeningSourceKind,
     PendingState,
     PositionBasis,
+    PriceBasis,
+    PriceKind,
     ProvenanceKind,
     RawRecordRef,
     ResolvedByEntries,
     Reversal,
     SettlementBucket,
+    Source,
+    SourceChoice,
+    SourceTimeKind,
     StatementSegmentRef,
     StreetRecordRef,
+    SubjectRef,
     SyncState,
+    Unanswered,
+    UnansweredReason,
+    VenueKind,
+    VenueRecord,
 )
 from .receive import Heard
 
-# What a plugin at the edge says its storage holds of each kind (contract v16).
-from .v1.sidecar_pb2 import MoveOutcome, StoredSpan
+# What a plugin at the edge says its storage holds of each kind (contract v16),
+# and how a dataset's rows can arrive (contract v18).
+from .v1.sidecar_pb2 import MoveOutcome, ObservationMode, StoredSpan
 
 __all__ = [
     "DEFAULT_ADDRESS",
@@ -300,6 +348,24 @@ __all__ = [
     "as_decimal",
     "as_money",
     "connect",
+    "Bar",
+    "DatasetDeclaration",
+    "DatasetLicence",
+    "DatasetRef",
+    "ObservationMeta",
+    "ObservationMode",
+    "Price",
+    "PriceBasis",
+    "PriceKind",
+    "Source",
+    "SourceChoice",
+    "SourceTime",
+    "SourceTimeKind",
+    "SubjectRef",
+    "Unanswered",
+    "UnansweredReason",
+    "VenueKind",
+    "VenueRecord",
 ]
 
 

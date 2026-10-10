@@ -23,22 +23,44 @@ A case asserting one value of a closed list (`closed_list`) a plugin's source
 never presents may be named in `not_presented`, with why; every other case is
 required, and a case with no producer fails. The suites are meridian-schema's
 `boundaries/suites.json`, vendored with the bindings.
+
+A case may name a row the plugin hears rather than sends (a want delivered to
+a `dgm`, contract v18; an activity recorded, to an operations plugin): the
+plugin hears it through its own `receive`, called on the recorder, which
+hands each row given a handler what `answer` gives for it -- the delivered
+message, or a list of them -- and returns, where a sidecar's stream stays
+open. What it handed on is kept on that row as what was sent, so the case
+checks it beside what the plugin sent after:
+
+    async def a_want_recorded_against(recorder):
+        recorder.answer("ObservationsWanted", lambda _: synthetic_want())
+        await recorder.receive(observations_wanted=MyDgm(recorder).on_want)
+
+    report = run("dgm", {"a-want-recorded-against": a_want_recorded_against, ...})
+
+From contract v18 the suites hold the `dgm`'s (prices and bars recorded
+exactly, a forming day restated, every subject and venue resolved, a token's
+price on its own cash instrument, wants recorded against or declined), and
+the reading roles' (`reporting`, `portfolio`, `compliance`, `signal`).
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
-from collections.abc import Awaitable, Callable, Iterable, Mapping
+from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from importlib import resources
-from typing import Any
+from typing import Any, cast
 
 from google.protobuf.message import Message
 
-from .operations import Operations, as_decimal
+from .operations import CONFLATED, DELIVERED, Operations, as_decimal
 from .plugin.v1 import operations_pb2 as ops
+
+#: The rows a plugin hears rather than sends, by name.
+HEARD = frozenset({*(row.name for row in DELIVERED), *(row.name for row in CONFLATED)})
 
 SET, UNSET = "<set>", "<unset>"
 
@@ -110,7 +132,8 @@ def suite(role: str) -> Suite:
 
 @dataclass(frozen=True)
 class Sent:
-    """One typed operation a plugin called: its row, and the params."""
+    """One typed operation a plugin called: its row, and the params; or a row
+    it heard, and the message handed to its handler."""
 
     row: str
     params: Message
@@ -129,16 +152,29 @@ class Recorder(Operations):
     Each call is kept as a `Sent` and answered as a sidecar would answer it
     in the ordinary case: a statement opened, a row recorded and resolved, an
     identifier resolved to a record this recorder names, a link made, no
-    accounts to link to. `raw_record` and `note_not_carried` behave as a
-    plugin's do. Use `answer` to answer a row otherwise."""
+    accounts to link to; from contract v18 a batch of prices or bars recorded
+    whole, a venue resolved to a record this recorder names, a want declined,
+    a read answering nothing. `raw_record` and `note_not_carried` behave as a
+    plugin's do. Use `answer` to answer a row otherwise, and to give a row the
+    plugin hears what is delivered on it."""
 
     def __init__(self, instance_id: str = "suite-plugin") -> None:
         self.instance_id = instance_id
         self.sent: list[Sent] = []
         self.seen: dict[tuple[str, str], int] = {}
-        self._answers: dict[str, Callable[[Message], Message]] = {}
+        self._answers: dict[str, Callable[[Message], Message | Sequence[Message]]] = {}
 
-    def answer(self, row: str, reply: Callable[[Message], Message]) -> None:
+    @property
+    def identity(self) -> Any:
+        """The instance the recorder stands in for, as a plugin's identity."""
+        from .client import Identity
+
+        return Identity(instance_id=self.instance_id, roles=(), deployment_id="suite")
+
+    def answer(self, row: str, reply: Callable[[Message], Message | Sequence[Message]]) -> None:
+        """Answer `row` with what `reply` makes of its params; for a row the
+        plugin hears, deliver on it what `reply` makes of the receive request:
+        one message, or a list of them."""
         self._answers[row] = reply
 
     def raw_record(self, key: str) -> ops.RawRecordRef:
@@ -162,6 +198,30 @@ class Recorder(Operations):
             return self._answers[row](params)
         return _ordinary(row, params, len(self.sent))
 
+    async def _receive(
+        self,
+        handlers: dict[str, Callable[[Any], Awaitable[None]] | None],
+        *,
+        seed: bool,
+        subjects: Sequence[str] = (),
+    ) -> None:
+        """Each row given a handler handed what `answer` gives for it, in
+        order, and kept as heard; then returns, where a sidecar's stream
+        stays open."""
+        from .receive import Heard
+
+        for row, handler in handlers.items():
+            reply = self._answers.get(row)
+            if handler is None or reply is None:
+                continue
+            given = reply(ops.ReceiveRequest(rows=[row], subjects=list(subjects)))
+            delivered = (
+                list(given) if isinstance(given, list | tuple) else [cast(Message, given)]
+            )
+            for message in delivered:
+                self.sent.append(Sent(row, message))
+                await handler(Heard(row=row, message=message))
+
     def on(self, row: str) -> list[Message]:
         return [sent.params for sent in self.sent if sent.row == row]
 
@@ -183,6 +243,18 @@ def _ordinary(row: str, params: Any, n: int) -> Message:
         return ops.LinkExternalAccountResult(
             external_account_id=params.external_account_id, account_id=f"ACC-suite-{n}"
         )
+    if row == "RecordPrices":
+        return ops.RecordPricesResult(recorded=len(params.prices))
+    if row == "RecordBars":
+        return ops.RecordBarsResult(recorded=len(params.bars))
+    if row == "ResolveVenue":
+        return ops.ResolveVenueResult(
+            found=True, venue=ops.VenueRecord(venue_id=f"VEN-suite-{n}")
+        )
+    # Any other read or command with an answer of its own: an empty one.
+    answered = getattr(ops, f"{row}Result", None)
+    if answered is not None:
+        return cast(Message, answered())
     return ops.Published(message_id=f"suite-{n}")
 
 
@@ -220,7 +292,7 @@ def _same(message: Message, name: str, wanted: Any) -> str | None:
         if not isinstance(wanted, list):
             return f"{name} is repeated and the case names {wanted!r}"
         for i, part in enumerate(wanted):
-            if not any(_matches(element, part) is None for element in value):
+            if not any(_element_is(descriptor, element, part) for element in value):
                 return f"{name}[{i}] matches no element of {name}: {part!r}"
         return None
     if descriptor.enum_type is not None:
@@ -241,6 +313,18 @@ def _same(message: Message, name: str, wanted: Any) -> str | None:
     if isinstance(value, int):
         return None if value == int(wanted) else f"{name} is {value}, not {wanted}"
     return None if str(value) == str(wanted) else f"{name} is {value!r}, not {wanted!r}"
+
+
+def _element_is(descriptor: Any, element: Any, wanted: Any) -> bool:
+    """Whether one element of a repeated field is what a case names: a
+    message matching its fields, an enum value by its name, a scalar by its
+    text."""
+    if descriptor.message_type is not None:
+        return isinstance(wanted, Mapping) and _matches(element, wanted) is None
+    if descriptor.enum_type is not None:
+        held = descriptor.enum_type.values_by_number.get(element)
+        return bool((held.name if held is not None else str(element)) == wanted)
+    return str(element) == str(wanted)
 
 
 def _decimal_same(name: str, value: Decimal, wanted: Any) -> str | None:
@@ -280,13 +364,15 @@ def check(case: Case, recorder: Recorder) -> str | None:
     """Why what `recorder` holds does not pass `case`, or None."""
     for i, expected in enumerate(case.expect):
         on_row = recorder.on(expected.row)
+        verb = "heard" if expected.row in HEARD else "sent"
         if not expected.sends:
             if on_row:
                 sent = len(on_row)
-                return f"expect[{i}]: sent {sent} on {expected.row}, and the case sends none"
+                none = "hears" if verb == "heard" else "sends"
+                return f"expect[{i}]: {verb} {sent} on {expected.row}, and the case {none} none"
             continue
         if not on_row:
-            return f"expect[{i}]: nothing was sent on {expected.row}"
+            return f"expect[{i}]: nothing was {verb} on {expected.row}"
         wanted = expected.fields or {}
         whys = [_matches(params, wanted) for params in on_row]
         if all(why is not None for why in whys):

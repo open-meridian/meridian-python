@@ -24,6 +24,7 @@ import base64
 import re
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
+from datetime import date, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, TypeVar
 
@@ -148,6 +149,27 @@ def _arm(oneof: str, **arms: Any) -> dict[str, Any]:
             f"{' and '.join(given)} were given"
         )
     return given
+
+
+def _date(value: date | str, name: str) -> str:
+    """A date as the wire carries it, its ISO 8601 text (2026-10-09), empty
+    for none: given as a date, or as that text. Refused naming the field, a
+    moment (a datetime) and text that is no date alike, never sent for the
+    sidecar to refuse (contract v18)."""
+    if isinstance(value, datetime):
+        raise TypeError(f"{name} is a date, not a moment: {value.date().isoformat()}, not {value.isoformat()}")
+    if isinstance(value, date):
+        return value.isoformat()
+    if not isinstance(value, str):
+        raise TypeError(f"{name} is a date or its ISO 8601 text, not {type(value).__name__}")
+    if value:
+        try:
+            stated = date.fromisoformat(value).isoformat()
+        except ValueError:
+            stated = ""
+        if stated != value:
+            raise ValueError(f"{name} is {value!r}, which is no date: YYYY-MM-DD, as 2026-10-09")
+    return value
 
 
 def _batch(rows: Sequence[Any], bound: Count, name: str) -> None:
@@ -315,7 +337,7 @@ class ReportedLot:
 
     quantity: Decimal | int
     cost: Money | None = None
-    acquired_date: str = ""
+    acquired_date: date | str = ""
 
 
 def _reported_lot(value: ReportedLot, name: str) -> ops.ReportedLot:
@@ -325,7 +347,7 @@ def _reported_lot(value: ReportedLot, name: str) -> ops.ReportedLot:
     return ops.ReportedLot(
         quantity=_decimal(value.quantity, f"{name}.quantity"),
         cost=None if value.cost is None else _money(value.cost, f"{name}.cost"),
-        acquired_date=value.acquired_date,
+        acquired_date=_date(value.acquired_date, f"{name}.acquired_date"),
     )
 
 
@@ -372,7 +394,7 @@ class ReportedPending:
     as a Money, an enum as its value or name, each converted and refused
     naming its path, as a request's own field is."""
 
-    value_date: str = ""
+    value_date: date | str = ""
     quantity: Decimal | int
 
 
@@ -381,7 +403,7 @@ def _reported_pending(value: ReportedPending, name: str) -> ops.ReportedPending:
     if not isinstance(value, ReportedPending):
         raise TypeError(f"{name} is a meridian.ReportedPending, not {type(value).__name__}")
     return ops.ReportedPending(
-        value_date=value.value_date,
+        value_date=_date(value.value_date, f"{name}.value_date"),
         quantity=_decimal(value.quantity, f"{name}.quantity"),
     )
 
@@ -402,8 +424,8 @@ class CustodialActivity:
     kind_as_reported: ops.AsReported | None = None
     instrument_id: str = ""
     instrument_as_reported: ops.AsReported | None = None
-    trade_date: str = ""
-    settlement_date: str = ""
+    trade_date: date | str = ""
+    settlement_date: date | str = ""
     units: Decimal | int | None = None
     price: Money | None = None
     amount: Money | None = None
@@ -422,8 +444,8 @@ def _custodial_activity(value: CustodialActivity, name: str) -> ops.CustodialAct
         kind_as_reported=value.kind_as_reported,
         instrument_id=value.instrument_id,
         instrument_as_reported=value.instrument_as_reported,
-        trade_date=value.trade_date,
-        settlement_date=value.settlement_date,
+        trade_date=_date(value.trade_date, f"{name}.trade_date"),
+        settlement_date=_date(value.settlement_date, f"{name}.settlement_date"),
         units=None if value.units is None else _decimal(value.units, f"{name}.units"),
         price=None if value.price is None else _money(value.price, f"{name}.price"),
         amount=None if value.amount is None else _money(value.amount, f"{name}.amount"),
@@ -443,7 +465,7 @@ class OpeningSource:
 
     kind: ops.OpeningSourceKind | str | None = None
     name: str = ""
-    as_of_date: str = ""
+    as_of_date: date | str = ""
     basis: ops.PositionBasis | str | None = None
     street_records: Sequence[ops.StreetRecordRef] = ()
 
@@ -455,7 +477,7 @@ def _opening_source(value: OpeningSource, name: str) -> ops.OpeningSource:
     return ops.OpeningSource(
         kind=_enum(ops.OpeningSourceKind, value.kind, f"{name}.kind"),
         name=value.name,
-        as_of_date=value.as_of_date,
+        as_of_date=_date(value.as_of_date, f"{name}.as_of_date"),
         basis=_enum(ops.PositionBasis, value.basis, f"{name}.basis"),
         street_records=list(value.street_records),
     )
@@ -499,7 +521,7 @@ class PendingSettlement:
     as a Money, an enum as its value or name, each converted and refused
     naming its path, as a request's own field is."""
 
-    value_date: str = ""
+    value_date: date | str = ""
     quantity: Decimal | int
     state: ops.PendingState | None = None
 
@@ -509,7 +531,7 @@ def _pending_settlement(value: PendingSettlement, name: str) -> ops.PendingSettl
     if not isinstance(value, PendingSettlement):
         raise TypeError(f"{name} is a meridian.PendingSettlement, not {type(value).__name__}")
     return ops.PendingSettlement(
-        value_date=value.value_date,
+        value_date=_date(value.value_date, f"{name}.value_date"),
         quantity=_decimal(value.quantity, f"{name}.quantity"),
         state=value.state,
     )
@@ -547,9 +569,9 @@ class LotTerms:
 
     unit_cost: Money | None = None
     cost: Money | None = None
-    acquired_date: str = ""
-    holding_period_start: str = ""
-    settlement_date: str = ""
+    acquired_date: date | str = ""
+    holding_period_start: date | str = ""
+    settlement_date: date | str = ""
     source: ops.LotSource | str | None = None
 
 
@@ -560,9 +582,9 @@ def _lot_terms(value: LotTerms, name: str) -> ops.LotTerms:
     return ops.LotTerms(
         unit_cost=None if value.unit_cost is None else _money(value.unit_cost, f"{name}.unit_cost"),
         cost=None if value.cost is None else _money(value.cost, f"{name}.cost"),
-        acquired_date=value.acquired_date,
-        holding_period_start=value.holding_period_start,
-        settlement_date=value.settlement_date,
+        acquired_date=_date(value.acquired_date, f"{name}.acquired_date"),
+        holding_period_start=_date(value.holding_period_start, f"{name}.holding_period_start"),
+        settlement_date=_date(value.settlement_date, f"{name}.settlement_date"),
         source=_enum(ops.LotSource, value.source, f"{name}.source"),
     )
 
@@ -674,7 +696,7 @@ class PendingSettlementRef:
 
     instrument_id: str = ""
     side: ops.HoldingSide | str | None = None
-    value_date: str = ""
+    value_date: date | str = ""
 
 
 def _pending_settlement_ref(value: PendingSettlementRef, name: str) -> ops.PendingSettlementRef:
@@ -684,7 +706,7 @@ def _pending_settlement_ref(value: PendingSettlementRef, name: str) -> ops.Pendi
     return ops.PendingSettlementRef(
         instrument_id=value.instrument_id,
         side=_enum(ops.HoldingSide, value.side, f"{name}.side"),
-        value_date=value.value_date,
+        value_date=_date(value.value_date, f"{name}.value_date"),
     )
 
 
@@ -810,7 +832,7 @@ class Adjustment:
     as a Money, an enum as its value or name, each converted and refused
     naming its path, as a request's own field is."""
 
-    effective_date: str = ""
+    effective_date: date | str = ""
     lines: Sequence[MovementLine] = ()
     basis_adjustments: Sequence[BasisAdjustment] = ()
     event_reference: str = ""
@@ -821,7 +843,7 @@ def _adjustment(value: Adjustment, name: str) -> ops.Adjustment:
     if not isinstance(value, Adjustment):
         raise TypeError(f"{name} is a meridian.Adjustment, not {type(value).__name__}")
     return ops.Adjustment(
-        effective_date=value.effective_date,
+        effective_date=_date(value.effective_date, f"{name}.effective_date"),
         lines=[_movement_line(each, f"{name}.lines[{i}]") for i, each in enumerate(value.lines)],
         basis_adjustments=[_basis_adjustment(each, f"{name}.basis_adjustments[{i}]") for i, each in enumerate(value.basis_adjustments)],
         event_reference=value.event_reference,
@@ -839,7 +861,7 @@ class MovementLine:
     instrument_id: str = ""
     side: ops.HoldingSide | str | None = None
     bucket: ops.SettlementBucket | str | None = None
-    value_date: str = ""
+    value_date: date | str = ""
     quantity: Decimal | int
     lot_id: str = ""
     opens_lot: LotTerms | None = None
@@ -854,7 +876,7 @@ def _movement_line(value: MovementLine, name: str) -> ops.MovementLine:
         instrument_id=value.instrument_id,
         side=_enum(ops.HoldingSide, value.side, f"{name}.side"),
         bucket=_enum(ops.SettlementBucket, value.bucket, f"{name}.bucket"),
-        value_date=value.value_date,
+        value_date=_date(value.value_date, f"{name}.value_date"),
         quantity=_decimal(value.quantity, f"{name}.quantity"),
         lot_id=value.lot_id,
         opens_lot=None if value.opens_lot is None else _lot_terms(value.opens_lot, f"{name}.opens_lot"),
@@ -873,7 +895,7 @@ class BasisAdjustment:
     lot_id: str = ""
     cost_change: Money | None = None
     stated_cost: Money | None = None
-    holding_period_start: str = ""
+    holding_period_start: date | str = ""
 
 
 def _basis_adjustment(value: BasisAdjustment, name: str) -> ops.BasisAdjustment:
@@ -883,7 +905,7 @@ def _basis_adjustment(value: BasisAdjustment, name: str) -> ops.BasisAdjustment:
     return ops.BasisAdjustment(
         lot_id=value.lot_id,
         **_arm(f"{name}.cost", cost_change=None if value.cost_change is None else _money(value.cost_change, f"{name}.cost_change"), stated_cost=None if value.stated_cost is None else _money(value.stated_cost, f"{name}.stated_cost")),
-        holding_period_start=value.holding_period_start,
+        holding_period_start=_date(value.holding_period_start, f"{name}.holding_period_start"),
     )
 
 
@@ -927,7 +949,7 @@ class ObservationMeta:
     source: ops.Source | None = None
     valid_from_ns: int = 0
     valid_until_ns: int = 0
-    business_date: str = ""
+    business_date: date | str = ""
     source_times: Sequence[SourceTime] = ()
     recorded_at_ns: int = 0
     version: int = 0
@@ -947,7 +969,7 @@ def _observation_meta(value: ObservationMeta, name: str) -> ops.ObservationMeta:
         source=value.source,
         valid_from_ns=value.valid_from_ns,
         valid_until_ns=value.valid_until_ns,
-        business_date=value.business_date,
+        business_date=_date(value.business_date, f"{name}.business_date"),
         source_times=[_source_time(each, f"{name}.source_times[{i}]") for i, each in enumerate(value.source_times)],
         recorded_at_ns=value.recorded_at_ns,
         version=value.version,
@@ -1037,7 +1059,11 @@ class Operations:
         raise NotImplementedError
 
     async def _receive(
-        self, handlers: dict[str, Callable[[Any], Awaitable[None]] | None], *, seed: bool
+        self,
+        handlers: dict[str, Callable[[Any], Awaitable[None]] | None],
+        *,
+        seed: bool,
+        subjects: Sequence[str] = (),
     ) -> None:  # pragma: no cover - Plugin's
         raise NotImplementedError
 
@@ -1064,7 +1090,7 @@ class Operations:
         state: ops.SyncState | str | None = None,
         holdings_as_of_ns: int = 0,
         history_as_of_ns: int = 0,
-        history_from: str = "",
+        history_from: date | str = "",
     ) -> ops.Published:
         """W2.1: How fresh a connected account's data is, as reported by the rail (stable)."""
         params = ops.ReportSyncStatusParams(
@@ -1077,7 +1103,7 @@ class Operations:
             state=_enum(ops.SyncState, state, "state"),
             holdings_as_of_ns=holdings_as_of_ns,
             history_as_of_ns=history_as_of_ns,
-            history_from=history_from,
+            history_from=_date(history_from, "history_from"),
         )
         return await self._operate(self._operations().ReportSyncStatus, params)
 
@@ -1086,7 +1112,7 @@ class Operations:
         *,
         source: str = "",
         external_statement_id: str = "",
-        as_of_date: str = "",
+        as_of_date: date | str = "",
         read_at_ns: int = 0,
         expected_rows: int = 0,
         buying_power: Money | None = None,
@@ -1105,7 +1131,7 @@ class Operations:
         params = ops.RecordHoldingsStatementParams(
             source=source,
             external_statement_id=external_statement_id,
-            as_of_date=as_of_date,
+            as_of_date=_date(as_of_date, "as_of_date"),
             read_at_ns=read_at_ns,
             expected_rows=expected_rows,
             buying_power=None if buying_power is None else _money(buying_power, "buying_power"),
@@ -1200,7 +1226,7 @@ class Operations:
         self,
         *,
         account_id: str = "",
-        as_of_date: str = "",
+        as_of_date: date | str = "",
         since: ops.Watermark | None = None,
         page_size: int = 0,
         cursor: str = "",
@@ -1208,7 +1234,7 @@ class Operations:
         """W2.9: Read completed statements and their figures (W2.9) (stable)."""
         params = ops.ListStatementsParams(
             account_id=account_id,
-            as_of_date=as_of_date,
+            as_of_date=_date(as_of_date, "as_of_date"),
             since=since,
             page_size=page_size,
             cursor=cursor,
@@ -1236,8 +1262,8 @@ class Operations:
         self,
         *,
         account_id: str = "",
-        trade_date_from: str = "",
-        trade_date_to: str = "",
+        trade_date_from: date | str = "",
+        trade_date_to: date | str = "",
         since: ops.Watermark | None = None,
         page_size: int = 0,
         cursor: str = "",
@@ -1245,8 +1271,8 @@ class Operations:
         """W2.11: Read an account's activity (W2.11), by trade date, paged (preview)."""
         params = ops.ListActivitiesParams(
             account_id=account_id,
-            trade_date_from=trade_date_from,
-            trade_date_to=trade_date_to,
+            trade_date_from=_date(trade_date_from, "trade_date_from"),
+            trade_date_to=_date(trade_date_to, "trade_date_to"),
             since=since,
             page_size=page_size,
             cursor=cursor,
@@ -1394,7 +1420,7 @@ class Operations:
         self,
         *,
         account_id: str = "",
-        as_of_date: str = "",
+        as_of_date: date | str = "",
         sources: Sequence[OpeningSource] = (),
         positions: Sequence[OpeningPosition] = (),
         reason: str = "",
@@ -1405,7 +1431,7 @@ class Operations:
         """W9.1: RecordOpeningBalance (stable)."""
         params = ops.RecordOpeningBalanceParams(
             account_id=account_id,
-            as_of_date=as_of_date,
+            as_of_date=_date(as_of_date, "as_of_date"),
             sources=[_opening_source(each, f"sources[{i}]") for i, each in enumerate(sources)],
             positions=[_opening_position(each, f"positions[{i}]") for i, each in enumerate(positions)],
             reason=reason,
@@ -1426,7 +1452,7 @@ class Operations:
         differences: Sequence[BreakDifference] = (),
         book_watermark: ops.Watermark | None = None,
         street: ops.StreetRecordRef | None = None,
-        business_date: str = "",
+        business_date: date | str = "",
         candidate_causes: Sequence[BreakCause] = (),
         idempotency_key: str = "",
         acting_for: str | None = None,
@@ -1440,7 +1466,7 @@ class Operations:
             differences=[_break_difference(each, f"differences[{i}]") for i, each in enumerate(differences)],
             book_watermark=book_watermark,
             street=street,
-            business_date=business_date,
+            business_date=_date(business_date, "business_date"),
             candidate_causes=[_break_cause(each, f"candidate_causes[{i}]") for i, each in enumerate(candidate_causes)],
             idempotency_key=idempotency_key,
             acting_for=_assertion(acting_for),
@@ -1451,7 +1477,7 @@ class Operations:
         self,
         *,
         account_id: str = "",
-        business_date: str = "",
+        business_date: date | str = "",
         source: ops.StreetRecordRef | None = None,
         agreements: Sequence[AgreementFigures] = (),
         idempotency_key: str = "",
@@ -1460,7 +1486,7 @@ class Operations:
         """W9.5: RecordAccountFigures (stable)."""
         params = ops.RecordAccountFiguresParams(
             account_id=account_id,
-            business_date=business_date,
+            business_date=_date(business_date, "business_date"),
             source=source,
             agreements=[_agreement_figures(each, f"agreements[{i}]") for i, each in enumerate(agreements)],
             idempotency_key=idempotency_key,
@@ -1472,7 +1498,7 @@ class Operations:
         self,
         *,
         account_id: str = "",
-        business_date: str = "",
+        business_date: date | str = "",
         source: ops.StreetRecordRef | None = None,
         positions: Sequence[PositionEncumbrances] = (),
         idempotency_key: str = "",
@@ -1481,7 +1507,7 @@ class Operations:
         """W9.15: W9.15. A finding, so the plugin may send it as itself (stable)."""
         params = ops.RecordEncumbrancesParams(
             account_id=account_id,
-            business_date=business_date,
+            business_date=_date(business_date, "business_date"),
             source=source,
             positions=[_position_encumbrances(each, f"positions[{i}]") for i, each in enumerate(positions)],
             idempotency_key=idempotency_key,
@@ -1562,7 +1588,7 @@ class Operations:
         *,
         account_id: str = "",
         since: ops.Watermark | None = None,
-        business_date: str = "",
+        business_date: date | str = "",
         at: ops.Watermark | None = None,
         page_size: int = 0,
         cursor: str = "",
@@ -1571,7 +1597,7 @@ class Operations:
         params = ops.ListPositionsParams(
             account_id=account_id,
             since=since,
-            business_date=business_date,
+            business_date=_date(business_date, "business_date"),
             at=at,
             page_size=page_size,
             cursor=cursor,
@@ -1602,8 +1628,8 @@ class Operations:
         *,
         account_id: str = "",
         agreement: ops.MarginAgreementRef | None = None,
-        from_date: str = "",
-        to_date: str = "",
+        from_date: date | str = "",
+        to_date: date | str = "",
         since: ops.Watermark | None = None,
         at: ops.Watermark | None = None,
         page_size: int = 0,
@@ -1613,8 +1639,8 @@ class Operations:
         params = ops.ListAccountFiguresParams(
             account_id=account_id,
             agreement=agreement,
-            from_date=from_date,
-            to_date=to_date,
+            from_date=_date(from_date, "from_date"),
+            to_date=_date(to_date, "to_date"),
             since=since,
             at=at,
             page_size=page_size,
@@ -1710,7 +1736,7 @@ class Operations:
         kinds: Sequence[ops.PriceKind | str] = (),
         sources: ops.SourceChoice | None = None,
         at_ns: int = 0,
-        business_date: str = "",
+        business_date: date | str = "",
         valid_from_ns: int = 0,
         valid_until_ns: int = 0,
         as_of_ns: int = 0,
@@ -1723,7 +1749,7 @@ class Operations:
             kinds=[_enum(ops.PriceKind, value, "kinds") for value in kinds],
             sources=sources,
             at_ns=at_ns,
-            business_date=business_date,
+            business_date=_date(business_date, "business_date"),
             valid_from_ns=valid_from_ns,
             valid_until_ns=valid_until_ns,
             as_of_ns=as_of_ns,
@@ -1739,7 +1765,7 @@ class Operations:
         interval_ns: int = 0,
         sources: ops.SourceChoice | None = None,
         at_ns: int = 0,
-        business_date: str = "",
+        business_date: date | str = "",
         valid_from_ns: int = 0,
         valid_until_ns: int = 0,
         as_of_ns: int = 0,
@@ -1752,7 +1778,7 @@ class Operations:
             interval_ns=interval_ns,
             sources=sources,
             at_ns=at_ns,
-            business_date=business_date,
+            business_date=_date(business_date, "business_date"),
             valid_from_ns=valid_from_ns,
             valid_until_ns=valid_until_ns,
             as_of_ns=as_of_ns,
@@ -1798,13 +1824,24 @@ class Operations:
         activity_recorded: Callable[[Heard[ops.ActivityRecordedEvent]], Awaitable[None]] | None = None,
         sync_status_recorded: Callable[[Heard[ops.SyncStatusRecordedEvent]], Awaitable[None]] | None = None,
         activity_re_resolved: Callable[[Heard[ops.ActivityReResolvedEvent]], Awaitable[None]] | None = None,
+        prices_recorded: Callable[[Heard[ops.PricesRecordedEvent]], Awaitable[None]] | None = None,
+        bars_recorded: Callable[[Heard[ops.BarsRecordedEvent]], Awaitable[None]] | None = None,
+        observations_wanted: Callable[[Heard[ops.ObservationsWantedEvent]], Awaitable[None]] | None = None,
+        want_withdrawn: Callable[[Heard[ops.WantWithdrawnEvent]], Awaitable[None]] | None = None,
         seed: bool = True,
+        subjects: Sequence[str] = (),
     ) -> None:
         """W4.3: hear the rows given a handler, each change once and in order,
         within the plugin's read scope, until cancelled. Seeded first from the
         store when `seed`; on a gap, a loss or a broken stream, caught up from
         it by each row's query, the handler told by `Heard.caught_up`. A row
-        no role of the plugin hears raises NotGranted."""
+        no role of the plugin hears raises NotGranted.
+
+        A row delivered latest value first (contract v18) is handed on newest
+        per key, an older value than one handed on never after it; a row
+        about subjects is heard for the `subjects` named, by their entity
+        IDs, none for none, and read again by its query, latest first, when
+        seeded, after a loss or after the stream broke."""
         handlers: dict[str, Callable[[Any], Awaitable[None]] | None] = {
             "StatementRecorded": statement_recorded,
             "CustodialPositionUpdated": custodial_position_updated,
@@ -1815,10 +1852,15 @@ class Operations:
             "ActivityRecorded": activity_recorded,
             "SyncStatusRecorded": sync_status_recorded,
             "ActivityReResolved": activity_re_resolved,
+            "PricesRecorded": prices_recorded,
+            "BarsRecorded": bars_recorded,
+            "ObservationsWanted": observations_wanted,
+            "WantWithdrawn": want_withdrawn,
         }
         await self._receive(
             {row: handler for row, handler in handlers.items() if handler is not None},
             seed=seed,
+            **({"subjects": subjects} if subjects else {}),
         )
 
 

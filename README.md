@@ -2,7 +2,7 @@
 
 The Python SDK for building [Open Meridian](https://open-meridian.com) plugins:
 the tools a trader has an AI agent build, and the bots and analytics a
-developer writes. Python 3.11 or newer. This is release 0.21.0; its reference
+developer writes. Python 3.11 or newer. This is release 0.22.0; its reference
 is at [open-meridian.dev](https://open-meridian.dev/api/python-sdk/).
 
 ## Start here
@@ -389,7 +389,7 @@ row arrives as a dict of text by column name, with `changed_by` and
 ### Quantities and money
 
 A quantity is a Python `Decimal` (or an `int`), and an amount of currency is a
-`meridian.Money`, a `Decimal` and its ISO 4217 code:
+`meridian.Money`, a `Decimal` and the asset it is in:
 
 ```python
 from decimal import Decimal
@@ -426,6 +426,24 @@ no sub-balances means none reported. Where
 the venue states no currency and you assume one, pass `currency_assumed=True`.
 Cash is a holding of the currency's cash instrument, which the security master
 names by `iso4217` (`meridian.Identifier(scheme="iso4217", value="USD")`).
+
+**A Money names its cash instrument** (contract v18; decisions/023 as amended).
+`Money(Decimal("12.50"), "USD")` still works: core resolves the ISO 4217 code,
+dated, to the currency's cash instrument, and what it keeps and answers names
+the instrument, so a Money read back (`as_money`) carries `instrument_id`
+beside the code. An asset with no ISO 4217 code -- USDC, USDT, a network's gas
+token -- is named by its instrument alone, as `resolve_identifier` resolved it:
+`Money(Decimal("2410.5"), instrument_id=usdc)`. Its code in `currency_code` is
+refused, a code and an instrument naming two assets are refused, and a USDT
+amount is never a USD amount. A Money naming neither is refused before
+anything is sent.
+
+**A date is a date** (contract v18). Every field the data dictionary types
+`date` -- a business date, an as-of date, a trade date, a value date -- takes a
+`datetime.date`, or its ISO 8601 text as before, and crosses as the text
+(`2026-10-09`). Text that is no date (`2026-02-30`, `20261009`) and a
+`datetime`, which is a moment, are refused naming the field before anything is
+sent. What comes back is the text: `date.fromisoformat(price.meta.business_date)`.
 
 **The plugin that speaks to a venue converts; nothing after it does.** Keep
 what the venue, broker or data vendor sent, as it sent it, in your own logs.
@@ -903,6 +921,152 @@ with `receive(activity_re_resolved=...)`, caught up from that read after a
 gap. A custody plugin re-resolves an account's activities whenever what
 resolves them changes. Both rows are `preview` in v15.
 
+### The lake (contract v18)
+
+The lake keeps what sources say about prices, append-only and point in time.
+A `dgm` plugin puts them in; the reading roles (`reporting`, `portfolio`,
+`compliance`, `signal`) read and hear them. The SDK carries the typed
+operations and nothing of any vendor's: no HTTP or WebSocket client, no
+vendor-file parser.
+
+**A dgm declares its catalogue** in its declaration, from code, beside its
+storage: each dataset it serves, by a key its rows name as the instance, a
+colon and the key (`coinbase-1:daily`):
+
+```python
+from meridian import DatasetDeclaration, DatasetLicence, Declaration
+
+DECLARATION = Declaration(
+    settings=SETTINGS,
+    storage=Storage(kinds=[RecordKind("responses", "Raw responses", window_days=30)]),
+    catalogue=[
+        DatasetDeclaration(
+            key="daily",
+            vendor="Coinbase",
+            data_types=["meridian.v1.Price", "meridian.v1.Bar", "meridian.v1.Bar.trade_count"],
+            modes=["pull", "push"],          # how its rows can arrive
+            cadence=86_400,                  # seconds between updates; 0, only when asked
+            history=3650,                    # days it reaches back; 0, none stated
+            licence_default=DatasetLicence(kept=True, personal_use=True),
+            day_time_zone="Etc/UTC",         # the day a business date is in
+            day_end_minute=0,                # minutes after local midnight it ends
+            venue_id="VEN-...",              # the venue it is; empty for consolidated
+        ),
+    ],
+)
+```
+
+A data type is named by its message and an optional field it fills by its
+dictionary entry; the licence is what the vendor's standard terms say, which
+the deployment's licence confirms or replaces, never whether a deployment meets
+them. Each is refused here past the dictionary's bounds (a key, a zone that is
+no IANA zone, a mode twice, a venue that is no venue master ID), and a
+catalogue from a version not holding `dgm` is refused.
+
+**It records prices and bars in batches** of 1 to 500, refused outside the
+bound before anything is sent, recorded whole or refused naming the item and
+field. Each row names its dataset, the deployment's own entities it is about,
+its times and the raw record it was converted from; resolve every subject first
+(`resolve_identifier`, a miss reported with `report_missing_instrument`) and
+every venue (`resolve_venue`, a MIC as `iso10383`, a miss reported with
+`report_missing_venue`):
+
+```python
+from datetime import date
+from meridian import Money, ObservationMeta, Price, Source, SourceTime, SubjectRef
+
+done = await plugin.record_prices(
+    prices=[
+        Price(
+            meta=ObservationMeta(
+                row_key="BTC-USD:1d:1791331200",      # from the raw record: a repeat changes nothing
+                subjects=[SubjectRef(entity_id=btc)],
+                source=Source(dataset=f"{plugin.identity.instance_id}:daily", venue_id=venue),
+                valid_from_ns=day_start_ns,
+                valid_until_ns=day_end_ns,            # a day still forming says so
+                business_date=date(2026, 10, 8),
+                source_times=[SourceTime(kind="published", at_ns=day_end_ns)],
+                raw=plugin.raw_record("candles/BTC-USD/86400/1791331200"),
+            ),
+            kind="close",
+            price=Money(Decimal("62431.27"), "USD"),
+            basis="per_unit",
+        )
+    ]
+)
+done.recorded, done.restated, done.unchanged
+```
+
+The same row key with the same values (by decimal value: 764.2 is 764.20) is
+answered unchanged; a changed value, the day still forming, is the next
+version, the first kept. A price in a stablecoin names the token's own cash
+instrument, never a fiat code. `record_bars` takes `Bar`s alike: one asset for
+open, high, low, close and a vwap, which is left unset where the source gives
+none, as is a trade count.
+
+**It hears what the lake wants of it** and records against the want or
+declines it per subject:
+
+```python
+async def wanted(heard: meridian.Heard[meridian.plugin.v1.operations_pb2.ObservationsWantedEvent]) -> None:
+    want = heard.message           # dataset, data_type, subjects, kinds, business_date or a range
+    await plugin.record_prices(prices=fetched(want), want_id=want.want_id)
+    await plugin.decline_want(want_id=want.want_id, subjects=uncovered, reason="not_covered")
+
+await plugin.receive(observations_wanted=wanted, want_withdrawn=stop_keeping_current)
+```
+
+A standing want asks the subjects kept current until it is withdrawn.
+
+**A reader reads** by business date, at a valid time (the latest in force) or
+over a range, as of a recorded time, from the deployment's default sources,
+named datasets or every dataset side by side -- the generated reads'
+parameters:
+
+```python
+closes = await plugin.list_prices(subjects=held, kinds=["close"], business_date=date(2026, 10, 8))
+then = await plugin.list_prices(subjects=held, business_date=date(2026, 10, 8), as_of_ns=cut)
+both = await plugin.list_prices(subjects=held, sources=meridian.SourceChoice(side_by_side=True))
+bars = await plugin.list_bars(subjects=held, interval_ns=86_400 * 10**9,
+                              valid_from_ns=start, valid_until_ns=end)
+closes.datasets      # each dataset the answer includes, once: vendor, aggregator, instance
+closes.unanswered    # each subject or dataset not served, and why
+listed = await plugin.list_datasets()   # what it may read, with each catalogue entry
+```
+
+and hears what is recorded after for the subjects it names, at most 500,
+latest value first per key (a price's dataset, subjects, venue and kind; a
+bar's interval start), read again by the same query, latest first, when it
+starts, after a loss and after a broken stream:
+
+```python
+await plugin.receive(prices_recorded=on_price, bars_recorded=on_bar, subjects=held_ids)
+```
+
+Each is handed on with its dataset as the catalogue declares it
+(`Heard.dataset`: vendor, aggregator, instance and its entry), which the
+lake's answers name once rather than on every row. The lake's rows are
+`preview` in v18.
+
+**The dgm suite** (`meridian.suites`, `run("dgm", producers)`) holds a data
+plugin to its role: a daily close with its business date, kind, dataset, source
+times and raw record; the forming day restated under one row key; a price
+exact past a float; a bar with no vwap; an FX rate; a stablecoin quote on the
+token's instrument; an asset that does not resolve and a venue not held,
+reported; a venue resolved; a want recorded against, a subject declined, a
+standing want withdrawn. A case naming a row the plugin hears gives it what
+`answer` delivers through its own `receive`, called on the recorder:
+
+```python
+async def a_want_recorded_against(recorder):
+    recorder.answer("ObservationsWanted", lambda _: synthetic_want())
+    await recorder.receive(observations_wanted=MyDgm(recorder).on_want)
+```
+
+Two plugins of one pair pass it unchanged; a candle read through a `float`, or
+a forming day recorded as a new row, fails it. The reading roles have suites
+of their own.
+
 ## Moving a plugin to a new release
 
     meridian plugin migrate            # to the latest release
@@ -962,6 +1126,7 @@ carries libcst.
 | 0.18.0 to 0.19.0: the SDK declares contract v14; a custody plugin reports the custodian's activity and operations reads, hears and links it (`plugin.record_activity`, `plugin.list_activities`, `CustodialActivity`, `ActivityKind`, `ActivityRef`, `receive(activity_recorded=)`); each sync status the street keeps (`plugin.list_sync_statuses`, `receive(sync_status_recorded=)`); a table setting (`meridian.Setting(name, list, columns=...)`, `meridian.Column`) | only the pins move | |
 | 0.19.0 to 0.20.0: the SDK declares contract v15, a person's access granted per role: `roles=` on `@pages.page`, `@pages.route`, `@pages.tool`, `meridian.Setting` and `meridian.Page`; `Caller.roles`, `Caller.level_for`, `Caller.read_for`, `Caller.write_for`; `PageClient(..., roles=)` and `roles=` on its sessions; an activity re-resolved (`plugin.re_resolve_activity`, `re_resolutions`, `receive(activity_re_resolved=)`); a plugin holding one role or none names no role, and one coming to hold a second names `roles=` on every page, route, tool and setting, which `meridian plugin check` reports | only the pins move | |
 | 0.20.0 to 0.21.0: the SDK declares contract v16, an edge plugin's older records move to the archive: the kinds of raw record (`Storage(kinds=[RecordKind(...)])`) and the two settings the SDK declares per kind (`<kind>_window_days`, `<kind>_past_window`), reserved; the archive (`edge.archive_dir()`, `MERIDIAN_ARCHIVE_BUCKET`); the moves with their index (`plugin.archive_unit`, `plugin.restore_unit`, `plugin.delete_unit`, `plugin.find_record`), a deletion inside the hold a `CommandRefused` with `REFUSAL_REASON_WITHIN_HOLD`; what each kind holds in storage on the heartbeat (`plugin.stored`, `StoredSpan`), with the bytes each uses of the archive (`StoredSpan.bytes`), which the SDK fills in; the archive's bound (`MERIDIAN_ARCHIVE_MOST_BYTES`), past which `archive_unit` refuses; `POST /archive/restore` on every edge plugin's host, derived as the `restore_unit` tool. A plugin declaring no kinds keeps `retention_days` as before, so `meridian plugin migrate` needs no change in the command line | only the pins move | a setting of the plugin's own that held a window, dropped, its release notes naming the kind's window it maps to for the admin to set once at upgrade (SnapTrade's two); a setting it declared as `<kind>_window_days` or `<kind>_past_window`, renamed |
+| 0.21.0 to 0.22.0: the SDK declares contract v18, the lake's 1a: a dgm's catalogue (`Declaration(catalogue=[DatasetDeclaration(...)])`, `DatasetLicence`, `ObservationMode`), prices and bars recorded in batches of 1 to 500 (`plugin.record_prices`, `plugin.record_bars`, `Price`, `Bar`, `ObservationMeta`, `SourceTime`, `Source`, `SubjectRef`), wants heard and declined (`receive(observations_wanted=, want_withdrawn=)`, `want_id=`, `plugin.decline_want`), the lake's reads by business date, as of and side by side (`list_prices`, `list_bars`, `list_datasets`, `SourceChoice`), prices and bars heard latest value first for the subjects named with their dataset (`receive(prices_recorded=, bars_recorded=, subjects=)`, `Heard.dataset`), venues resolved (`resolve_venue`, `report_missing_venue`), the dgm suite and the reading roles' (a heard row delivered by `answer`); a Money names its cash instrument (`Money.instrument_id`; `Money(amount, "USD")` resolved by core, dated); every date field takes a `datetime.date`, and refuses text that is no date. `Money(amount, code)` keeps its shape, so `meridian plugin migrate` needs no change in the command line | only the pins move | a test comparing a Money read back (`as_money`) with one it made, which now carries `instrument_id`: compare `amount` and `currency_code`; a date sent as text that is no date, refused |
 
 `tests/migrations/` holds the plugins the migrations are recorded for, as
 written and as their migration leaves them, and `make check-migrations` holds

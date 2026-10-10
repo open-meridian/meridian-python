@@ -42,6 +42,30 @@ the instance an archive and `kept` otherwise. Those names are the SDK's: a
 plugin declaring a setting of one of them itself is refused here, as the
 sidecar refuses its registration. A plugin declaring no kinds keeps the
 behaviour before v16 under `retention_days`.
+
+From contract v18 a `dgm` declares its catalogue (W8.1, W10.4; spec/the-lake,
+"The catalogue"): each dataset it serves the lake, by its key, with its
+vendor, the data types and optional fields it fills by their dictionary
+entries, how its rows can arrive, its cadence and history, the terms its
+vendor's standard terms impose, the day a daily value's business date is in,
+and the venue it is, where it is one venue's:
+
+    catalogue=[
+        DatasetDeclaration(
+            key="daily",
+            vendor="Coinbase",
+            data_types=["meridian.v1.Price", "meridian.v1.Bar"],
+            modes=["pull", "push"],
+            cadence=86_400,
+            licence_default=DatasetLicence(kept=True, personal_use=True),
+            day_time_zone="Etc/UTC",
+            venue_id="VEN-01JA0000000000000CBEXC",
+        ),
+    ]
+
+Its rows then name the dataset as the instance, a colon and the key
+(`coinbase-1:daily`). The catalogue is the lake's, not a declaration of
+support, and only a version holding `dgm` declares one.
 """
 
 from __future__ import annotations
@@ -55,6 +79,16 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from .bounds import (
+    CATALOGUE_DATASETS_COUNT,
+    DATASET_DECLARATION_AGGREGATOR_LENGTH,
+    DATASET_DECLARATION_DATA_TYPES_COUNT,
+    DATASET_DECLARATION_DAY_END_MINUTE_RANGE,
+    DATASET_DECLARATION_DAY_TIME_ZONE_LENGTH,
+    DATASET_DECLARATION_KEY_LENGTH,
+    DATASET_DECLARATION_MODES_COUNT,
+    DATASET_DECLARATION_VENDOR_LENGTH,
+    DATASET_LICENCE_DEFAULT_FIELDS_COUNT,
+    DATASET_LICENCE_RETENTION_DAYS_RANGE,
     NOT_CARRIED_NAME_LENGTH,
     NOT_CARRIED_ROLE_LENGTH,
     NOT_CARRIED_SCHEME_LENGTH,
@@ -219,20 +253,258 @@ class Storage:
         )
 
 
+#: A dataset's key: lowercase letters, digits and underscores, beginning with
+#: a letter (DatasetDeclaration.key).
+_DATASET_KEY = re.compile(r"[a-z][a-z0-9_]*")
+
+#: The largest whole number a uint32 field carries.
+_UINT32 = 2**32 - 1
+
+
+def _entry_named(name: str) -> bool:
+    """Whether `name` is a dictionary entry, or a message the dictionary has
+    entries for: a data type by its message, a field by its entry."""
+    from .dictionary import _by_name
+
+    entries = _by_name()
+    return name in entries or any(held.startswith(f"{name}.") for held in entries)
+
+
+def _zone_refused(zone: str) -> bool:
+    """Whether `zone` is no IANA time zone, where this machine has the zone
+    database to tell; the sidecar refuses one all the same."""
+    import zoneinfo
+
+    if not zone or not zoneinfo.available_timezones():
+        return False
+    try:
+        zoneinfo.ZoneInfo(zone)
+    except (zoneinfo.ZoneInfoNotFoundError, ValueError):
+        return True
+    return False
+
+
+@dataclass(frozen=True, kw_only=True)
+class DatasetLicence:
+    """The terms a dataset's vendor's standard terms impose, as its catalogue
+    declares them (contract v18; spec/the-lake, Q8): what the deployment's
+    licence confirms or replaces. Whether the lake may keep its rows (false
+    serves them, not kept), for how many days (0 for no limit set), whether
+    derived data may be made and shown, the fields readable by default by
+    their dictionary entries (none for every field), and whether its terms
+    are one person's. Records what the vendor's terms say, never whether a
+    deployment meets them."""
+
+    kept: bool = False
+    retention_days: int = 0
+    derived_use: bool = False
+    display: bool = False
+    default_fields: Sequence[str] = ()
+    personal_use: bool = False
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "default_fields", tuple(self.default_fields))
+        bound = DATASET_LICENCE_RETENTION_DAYS_RANGE
+        if not bound.admits(self.retention_days):
+            raise ValueError(f"a licence's retention_days is {bound.least} to {bound.most}")
+        if not DATASET_LICENCE_DEFAULT_FIELDS_COUNT.admits(len(self.default_fields)):
+            raise ValueError(
+                f"a licence names at most {DATASET_LICENCE_DEFAULT_FIELDS_COUNT.most} "
+                "default fields"
+            )
+        unknown = next((f for f in self.default_fields if not _entry_named(f)), None)
+        if unknown is not None:
+            raise ValueError(
+                f"a licence's default field {unknown!r} is no entry of the data dictionary"
+            )
+
+    def _wire(self) -> sidecar_pb2.DatasetLicence:
+        return sidecar_pb2.DatasetLicence(
+            kept=self.kept,
+            retention_days=self.retention_days,
+            derived_use=self.derived_use,
+            display=self.display,
+            default_fields=list(self.default_fields),
+            personal_use=self.personal_use,
+        )
+
+    def _to_json(self) -> dict[str, Any]:
+        return {
+            "kept": self.kept,
+            "retention_days": self.retention_days,
+            "derived_use": self.derived_use,
+            "display": self.display,
+            "default_fields": list(self.default_fields),
+            "personal_use": self.personal_use,
+        }
+
+
+@dataclass(frozen=True, kw_only=True)
+class DatasetDeclaration:
+    """One dataset a `dgm` serves the lake (contract v18): its identity in a
+    deployment is the instance and its key (spec/the-lake, Q19).
+
+    `data_types` are the lake's data types it serves and the optional fields
+    it fills, each by its dictionary entry (`meridian.v1.Price`,
+    `meridian.v1.Bar.vwap`); `modes` how its rows can arrive -- pull, push or
+    stream, each once; `cadence` the seconds between its source's updates (0
+    for a dataset updated only when asked) and `history` the days its source
+    reaches back (0 for none stated). `day_time_zone` and `day_end_minute`
+    are the day a daily value's business date is in: an IANA zone and the
+    minute after local midnight the day ends, which say which candle or
+    session counts as the date and when it is final. `venue_id` is the venue
+    the dataset is, the venue master's ID, empty for a dataset that is not
+    one venue's, which is the consolidated view."""
+
+    key: str
+    vendor: str
+    data_types: Sequence[str]
+    modes: Sequence[str | int]
+    aggregator: str = ""
+    cadence: int = 0
+    history: int = 0
+    licence_default: DatasetLicence | None = None
+    day_time_zone: str = ""
+    day_end_minute: int = 0
+    venue_id: str = ""
+
+    def __post_init__(self) -> None:
+        from .operations import _enum
+
+        object.__setattr__(self, "data_types", tuple(self.data_types))
+        modes = tuple(
+            _enum(sidecar_pb2.ObservationMode, mode, f"the dataset {self.key}'s modes")
+            for mode in self.modes
+        )
+        object.__setattr__(self, "modes", modes)
+        at = f"the dataset {self.key!r}"
+        if not DATASET_DECLARATION_KEY_LENGTH.admits(
+            len(self.key)
+        ) or not _DATASET_KEY.fullmatch(self.key):
+            raise ValueError(
+                f"{at}: a key is 1 to {DATASET_DECLARATION_KEY_LENGTH.most} lowercase letters, "
+                "digits and underscores, beginning with a letter"
+            )
+        if not DATASET_DECLARATION_VENDOR_LENGTH.admits(len(self.vendor)):
+            raise ValueError(
+                f"{at}'s vendor is 1 to {DATASET_DECLARATION_VENDOR_LENGTH.most} characters"
+            )
+        if not DATASET_DECLARATION_AGGREGATOR_LENGTH.admits(len(self.aggregator)):
+            raise ValueError(
+                f"{at}'s aggregator is at most {DATASET_DECLARATION_AGGREGATOR_LENGTH.most} "
+                "characters"
+            )
+        if not DATASET_DECLARATION_DATA_TYPES_COUNT.admits(len(self.data_types)):
+            raise ValueError(
+                f"{at} names 1 to {DATASET_DECLARATION_DATA_TYPES_COUNT.most} data types "
+                "and fields"
+            )
+        for named in self.data_types:
+            if self.data_types.count(named) > 1:
+                raise ValueError(f"{at} names {named} twice")
+            if not _entry_named(named):
+                raise ValueError(
+                    f"{at} names {named!r}, which is no data type or field of the data "
+                    "dictionary: a type by its message (meridian.v1.Price), a field by its "
+                    "entry (meridian.v1.Bar.vwap)"
+                )
+        if not DATASET_DECLARATION_MODES_COUNT.admits(len(modes)) or not all(modes):
+            raise ValueError(f"{at} arrives by 1 to 3 modes: pull, push or stream")
+        if len(set(modes)) != len(modes):
+            raise ValueError(f"{at} names a mode twice; each once")
+        for name, value in (("cadence", self.cadence), ("history", self.history)):
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, int)
+                or not 0 <= value <= _UINT32
+            ):
+                raise ValueError(f"{at}'s {name} is a whole number, 0 or more")
+        if not DATASET_DECLARATION_DAY_TIME_ZONE_LENGTH.admits(len(self.day_time_zone)):
+            raise ValueError(f"{at}'s day_time_zone is an IANA zone, at most 64 characters")
+        if _zone_refused(self.day_time_zone):
+            raise ValueError(
+                f"{at}'s day_time_zone {self.day_time_zone!r} is no IANA time zone "
+                "(Etc/UTC, America/New_York)"
+            )
+        bound = DATASET_DECLARATION_DAY_END_MINUTE_RANGE
+        if not bound.admits(self.day_end_minute):
+            raise ValueError(
+                f"{at}'s day_end_minute is {bound.least} to {bound.most}: minutes after local "
+                "midnight"
+            )
+        if self.venue_id and not self.venue_id.startswith("VEN-"):
+            raise ValueError(
+                f"{at}'s venue_id {self.venue_id!r} is no venue master ID (VEN-): a MIC or "
+                "a vendor's code is resolved to one first (resolve_venue)"
+            )
+
+    def _wire(self) -> sidecar_pb2.DatasetDeclaration:
+        return sidecar_pb2.DatasetDeclaration(
+            key=self.key,
+            vendor=self.vendor,
+            aggregator=self.aggregator,
+            data_types=list(self.data_types),
+            modes=list(self.modes),  # type: ignore[arg-type]
+            cadence=self.cadence,
+            history=self.history,
+            licence_default=(
+                None if self.licence_default is None else self.licence_default._wire()
+            ),
+            day_time_zone=self.day_time_zone,
+            day_end_minute=self.day_end_minute,
+            venue_id=self.venue_id,
+        )
+
+    def _to_json(self) -> dict[str, Any]:
+        """As an upload carries it: each mode in its word, as a reason not
+        carried is."""
+        words = {
+            value: name.removeprefix("OBSERVATION_MODE_").lower()
+            for name, value in sidecar_pb2.ObservationMode.items()
+        }
+        return {
+            "key": self.key,
+            "vendor": self.vendor,
+            "aggregator": self.aggregator,
+            "data_types": list(self.data_types),
+            "modes": [words[int(mode)] for mode in self.modes],
+            "cadence": self.cadence,
+            "history": self.history,
+            "licence_default": (
+                None if self.licence_default is None else self.licence_default._to_json()
+            ),
+            "day_time_zone": self.day_time_zone,
+            "day_end_minute": self.day_end_minute,
+            "venue_id": self.venue_id,
+        }
+
+
 @dataclass(frozen=True)
 class Declaration:
     """A version's declaration. `settings` are the ones it declares at
-    registration (`meridian.Setting`), whose secret ones' names it carries."""
+    registration (`meridian.Setting`), whose secret ones' names it carries.
+    From contract v18 a `dgm`'s `catalogue`: the datasets it serves the lake."""
 
     settings: Sequence[Any] = ()
     not_carried: Sequence[NotCarried] = field(default=())
     storage: Storage | None = None
+    catalogue: Sequence[DatasetDeclaration] = ()
 
     def __post_init__(self) -> None:
         if len(self.not_carried) > PLUGIN_DECLARATION_NOT_CARRIED_COUNT.most:
             raise ValueError(
                 f"at most {PLUGIN_DECLARATION_NOT_CARRIED_COUNT.most} names not carried"
             )
+        catalogue = tuple(self.catalogue)
+        object.__setattr__(self, "catalogue", catalogue)
+        if not CATALOGUE_DATASETS_COUNT.admits(len(catalogue)):
+            raise ValueError(
+                f"a catalogue holds at most {CATALOGUE_DATASETS_COUNT.most} datasets"
+            )
+        keys = [dataset.key for dataset in catalogue]
+        twice = next((key for key in keys if keys.count(key) > 1), None)
+        if twice is not None:
+            raise ValueError(f"the dataset {twice} is declared twice; each key once")
         reserved = self.storage._reserved if self.storage is not None else frozenset()
         taken = next(
             (setting.name for setting in self.settings if setting.name in reserved), None
@@ -309,6 +581,11 @@ class Declaration:
                 + ", ".join(sorted(EDGE_ROLES))
                 + " own storage (decisions/028)"
             )
+        if self.catalogue and "dgm" not in roles:
+            return (
+                "a catalogue is declared by a plugin not holding dgm; "
+                "only a dgm serves the lake"
+            )
         return None
 
     def to_wire(self) -> sidecar_pb2.PluginDeclaration:
@@ -340,11 +617,18 @@ class Declaration:
                     ],
                 )
             ),
+            catalogue=(
+                sidecar_pb2.Catalogue(datasets=[dataset._wire() for dataset in self.catalogue])
+                if self.catalogue
+                else None
+            ),
         )
 
     def to_json(self) -> dict[str, Any]:
-        """As an upload carries it, which the dashboard reads (W8.1)."""
-        return {
+        """As an upload carries it, which the dashboard reads (W8.1): a
+        catalogue only where one is declared, so a version declaring none
+        uploads what it did before v18."""
+        out: dict[str, Any] = {
             "secret_settings": self.secret_settings,
             "not_carried": [
                 {
@@ -357,6 +641,9 @@ class Declaration:
             ],
             "storage": None if self.storage is None else self.storage._to_json(),
         }
+        if self.catalogue:
+            out["catalogue"] = {"datasets": [dataset._to_json() for dataset in self.catalogue]}
+        return out
 
 
 def load(named: str) -> Declaration:

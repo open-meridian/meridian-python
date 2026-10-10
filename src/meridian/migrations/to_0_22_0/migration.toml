@@ -1,0 +1,46 @@
+# open-meridian 0.21.0 to 0.22.0: the SDK declares contract v18, the lake's
+# 1a: prices and bars, a dgm's catalogue, wants, the lake's reads, the venue
+# master, a Money naming its instrument and dates typed
+# (sdk-contract/the-lake-prices-the-book-contract;
+# plans/the-lake-prices-the-book, row 5; decisions/023 as amended).
+# Nothing a plugin calls changed shape, so only the pins move.
+from = "0.21.0"
+to = "0.22.0"
+summary = """
+The SDK declares contract v18 (meridian.SCHEMA_VERSION; v17 numbered a design
+revision and no contract). A dgm declares its catalogue,
+Declaration(catalogue=[DatasetDeclaration(key, vendor, data_types, modes,
+cadence=, history=, licence_default=DatasetLicence(...), day_time_zone=,
+day_end_minute=, venue_id=)]), refused here past the dictionary's bounds and
+from a version not holding dgm; records prices and bars in batches of 1 to
+500 (plugin.record_prices, plugin.record_bars: each a Price or a Bar under an
+ObservationMeta naming its dataset, subjects, business date, source times and
+raw record), refused outside the bound before anything is sent; resolves
+venues (resolve_venue, report_missing_venue); hears wants
+(receive(observations_wanted=, want_withdrawn=)) and records against one
+(want_id=) or declines it per subject (decline_want). A reading role reads by
+business date, as of a recorded time or side by side (list_prices,
+list_bars: business_date=, as_of_ns=, sources=SourceChoice(...)), lists the
+datasets it may read (list_datasets), and hears prices and bars for the
+subjects it names (receive(prices_recorded=, bars_recorded=, subjects=[...])),
+latest value first, each with its dataset (Heard.dataset).
+
+A Money names the asset's cash instrument (Money.instrument_id). Money(amount,
+"USD") still works: core resolves the ISO 4217 code, dated, to the currency's
+instrument, and what core keeps and answers names it, so a Money read back
+(as_money) may carry instrument_id beside the code; a plugin comparing a read
+Money with one it made compares amount and currency_code. An asset with no
+ISO 4217 code (USDC, USDT) is named by its instrument alone,
+Money(amount, instrument_id=...), as W3.1 resolved it: its code in
+currency_code is refused, and a USDT amount is never a USD amount.
+
+A date field takes a datetime.date, or its ISO 8601 text as before; text that
+is no date (2026-02-30, 20261009) and a datetime are refused naming the field
+before anything is sent. A plugin built on 0.22.0 is refused at registration
+by a sidecar accepting only up to v16, naming both.
+
+Nothing to rewrite, so `meridian plugin migrate` moves the pins and changes no
+code: Money(amount, code) keeps its shape, receive() keeps every handler it
+had, and a date passed as valid ISO text is unchanged.
+"""
+breaking = false

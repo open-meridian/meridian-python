@@ -575,7 +575,7 @@ async def test_the_v16_declaration_and_heartbeat_cases_are_what_the_sdk_sends(
         await plugin.leave()
 
     (sent,) = service.registered
-    assert sent.schema_version == "v16"
+    assert sent.schema_version == meridian.SCHEMA_VERSION
     assert sent.declaration.SerializeToString(deterministic=True) == expected.SerializeToString(
         deterministic=True
     )
@@ -589,3 +589,135 @@ async def test_the_v16_declaration_and_heartbeat_cases_are_what_the_sdk_sends(
     for stored, beat_heard in zip(accepted, heard, strict=True):
         wanted = [_json.ParseDict(span, sidecar_pb2.StoredSpan()) for span in stored]
         assert beat_heard == wanted
+
+
+async def test_the_lakes_commands_and_reads_made_with_the_sdk_are_the_pinned_bytes(
+    sidecar,
+) -> None:
+    """A dgm's batch of prices and of bars, its decline of a want, a venue
+    resolved, and a reader's reads, each made through the SDK's typed
+    operations -- its dates given as dates, its numbers put on the wire by its
+    own conversion -- are the requests the lake's fixtures pin; and what the
+    lake answers and delivers reads back whole (W10.4 to W10.7, W3.14,
+    contract v18)."""
+    from datetime import date
+
+    import meridian
+    from meridian.plugin.v1 import operations_pb2 as ops
+    from meridian.v1 import lake_pb2, reference_pb2
+
+    def pinned(name: str, section: str = "request") -> tuple[dict[str, Any], bytes]:
+        fixture = yaml.safe_load((fixtures_root() / _find(name)).read_text(encoding="utf-8"))
+        return (
+            fixture[section]["fields"],
+            base64.b64decode(fixture["expected_proto_bytes_b64"][section]),
+        )
+
+    def meta(given: dict[str, Any]) -> meridian.ObservationMeta:
+        return meridian.ObservationMeta(
+            row_key=given["row_key"],
+            subjects=[meridian.SubjectRef(**s) for s in given["subjects"]],
+            source=meridian.Source(**given["source"]),
+            valid_from_ns=given["valid_from_ns"],
+            valid_until_ns=given["valid_until_ns"],
+            business_date=date.fromisoformat(given["business_date"]),
+            source_times=[meridian.SourceTime(**t) for t in given.get("source_times", [])],
+            raw=meridian.RawRecordRef(**given["raw"]),
+        )
+
+    def money(given: dict[str, Any]) -> meridian.Money:
+        return meridian.Money(Decimal(given["amount"]), given["currency_code"])
+
+    prices, prices_pin = pinned("record-prices.yaml")
+    bars, bars_pin = pinned("record-bars.yaml")
+    declined, declined_pin = pinned("decline-want.yaml")
+    listed, listed_pin = pinned("list-prices.yaml")
+    ranged, ranged_pin = pinned("list-bars.yaml")
+    venue, venue_pin = pinned("resolve-venue.yaml")
+
+    from meridian.v1 import sidecar_pb2
+
+    service, address = sidecar
+    service.roles = ("dgm",)
+    # The two instances' datasets the fixtures' rows name, as declared.
+    service.operations.lake.datasets = {
+        "coinbase-1:daily": sidecar_pb2.DatasetDeclaration(key="daily", vendor="Coinbase"),
+        "alpaca-1:daily": sidecar_pb2.DatasetDeclaration(key="daily", vendor="Alpaca"),
+    }
+    plugin = await meridian.connect(address, heartbeat=False)
+    try:
+        price = prices["prices"][0]
+        await plugin.record_prices(
+            prices=[
+                meridian.Price(
+                    meta=meta(price["meta"]),
+                    kind=price["kind"],
+                    price=money(price["price"]),
+                    basis=price["basis"],
+                )
+            ]
+        )
+        bar = bars["bars"][0]
+        await plugin.record_bars(
+            bars=[
+                meridian.Bar(
+                    meta=meta(bar["meta"]),
+                    open=money(bar["open"]),
+                    high=money(bar["high"]),
+                    low=money(bar["low"]),
+                    close=money(bar["close"]),
+                    volume=Decimal(bar["volume"]),
+                    vwap=money(bar["vwap"]),
+                    trade_count=bar["trade_count"],
+                )
+            ]
+        )
+        await plugin.decline_want(
+            want_id=declined["want_id"],
+            subjects=[meridian.SubjectRef(**s) for s in declined["subjects"]],
+            reason=declined["reason"],
+        )
+        await plugin.list_prices(
+            subjects=[meridian.SubjectRef(**s) for s in listed["subjects"]],
+            kinds=listed["kinds"],
+            business_date=date.fromisoformat(listed["business_date"]),
+        )
+        await plugin.list_bars(
+            subjects=[meridian.SubjectRef(**s) for s in ranged["subjects"]],
+            interval_ns=ranged["interval_ns"],
+            valid_from_ns=ranged["valid_from_ns"],
+            valid_until_ns=ranged["valid_until_ns"],
+        )
+        await plugin.resolve_venue(
+            identifiers=[meridian.Identifier(**i) for i in venue["identifiers"]],
+            as_of_ns=venue["as_of_ns"],
+        )
+    finally:
+        await plugin.leave()
+
+    by_type = {type(sent).__name__: sent for sent in service.operations.sent}
+    for params, domain, pin in (
+        ("RecordPricesParams", lake_pb2.RecordPricesRequest, prices_pin),
+        ("RecordBarsParams", lake_pb2.RecordBarsRequest, bars_pin),
+        ("DeclineWantParams", lake_pb2.DeclineWantRequest, declined_pin),
+        ("ListPricesParams", lake_pb2.ListPricesRequest, listed_pin),
+        ("ListBarsParams", lake_pb2.ListBarsRequest, ranged_pin),
+        ("ResolveVenueParams", reference_pb2.ResolveVenueRequest, venue_pin),
+    ):
+        sent = domain.FromString(by_type[params].SerializeToString())
+        assert sent.SerializeToString(deterministic=True) == pin, params
+
+    # What the lake answers and delivers reads back whole as the SDK's.
+    for name, section, message in (
+        ("record-prices.yaml", "reply", ops.RecordPricesResult),
+        ("list-prices.yaml", "reply", ops.ListPricesResult),
+        ("list-bars.yaml", "reply", ops.ListBarsResult),
+        ("resolve-venue.yaml", "reply", ops.ResolveVenueResult),
+        ("observations-wanted.yaml", "event", ops.ObservationsWantedEvent),
+        ("prices-recorded.yaml", "event", ops.PricesRecordedEvent),
+        ("bars-recorded.yaml", "event", ops.BarsRecordedEvent),
+        ("want-withdrawn.yaml", "event", ops.WantWithdrawnEvent),
+        ("list-datasets.yaml", "reply", ops.ListDatasetsResult),
+    ):
+        _, reply_pin = pinned(name, section)
+        assert message.FromString(reply_pin).SerializeToString(deterministic=True) == reply_pin
