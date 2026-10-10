@@ -2,7 +2,9 @@
 bars recorded in batches, wants heard, recorded against and declined, the
 readers' reads by business date, as of and side by side, the rows heard
 latest value first with their dataset, venues resolved, a Money naming its
-instrument, dates typed, and the dgm suite a data plugin holds itself to.
+instrument, dates typed, and the dgm suite a data plugin holds itself to,
+with its 1b cases from contract v19 (tests/test_trades_and_quotes.py has the
+rest of the 1b).
 
 Against the fake sidecar (conftest), which mirrors the lake, money
 resolution and venue resolution as core's sidecar and lake answer them.
@@ -11,6 +13,7 @@ resolution and venue resolution as core's sidecar and lake answer them.
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 from datetime import UTC, date, datetime
 from decimal import Decimal
 
@@ -32,7 +35,9 @@ from meridian import (
     SourceChoice,
     SourceTime,
     SubjectRef,
+    Trade,
 )
+from meridian.edge import as_reported
 from meridian.plugin.v1 import operations_pb2 as ops
 from meridian.suites import Recorder, check, names, run, suite
 
@@ -671,6 +676,7 @@ class ToyDgm:
         through_float: bool = False,
         forming_as_new: bool = False,
         reads_no_record: bool = False,
+        keeps_makers_side: bool = False,
     ) -> None:
         self.plugin = plugin
         self.through_float = through_float
@@ -678,6 +684,9 @@ class ToyDgm:
         # The mutation: a subject the toy did not resolve itself declined,
         # its record never read.
         self.reads_no_record = reads_no_record
+        # The mutation: the side of the resting order a source names sent as
+        # the side that took liquidity.
+        self.keeps_makers_side = keeps_makers_side
 
     def amount(self, text: str) -> Decimal:
         # The mutation: a candle's JSON number read through a float.
@@ -821,6 +830,119 @@ class ToyDgm:
     async def on_withdrawn(self, heard: meridian.Heard[ops.WantWithdrawnEvent]) -> None:
         return None  # the standing want stops being kept current
 
+    # ── The 1b (contract v19): trades and quotes, from the source's stream ──
+
+    def meta(
+        self, subject: str, row_key: str, at_ns: int = DAY + 3_600 * 10**9
+    ) -> ObservationMeta:
+        instance = self.plugin.identity.instance_id  # type: ignore[attr-defined]
+        return ObservationMeta(
+            row_key=row_key,
+            subjects=[SubjectRef(entity_id=subject)],
+            source=Source(dataset=f"{instance}:live", venue_id=COINBASE),
+            valid_from_ns=at_ns,
+            raw=self.plugin.raw_record(f"matches/{row_key}"),  # type: ignore[attr-defined]
+        )
+
+    def trade(
+        self,
+        subject: str,
+        *,
+        row_key: str = "BTC-USD:match:1",
+        aggressor: str = "buy",
+        attributes: meridian.TradeAttributes | None = None,
+        unconverted: tuple[ops.AsReported, ...] = (),
+        cancelled: bool = False,
+    ) -> Trade:
+        every = meridian.Eligibility(
+            high_low="eligible", open="eligible", close="eligible", volume="eligible"
+        )
+        meta = self.meta(subject, row_key)
+        if unconverted:
+            meta = dataclasses.replace(meta, unconverted=unconverted)
+        return Trade(
+            meta=meta,
+            price=Money(Decimal("62431.27"), "USD"),
+            quantity=Decimal("0.0153"),
+            attributes=attributes
+            or meridian.TradeAttributes(consolidated=every, market_centre=every),
+            aggressor=aggressor,
+            source_sequence=1,
+            cancelled=cancelled,
+        )
+
+    async def a_trade(self) -> None:
+        subject = await self.subject("BTC-USD")
+        await self.plugin.record_trades(trades=[self.trade(subject)])  # type: ignore[attr-defined]
+
+    async def makers_side(self) -> None:
+        # The source names the resting order's side, a sell: the buyer took it.
+        stated = "sell"
+        taker = stated if self.keeps_makers_side else {"sell": "buy", "buy": "sell"}[stated]
+        subject = await self.subject("BTC-USD")
+        await self.plugin.record_trades(trades=[self.trade(subject, aggressor=taker)])  # type: ignore[attr-defined]
+
+    async def condition_converted(self) -> None:
+        # An odd lot: neither the high and low nor the close, its volume counted.
+        rule = meridian.Eligibility(
+            high_low="not_eligible",
+            open="not_eligible",
+            close="not_eligible",
+            volume="eligible",
+        )
+        subject = await self.subject("QQQ")
+        attributes = meridian.TradeAttributes(
+            consolidated=rule, market_centre=rule, characteristics=["odd_lot"]
+        )
+        await self.plugin.record_trades(  # type: ignore[attr-defined]
+            trades=[self.trade(subject, attributes=attributes)]
+        )
+
+    async def condition_not_converted(self) -> None:
+        subject = await self.subject("QQQ")
+        await self.plugin.record_trades(  # type: ignore[attr-defined]
+            trades=[
+                self.trade(
+                    subject,
+                    attributes=meridian.TradeAttributes(),
+                    unconverted=(as_reported("toy:conditions", "Q7"),),
+                )
+            ]
+        )
+
+    async def withdrawn_trade(self) -> None:
+        subject = await self.subject("BTC-USD")
+        await self.plugin.record_trades(trades=[self.trade(subject)])  # type: ignore[attr-defined]
+        await self.plugin.record_trades(trades=[self.trade(subject, cancelled=True)])  # type: ignore[attr-defined]
+
+    def quote(self, subject: str, *, ask: bool = True) -> meridian.Quote:
+        return meridian.Quote(
+            meta=self.meta(subject, "BTC-USD:ticker:1"),
+            bid=Money(Decimal("62431.26"), "USD"),
+            ask=Money(Decimal("62431.27"), "USD") if ask else None,
+            bid_quantity=Decimal("1.2"),
+            ask_quantity=Decimal("0.4") if ask else None,
+        )
+
+    async def a_quote(self) -> None:
+        subject = await self.subject("BTC-USD")
+        await self.plugin.record_quotes(quotes=[self.quote(subject)])  # type: ignore[attr-defined]
+
+    async def one_sided(self) -> None:
+        subject = await self.subject("BTC-USD")
+        await self.plugin.record_quotes(quotes=[self.quote(subject, ask=False)])  # type: ignore[attr-defined]
+
+    async def on_trades_wanted(
+        self, heard: meridian.Heard[ops.ObservationsWantedEvent]
+    ) -> None:
+        """A standing want of the live dataset: its subjects kept current
+        from the source's stream, which states a trade for one."""
+        want = heard.message
+        if want.standing and want.data_type == "meridian.v1.Trade":
+            await self.plugin.record_trades(  # type: ignore[attr-defined]
+                trades=[self.trade(s.entity_id) for s in want.subjects], want_id=want.want_id
+            )
+
 
 def producers(**mutations: bool) -> dict[str, object]:
     def made(step: str):  # type: ignore[no-untyped-def]
@@ -849,6 +971,18 @@ def producers(**mutations: bool) -> dict[str, object]:
         )
         await recorder.receive(want_withdrawn=toy.on_withdrawn)
 
+    async def streamed(recorder: Recorder) -> None:
+        toy = ToyDgm(recorder, **mutations)
+        want = ops.ObservationsWantedEvent(
+            want_id="WNT-2",
+            dataset=LIVE,
+            data_type="meridian.v1.Trade",
+            subjects=[ops.SubjectRef(entity_id=BTC)],
+            standing=True,
+        )
+        recorder.answer("ObservationsWanted", lambda _: want)
+        await recorder.receive(observations_wanted=toy.on_trades_wanted)
+
     return {
         "a-daily-close": made("daily_close"),
         "the-forming-day-restated": made("forming_day"),
@@ -863,21 +997,91 @@ def producers(**mutations: bool) -> dict[str, object]:
         "a-subject-another-source-resolved": wanted([ELSEWHERE]),
         "a-subject-declined": wanted(["LCL-NOT-COVERED"]),
         "a-standing-want-withdrawn": withdrawn,
+        "a-trade-recorded": made("a_trade"),
+        "the-makers-side-inverted": made("makers_side"),
+        "a-condition-converted": made("condition_converted"),
+        "a-condition-not-converted": made("condition_not_converted"),
+        "a-trade-withdrawn": made("withdrawn_trade"),
+        "a-quote-recorded": made("a_quote"),
+        "a-one-sided-quote": made("one_sided"),
+        "a-standing-want-streamed": streamed,
     }
 
 
-def test_the_dgm_suite_is_carried_with_its_thirteen_cases() -> None:
+def test_the_dgm_suite_is_carried_with_its_twenty_one_cases() -> None:
     held = suite("dgm")
     assert held.since == "v18"
-    assert len(held.cases) == 13
+    assert len(held.cases) == 21
     assert "a-want-recorded-against" in names("dgm")
     assert "a-subject-another-source-resolved" in names("dgm")
+    # The 1b's eight (contract v19), each about trades or quotes.
+    later = [case for case in held.cases if case.name in V19_DGM_CASES]
+    assert len(later) == 8
+    assert {case.about for case in later} == {"trades", "quotes"}
+    assert held.case("an-fx-rate").about == "a currency's rate against another currency"
+    assert held.case("an-exact-price").about == ""
+
+
+V19_DGM_CASES = {
+    "a-trade-recorded",
+    "the-makers-side-inverted",
+    "a-condition-converted",
+    "a-condition-not-converted",
+    "a-trade-withdrawn",
+    "a-quote-recorded",
+    "a-one-sided-quote",
+    "a-standing-want-streamed",
+}
 
 
 def test_a_dgm_converting_exactly_passes_every_case_of_its_suite() -> None:
     report = run("dgm", producers(), instance_id="toy-1")
     assert report.passed, report.failures
-    assert len(report.passed_cases) == 13
+    assert len(report.passed_cases) == 21
+
+
+def test_a_dgm_sending_the_makers_side_as_the_aggressor_fails_the_suite() -> None:
+    report = run("dgm", producers(keeps_makers_side=True))
+    assert set(report.failures) == {"the-makers-side-inverted"}
+    assert "matches no element of trades" in report.failures["the-makers-side-inverted"]
+
+
+def test_a_case_about_a_kind_the_plugin_never_publishes_may_be_not_presented() -> None:
+    # Contract v19, approved 2026-10-10: a source of daily closes states no
+    # trades or quotes, and H.10 no bars; each is verified on the rest.
+    every = producers()
+    never = {
+        name: "daily closes and bars only: this source states no trades or quotes"
+        for name in V19_DGM_CASES
+    }
+    never["a-daily-bar"] = "this source states no bars"
+    mapped = {name: made for name, made in every.items() if name not in never}
+    report = run("dgm", mapped, not_presented=never)
+    assert report.passed, report.failures
+    assert report.not_presented == never
+    assert len(report.passed_cases) == 21 - 9
+
+
+def test_a_case_every_dgm_answers_is_never_not_presented_and_one_that_is_says_why() -> None:
+    every = producers()
+    mapped = {
+        name: made
+        for name, made in every.items()
+        if name not in {"an-exact-price", "a-want-recorded-against", "a-trade-recorded"}
+    }
+    report = run(
+        "dgm",
+        mapped,
+        not_presented={
+            "an-exact-price": "this source rounds",
+            "a-want-recorded-against": "this source is never asked",
+            "a-trade-recorded": " ",
+        },
+    )
+    assert "required" in report.failures["an-exact-price"]
+    assert "required" in report.failures["a-want-recorded-against"]
+    assert "says why" in report.failures["a-trade-recorded"]
+    assert report.not_presented == {}
 
 
 def test_a_dgm_declining_a_subject_another_source_resolved_fails_the_suite() -> None:
@@ -938,6 +1142,14 @@ def test_a_reading_role_hears_and_reads_as_its_suite_asks() -> None:
 
         return produce
 
+    async def currency(recorder: Recorder) -> None:
+        # Contract v19 (approved 2026-10-10): a reporting plugin names its
+        # reporting currency by its ISO 4217 code, and core resolves it.
+        found = await recorder.resolve_identifier(
+            identifiers=[meridian.Identifier(scheme="iso4217", value="USD")], as_of_ns=DAY
+        )
+        assert found.found
+
     price = ops.PricesRecordedEvent(price=ops.Price(kind=ops.PRICE_KIND_CLOSE))
     bar = ops.BarsRecordedEvent(bar=ops.Bar())
     report = run(
@@ -948,6 +1160,7 @@ def test_a_reading_role_hears_and_reads_as_its_suite_asks() -> None:
             "hears-a-price-recorded": hearing("PricesRecorded", price, "prices_recorded"),
             "reads-daily-bars-over-a-range": bars,
             "hears-a-bar-recorded": hearing("BarsRecorded", bar, "bars_recorded"),
+            "resolves-its-reporting-currency": currency,
         },
     )
     assert report.passed, report.failures

@@ -184,6 +184,16 @@ class PluginOperationsStub(object):
                 request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordBarsParams.SerializeToString,
                 response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordBarsResult.FromString,
                 _registered_method=True)
+        self.RecordTrades = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/RecordTrades',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordTradesParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordTradesResult.FromString,
+                _registered_method=True)
+        self.RecordQuotes = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/RecordQuotes',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordQuotesParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordQuotesResult.FromString,
+                _registered_method=True)
         self.ListPrices = channel.unary_unary(
                 '/meridian.plugin.v1.PluginOperations/ListPrices',
                 request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListPricesParams.SerializeToString,
@@ -193,6 +203,16 @@ class PluginOperationsStub(object):
                 '/meridian.plugin.v1.PluginOperations/ListBars',
                 request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListBarsParams.SerializeToString,
                 response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListBarsResult.FromString,
+                _registered_method=True)
+        self.ListTrades = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ListTrades',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListTradesParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListTradesResult.FromString,
+                _registered_method=True)
+        self.ListQuotes = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ListQuotes',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListQuotesParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListQuotesResult.FromString,
                 _registered_method=True)
         self.DeclineWant = channel.unary_unary(
                 '/meridian.plugin.v1.PluginOperations/DeclineWant',
@@ -424,6 +444,20 @@ class PluginOperationsServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def RecordTrades(self, request, context):
+        """W10.4: platform.lake.command.record-trades (command; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RecordQuotes(self, request, context):
+        """W10.4: platform.lake.command.record-quotes (command; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def ListPrices(self, request, context):
         """W10.6: platform.lake.query.list-prices (query; preview).
         """
@@ -433,6 +467,20 @@ class PluginOperationsServicer(object):
 
     def ListBars(self, request, context):
         """W10.6: platform.lake.query.list-bars (query; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListTrades(self, request, context):
+        """W10.6: platform.lake.query.list-trades (query; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListQuotes(self, request, context):
+        """W10.6: platform.lake.query.list-quotes (query; preview).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -612,6 +660,16 @@ def add_PluginOperationsServicer_to_server(servicer, server):
                     request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordBarsParams.FromString,
                     response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordBarsResult.SerializeToString,
             ),
+            'RecordTrades': grpc.unary_unary_rpc_method_handler(
+                    servicer.RecordTrades,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordTradesParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordTradesResult.SerializeToString,
+            ),
+            'RecordQuotes': grpc.unary_unary_rpc_method_handler(
+                    servicer.RecordQuotes,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordQuotesParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordQuotesResult.SerializeToString,
+            ),
             'ListPrices': grpc.unary_unary_rpc_method_handler(
                     servicer.ListPrices,
                     request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListPricesParams.FromString,
@@ -621,6 +679,16 @@ def add_PluginOperationsServicer_to_server(servicer, server):
                     servicer.ListBars,
                     request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListBarsParams.FromString,
                     response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListBarsResult.SerializeToString,
+            ),
+            'ListTrades': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListTrades,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListTradesParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListTradesResult.SerializeToString,
+            ),
+            'ListQuotes': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListQuotes,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListQuotesParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListQuotesResult.SerializeToString,
             ),
             'DeclineWant': grpc.unary_unary_rpc_method_handler(
                     servicer.DeclineWant,
@@ -1459,6 +1527,60 @@ class PluginOperations(object):
             _registered_method=True)
 
     @staticmethod
+    def RecordTrades(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/RecordTrades',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordTradesParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordTradesResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RecordQuotes(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/RecordQuotes',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordQuotesParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordQuotesResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
     def ListPrices(request,
             target,
             options=(),
@@ -1502,6 +1624,60 @@ class PluginOperations(object):
             '/meridian.plugin.v1.PluginOperations/ListBars',
             meridian_dot_plugin_dot_v1_dot_operations__pb2.ListBarsParams.SerializeToString,
             meridian_dot_plugin_dot_v1_dot_operations__pb2.ListBarsResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListTrades(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ListTrades',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListTradesParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListTradesResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListQuotes(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ListQuotes',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListQuotesParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListQuotesResult.FromString,
             options,
             channel_credentials,
             insecure,

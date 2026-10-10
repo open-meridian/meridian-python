@@ -74,6 +74,15 @@ datasets in order, or side by side; with each dataset named once and each
 subject no dataset covers unanswered. Venues resolve by their identifiers
 (`venues`); a miss is reported. A want's decline is kept (`declined`).
 
+From contract v19 it records trades and quotes the same way: a trade's price
+and a quote's sides resolved, dated by their valid time, a quote's two sides
+in one asset or refused; published as TradesRecorded and QuotesRecorded. A
+trades read answers a range within one day, refused naming the range when
+wider, or the rows each partition a watermark names recorded after its
+sequence there (`after_watermark`), whatever their valid time; exactly one.
+A quotes read answers the latest in force per dataset, venue and asset at a
+valid time (`at_ns`, 0 for now), or a range within one day.
+
 And it answers ResolveInstrument (W3.6) from the deployment's records
 (`instruments`), as the instrument store does, to any role that asks: a
 dgm reads the record of an instrument another source resolved (contract
@@ -173,6 +182,24 @@ class FakeOperations(operations_pb2_grpc.PluginOperationsServicer):
         return await self._lake(
             request, context, lambda: self.lake.read(request, operations_pb2.Bar, "bars")
         )
+
+    async def RecordTrades(self, request, context):  # noqa: N802
+        return await self._lake(
+            request, context, lambda: self.lake.record(list(request.trades), "trades")
+        )
+
+    async def RecordQuotes(self, request, context):  # noqa: N802
+        return await self._lake(
+            request, context, lambda: self.lake.record(list(request.quotes), "quotes")
+        )
+
+    async def ListTrades(self, request, context):  # noqa: N802
+        self.reads.append(request)
+        return await self._lake(request, context, lambda: self.lake.read_trades(request))
+
+    async def ListQuotes(self, request, context):  # noqa: N802
+        self.reads.append(request)
+        return await self._lake(request, context, lambda: self.lake.read_quotes(request))
 
     async def ListDatasets(self, request, context):  # noqa: N802
         self.reads.append(request)
@@ -615,7 +642,7 @@ class FakeLake:
     datasets: dict[str, object] = field(default_factory=dict)
     cash: dict[str, list[tuple[str, str]]] = field(default_factory=lambda: dict(CASH))
     venues: dict[str, object] = field(default_factory=lambda: dict(VENUES))
-    # Every version recorded, prices and bars, in order.
+    # Every version recorded, prices, bars, trades and quotes, in order.
     rows: list[object] = field(default_factory=list)
     published: list[object] = field(default_factory=list)
     heads: dict[str, int] = field(default_factory=dict)
@@ -674,8 +701,14 @@ class FakeLake:
             when = _when(row.meta)
             copy = type(row)()
             copy.CopyFrom(row)
-            if kind == "prices":
+            if kind == "prices" or kind == "trades":
                 self._money(copy.price, f"{at}.price", when)
+            elif kind == "quotes":
+                sides = [n for n in ("bid", "ask") if copy.HasField(n)]
+                for name in sides:
+                    self._money(getattr(copy, name), f"{at}.{name}", when)
+                if len({getattr(copy, n).instrument_id for n in sides}) > 1:
+                    raise LakeRefused(f"{at}: a quote's two sides are in one asset")
             else:
                 amounts = ["open", "high", "low", "close"] + (
                     ["vwap"] if copy.HasField("vwap") else []
@@ -713,19 +746,12 @@ class FakeLake:
             self.clock += 1_000_000_000
             meta.recorded_at_ns = self.clock
             self.rows.append(copy)
-            if kind == "prices":
-                self.published.append(operations_pb2.PricesRecordedEvent(price=copy))
-            else:
-                self.published.append(operations_pb2.BarsRecordedEvent(bar=copy))
+            self.published.append(_EVENTS[kind](copy))
             if held is None:
                 recorded += 1
             else:
                 restated += 1
-        result = (
-            operations_pb2.RecordPricesResult
-            if kind == "prices"
-            else operations_pb2.RecordBarsResult
-        )
+        result = _RESULTS[kind]
         return result(
             recorded=recorded,
             restated=restated,
@@ -759,8 +785,29 @@ class FakeLake:
         value, each Money and number compared as numbers."""
 
         def said(row: object) -> tuple[object, ...]:
+            from meridian.operations import as_decimal
+
             if isinstance(row, operations_pb2.Price):
                 return (row.kind, _value(row.price), row.meta.valid_until_ns)
+            if isinstance(row, operations_pb2.Trade):
+                return (
+                    _value(row.price),
+                    as_decimal(row.quantity),
+                    row.aggressor,
+                    row.cancelled,
+                    row.attributes.SerializeToString(deterministic=True),
+                )
+            if isinstance(row, operations_pb2.Quote):
+                return tuple(
+                    (
+                        _value(getattr(row, n))
+                        if n in ("bid", "ask")
+                        else as_decimal(getattr(row, n))
+                    )
+                    if row.HasField(n)
+                    else None
+                    for n in ("bid", "ask", "bid_quantity", "ask_quantity")
+                ) + (tuple(row.characteristics),)
             return (
                 *(_value(getattr(row, n)) for n in ("open", "high", "low", "close")),
                 _value(row.vwap) if row.HasField("vwap") else None,
@@ -863,6 +910,149 @@ class FakeLake:
             next_cursor=following,
         )
 
+    def _latest(self, kind: type, as_of: int) -> list[object]:
+        """Each row key's version in force as of a recorded time, in order."""
+        latest: dict[tuple[str, str], object] = {}
+        for row in self.rows:
+            if type(row) is not kind:
+                continue
+            held = self._version(kind, row.meta.source.dataset, row.meta.row_key, as_of)
+            if held is not None:
+                latest[(row.meta.source.dataset, row.meta.row_key)] = held
+        return list(latest.values())
+
+    def _order(self, choice: object, kind: type) -> list[str]:
+        if choice.named:
+            return list(choice.named)
+        order = self.priority.get(kind.DESCRIPTOR.full_name.replace("plugin.", ""), [])
+        return [*order, *(d for d in self.datasets if d not in order)]
+
+    @staticmethod
+    def _one_day(request: object) -> None:
+        if request.valid_until_ns - request.valid_from_ns > 86_400 * 10**9:
+            raise LakeRefused(
+                "valid_from_ns: a range of trades or quotes is within one day of its dataset"
+            )
+
+    def _answer(
+        self, request: object, kind: type, found: list[object], unanswered: list[object]
+    ) -> object:
+        found.sort(key=lambda r: (r.meta.source.dataset, r.meta.sequence))
+        page, following = _page(found, request.page_size, request.cursor)
+        named = list(dict.fromkeys(r.meta.source.dataset for r in page))
+        result = (
+            operations_pb2.ListTradesResult
+            if kind is operations_pb2.Trade
+            else operations_pb2.ListQuotesResult
+        )
+        return result(
+            **{"trades" if kind is operations_pb2.Trade else "quotes": page},
+            unanswered=unanswered,
+            datasets=[self._ref(d) for d in named],
+            watermark=operations_pb2.Watermark(
+                partitions=[
+                    operations_pb2.PartitionSequence(partition=d, sequence=self.heads.get(d, 0))
+                    for d in named
+                ]
+            ),
+            next_cursor=following,
+        )
+
+    def _chosen(
+        self, request: object, kind: type, rows: list[object], entity: str
+    ) -> list[object]:
+        """A subject's rows from the datasets a read takes: named, side by
+        side, or the default per subject."""
+        mine = [r for r in rows if entity in [s.entity_id for s in r.meta.subjects]]
+        order = (
+            list(self.datasets)
+            if request.sources.side_by_side
+            else self._order(request.sources, kind)
+        )
+        chosen = [r for r in mine if r.meta.source.dataset in order]
+        if not request.sources.side_by_side and chosen:
+            first = next(d for d in order if any(r.meta.source.dataset == d for r in chosen))
+            chosen = [r for r in chosen if r.meta.source.dataset == first]
+        return chosen
+
+    def read_trades(self, request: object) -> object:
+        """A read of trades: over a range within one day, or after a
+        watermark, whatever their valid time (contract v19)."""
+        if not 1 <= len(request.subjects) <= 500:
+            raise LakeRefused("subjects: a read names 1 to 500 subjects")
+        after = {p.partition: p.sequence for p in request.after_watermark.partitions}
+        ranged = bool(request.valid_from_ns or request.valid_until_ns)
+        if ranged == request.HasField("after_watermark"):
+            raise LakeRefused("a trades read gives a range or a watermark: exactly one")
+        if ranged:
+            self._one_day(request)
+        rows = self._latest(operations_pb2.Trade, request.as_of_ns)
+        found: list[object] = []
+        unanswered = []
+        for entity in [s.entity_id for s in request.subjects]:
+            chosen = self._chosen(request, operations_pb2.Trade, rows, entity)
+            if ranged:
+                chosen = [
+                    r
+                    for r in chosen
+                    if request.valid_from_ns <= r.meta.valid_from_ns < request.valid_until_ns
+                ]
+            else:
+                chosen = [
+                    r
+                    for r in chosen
+                    if r.meta.source.dataset in after
+                    and r.meta.sequence > after[r.meta.source.dataset]
+                ]
+            if not chosen and ranged:
+                unanswered.append(
+                    operations_pb2.Unanswered(
+                        subject=operations_pb2.SubjectRef(entity_id=entity),
+                        reason=operations_pb2.UNANSWERED_REASON_NOT_COVERED,
+                    )
+                )
+            found.extend(chosen)
+        return self._answer(request, operations_pb2.Trade, found, unanswered)
+
+    def read_quotes(self, request: object) -> object:
+        """A read of quotes: the latest in force per dataset, venue and asset
+        at a valid time, or over a range within one day (contract v19)."""
+        if not 1 <= len(request.subjects) <= 500:
+            raise LakeRefused("subjects: a read names 1 to 500 subjects")
+        ranged = bool(request.valid_from_ns or request.valid_until_ns)
+        if ranged:
+            self._one_day(request)
+        rows = self._latest(operations_pb2.Quote, request.as_of_ns)
+        found: list[object] = []
+        unanswered = []
+        for entity in [s.entity_id for s in request.subjects]:
+            chosen = self._chosen(request, operations_pb2.Quote, rows, entity)
+            if ranged:
+                chosen = [
+                    r
+                    for r in chosen
+                    if request.valid_from_ns <= r.meta.valid_from_ns < request.valid_until_ns
+                ]
+            else:
+                newest: dict[tuple[object, ...], object] = {}
+                for r in sorted(chosen, key=lambda r: r.meta.valid_from_ns):
+                    if request.at_ns and r.meta.valid_from_ns > request.at_ns:
+                        continue
+                    side = r.bid if r.HasField("bid") else r.ask
+                    newest[
+                        (r.meta.source.dataset, r.meta.source.venue_id, side.instrument_id)
+                    ] = r
+                chosen = list(newest.values())
+            if not chosen:
+                unanswered.append(
+                    operations_pb2.Unanswered(
+                        subject=operations_pb2.SubjectRef(entity_id=entity),
+                        reason=operations_pb2.UNANSWERED_REASON_NOT_COVERED,
+                    )
+                )
+            found.extend(chosen)
+        return self._answer(request, operations_pb2.Quote, found, unanswered)
+
     @staticmethod
     def _in_time(row: object, request: object) -> bool:
         meta = row.meta
@@ -905,6 +1095,21 @@ class FakeLake:
                 else operations_pb2.MISS_REASON_NOT_FOUND
             ),
         )
+
+
+#: What the lake publishes and answers for each kind of batch.
+_EVENTS = {
+    "prices": lambda row: operations_pb2.PricesRecordedEvent(price=row),
+    "bars": lambda row: operations_pb2.BarsRecordedEvent(bar=row),
+    "trades": lambda row: operations_pb2.TradesRecordedEvent(trade=row),
+    "quotes": lambda row: operations_pb2.QuotesRecordedEvent(quote=row),
+}
+_RESULTS = {
+    "prices": operations_pb2.RecordPricesResult,
+    "bars": operations_pb2.RecordBarsResult,
+    "trades": operations_pb2.RecordTradesResult,
+    "quotes": operations_pb2.RecordQuotesResult,
+}
 
 
 def _page(found: list, size: int, cursor: str) -> tuple[list, str]:

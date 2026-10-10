@@ -2,7 +2,7 @@
 
 The Python SDK for building [Open Meridian](https://open-meridian.com) plugins:
 the tools a trader has an AI agent build, and the bots and analytics a
-developer writes. Python 3.11 or newer. This is release 0.22.0; its reference
+developer writes. Python 3.11 or newer. This is release 0.23.0; its reference
 is at [open-meridian.dev](https://open-meridian.dev/api/python-sdk/).
 
 ## Start here
@@ -1076,6 +1076,90 @@ Two plugins of one pair pass it unchanged; a candle read through a `float`, or
 a forming day recorded as a new row, fails it. The reading roles have suites
 of their own.
 
+### Trades and quotes (contract v19)
+
+The lake's 1b: a `dgm` records trades and top-of-book quotes, and `signal` and
+`ems` read and hear them (`reporting` reads neither). Still typed operations
+only: no WebSocket client, no reconnecting stream, no bar builder.
+
+**A dgm records them in batches** of 1 to 500, from a live dataset declaring
+`data_types=["meridian.v1.Trade", "meridian.v1.Quote"]` and `modes=["stream"]`.
+Each is keyed by UTC instants and names no business date; a trade's venue is
+the venue it printed on, and its price a `Money` naming its cash instrument:
+
+```python
+from meridian import Eligibility, Quote, Trade, TradeAttributes
+
+every = Eligibility(high_low="eligible", open="eligible", close="eligible", volume="eligible")
+await plugin.record_trades(
+    trades=[
+        Trade(
+            meta=ObservationMeta(row_key="BTC-USD:t:812345678", subjects=[SubjectRef(entity_id=btc)],
+                                 source=Source(dataset=live, venue_id=venue), valid_from_ns=at_ns,
+                                 raw=plugin.raw_record("matches/BTC-USD/812345678")),
+            price=Money(Decimal("62510.01"), "USD"),
+            quantity=Decimal("0.0125"),
+            attributes=TradeAttributes(consolidated=every, market_centre=every),
+            aggressor="buy",            # the side that took liquidity; unset when not said
+            source_sequence=812345678,
+        )
+    ]
+)
+await plugin.record_quotes(quotes=[Quote(meta=meta, bid=Money(Decimal("62510.00"), "USD"),
+                                         bid_quantity=Decimal("0.84"))])   # no offer: ask unset
+```
+
+A source's condition codes are converted at the edge into the trade's
+attributes (`characteristics=["odd_lot"]`, and what it may set of a bar); a
+code with no conversion stays in `meta.unconverted`, its eligibilities
+unspecified. A source naming the resting order's side records the other as
+the aggressor. A withdrawn trade is the next version under its row key, with
+`cancelled=True`.
+
+**A reader reads** trades over a range within one day of the dataset, or the
+trades recorded after a watermark, whatever their valid time; and quotes at the
+latest in force, per subject, dataset, venue and asset, or over a range:
+
+```python
+day = await plugin.list_trades(subjects=held, valid_from_ns=start, valid_until_ns=end)
+late = await plugin.list_trades(subjects=held, after_watermark=day.watermark)
+quotes = await plugin.list_quotes(subjects=held)          # BTC in USD and in USDC: both
+```
+
+and hears them for the subjects it names:
+
+```python
+await plugin.receive(trades_recorded=on_trade, quotes_recorded=on_quote, subjects=held_ids)
+```
+
+Every trade is handed on, never dropped for a later one. After a loss, or a
+broken stream, the SDK reads the trades recorded after the watermark it last
+saw -- per dataset, the last trade handed on -- and hands them on marked
+`caught_up`, a late print among them, before anything heard after; on start
+it reads none, so a plugin wanting the day's trades reads them by range.
+Quotes, like prices, are handed on latest value first, and read again at the
+latest after a loss. The 1b's rows are `preview` in v19. From v19 a price's key and a quote's hold the asset they
+are in, so BTC priced in USD and in USDC on one venue are two values.
+
+**The suites.** The dgm suite gains eight cases about trades and quotes: a
+trade with its attributes and aggressor, the maker's side inverted, a
+condition converted and one not, a withdrawal, a quote two-sided and
+one-sided, a standing want streamed. A case about one kind of data says so
+(`Case.about`: closes, bars, trades, quotes, prices on a venue), and a plugin
+that declares it never publishes that kind names it in `not_presented`, with
+why, and is verified on the rest; every other case is still required:
+
+```python
+report = run("dgm", producers, not_presented={
+    "a-trade-recorded": "daily closes and bars only: this source states no trades",
+})
+```
+
+`signal`'s suite gains trades and quotes read, heard and caught up after a
+watermark; `ems` has its first suite, the same and the datasets it may read;
+and `reporting`'s, its reporting currency resolved by its ISO 4217 code
+(`resolve_identifier`, read-only for `reporting` from v19).
+
 ## Moving a plugin to a new release
 
     meridian plugin migrate            # to the latest release
@@ -1136,6 +1220,7 @@ carries libcst.
 | 0.19.0 to 0.20.0: the SDK declares contract v15, a person's access granted per role: `roles=` on `@pages.page`, `@pages.route`, `@pages.tool`, `meridian.Setting` and `meridian.Page`; `Caller.roles`, `Caller.level_for`, `Caller.read_for`, `Caller.write_for`; `PageClient(..., roles=)` and `roles=` on its sessions; an activity re-resolved (`plugin.re_resolve_activity`, `re_resolutions`, `receive(activity_re_resolved=)`); a plugin holding one role or none names no role, and one coming to hold a second names `roles=` on every page, route, tool and setting, which `meridian plugin check` reports | only the pins move | |
 | 0.20.0 to 0.21.0: the SDK declares contract v16, an edge plugin's older records move to the archive: the kinds of raw record (`Storage(kinds=[RecordKind(...)])`) and the two settings the SDK declares per kind (`<kind>_window_days`, `<kind>_past_window`), reserved; the archive (`edge.archive_dir()`, `MERIDIAN_ARCHIVE_BUCKET`); the moves with their index (`plugin.archive_unit`, `plugin.restore_unit`, `plugin.delete_unit`, `plugin.find_record`), a deletion inside the hold a `CommandRefused` with `REFUSAL_REASON_WITHIN_HOLD`; what each kind holds in storage on the heartbeat (`plugin.stored`, `StoredSpan`), with the bytes each uses of the archive (`StoredSpan.bytes`), which the SDK fills in; the archive's bound (`MERIDIAN_ARCHIVE_MOST_BYTES`), past which `archive_unit` refuses; `POST /archive/restore` on every edge plugin's host, derived as the `restore_unit` tool. A plugin declaring no kinds keeps `retention_days` as before, so `meridian plugin migrate` needs no change in the command line | only the pins move | a setting of the plugin's own that held a window, dropped, its release notes naming the kind's window it maps to for the admin to set once at upgrade (SnapTrade's two); a setting it declared as `<kind>_window_days` or `<kind>_past_window`, renamed |
 | 0.21.0 to 0.22.0: the SDK declares contract v18, the lake's 1a: a dgm's catalogue (`Declaration(catalogue=[DatasetDeclaration(...)])`, `DatasetLicence`, `ObservationMode`), prices and bars recorded in batches of 1 to 500 (`plugin.record_prices`, `plugin.record_bars`, `Price`, `Bar`, `ObservationMeta`, `SourceTime`, `Source`, `SubjectRef`), wants heard and declined (`receive(observations_wanted=, want_withdrawn=)`, `want_id=`, `plugin.decline_want`), the lake's reads by business date, as of and side by side (`list_prices`, `list_bars`, `list_datasets`, `SourceChoice`), prices and bars heard latest value first for the subjects named with their dataset (`receive(prices_recorded=, bars_recorded=, subjects=)`, `Heard.dataset`), venues resolved (`resolve_venue`, `report_missing_venue`), the dgm suite and the reading roles' (a heard row delivered by `answer`); a Money names its cash instrument (`Money.instrument_id`; `Money(amount, "USD")` resolved by core, dated); every date field takes a `datetime.date`, and refuses text that is no date. `Money(amount, code)` keeps its shape, so `meridian plugin migrate` needs no change in the command line | only the pins move | a test comparing a Money read back (`as_money`) with one it made, which now carries `instrument_id`: compare `amount` and `currency_code`; a date sent as text that is no date, refused |
+| 0.22.0 to 0.23.0: the SDK declares contract v19, the lake's 1b: trades and quotes recorded in batches of 1 to 500 (`plugin.record_trades`, `plugin.record_quotes`, `Trade`, `TradeAttributes`, `Eligibility`, `Quote`), read (`list_trades` over a range or `after_watermark=`, `list_quotes`) and heard (`receive(trades_recorded=, quotes_recorded=, subjects=)`: every trade, caught up after the watermark last seen; the latest quote per asset); a price heard is conflated per its asset too; `reporting` resolves an identifier; the dgm suite's eight 1b cases, a case about a kind of data the plugin never publishes not presented with why (`Case.about`), `signal`'s 1b cases, the `ems` suite, `reporting`'s `resolves-its-reporting-currency` | only the pins move | a dgm's suite test meeting the eight new cases: map each, or name those about trades or quotes in `not_presented` with why where it publishes neither |
 
 `tests/migrations/` holds the plugins the migrations are recorded for, as
 written and as their migration leaves them, and `make check-migrations` holds

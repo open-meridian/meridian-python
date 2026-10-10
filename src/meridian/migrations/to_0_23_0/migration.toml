@@ -1,0 +1,44 @@
+# open-meridian 0.22.0 to 0.23.0: the SDK declares contract v19, the lake's
+# 1b: trades and quotes recorded, read and heard, trades in full and caught
+# up after a watermark; reporting resolves an identifier; a dgm suite case
+# about a kind of data the plugin never publishes may be not presented
+# (sdk-contract/the-lake-trades-and-quotes-contract;
+# plans/the-lake-prices-the-book, row 18).
+# Nothing a plugin calls changed shape, so only the pins move.
+from = "0.22.0"
+to = "0.23.0"
+summary = """
+The SDK declares contract v19 (meridian.SCHEMA_VERSION). A dgm records trades
+and quotes in batches of 1 to 500 (plugin.record_trades, plugin.record_quotes:
+each a Trade -- its price a Money, its quantity, its TradeAttributes with an
+Eligibility for the consolidated bar and its venue's, its characteristics,
+the Aggressor where its source says it, cancelled for a withdrawal -- or a
+Quote, a side left unset where it is empty), keyed by UTC instants with no
+business date, refused outside the bound before anything is sent. signal and
+ems read them (list_trades over a range within a day, or after_watermark=;
+list_quotes at the latest in force, at_ns=, or over a range) and hear them
+(receive(trades_recorded=, quotes_recorded=, subjects=[...])): every trade,
+never conflated, and after a loss or a broken stream the trades recorded
+after the watermark last seen, marked caught_up; the latest quote per
+subject, dataset, venue and asset. A price heard is conflated per its asset
+too, so BTC in USD and in USDC on one venue are two values.
+
+A reporting plugin resolves an identifier (resolve_identifier, read-only):
+its reporting currency by its ISO 4217 code, whether or not the book holds
+it. The reporting suite holds it to that in resolves-its-reporting-currency;
+the signal suite gains the 1b's reads and hears, and the ems role its first
+suite.
+
+The dgm suite gains eight cases about trades and quotes. A case about one
+kind of data (Case.about: closes, bars, trades, quotes, prices on a venue)
+the plugin declares it never publishes may be named in run(...,
+not_presented={case: why}), as a closed-list case may: a source of daily
+closes marks the trades and quotes cases not presented and is verified on
+the rest; any other case is still required.
+
+Nothing to rewrite, so `meridian plugin migrate` moves the pins and changes no
+code: every handler receive() took it still takes. A dgm whose suite test runs
+run("dgm", ...) meets the eight new cases as unmapped until it maps them or,
+publishing no trades or quotes, names them in not_presented with why.
+"""
+breaking = false

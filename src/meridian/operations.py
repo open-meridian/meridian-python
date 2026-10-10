@@ -36,6 +36,8 @@ from .bounds import (
     DECIMAL_SCALE,
     RECORD_BARS_REQUEST_BARS_COUNT,
     RECORD_PRICES_REQUEST_PRICES_COUNT,
+    RECORD_QUOTES_REQUEST_QUOTES_COUNT,
+    RECORD_TRADES_REQUEST_TRADES_COUNT,
     Count,
 )
 
@@ -1037,6 +1039,121 @@ def _bar(value: Bar, name: str) -> ops.Bar:
     )
 
 
+@dataclass(frozen=True, kw_only=True)
+class Trade:
+    """One trade as its source reported it.
+
+    The SDK's form of the wire's Trade: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    meta: ObservationMeta | None = None
+    price: Money
+    quantity: Decimal | int
+    attributes: TradeAttributes | None = None
+    aggressor: ops.Aggressor | str | None = None
+    source_sequence: int = 0
+    cancelled: bool = False
+
+
+def _trade(value: Trade, name: str) -> ops.Trade:
+    """A Trade as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, Trade):
+        raise TypeError(f"{name} is a meridian.Trade, not {type(value).__name__}")
+    return ops.Trade(
+        meta=None if value.meta is None else _observation_meta(value.meta, f"{name}.meta"),
+        price=_money(value.price, f"{name}.price"),
+        quantity=_decimal(value.quantity, f"{name}.quantity"),
+        attributes=None if value.attributes is None else _trade_attributes(value.attributes, f"{name}.attributes"),
+        aggressor=_enum(ops.Aggressor, value.aggressor, f"{name}.aggressor"),
+        source_sequence=value.source_sequence,
+        cancelled=value.cancelled,
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class TradeAttributes:
+    """What a trade may count for (spec/the-lake, "Trade attributes"):
+    written on each trade, so no reader needs a table to compute a bar.
+
+    The SDK's form of the wire's TradeAttributes: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    consolidated: Eligibility | None = None
+    market_centre: Eligibility | None = None
+    characteristics: Sequence[ops.TradeCharacteristic | str] = ()
+
+
+def _trade_attributes(value: TradeAttributes, name: str) -> ops.TradeAttributes:
+    """A TradeAttributes as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, TradeAttributes):
+        raise TypeError(f"{name} is a meridian.TradeAttributes, not {type(value).__name__}")
+    return ops.TradeAttributes(
+        consolidated=None if value.consolidated is None else _eligibility(value.consolidated, f"{name}.consolidated"),
+        market_centre=None if value.market_centre is None else _eligibility(value.market_centre, f"{name}.market_centre"),
+        characteristics=[_enum(ops.TradeCharacteristic, each, f"{name}.characteristics[{i}]") for i, each in enumerate(value.characteristics)],
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class Eligibility:
+    """Whether a trade may set each statistic of a bar; not whether it did.
+
+    The SDK's form of the wire's Eligibility: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    high_low: ops.Eligible | str | None = None
+    open: ops.Eligible | str | None = None
+    close: ops.Eligible | str | None = None
+    volume: ops.Eligible | str | None = None
+
+
+def _eligibility(value: Eligibility, name: str) -> ops.Eligibility:
+    """A Eligibility as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, Eligibility):
+        raise TypeError(f"{name} is a meridian.Eligibility, not {type(value).__name__}")
+    return ops.Eligibility(
+        high_low=_enum(ops.Eligible, value.high_low, f"{name}.high_low"),
+        open=_enum(ops.Eligible, value.open, f"{name}.open"),
+        close=_enum(ops.Eligible, value.close, f"{name}.close"),
+        volume=_enum(ops.Eligible, value.volume, f"{name}.volume"),
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class Quote:
+    """The best bid and offer, on a venue or consolidated: in force from its
+    valid time until the next quote for the same subject, dataset, venue and
+    asset.
+
+    The SDK's form of the wire's Quote: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    meta: ObservationMeta | None = None
+    bid: Money | None = None
+    ask: Money | None = None
+    bid_quantity: Decimal | int | None = None
+    ask_quantity: Decimal | int | None = None
+    characteristics: Sequence[ops.QuoteCharacteristic | str] = ()
+
+
+def _quote(value: Quote, name: str) -> ops.Quote:
+    """A Quote as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, Quote):
+        raise TypeError(f"{name} is a meridian.Quote, not {type(value).__name__}")
+    return ops.Quote(
+        meta=None if value.meta is None else _observation_meta(value.meta, f"{name}.meta"),
+        bid=None if value.bid is None else _money(value.bid, f"{name}.bid"),
+        ask=None if value.ask is None else _money(value.ask, f"{name}.ask"),
+        bid_quantity=None if value.bid_quantity is None else _decimal(value.bid_quantity, f"{name}.bid_quantity"),
+        ask_quantity=None if value.ask_quantity is None else _decimal(value.ask_quantity, f"{name}.ask_quantity"),
+        characteristics=[_enum(ops.QuoteCharacteristic, each, f"{name}.characteristics[{i}]") for i, each in enumerate(value.characteristics)],
+    )
+
+
 def _assertion(header: str | None) -> sidecar_pb2.CallerAssertion | None:
     """The person a command is sent for, from the Meridian-Caller header as the
     plugin received it: base64url, unpadded. Handed back to the sidecar, which
@@ -1331,7 +1448,7 @@ class Operations:
         stated_description: str = "",
         stated_instrument_type: ops.InstrumentType | str | None = None,
     ) -> ops.ResolveIdentifierResult:
-        """W3.1: Reverse resolution: identifiers to an instrument, as of a date (stable)."""
+        """W3.1: Reverse resolution: identifiers to an instrument, as of a date. Answered (stable)."""
         params = ops.ResolveIdentifierParams(
             identifiers=list(identifiers),
             as_of_ns=as_of_ns,
@@ -1729,6 +1846,38 @@ class Operations:
         )
         return await self._operate(self._operations().RecordBars, params)
 
+    async def record_trades(
+        self,
+        *,
+        trades: Sequence[Trade] = (),
+        want_id: str = "",
+        acting_for: str | None = None,
+    ) -> ops.RecordTradesResult:
+        """W10.4: A batch of trades, recorded whole or refused naming the item and field: (preview)."""
+        _batch(trades, RECORD_TRADES_REQUEST_TRADES_COUNT, "trades")
+        params = ops.RecordTradesParams(
+            trades=[_trade(each, f"trades[{i}]") for i, each in enumerate(trades)],
+            want_id=want_id,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().RecordTrades, params)
+
+    async def record_quotes(
+        self,
+        *,
+        quotes: Sequence[Quote] = (),
+        want_id: str = "",
+        acting_for: str | None = None,
+    ) -> ops.RecordQuotesResult:
+        """W10.4: A batch of quotes, recorded whole or refused naming the item and field: (preview)."""
+        _batch(quotes, RECORD_QUOTES_REQUEST_QUOTES_COUNT, "quotes")
+        params = ops.RecordQuotesParams(
+            quotes=[_quote(each, f"quotes[{i}]") for i, each in enumerate(quotes)],
+            want_id=want_id,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().RecordQuotes, params)
+
     async def list_prices(
         self,
         *,
@@ -1787,6 +1936,56 @@ class Operations:
         )
         return await self._operate(self._operations().ListBars, params)
 
+    async def list_trades(
+        self,
+        *,
+        subjects: Sequence[ops.SubjectRef] = (),
+        sources: ops.SourceChoice | None = None,
+        valid_from_ns: int = 0,
+        valid_until_ns: int = 0,
+        after_watermark: ops.Watermark | None = None,
+        as_of_ns: int = 0,
+        page_size: int = 0,
+        cursor: str = "",
+    ) -> ops.ListTradesResult:
+        """W10.6: Trades for subjects (contract v19): a valid-time range, from inclusive to (preview)."""
+        params = ops.ListTradesParams(
+            subjects=list(subjects),
+            sources=sources,
+            valid_from_ns=valid_from_ns,
+            valid_until_ns=valid_until_ns,
+            after_watermark=after_watermark,
+            as_of_ns=as_of_ns,
+            page_size=page_size,
+            cursor=cursor,
+        )
+        return await self._operate(self._operations().ListTrades, params)
+
+    async def list_quotes(
+        self,
+        *,
+        subjects: Sequence[ops.SubjectRef] = (),
+        sources: ops.SourceChoice | None = None,
+        at_ns: int = 0,
+        valid_from_ns: int = 0,
+        valid_until_ns: int = 0,
+        as_of_ns: int = 0,
+        page_size: int = 0,
+        cursor: str = "",
+    ) -> ops.ListQuotesResult:
+        """W10.6: Quotes for subjects (contract v19), at one of: the latest in force at a (preview)."""
+        params = ops.ListQuotesParams(
+            subjects=list(subjects),
+            sources=sources,
+            at_ns=at_ns,
+            valid_from_ns=valid_from_ns,
+            valid_until_ns=valid_until_ns,
+            as_of_ns=as_of_ns,
+            page_size=page_size,
+            cursor=cursor,
+        )
+        return await self._operate(self._operations().ListQuotes, params)
+
     async def decline_want(
         self,
         *,
@@ -1795,7 +1994,7 @@ class Operations:
         reason: ops.UnansweredReason | str | None = None,
         acting_for: str | None = None,
     ) -> ops.DeclineWantResult:
-        """W10.7: What a `dgm` cannot serve of a want, per subject, with its reason (preview)."""
+        """W10.7: What a `dgm` cannot serve of a want, per subject, with its reason. It (preview)."""
         params = ops.DeclineWantParams(
             want_id=want_id,
             subjects=list(subjects),
@@ -1828,6 +2027,8 @@ class Operations:
         bars_recorded: Callable[[Heard[ops.BarsRecordedEvent]], Awaitable[None]] | None = None,
         observations_wanted: Callable[[Heard[ops.ObservationsWantedEvent]], Awaitable[None]] | None = None,
         want_withdrawn: Callable[[Heard[ops.WantWithdrawnEvent]], Awaitable[None]] | None = None,
+        trades_recorded: Callable[[Heard[ops.TradesRecordedEvent]], Awaitable[None]] | None = None,
+        quotes_recorded: Callable[[Heard[ops.QuotesRecordedEvent]], Awaitable[None]] | None = None,
         seed: bool = True,
         subjects: Sequence[str] = (),
     ) -> None:
@@ -1841,7 +2042,9 @@ class Operations:
         per key, an older value than one handed on never after it; a row
         about subjects is heard for the `subjects` named, by their entity
         IDs, none for none, and read again by its query, latest first, when
-        seeded, after a loss or after the stream broke."""
+        seeded, after a loss or after the stream broke. A row delivered in
+        full (contract v19) is handed on every row, and after a loss read
+        again by its query after the watermark last seen."""
         handlers: dict[str, Callable[[Any], Awaitable[None]] | None] = {
             "StatementRecorded": statement_recorded,
             "CustodialPositionUpdated": custodial_position_updated,
@@ -1856,6 +2059,8 @@ class Operations:
             "BarsRecorded": bars_recorded,
             "ObservationsWanted": observations_wanted,
             "WantWithdrawn": want_withdrawn,
+            "TradesRecorded": trades_recorded,
+            "QuotesRecorded": quotes_recorded,
         }
         await self._receive(
             {row: handler for row, handler in handlers.items() if handler is not None},
@@ -2063,5 +2268,29 @@ CONFLATED: tuple[ConflatedRow, ...] = (
         caught_up_by="",
         records="",
         within="",
+    ),
+    ConflatedRow(
+        name="QuotesRecorded",
+        step="W10.5",
+        arm="quotes_recorded",
+        message=ops.QuotesRecordedEvent,
+        caught_up_by="list_quotes",
+        records="quotes",
+        within="quote",
+    ),
+)
+
+#: Every row a plugin's roles may hear in full, never conflated (contract
+#: v19), by arm number: shaped as a conflated row, caught up after the
+#: watermark last seen by `caught_up_by`.
+UNCONFLATED: tuple[ConflatedRow, ...] = (
+    ConflatedRow(
+        name="TradesRecorded",
+        step="W10.5",
+        arm="trades_recorded",
+        message=ops.TradesRecordedEvent,
+        caught_up_by="list_trades",
+        records="trades",
+        within="trade",
     ),
 )

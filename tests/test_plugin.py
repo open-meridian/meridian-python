@@ -114,14 +114,20 @@ async def test_the_sdk_declares_the_contract_it_was_built_for(
     (sdk-contract/the-lake-prices-the-book-contract): a sidecar still at v16
     holds no catalogue and answers no lake, so it refuses the plugin at
     registration, naming both versions.
+
+    v19 is the lake's 1b: trades and quotes recorded in batches, read, and
+    heard -- trades in full, caught up after a watermark, quotes latest value
+    first per asset (sdk-contract/the-lake-trades-and-quotes-contract): a
+    sidecar still at v18 delivers no trade and answers no trades read, so it
+    refuses the plugin at registration, naming both versions.
     """
     service, address = sidecar
     plugin = await meridian.connect(address, heartbeat=False)
     await plugin.leave()
 
     (sent,) = service.registered
-    assert meridian.SCHEMA_VERSION == "v18"
-    assert sent.schema_version == "v18"
+    assert meridian.SCHEMA_VERSION == "v19"
+    assert sent.schema_version == "v19"
 
 
 async def test_identity_and_grants_come_back(sidecar: tuple[FakeSidecar, str]) -> None:

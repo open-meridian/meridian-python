@@ -109,6 +109,18 @@ an asset with no ISO 4217 code, a stablecoin's say, is named by its
 instrument alone (`Money(amount, instrument_id=...)`). A date is a
 `datetime.date`, or its ISO 8601 text, and one that is no date is refused
 naming the field before anything is sent.
+
+From contract v19 the lake hears trades and quotes. A `dgm` records them in
+batches of 1 to 500 (`plugin.record_trades`, `plugin.record_quotes`, each a
+`Trade` -- its price a `Money`, its quantity, its `TradeAttributes` with an
+`Eligibility` for the consolidated bar and its venue's, and the `Aggressor`
+where the source says it -- or a `Quote`, each side unset where it is
+empty), keyed by UTC instants with no business date. `signal` and `ems`
+read them (`list_trades` over a range, or after the watermark last seen;
+`list_quotes` at the latest in force or over a range) and hear them
+(`receive(trades_recorded=..., quotes_recorded=..., subjects=[...])`):
+every trade, never conflated, and after a loss the trades recorded after the
+watermark last seen; the latest quote per subject, dataset, venue and asset.
 """
 
 from .asgi import CallerMiddleware
@@ -169,6 +181,7 @@ from .operations import (
     BreakDifference,
     BreakValue,
     CustodialActivity,
+    Eligibility,
     Encumbrance,
     ExternalAccount,
     LotTerms,
@@ -184,6 +197,7 @@ from .operations import (
     PositionKey,
     Price,
     Provenance,
+    Quote,
     ReportedCollateral,
     ReportedEncumbrance,
     ReportedLot,
@@ -191,6 +205,8 @@ from .operations import (
     ReportedPositionValue,
     SourceTime,
     StatementFigures,
+    Trade,
+    TradeAttributes,
     as_decimal,
     as_money,
 )
@@ -201,6 +217,7 @@ from .plugin.v1.operations_pb2 import (
     AccountKind,
     ActivityKind,
     ActivityRef,
+    Aggressor,
     AsReported,
     AssetClass,
     Backfill,
@@ -210,6 +227,7 @@ from .plugin.v1.operations_pb2 import (
     BreakState,
     CollateralDirection,
     DatasetRef,
+    Eligible,
     FigureKey,
     HoldingSide,
     Identifier,
@@ -224,6 +242,7 @@ from .plugin.v1.operations_pb2 import (
     PriceBasis,
     PriceKind,
     ProvenanceKind,
+    QuoteCharacteristic,
     RawRecordRef,
     ResolvedByEntries,
     Reversal,
@@ -235,6 +254,7 @@ from .plugin.v1.operations_pb2 import (
     StreetRecordRef,
     SubjectRef,
     SyncState,
+    TradeCharacteristic,
     Unanswered,
     UnansweredReason,
     VenueKind,
@@ -366,6 +386,14 @@ __all__ = [
     "UnansweredReason",
     "VenueKind",
     "VenueRecord",
+    "Aggressor",
+    "Eligibility",
+    "Eligible",
+    "Quote",
+    "QuoteCharacteristic",
+    "Trade",
+    "TradeAttributes",
+    "TradeCharacteristic",
 ]
 
 

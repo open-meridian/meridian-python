@@ -137,11 +137,25 @@ SOURCE_PLUGIN_VERSION_LENGTH = Length(least=0, most=64)
 SOURCE_DATASET_LENGTH = Length(least=1, most=96)
 """meridian.v1.Source.dataset: names the dataset a row belongs to"""
 
+TRADE_ATTRIBUTES_CHARACTERISTICS_COUNT = Count(least=0, most=16)
+"""meridian.v1.TradeAttributes.characteristics: carries what a trade's
+condition codes meant, in the platform's words"""
+
+QUOTE_CHARACTERISTICS_COUNT = Count(least=0, most=4)
+"""meridian.v1.Quote.characteristics: says a quote's state in the platform's
+words"""
+
 RECORD_PRICES_REQUEST_PRICES_COUNT = Count(least=1, most=500)
 """meridian.v1.RecordPricesRequest.prices: carries a batch of prices"""
 
 RECORD_BARS_REQUEST_BARS_COUNT = Count(least=1, most=500)
 """meridian.v1.RecordBarsRequest.bars: carries a batch of bars"""
+
+RECORD_TRADES_REQUEST_TRADES_COUNT = Count(least=1, most=500)
+"""meridian.v1.RecordTradesRequest.trades: carries a batch of trades"""
+
+RECORD_QUOTES_REQUEST_QUOTES_COUNT = Count(least=1, most=500)
+"""meridian.v1.RecordQuotesRequest.quotes: carries a batch of quotes"""
 
 SOURCE_CHOICE_NAMED_COUNT = Count(least=0, most=16)
 """meridian.v1.SourceChoice.named: asks for named datasets"""
@@ -157,6 +171,18 @@ LIST_BARS_REQUEST_SUBJECTS_COUNT = Count(least=1, most=500)
 
 LIST_BARS_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=True)
 """meridian.v1.ListBarsRequest.page_size: bounds a page"""
+
+LIST_TRADES_REQUEST_SUBJECTS_COUNT = Count(least=1, most=500)
+"""meridian.v1.ListTradesRequest.subjects: names the entities a read is about"""
+
+LIST_TRADES_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=True)
+"""meridian.v1.ListTradesRequest.page_size: bounds a page"""
+
+LIST_QUOTES_REQUEST_SUBJECTS_COUNT = Count(least=1, most=500)
+"""meridian.v1.ListQuotesRequest.subjects: names the entities a read is about"""
+
+LIST_QUOTES_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=True)
+"""meridian.v1.ListQuotesRequest.page_size: bounds a page"""
 
 OBSERVATIONS_WANTED_EVENT_SUBJECTS_COUNT = Count(least=1, most=500)
 """meridian.v1.ObservationsWantedEvent.subjects: names the entities wanted"""

@@ -129,6 +129,14 @@
           "intent": "open, high, low and close over an interval, as one source stated them"
         },
         {
+          "message": "meridian.v1.Trade",
+          "intent": "one trade as its source reported it, with what it may count for in the platform's words (contract v19)"
+        },
+        {
+          "message": "meridian.v1.Quote",
+          "intent": "the best bid and offer on a venue or consolidated, in force until the next (contract v19)"
+        },
+        {
           "message": "meridian.v1.DatasetEntitlement",
           "intent": "a plugin instance's entitlement to a dataset, every field or some, as a deployment admin set it"
         },
@@ -218,8 +226,10 @@
     "ListDatasets": "meridian.v1.ListDatasetsRequest",
     "ListPositions": "meridian.v1.ListPositionsRequest",
     "ListPrices": "meridian.v1.ListPricesRequest",
+    "ListQuotes": "meridian.v1.ListQuotesRequest",
     "ListStatements": "meridian.v1.ListStatementsRequest",
     "ListSyncStatuses": "meridian.v1.ListSyncStatusesRequest",
+    "ListTrades": "meridian.v1.ListTradesRequest",
     "ReResolveActivity": "meridian.v1.ReResolveActivityRequest",
     "ReadAccountsForLinking": "meridian.v1.AccountsRequest",
     "RecordAccountFigures": "meridian.v1.RecordAccountFiguresRequest",
@@ -231,6 +241,8 @@
     "RecordHoldingsStatement": "meridian.v1.RecordHoldingsStatementRequest",
     "RecordOpeningBalance": "meridian.v1.RecordOpeningBalanceRequest",
     "RecordPrices": "meridian.v1.RecordPricesRequest",
+    "RecordQuotes": "meridian.v1.RecordQuotesRequest",
+    "RecordTrades": "meridian.v1.RecordTradesRequest",
     "ReportExternalAccounts": "meridian.v1.ExternalAccountsEvent",
     "ReportMissingInstrument": "meridian.v1.MissingInstrumentDetectedEvent",
     "ReportMissingVenue": "meridian.v1.MissingVenueDetectedEvent",
@@ -6871,15 +6883,50 @@
       "store": "instrument"
     },
     {
+      "name": "meridian.v1.Identifier.valid_from_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "0 from a plugin: the sidecar sends it empty; on a record the store answers, 0 is a window open since the record began",
+      "intent": "says from when an identifier named the record it is on",
+      "meaning": "the start of the identifier's window on the record, inclusive, kept by the instrument store and filled by the platform on a pull (decisions/034)",
+      "not_meaning": "when the identifier was issued, or when a plugin reported it",
+      "filled": "stamped",
+      "filled_by": "sidecar",
+      "since": "v19",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.Identifier.valid_until_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "0: in force on the record now; 0 from a plugin, which the sidecar sends empty",
+      "intent": "says until when an identifier named the record it is on",
+      "meaning": "the end of its window, exclusive: the date it left the record, by a merge, a completion or the platform's answer accepted; the identifier is kept, and a resolve as of a date before answers the record that held it",
+      "not_meaning": "a deletion: nothing removes an identifier from a record's history",
+      "filled": "stamped",
+      "filled_by": "sidecar",
+      "since": "v19",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
       "name": "meridian.v1.InstrumentRecord.instrument_id",
       "type": "identifier instrument",
       "empty": "never empty",
       "intent": "identifies the record for life",
       "meaning": "the deployment's own key (decisions/030): LCL- for a record its instrument store minted, which says who minted it and nothing about whether it is resolved; or the INS- key of a record applied from the platform before v10, which it keeps",
-      "not_meaning": "a global identifier: one the platform answers later joins identifiers, never replacing this",
+      "not_meaning": "a global identifier: one the platform answers later joins identifiers, never replacing this; a key ever reused: a retired, decommissioned or replaced record keeps it, and no other record is given it (decisions/034)",
       "filled": "minted",
       "filled_by": "instrument",
       "since": "v2",
+      "changes": [
+        {
+          "version": "v19",
+          "kind": "clarified",
+          "what": "never reused (decisions/034)"
+        }
+      ],
       "stability": "stable",
       "store": "instrument"
     },
@@ -7150,6 +7197,11 @@
         {
           "value": "INSTRUMENT_TYPE_MONEY_MARKET_FUND",
           "meaning": "under fund: a fund investing in short-term debt under SEC rule 2a-7 and aiming to keep its value; held as a fund, never as cash, even where a custodian sweeps cash into it"
+        },
+        {
+          "value": "INSTRUMENT_TYPE_BINARY_EVENT_CONTRACT",
+          "meaning": "under event_contract: a contract paying a fixed amount if an event happens and nothing if it does not; a venue's YES and NO tokens are two instruments",
+          "since": "v19"
         }
       ],
       "empty": "unspecified where no type is in force",
@@ -7173,6 +7225,19 @@
       "filled_by": "instrument",
       "since": "v11",
       "stability": "stable",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.InstrumentRecord.binary_event_contract",
+      "type": "message BinaryEventContract",
+      "empty": "unset unless the record's type is binary event contract, and until a person states its payout",
+      "intent": "carries a binary event contract's attributes",
+      "meaning": "what one contract pays if the event happens, and when trading in it closes",
+      "not_meaning": "which outcome it pays on, which its description says in the venue's words; its outcome or settlement, which are observations and servicing's",
+      "filled": "decided",
+      "filled_by": "instrument",
+      "since": "v19",
+      "stability": "preview",
       "store": "instrument"
     },
     {
@@ -7293,6 +7358,34 @@
       "store": "instrument"
     },
     {
+      "name": "meridian.v1.BinaryEventContract.payout",
+      "type": "Money",
+      "unit": "the major unit of the asset the Money names, per contract",
+      "empty": "never unset on a binary event contract's attributes; a payout naming no asset, or not more than zero, is refused",
+      "intent": "says what one contract pays if the event happens",
+      "meaning": "the fixed amount one contract pays, naming its cash instrument: 1 USD, or 1 in a venue's own USDC instrument; a price divided by it is the market's implied probability, a reader's computation",
+      "not_meaning": "a price, or a probability, which nothing stores",
+      "filled": "decided",
+      "filled_by": "instrument",
+      "since": "v19",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.BinaryEventContract.closes_at_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "0: the venue states none",
+      "intent": "says when trading in the contract closes",
+      "meaning": "when the venue says trading in it closes, in UTC",
+      "not_meaning": "when the event is determined or the contract settles, which its outcome will say",
+      "filled": "decided",
+      "filled_by": "instrument",
+      "since": "v19",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
       "name": "meridian.v1.InstrumentValue.asset_class",
       "type": "enum AssetClass",
       "allowed": [
@@ -7385,6 +7478,11 @@
         {
           "value": "INSTRUMENT_TYPE_MONEY_MARKET_FUND",
           "meaning": "under fund: a fund investing in short-term debt under SEC rule 2a-7 and aiming to keep its value; held as a fund, never as cash, even where a custodian sweeps cash into it"
+        },
+        {
+          "value": "INSTRUMENT_TYPE_BINARY_EVENT_CONTRACT",
+          "meaning": "under event_contract: a contract paying a fixed amount if an event happens and nothing if it does not; a venue's YES and NO tokens are two instruments",
+          "since": "v19"
         }
       ],
       "empty": "unspecified unless the value is an instrument type",
@@ -7406,6 +7504,18 @@
       "filled": "entered",
       "since": "v11",
       "stability": "stable",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.InstrumentValue.binary_event_contract",
+      "type": "message BinaryEventContract",
+      "empty": "unset unless the value is a binary event contract's attributes",
+      "intent": "carries a binary event contract's attributes set or offered for a record",
+      "meaning": "its payout stated, and its close where the venue states one; refused on a record whose type is not binary event contract",
+      "not_meaning": "its outcome",
+      "filled": "entered",
+      "since": "v19",
+      "stability": "preview",
       "store": "instrument"
     },
     {
@@ -7453,6 +7563,11 @@
           "value": "INSTRUMENT_FIELD_MONEY_MARKET_FUND",
           "meaning": "a money market fund's attributes",
           "since": "v11"
+        },
+        {
+          "value": "INSTRUMENT_FIELD_BINARY_EVENT_CONTRACT",
+          "meaning": "a binary event contract's attributes",
+          "since": "v19"
         }
       ],
       "empty": "never unspecified on a read",
@@ -7612,11 +7727,18 @@
       "type": "repeated message Identifier",
       "empty": "never empty: at least one",
       "intent": "names what the plugin holds of a security",
-      "meaning": "every identifier its source gave, matched strongest first: a global scheme before a source-scoped symbol",
+      "meaning": "every identifier its source gave, matched strongest first: a global scheme before a source-scoped symbol; from reporting, what names the instrument it wants, resolved read-only (W3.1)",
       "not_meaning": "a description to match on",
       "filled": "as-reported",
       "filled_by": "custody",
       "since": "v2",
+      "changes": [
+        {
+          "version": "v19",
+          "kind": "clarified",
+          "what": "reporting may ask, and nothing is minted, joined, offered or listed for it (W3.1, approved 2026-10-10)"
+        }
+      ],
       "stability": "stable",
       "store": "instrument"
     },
@@ -7626,11 +7748,18 @@
       "unit": "nanoseconds since the epoch",
       "empty": "0 for now",
       "intent": "says the date the mapping is asked about",
-      "meaning": "reference time: a symbol reused since then still resolves to what it named then",
+      "meaning": "reference time: a symbol reused since then still resolves to what it named then, from the identifier windows the store keeps, without the platform",
       "not_meaning": "when the plugin read its source",
       "filled": "as-reported",
       "filled_by": "custody",
       "since": "v2",
+      "changes": [
+        {
+          "version": "v19",
+          "kind": "clarified",
+          "what": "answered from the windows the store keeps, closed when an identifier leaves a record (W3.1, W3.5)"
+        }
+      ],
       "stability": "stable",
       "store": "instrument"
     },
@@ -7744,6 +7873,11 @@
         {
           "value": "INSTRUMENT_TYPE_MONEY_MARKET_FUND",
           "meaning": "under fund: a fund investing in short-term debt under SEC rule 2a-7 and aiming to keep its value; held as a fund, never as cash, even where a custodian sweeps cash into it"
+        },
+        {
+          "value": "INSTRUMENT_TYPE_BINARY_EVENT_CONTRACT",
+          "meaning": "under event_contract: a contract paying a fixed amount if an event happens and nothing if it does not; a venue's YES and NO tokens are two instruments",
+          "since": "v19"
         }
       ],
       "empty": "unspecified is not stated",
@@ -7840,10 +7974,17 @@
       "unit": "nanoseconds since the epoch",
       "empty": "0 for now",
       "intent": "says the date the record is asked about",
-      "meaning": "reference time: the version effective then",
+      "meaning": "reference time: the version effective then; it selects a version's values, never which record, since an instrument ID is never reused (decisions/034)",
       "not_meaning": "when the record was learned",
       "filled": "as-reported",
       "since": "v2",
+      "changes": [
+        {
+          "version": "v19",
+          "kind": "clarified",
+          "what": "selects a version, never a record (decisions/034)"
+        }
+      ],
       "stability": "stable",
       "store": "instrument"
     },
@@ -8426,6 +8567,14 @@
         {
           "row": "RecordBars",
           "since": "v18"
+        },
+        {
+          "row": "RecordTrades",
+          "since": "v19"
+        },
+        {
+          "row": "RecordQuotes",
+          "since": "v19"
         }
       ],
       "since": "v18",
@@ -8455,6 +8604,14 @@
         {
           "row": "RecordBars",
           "since": "v18"
+        },
+        {
+          "row": "RecordTrades",
+          "since": "v19"
+        },
+        {
+          "row": "RecordQuotes",
+          "since": "v19"
         }
       ],
       "since": "v18",
@@ -8478,6 +8635,14 @@
         {
           "row": "RecordBars",
           "since": "v18"
+        },
+        {
+          "row": "RecordTrades",
+          "since": "v19"
+        },
+        {
+          "row": "RecordQuotes",
+          "since": "v19"
         }
       ],
       "since": "v18",
@@ -8502,6 +8667,14 @@
         {
           "row": "RecordBars",
           "since": "v18"
+        },
+        {
+          "row": "RecordTrades",
+          "since": "v19"
+        },
+        {
+          "row": "RecordQuotes",
+          "since": "v19"
         }
       ],
       "since": "v18",
@@ -8528,10 +8701,17 @@
       "empty": "empty: not a daily value",
       "intent": "says which business day a daily value is for",
       "meaning": "a plain date, YYYY-MM-DD, in the day the dataset declares (its time zone and the minute its day ends); an invalid date is refused",
-      "not_meaning": "the valid time's date in UTC, or a moment",
+      "not_meaning": "the valid time's date in UTC, or a moment; a trade's or a quote's, which name none and are keyed by UTC instants",
       "filled": "as-reported",
       "filled_by": "dgm",
       "since": "v18",
+      "changes": [
+        {
+          "version": "v19",
+          "kind": "clarified",
+          "what": "a trade and a quote name no business date, refused naming it (W10.4)"
+        }
+      ],
       "stability": "preview",
       "store": "lake"
     },
@@ -8641,6 +8821,14 @@
         {
           "row": "RecordBars",
           "since": "v18"
+        },
+        {
+          "row": "RecordTrades",
+          "since": "v19"
+        },
+        {
+          "row": "RecordQuotes",
+          "since": "v19"
         }
       ],
       "since": "v18",
@@ -8751,11 +8939,18 @@
       "type": "identifier venue",
       "empty": "empty: not venue-specific, which is the consolidated view; a venue not yet held is not known, and its value as reported is in unconverted",
       "intent": "names the venue an observation originated on",
-      "meaning": "the venue master's ID (VEN-), resolved through W3.14",
+      "meaning": "the venue master's ID (VEN-), resolved through W3.14; for a trade, the venue it printed on: the market centre a consolidated dataset's trade names, a FINRA print's reporting facility",
       "not_meaning": "a MIC, which is one of the venue's identifiers; the dataset's distributor",
       "filled": "as-reported",
       "filled_by": "dgm",
       "since": "v18",
+      "changes": [
+        {
+          "version": "v19",
+          "kind": "clarified",
+          "what": "a trade's venue is the venue it printed on (W10.4)"
+        }
+      ],
       "stability": "preview",
       "store": "lake"
     },
@@ -9169,6 +9364,476 @@
       "store": "lake"
     },
     {
+      "name": "meridian.v1.Trade.meta",
+      "type": "message ObservationMeta",
+      "empty": "never unset",
+      "intent": "carries a trade's envelope; valid from its event time at its venue",
+      "meaning": "its key, subject, source and venue, event time, version and sequence; valid_until_ns 0 and no business date",
+      "not_meaning": "the trade's price or quantity",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "required": [
+        {
+          "row": "RecordTrades",
+          "since": "v19"
+        }
+      ],
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.Trade.price",
+      "type": "Money",
+      "unit": "the major unit of the asset the Money names, per one unit of the subject",
+      "required": [
+        {
+          "row": "RecordTrades",
+          "since": "v19"
+        }
+      ],
+      "empty": "never; a trade with no price is refused",
+      "intent": "says what one unit of the subject traded at",
+      "meaning": "the trade's price per unit of the subject, in the asset it traded in, that asset's cash instrument named; for an event contract, what one contract cost in the asset it pays out in",
+      "not_meaning": "a probability; a price converted into another asset by the dgm; the trade's notional",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.Trade.quantity",
+      "type": "Decimal",
+      "bounds": {
+        "digits": 38,
+        "scale": [
+          0,
+          18
+        ]
+      },
+      "unit": "units of the instrument",
+      "required": [
+        {
+          "row": "RecordTrades",
+          "since": "v19"
+        }
+      ],
+      "empty": "never; zero or less is refused",
+      "intent": "says how much traded",
+      "meaning": "the quantity traded, more than zero",
+      "not_meaning": "notional, or a count of contracts on another unit than the instrument's",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.Trade.attributes",
+      "type": "message TradeAttributes",
+      "empty": "never unset; its eligibilities unspecified are not known",
+      "intent": "says what a trade may count for, and its characteristics",
+      "meaning": "the platform's trade attributes, converted from the source's condition codes at the edge",
+      "not_meaning": "a vendor's or a SIP's codes, which no reader needs",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.Trade.aggressor",
+      "type": "enum Aggressor",
+      "allowed": [
+        {
+          "value": "AGGRESSOR_UNSPECIFIED",
+          "meaning": "not known: the source does not say"
+        },
+        {
+          "value": "AGGRESSOR_BUY",
+          "meaning": "the buyer took liquidity: it lifted the offer"
+        },
+        {
+          "value": "AGGRESSOR_SELL",
+          "meaning": "the seller took liquidity: it hit the bid"
+        }
+      ],
+      "empty": "unspecified: not known",
+      "intent": "says which side took liquidity",
+      "meaning": "the side the source says took liquidity: a venue's taker side as sent, or its maker side inverted",
+      "not_meaning": "a side guessed from the price's movement; the side of anyone's order in the book",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.Trade.source_sequence",
+      "type": "integer",
+      "unit": "the source's sequence numbers",
+      "empty": "0: the source gave none",
+      "intent": "keeps the source's own sequence number",
+      "meaning": "the number the source gave the trade in its own feed",
+      "not_meaning": "the lake's sequence, which the envelope carries; a trade identifier",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.Trade.cancelled",
+      "type": "boolean",
+      "empty": "false: the trade stands",
+      "intent": "says the source withdrew a trade",
+      "meaning": "true in a version, under the trade's row key, saying the source withdrew it",
+      "not_meaning": "a trade removed: the versions before it are kept, and an as-of read before the withdrawal answers it",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.TradeAttributes.consolidated",
+      "type": "message Eligibility",
+      "empty": "never unset",
+      "intent": "says what a trade may count for in the consolidated bar across venues",
+      "meaning": "whether it may set the consolidated view's high and low, open, close and volume",
+      "not_meaning": "whether it did",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.TradeAttributes.market_centre",
+      "type": "message Eligibility",
+      "empty": "never unset",
+      "intent": "says what a trade may count for in its own venue's bar",
+      "meaning": "whether it may set its market centre's high and low, open, close and volume",
+      "not_meaning": "whether it did",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.TradeAttributes.characteristics",
+      "type": "repeated enum TradeCharacteristic",
+      "bounds": {
+        "count": [
+          0,
+          16
+        ]
+      },
+      "allowed": [
+        {
+          "value": "TRADE_CHARACTERISTIC_UNSPECIFIED",
+          "meaning": "refused"
+        },
+        {
+          "value": "TRADE_CHARACTERISTIC_OPENING_AUCTION",
+          "meaning": "printed by the venue's opening auction"
+        },
+        {
+          "value": "TRADE_CHARACTERISTIC_CLOSING_AUCTION",
+          "meaning": "printed by the venue's closing auction"
+        },
+        {
+          "value": "TRADE_CHARACTERISTIC_OTHER_AUCTION",
+          "meaning": "printed by another auction: a reopening after a halt, an intraday auction"
+        },
+        {
+          "value": "TRADE_CHARACTERISTIC_ODD_LOT",
+          "meaning": "smaller than the instrument's round lot"
+        },
+        {
+          "value": "TRADE_CHARACTERISTIC_EXTENDED_HOURS",
+          "meaning": "outside the venue's regular session"
+        },
+        {
+          "value": "TRADE_CHARACTERISTIC_OUT_OF_SEQUENCE",
+          "meaning": "reported out of its time order"
+        },
+        {
+          "value": "TRADE_CHARACTERISTIC_LATE_REPORT",
+          "meaning": "reported later than its venue's rules require"
+        },
+        {
+          "value": "TRADE_CHARACTERISTIC_AVERAGE_PRICE",
+          "meaning": "priced as an average over several executions"
+        },
+        {
+          "value": "TRADE_CHARACTERISTIC_NON_REGULAR_SETTLEMENT",
+          "meaning": "settling other than on the regular cycle: cash, next day, seller's option"
+        },
+        {
+          "value": "TRADE_CHARACTERISTIC_INTERMARKET_SWEEP",
+          "meaning": "part of an order sweeping several venues at once"
+        },
+        {
+          "value": "TRADE_CHARACTERISTIC_DERIVATIVELY_PRICED",
+          "meaning": "priced from another instrument or a benchmark, not by the market at the time"
+        },
+        {
+          "value": "TRADE_CHARACTERISTIC_PRIOR_REFERENCE_PRICE",
+          "meaning": "priced at a reference price from earlier in the day"
+        },
+        {
+          "value": "TRADE_CHARACTERISTIC_CONTINGENT",
+          "meaning": "executed contingent on another trade"
+        },
+        {
+          "value": "TRADE_CHARACTERISTIC_CROSS",
+          "meaning": "a cross of two orders by one participant"
+        }
+      ],
+      "empty": "none listed means a regular trade, unless unconverted names a code that did not convert, when the characteristics are not known",
+      "intent": "carries what a trade's condition codes meant, in the platform's words",
+      "meaning": "each characteristic the source's codes said the trade had",
+      "not_meaning": "a vendor's or a SIP's code; whether the trade may set a bar's statistics, which its Eligibility says",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.Eligibility.high_low",
+      "type": "enum Eligible",
+      "allowed": [
+        {
+          "value": "ELIGIBLE_UNSPECIFIED",
+          "meaning": "not known: a code that did not convert; a reader computing a bar reads it as not eligible, and says so"
+        },
+        {
+          "value": "ELIGIBLE_ELIGIBLE",
+          "meaning": "the trade may set the statistic"
+        },
+        {
+          "value": "ELIGIBLE_NOT_ELIGIBLE",
+          "meaning": "the trade may not set the statistic"
+        }
+      ],
+      "empty": "unspecified: not known, read as not eligible",
+      "intent": "says whether a trade may set a bar's high and low",
+      "meaning": "whether the trade may set the high and the low",
+      "not_meaning": "whether it did",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.Eligibility.open",
+      "type": "enum Eligible",
+      "allowed": [
+        {
+          "value": "ELIGIBLE_UNSPECIFIED",
+          "meaning": "not known: a code that did not convert; a reader computing a bar reads it as not eligible, and says so"
+        },
+        {
+          "value": "ELIGIBLE_ELIGIBLE",
+          "meaning": "the trade may set the statistic"
+        },
+        {
+          "value": "ELIGIBLE_NOT_ELIGIBLE",
+          "meaning": "the trade may not set the statistic"
+        }
+      ],
+      "empty": "unspecified: not known, read as not eligible",
+      "intent": "says whether a trade may set a bar's open",
+      "meaning": "whether the trade may set the open",
+      "not_meaning": "whether it did",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.Eligibility.close",
+      "type": "enum Eligible",
+      "allowed": [
+        {
+          "value": "ELIGIBLE_UNSPECIFIED",
+          "meaning": "not known: a code that did not convert; a reader computing a bar reads it as not eligible, and says so"
+        },
+        {
+          "value": "ELIGIBLE_ELIGIBLE",
+          "meaning": "the trade may set the statistic"
+        },
+        {
+          "value": "ELIGIBLE_NOT_ELIGIBLE",
+          "meaning": "the trade may not set the statistic"
+        }
+      ],
+      "empty": "unspecified: not known, read as not eligible",
+      "intent": "says whether a trade may set a bar's close",
+      "meaning": "whether the trade may set the close",
+      "not_meaning": "whether it did; the official close, which is a price of kind close",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.Eligibility.volume",
+      "type": "enum Eligible",
+      "allowed": [
+        {
+          "value": "ELIGIBLE_UNSPECIFIED",
+          "meaning": "not known: a code that did not convert; a reader computing a bar reads it as not eligible, and says so"
+        },
+        {
+          "value": "ELIGIBLE_ELIGIBLE",
+          "meaning": "the trade may set the statistic"
+        },
+        {
+          "value": "ELIGIBLE_NOT_ELIGIBLE",
+          "meaning": "the trade may not set the statistic"
+        }
+      ],
+      "empty": "unspecified: not known, read as not eligible",
+      "intent": "says whether a trade counts toward a bar's volume",
+      "meaning": "whether the trade's quantity may count toward the volume",
+      "not_meaning": "whether it did",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.Quote.meta",
+      "type": "message ObservationMeta",
+      "empty": "never unset",
+      "intent": "carries a quote's envelope; in force from its valid time until the next",
+      "meaning": "its key, subject, source and venue, time, version and sequence; no business date",
+      "not_meaning": "the quote's prices",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "required": [
+        {
+          "row": "RecordQuotes",
+          "since": "v19"
+        }
+      ],
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.Quote.bid",
+      "type": "Money",
+      "unit": "the major unit of the asset the Money names, per one unit of the subject",
+      "empty": "unset: that side is empty",
+      "intent": "says the best bid",
+      "meaning": "the best price a buyer offered, in the quote's asset, its cash instrument named; one asset with the ask",
+      "not_meaning": "a price of kind bid, which a dataset records as a price; book depth",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.Quote.ask",
+      "type": "Money",
+      "unit": "the major unit of the asset the Money names, per one unit of the subject",
+      "empty": "unset: that side is empty",
+      "intent": "says the best ask",
+      "meaning": "the best price a seller asked, in the quote's asset, its cash instrument named; one asset with the bid",
+      "not_meaning": "a price of kind ask, which a dataset records as a price; book depth",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.Quote.bid_quantity",
+      "type": "Decimal",
+      "bounds": {
+        "digits": 38,
+        "scale": [
+          0,
+          18
+        ]
+      },
+      "unit": "units of the instrument",
+      "empty": "unset: the source gave none; zero or less is refused",
+      "intent": "says how much is bid at the best bid",
+      "meaning": "the quantity at the best bid, more than zero",
+      "not_meaning": "the quantity across the book",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.Quote.ask_quantity",
+      "type": "Decimal",
+      "bounds": {
+        "digits": 38,
+        "scale": [
+          0,
+          18
+        ]
+      },
+      "unit": "units of the instrument",
+      "empty": "unset: the source gave none; zero or less is refused",
+      "intent": "says how much is offered at the best ask",
+      "meaning": "the quantity at the best ask, more than zero",
+      "not_meaning": "the quantity across the book",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.Quote.characteristics",
+      "type": "repeated enum QuoteCharacteristic",
+      "bounds": {
+        "count": [
+          0,
+          4
+        ]
+      },
+      "allowed": [
+        {
+          "value": "QUOTE_CHARACTERISTIC_UNSPECIFIED",
+          "meaning": "refused"
+        },
+        {
+          "value": "QUOTE_CHARACTERISTIC_INDICATIVE",
+          "meaning": "not firm: a price a participant need not trade at"
+        },
+        {
+          "value": "QUOTE_CHARACTERISTIC_HALTED",
+          "meaning": "trading in the subject is halted"
+        }
+      ],
+      "empty": "none: firm and trading",
+      "intent": "says a quote's state in the platform's words",
+      "meaning": "each state the source said the quote was in",
+      "not_meaning": "a vendor's code",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
       "name": "meridian.v1.RecordPricesRequest.prices",
       "type": "repeated message Price",
       "bounds": {
@@ -9233,6 +9898,70 @@
       "store": "lake"
     },
     {
+      "name": "meridian.v1.RecordTradesRequest.trades",
+      "type": "repeated message Trade",
+      "bounds": {
+        "count": [
+          1,
+          500
+        ]
+      },
+      "empty": "never empty",
+      "intent": "carries a batch of trades",
+      "meaning": "1 to 500 trades, recorded whole or refused naming the item and field",
+      "not_meaning": "a transaction across datasets: each row is recorded in its own dataset's partition",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.RecordTradesRequest.want_id",
+      "type": "text",
+      "empty": "empty: recorded unasked, as a standing want's stream mostly is",
+      "intent": "names the want a batch answers",
+      "meaning": "the want's identifier as it was delivered",
+      "not_meaning": "a key the plugin made",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.RecordQuotesRequest.quotes",
+      "type": "repeated message Quote",
+      "bounds": {
+        "count": [
+          1,
+          500
+        ]
+      },
+      "empty": "never empty",
+      "intent": "carries a batch of quotes",
+      "meaning": "1 to 500 quotes, recorded whole or refused naming the item and field",
+      "not_meaning": "a transaction across datasets",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.RecordQuotesRequest.want_id",
+      "type": "text",
+      "empty": "empty: recorded unasked",
+      "intent": "names the want a batch answers",
+      "meaning": "the want's identifier as it was delivered",
+      "not_meaning": "a key the plugin made",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
       "name": "meridian.v1.RecordObservationsReply.recorded",
       "type": "integer",
       "unit": "rows",
@@ -9293,10 +10022,17 @@
       "empty": "never unset",
       "intent": "delivers a price the lake recorded",
       "meaning": "the row as recorded, with its version and sequence",
-      "not_meaning": "every price: a reader hears what it is entitled to and asked for, latest first under load",
+      "not_meaning": "every price: a reader hears what it is entitled to and asked for, latest first under load per subject, dataset, kind, venue and the price's asset",
       "filled": "decided",
       "filled_by": "lake",
       "since": "v18",
+      "changes": [
+        {
+          "version": "v19",
+          "kind": "clarified",
+          "what": "conflated per the price's asset too (W10.5, approved 2026-10-10)"
+        }
+      ],
       "stability": "preview",
       "store": "lake"
     },
@@ -9310,6 +10046,32 @@
       "filled": "decided",
       "filled_by": "lake",
       "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.TradesRecordedEvent.trade",
+      "type": "message Trade",
+      "empty": "never unset",
+      "intent": "delivers a trade the lake recorded",
+      "meaning": "the row as recorded, with its version and sequence; every trade is delivered, never conflated",
+      "not_meaning": "a promise of delivery: a reader too slow for them meets a loss marker and reads the trades after the watermark it last saw",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.QuotesRecordedEvent.quote",
+      "type": "message Quote",
+      "empty": "never unset",
+      "intent": "delivers a quote the lake recorded",
+      "meaning": "the row as recorded, with its version and sequence",
+      "not_meaning": "every quote: a reader hears what it is entitled to and asked for, latest first under load per subject, dataset, venue and the quote's asset",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v19",
       "stability": "preview",
       "store": "lake"
     },
@@ -9529,11 +10291,18 @@
       "unit": "nanoseconds since the epoch",
       "empty": "0 with no business date and no range: the latest in force now",
       "intent": "asks for the latest in force at a valid time",
-      "meaning": "the valid time",
+      "meaning": "the valid time; the latest is chosen per subject, dataset, kind, venue and the price's asset, so a subject priced in two assets on one venue answers both",
       "not_meaning": "a recorded time, which as_of_ns cuts",
       "filled": "as-reported",
       "filled_by": "reporting",
       "since": "v18",
+      "changes": [
+        {
+          "version": "v19",
+          "kind": "clarified",
+          "what": "the latest is chosen per the price's asset too (W10.6, approved 2026-10-10)"
+        }
+      ],
       "stability": "preview",
       "store": "lake"
     },
@@ -9906,6 +10675,379 @@
       "store": "lake"
     },
     {
+      "name": "meridian.v1.ListTradesRequest.subjects",
+      "type": "repeated message SubjectRef",
+      "bounds": {
+        "count": [
+          1,
+          500
+        ]
+      },
+      "empty": "never empty",
+      "intent": "names the entities a read is about",
+      "meaning": "1 to 500 entities",
+      "not_meaning": "vendor identifiers",
+      "filled": "as-reported",
+      "filled_by": "signal",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListTradesRequest.sources",
+      "type": "message SourceChoice",
+      "empty": "unset: the deployment's default",
+      "intent": "says which datasets a read is answered from",
+      "meaning": "the default, named datasets, or every entitled dataset side by side",
+      "not_meaning": "an entitlement",
+      "filled": "as-reported",
+      "filled_by": "signal",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListTradesRequest.valid_from_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "0: not a range, when after_watermark is given",
+      "intent": "opens a valid-time range",
+      "meaning": "the range's start, inclusive; the range lies within one day of each dataset as it declares its day, or is refused naming it",
+      "not_meaning": "a recorded time",
+      "filled": "as-reported",
+      "filled_by": "signal",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListTradesRequest.valid_until_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "0: not a range, when after_watermark is given",
+      "intent": "closes a valid-time range",
+      "meaning": "the range's end, exclusive",
+      "not_meaning": "a recorded time",
+      "filled": "as-reported",
+      "filled_by": "signal",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListTradesRequest.after_watermark",
+      "type": "message Watermark",
+      "empty": "unset: a read by range",
+      "intent": "catches a reader up on the trades it lost",
+      "meaning": "the watermark the reader last saw: answered the rows each dataset partition it names recorded after its sequence there, for the subjects asked, whatever their valid time, a late or out-of-sequence print included",
+      "not_meaning": "a time; a range: a partition it does not name is not read",
+      "filled": "as-reported",
+      "filled_by": "signal",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListTradesRequest.as_of_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "0: what the lake knows now",
+      "intent": "reads what the lake knew at a recorded time",
+      "meaning": "the recorded-time cut-off: nothing recorded after it answers",
+      "not_meaning": "a valid time",
+      "filled": "as-reported",
+      "filled_by": "signal",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListTradesRequest.page_size",
+      "type": "integer",
+      "unit": "rows",
+      "bounds": {
+        "range": {
+          "least": "0",
+          "most": "500"
+        },
+        "past": "capped"
+      },
+      "empty": "0 is 100; past 500, answered at 500",
+      "intent": "bounds a page",
+      "meaning": "how many rows a page holds at most",
+      "not_meaning": "a promise that a page is full",
+      "filled": "as-reported",
+      "filled_by": "signal",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListTradesRequest.cursor",
+      "type": "text",
+      "empty": "empty for the first page",
+      "intent": "asks for the next page",
+      "meaning": "the previous reply's next_cursor, as given",
+      "not_meaning": "a position a plugin computes",
+      "filled": "as-reported",
+      "filled_by": "signal",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListTradesReply.trades",
+      "type": "repeated message Trade",
+      "empty": "none answered",
+      "intent": "carries a page of trades",
+      "meaning": "the rows, each naming its dataset",
+      "not_meaning": "every subject asked: unanswered says which were not",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListTradesReply.unanswered",
+      "type": "repeated message Unanswered",
+      "empty": "none: every part answered",
+      "intent": "says what a read could not serve, and why",
+      "meaning": "each subject, dataset and field not answered, with its reason; a default read's fallback names why the datasets above it did not answer",
+      "not_meaning": "a refusal of the read",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListTradesReply.datasets",
+      "type": "repeated message DatasetRef",
+      "empty": "none when no row answered",
+      "intent": "says what each dataset in the answer is, once",
+      "meaning": "each dataset with its instance, vendor and aggregator",
+      "not_meaning": "the datasets the reader may read, which ListDatasets answers",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListTradesReply.watermark",
+      "type": "message Watermark",
+      "empty": "never unset",
+      "intent": "says where the read was answered",
+      "meaning": "the sequence per dataset partition the read was answered at, which a later catch-up names",
+      "not_meaning": "a time",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListTradesReply.next_cursor",
+      "type": "text",
+      "empty": "empty when the read is exhausted",
+      "intent": "lets a reader ask for the next page",
+      "meaning": "an opaque cursor",
+      "not_meaning": "a count",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListQuotesRequest.subjects",
+      "type": "repeated message SubjectRef",
+      "bounds": {
+        "count": [
+          1,
+          500
+        ]
+      },
+      "empty": "never empty",
+      "intent": "names the entities a read is about",
+      "meaning": "1 to 500 entities",
+      "not_meaning": "vendor identifiers",
+      "filled": "as-reported",
+      "filled_by": "signal",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListQuotesRequest.sources",
+      "type": "message SourceChoice",
+      "empty": "unset: the deployment's default",
+      "intent": "says which datasets a read is answered from",
+      "meaning": "the default, named datasets, or every entitled dataset side by side",
+      "not_meaning": "an entitlement",
+      "filled": "as-reported",
+      "filled_by": "signal",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListQuotesRequest.at_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "0 with no range: the latest in force now",
+      "intent": "asks for the latest quote in force at a valid time",
+      "meaning": "the valid time; the latest is chosen per subject, dataset, venue and the quote's asset",
+      "not_meaning": "a recorded time, which as_of_ns cuts",
+      "filled": "as-reported",
+      "filled_by": "signal",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListQuotesRequest.valid_from_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "0: not a range",
+      "intent": "opens a valid-time range",
+      "meaning": "the range's start, inclusive; the range lies within one day of each dataset as it declares its day, or is refused naming it",
+      "not_meaning": "a recorded time",
+      "filled": "as-reported",
+      "filled_by": "signal",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListQuotesRequest.valid_until_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "0: not a range",
+      "intent": "closes a valid-time range",
+      "meaning": "the range's end, exclusive",
+      "not_meaning": "a recorded time",
+      "filled": "as-reported",
+      "filled_by": "signal",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListQuotesRequest.as_of_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "0: what the lake knows now",
+      "intent": "reads what the lake knew at a recorded time",
+      "meaning": "the recorded-time cut-off",
+      "not_meaning": "a valid time",
+      "filled": "as-reported",
+      "filled_by": "signal",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListQuotesRequest.page_size",
+      "type": "integer",
+      "unit": "rows",
+      "bounds": {
+        "range": {
+          "least": "0",
+          "most": "500"
+        },
+        "past": "capped"
+      },
+      "empty": "0 is 100; past 500, answered at 500",
+      "intent": "bounds a page",
+      "meaning": "how many rows a page holds at most",
+      "not_meaning": "a promise that a page is full",
+      "filled": "as-reported",
+      "filled_by": "signal",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListQuotesRequest.cursor",
+      "type": "text",
+      "empty": "empty for the first page",
+      "intent": "asks for the next page",
+      "meaning": "the previous reply's next_cursor, as given",
+      "not_meaning": "a position a plugin computes",
+      "filled": "as-reported",
+      "filled_by": "signal",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListQuotesReply.quotes",
+      "type": "repeated message Quote",
+      "empty": "none answered",
+      "intent": "carries a page of quotes",
+      "meaning": "the rows, each naming its dataset",
+      "not_meaning": "every subject asked: unanswered says which were not",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListQuotesReply.unanswered",
+      "type": "repeated message Unanswered",
+      "empty": "none: every part answered",
+      "intent": "says what a read could not serve, and why",
+      "meaning": "each subject, dataset and field not answered, with its reason; a default read's fallback names why the datasets above it did not answer",
+      "not_meaning": "a refusal of the read",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListQuotesReply.datasets",
+      "type": "repeated message DatasetRef",
+      "empty": "none when no row answered",
+      "intent": "says what each dataset in the answer is, once",
+      "meaning": "each dataset with its instance, vendor and aggregator",
+      "not_meaning": "the datasets the reader may read, which ListDatasets answers",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListQuotesReply.watermark",
+      "type": "message Watermark",
+      "empty": "never unset",
+      "intent": "says where the read was answered",
+      "meaning": "the sequence per dataset partition the read was answered at, which a later catch-up names",
+      "not_meaning": "a time",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListQuotesReply.next_cursor",
+      "type": "text",
+      "empty": "empty when the read is exhausted",
+      "intent": "lets a reader ask for the next page",
+      "meaning": "an opaque cursor",
+      "not_meaning": "a count",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v19",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
       "name": "meridian.v1.ObservationsWantedEvent.want_id",
       "type": "text",
       "empty": "never empty",
@@ -9936,11 +11078,18 @@
       "type": "text",
       "empty": "never empty",
       "intent": "names the data type wanted",
-      "meaning": "the data type by its message's full name: meridian.v1.Price or meridian.v1.Bar",
+      "meaning": "the data type by its message's full name: meridian.v1.Price, meridian.v1.Bar, and from v19 meridian.v1.Trade or meridian.v1.Quote",
       "not_meaning": "a kind of price",
       "filled": "decided",
       "filled_by": "lake",
       "since": "v18",
+      "changes": [
+        {
+          "version": "v19",
+          "kind": "clarified",
+          "what": "a want may be of trades or quotes (W10.7)"
+        }
+      ],
       "stability": "preview",
       "store": "lake"
     },
@@ -10070,11 +11219,18 @@
       "type": "boolean",
       "empty": "false: fetch once",
       "intent": "asks the dgm to keep subjects current",
-      "meaning": "keep the subjects current, by stream or schedule, until the want is withdrawn",
+      "meaning": "keep the subjects current until the want is withdrawn: from the vendor's stream where the dataset is streamed, by its schedule otherwise",
       "not_meaning": "a subscription a plugin holds: the lake withdraws it when no reader asks",
       "filled": "decided",
       "filled_by": "lake",
       "since": "v18",
+      "changes": [
+        {
+          "version": "v19",
+          "kind": "clarified",
+          "what": "a streamed dataset keeps a standing want current from its vendor's stream (W10.7)"
+        }
+      ],
       "stability": "preview",
       "store": "lake"
     },
@@ -10175,11 +11331,18 @@
       ],
       "empty": "unspecified is refused",
       "intent": "says why the dgm cannot serve subjects of a want",
-      "meaning": "not covered, source silent or beyond history; the readers' next answers carry it",
+      "meaning": "not covered, source silent or beyond history, for the date or range the want asked, or the latest where it asked the latest, and no other; the readers' next answers for that date carry it",
       "not_meaning": "an error in the plugin",
       "filled": "as-reported",
       "filled_by": "dgm",
       "since": "v18",
+      "changes": [
+        {
+          "version": "v19",
+          "kind": "clarified",
+          "what": "a decline stands for the date asked only (W10.7, approved 2026-10-10)"
+        }
+      ],
       "stability": "preview",
       "store": "lake"
     },
@@ -10312,11 +11475,18 @@
       "type": "text",
       "empty": "never empty",
       "intent": "names the data type a priority is for",
-      "meaning": "meridian.v1.Price or meridian.v1.Bar",
+      "meaning": "meridian.v1.Price, meridian.v1.Bar, and from v19 meridian.v1.Trade or meridian.v1.Quote",
       "not_meaning": "a kind of price",
       "filled": "entered",
       "filled_by": "dashboard",
       "since": "v18",
+      "changes": [
+        {
+          "version": "v19",
+          "kind": "clarified",
+          "what": "trades and quotes take a priority too, with no kind (W10.2)"
+        }
+      ],
       "stability": "preview",
       "store": "lake"
     },
@@ -10457,11 +11627,18 @@
       "type": "text",
       "empty": "never empty",
       "intent": "names the data type a priority is for",
-      "meaning": "meridian.v1.Price or meridian.v1.Bar",
+      "meaning": "meridian.v1.Price, meridian.v1.Bar, and from v19 meridian.v1.Trade or meridian.v1.Quote",
       "not_meaning": "a kind of price",
       "filled": "entered",
       "filled_by": "dashboard",
       "since": "v18",
+      "changes": [
+        {
+          "version": "v19",
+          "kind": "clarified",
+          "what": "trades and quotes take a priority too, with no kind (W10.2)"
+        }
+      ],
       "stability": "preview",
       "store": "lake"
     },
@@ -10702,6 +11879,14 @@
         {
           "row": "RecordBars",
           "since": "v18"
+        },
+        {
+          "row": "RecordTrades",
+          "since": "v19"
+        },
+        {
+          "row": "RecordQuotes",
+          "since": "v19"
         }
       ],
       "empty": "never unset in an amount that is set: the amount is the Money",
@@ -15070,11 +16255,18 @@
       },
       "empty": "none: no conflated row is delivered",
       "intent": "names the subjects a plugin wants of the conflated rows",
-      "meaning": "entity IDs; the sidecar delivers only the conflated rows about them",
+      "meaning": "entity IDs; the sidecar delivers only the conflated rows, and from v19 the unconflated ones, about them",
       "not_meaning": "rows to hear, which rows names",
       "filled": "as-reported",
       "filled_by": "plugin",
       "since": "v18",
+      "changes": [
+        {
+          "version": "v19",
+          "kind": "clarified",
+          "what": "narrows the unconflated rows too: the lake's trades (W4.3)"
+        }
+      ],
       "stability": "preview",
       "store": "sidecar"
     },
@@ -15101,6 +16293,32 @@
       "filled": "decided",
       "filled_by": "lake",
       "since": "v18",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.plugin.v1.Delivery.trades_recorded",
+      "type": "message TradesRecordedEvent",
+      "empty": "unset unless the delivery is a trade the lake recorded",
+      "intent": "delivers a trade the lake recorded (W10.5)",
+      "meaning": "a trade the lake recorded, every one, never dropped for a later one; after a loss marker the plugin reads the trades after the watermark it last saw",
+      "not_meaning": "a record with a journal: a lake row carries its sequence in its own envelope",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v19",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.plugin.v1.Delivery.quotes_recorded",
+      "type": "message QuotesRecordedEvent",
+      "empty": "unset unless the delivery is a quote the lake recorded",
+      "intent": "delivers a quote the lake recorded (W10.5)",
+      "meaning": "a quote the lake recorded, latest value first per key under load",
+      "not_meaning": "a record with a journal: a lake row carries its sequence in its own envelope",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v19",
       "stability": "preview",
       "store": "sidecar"
     },
@@ -15153,6 +16371,32 @@
       "filled": "as-reported",
       "filled_by": "plugin",
       "since": "v18",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.plugin.v1.RecordTradesParams.acting_for",
+      "type": "message CallerAssertion",
+      "empty": "unset, the plugin acts as itself",
+      "intent": "names the person RecordTrades is sent for",
+      "meaning": "the assertion the plugin was handed for them, the same bytes, never altered; a dgm records as itself",
+      "not_meaning": "the plugin's own identity, which the sidecar knows",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v19",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.plugin.v1.RecordQuotesParams.acting_for",
+      "type": "message CallerAssertion",
+      "empty": "unset, the plugin acts as itself",
+      "intent": "names the person RecordQuotes is sent for",
+      "meaning": "the assertion the plugin was handed for them, the same bytes, never altered; a dgm records as itself",
+      "not_meaning": "the plugin's own identity, which the sidecar knows",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v19",
       "stability": "preview",
       "store": "sidecar"
     },

@@ -85,10 +85,11 @@ if TYPE_CHECKING:
 #: a design revision and no contract) a dgm's catalogue in the declaration,
 #: prices and bars recorded in batches and heard latest value first, wants
 #: heard and declined, the lake's reads, venues resolved, a Money naming its
-#: instrument and a date refused where it is no date -- and a newer sidecar
-#: still admits it. Raised with every contract revision that adds something
-#: a plugin can depend on.
-SCHEMA_VERSION = "v18"
+#: instrument and a date refused where it is no date, and from v19 trades and
+#: quotes recorded, read and heard, trades in full and caught up after a
+#: watermark -- and a newer sidecar still admits it. Raised with every
+#: contract revision that adds something a plugin can depend on.
+SCHEMA_VERSION = "v19"
 
 #: Where a sidecar listens. Loopback, always: a sidecar reachable from another
 #: host is a way around the boundary it exists to enforce.

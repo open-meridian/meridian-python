@@ -438,7 +438,7 @@ async def test_an_unusable_instrument_record_is_named_and_unavailability_retryab
 
 
 def test_the_sdk_declares_contract_v18() -> None:
-    assert meridian.SCHEMA_VERSION == "v18"
+    assert meridian.SCHEMA_VERSION == "v19"
 
 
 def test_every_row_of_the_book_is_heard_with_a_handler_of_its_own() -> None:

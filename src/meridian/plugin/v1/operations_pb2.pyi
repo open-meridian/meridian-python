@@ -99,6 +99,7 @@ class InstrumentType(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
     INSTRUMENT_TYPE_UNSPECIFIED: _ClassVar[InstrumentType]
     INSTRUMENT_TYPE_MONEY_MARKET_FUND: _ClassVar[InstrumentType]
+    INSTRUMENT_TYPE_BINARY_EVENT_CONTRACT: _ClassVar[InstrumentType]
 
 class MissReason(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
@@ -122,6 +123,7 @@ class InstrumentField(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     INSTRUMENT_FIELD_IDENTIFIER: _ClassVar[InstrumentField]
     INSTRUMENT_FIELD_INSTRUMENT_TYPE: _ClassVar[InstrumentField]
     INSTRUMENT_FIELD_MONEY_MARKET_FUND: _ClassVar[InstrumentField]
+    INSTRUMENT_FIELD_BINARY_EVENT_CONTRACT: _ClassVar[InstrumentField]
 
 class MoneyMarketFundCategory(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
@@ -259,6 +261,42 @@ class PriceBasis(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     PRICE_BASIS_UNSPECIFIED: _ClassVar[PriceBasis]
     PRICE_BASIS_PER_UNIT: _ClassVar[PriceBasis]
 
+class Eligible(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    ELIGIBLE_UNSPECIFIED: _ClassVar[Eligible]
+    ELIGIBLE_ELIGIBLE: _ClassVar[Eligible]
+    ELIGIBLE_NOT_ELIGIBLE: _ClassVar[Eligible]
+
+class TradeCharacteristic(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    TRADE_CHARACTERISTIC_UNSPECIFIED: _ClassVar[TradeCharacteristic]
+    TRADE_CHARACTERISTIC_OPENING_AUCTION: _ClassVar[TradeCharacteristic]
+    TRADE_CHARACTERISTIC_CLOSING_AUCTION: _ClassVar[TradeCharacteristic]
+    TRADE_CHARACTERISTIC_OTHER_AUCTION: _ClassVar[TradeCharacteristic]
+    TRADE_CHARACTERISTIC_ODD_LOT: _ClassVar[TradeCharacteristic]
+    TRADE_CHARACTERISTIC_EXTENDED_HOURS: _ClassVar[TradeCharacteristic]
+    TRADE_CHARACTERISTIC_OUT_OF_SEQUENCE: _ClassVar[TradeCharacteristic]
+    TRADE_CHARACTERISTIC_LATE_REPORT: _ClassVar[TradeCharacteristic]
+    TRADE_CHARACTERISTIC_AVERAGE_PRICE: _ClassVar[TradeCharacteristic]
+    TRADE_CHARACTERISTIC_NON_REGULAR_SETTLEMENT: _ClassVar[TradeCharacteristic]
+    TRADE_CHARACTERISTIC_INTERMARKET_SWEEP: _ClassVar[TradeCharacteristic]
+    TRADE_CHARACTERISTIC_DERIVATIVELY_PRICED: _ClassVar[TradeCharacteristic]
+    TRADE_CHARACTERISTIC_PRIOR_REFERENCE_PRICE: _ClassVar[TradeCharacteristic]
+    TRADE_CHARACTERISTIC_CONTINGENT: _ClassVar[TradeCharacteristic]
+    TRADE_CHARACTERISTIC_CROSS: _ClassVar[TradeCharacteristic]
+
+class Aggressor(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    AGGRESSOR_UNSPECIFIED: _ClassVar[Aggressor]
+    AGGRESSOR_BUY: _ClassVar[Aggressor]
+    AGGRESSOR_SELL: _ClassVar[Aggressor]
+
+class QuoteCharacteristic(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    QUOTE_CHARACTERISTIC_UNSPECIFIED: _ClassVar[QuoteCharacteristic]
+    QUOTE_CHARACTERISTIC_INDICATIVE: _ClassVar[QuoteCharacteristic]
+    QUOTE_CHARACTERISTIC_HALTED: _ClassVar[QuoteCharacteristic]
+
 class UnansweredReason(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
     UNANSWERED_REASON_UNSPECIFIED: _ClassVar[UnansweredReason]
@@ -339,6 +377,7 @@ ASSET_CLASS_EVENT_CONTRACT: AssetClass
 ASSET_CLASS_CASH: AssetClass
 INSTRUMENT_TYPE_UNSPECIFIED: InstrumentType
 INSTRUMENT_TYPE_MONEY_MARKET_FUND: InstrumentType
+INSTRUMENT_TYPE_BINARY_EVENT_CONTRACT: InstrumentType
 MISS_REASON_UNSPECIFIED: MissReason
 MISS_REASON_NOT_FOUND: MissReason
 MISS_REASON_AMBIGUOUS: MissReason
@@ -353,6 +392,7 @@ INSTRUMENT_FIELD_DESCRIPTION: InstrumentField
 INSTRUMENT_FIELD_IDENTIFIER: InstrumentField
 INSTRUMENT_FIELD_INSTRUMENT_TYPE: InstrumentField
 INSTRUMENT_FIELD_MONEY_MARKET_FUND: InstrumentField
+INSTRUMENT_FIELD_BINARY_EVENT_CONTRACT: InstrumentField
 MONEY_MARKET_FUND_CATEGORY_UNSPECIFIED: MoneyMarketFundCategory
 MONEY_MARKET_FUND_CATEGORY_GOVERNMENT: MoneyMarketFundCategory
 MONEY_MARKET_FUND_CATEGORY_PRIME: MoneyMarketFundCategory
@@ -435,6 +475,30 @@ PRICE_KIND_ASK: PriceKind
 PRICE_KIND_MID: PriceKind
 PRICE_BASIS_UNSPECIFIED: PriceBasis
 PRICE_BASIS_PER_UNIT: PriceBasis
+ELIGIBLE_UNSPECIFIED: Eligible
+ELIGIBLE_ELIGIBLE: Eligible
+ELIGIBLE_NOT_ELIGIBLE: Eligible
+TRADE_CHARACTERISTIC_UNSPECIFIED: TradeCharacteristic
+TRADE_CHARACTERISTIC_OPENING_AUCTION: TradeCharacteristic
+TRADE_CHARACTERISTIC_CLOSING_AUCTION: TradeCharacteristic
+TRADE_CHARACTERISTIC_OTHER_AUCTION: TradeCharacteristic
+TRADE_CHARACTERISTIC_ODD_LOT: TradeCharacteristic
+TRADE_CHARACTERISTIC_EXTENDED_HOURS: TradeCharacteristic
+TRADE_CHARACTERISTIC_OUT_OF_SEQUENCE: TradeCharacteristic
+TRADE_CHARACTERISTIC_LATE_REPORT: TradeCharacteristic
+TRADE_CHARACTERISTIC_AVERAGE_PRICE: TradeCharacteristic
+TRADE_CHARACTERISTIC_NON_REGULAR_SETTLEMENT: TradeCharacteristic
+TRADE_CHARACTERISTIC_INTERMARKET_SWEEP: TradeCharacteristic
+TRADE_CHARACTERISTIC_DERIVATIVELY_PRICED: TradeCharacteristic
+TRADE_CHARACTERISTIC_PRIOR_REFERENCE_PRICE: TradeCharacteristic
+TRADE_CHARACTERISTIC_CONTINGENT: TradeCharacteristic
+TRADE_CHARACTERISTIC_CROSS: TradeCharacteristic
+AGGRESSOR_UNSPECIFIED: Aggressor
+AGGRESSOR_BUY: Aggressor
+AGGRESSOR_SELL: Aggressor
+QUOTE_CHARACTERISTIC_UNSPECIFIED: QuoteCharacteristic
+QUOTE_CHARACTERISTIC_INDICATIVE: QuoteCharacteristic
+QUOTE_CHARACTERISTIC_HALTED: QuoteCharacteristic
 UNANSWERED_REASON_UNSPECIFIED: UnansweredReason
 UNANSWERED_REASON_NOT_ENTITLED: UnansweredReason
 UNANSWERED_REASON_NOT_COVERED: UnansweredReason
@@ -1268,6 +1332,50 @@ class RecordBarsResult(_message.Message):
     watermark: Watermark
     def __init__(self, recorded: _Optional[int] = ..., restated: _Optional[int] = ..., unchanged: _Optional[int] = ..., watermark: _Optional[_Union[Watermark, _Mapping]] = ...) -> None: ...
 
+class RecordTradesParams(_message.Message):
+    __slots__ = ("trades", "want_id", "acting_for")
+    TRADES_FIELD_NUMBER: _ClassVar[int]
+    WANT_ID_FIELD_NUMBER: _ClassVar[int]
+    ACTING_FOR_FIELD_NUMBER: _ClassVar[int]
+    trades: _containers.RepeatedCompositeFieldContainer[Trade]
+    want_id: str
+    acting_for: _sidecar_pb2.CallerAssertion
+    def __init__(self, trades: _Optional[_Iterable[_Union[Trade, _Mapping]]] = ..., want_id: _Optional[str] = ..., acting_for: _Optional[_Union[_sidecar_pb2.CallerAssertion, _Mapping]] = ...) -> None: ...
+
+class RecordTradesResult(_message.Message):
+    __slots__ = ("recorded", "restated", "unchanged", "watermark")
+    RECORDED_FIELD_NUMBER: _ClassVar[int]
+    RESTATED_FIELD_NUMBER: _ClassVar[int]
+    UNCHANGED_FIELD_NUMBER: _ClassVar[int]
+    WATERMARK_FIELD_NUMBER: _ClassVar[int]
+    recorded: int
+    restated: int
+    unchanged: int
+    watermark: Watermark
+    def __init__(self, recorded: _Optional[int] = ..., restated: _Optional[int] = ..., unchanged: _Optional[int] = ..., watermark: _Optional[_Union[Watermark, _Mapping]] = ...) -> None: ...
+
+class RecordQuotesParams(_message.Message):
+    __slots__ = ("quotes", "want_id", "acting_for")
+    QUOTES_FIELD_NUMBER: _ClassVar[int]
+    WANT_ID_FIELD_NUMBER: _ClassVar[int]
+    ACTING_FOR_FIELD_NUMBER: _ClassVar[int]
+    quotes: _containers.RepeatedCompositeFieldContainer[Quote]
+    want_id: str
+    acting_for: _sidecar_pb2.CallerAssertion
+    def __init__(self, quotes: _Optional[_Iterable[_Union[Quote, _Mapping]]] = ..., want_id: _Optional[str] = ..., acting_for: _Optional[_Union[_sidecar_pb2.CallerAssertion, _Mapping]] = ...) -> None: ...
+
+class RecordQuotesResult(_message.Message):
+    __slots__ = ("recorded", "restated", "unchanged", "watermark")
+    RECORDED_FIELD_NUMBER: _ClassVar[int]
+    RESTATED_FIELD_NUMBER: _ClassVar[int]
+    UNCHANGED_FIELD_NUMBER: _ClassVar[int]
+    WATERMARK_FIELD_NUMBER: _ClassVar[int]
+    recorded: int
+    restated: int
+    unchanged: int
+    watermark: Watermark
+    def __init__(self, recorded: _Optional[int] = ..., restated: _Optional[int] = ..., unchanged: _Optional[int] = ..., watermark: _Optional[_Union[Watermark, _Mapping]] = ...) -> None: ...
+
 class ListPricesParams(_message.Message):
     __slots__ = ("subjects", "kinds", "sources", "at_ns", "business_date", "valid_from_ns", "valid_until_ns", "as_of_ns", "page_size", "cursor")
     SUBJECTS_FIELD_NUMBER: _ClassVar[int]
@@ -1344,6 +1452,74 @@ class ListBarsResult(_message.Message):
     next_cursor: str
     def __init__(self, bars: _Optional[_Iterable[_Union[Bar, _Mapping]]] = ..., unanswered: _Optional[_Iterable[_Union[Unanswered, _Mapping]]] = ..., datasets: _Optional[_Iterable[_Union[DatasetRef, _Mapping]]] = ..., watermark: _Optional[_Union[Watermark, _Mapping]] = ..., next_cursor: _Optional[str] = ...) -> None: ...
 
+class ListTradesParams(_message.Message):
+    __slots__ = ("subjects", "sources", "valid_from_ns", "valid_until_ns", "after_watermark", "as_of_ns", "page_size", "cursor")
+    SUBJECTS_FIELD_NUMBER: _ClassVar[int]
+    SOURCES_FIELD_NUMBER: _ClassVar[int]
+    VALID_FROM_NS_FIELD_NUMBER: _ClassVar[int]
+    VALID_UNTIL_NS_FIELD_NUMBER: _ClassVar[int]
+    AFTER_WATERMARK_FIELD_NUMBER: _ClassVar[int]
+    AS_OF_NS_FIELD_NUMBER: _ClassVar[int]
+    PAGE_SIZE_FIELD_NUMBER: _ClassVar[int]
+    CURSOR_FIELD_NUMBER: _ClassVar[int]
+    subjects: _containers.RepeatedCompositeFieldContainer[SubjectRef]
+    sources: SourceChoice
+    valid_from_ns: int
+    valid_until_ns: int
+    after_watermark: Watermark
+    as_of_ns: int
+    page_size: int
+    cursor: str
+    def __init__(self, subjects: _Optional[_Iterable[_Union[SubjectRef, _Mapping]]] = ..., sources: _Optional[_Union[SourceChoice, _Mapping]] = ..., valid_from_ns: _Optional[int] = ..., valid_until_ns: _Optional[int] = ..., after_watermark: _Optional[_Union[Watermark, _Mapping]] = ..., as_of_ns: _Optional[int] = ..., page_size: _Optional[int] = ..., cursor: _Optional[str] = ...) -> None: ...
+
+class ListTradesResult(_message.Message):
+    __slots__ = ("trades", "unanswered", "datasets", "watermark", "next_cursor")
+    TRADES_FIELD_NUMBER: _ClassVar[int]
+    UNANSWERED_FIELD_NUMBER: _ClassVar[int]
+    DATASETS_FIELD_NUMBER: _ClassVar[int]
+    WATERMARK_FIELD_NUMBER: _ClassVar[int]
+    NEXT_CURSOR_FIELD_NUMBER: _ClassVar[int]
+    trades: _containers.RepeatedCompositeFieldContainer[Trade]
+    unanswered: _containers.RepeatedCompositeFieldContainer[Unanswered]
+    datasets: _containers.RepeatedCompositeFieldContainer[DatasetRef]
+    watermark: Watermark
+    next_cursor: str
+    def __init__(self, trades: _Optional[_Iterable[_Union[Trade, _Mapping]]] = ..., unanswered: _Optional[_Iterable[_Union[Unanswered, _Mapping]]] = ..., datasets: _Optional[_Iterable[_Union[DatasetRef, _Mapping]]] = ..., watermark: _Optional[_Union[Watermark, _Mapping]] = ..., next_cursor: _Optional[str] = ...) -> None: ...
+
+class ListQuotesParams(_message.Message):
+    __slots__ = ("subjects", "sources", "at_ns", "valid_from_ns", "valid_until_ns", "as_of_ns", "page_size", "cursor")
+    SUBJECTS_FIELD_NUMBER: _ClassVar[int]
+    SOURCES_FIELD_NUMBER: _ClassVar[int]
+    AT_NS_FIELD_NUMBER: _ClassVar[int]
+    VALID_FROM_NS_FIELD_NUMBER: _ClassVar[int]
+    VALID_UNTIL_NS_FIELD_NUMBER: _ClassVar[int]
+    AS_OF_NS_FIELD_NUMBER: _ClassVar[int]
+    PAGE_SIZE_FIELD_NUMBER: _ClassVar[int]
+    CURSOR_FIELD_NUMBER: _ClassVar[int]
+    subjects: _containers.RepeatedCompositeFieldContainer[SubjectRef]
+    sources: SourceChoice
+    at_ns: int
+    valid_from_ns: int
+    valid_until_ns: int
+    as_of_ns: int
+    page_size: int
+    cursor: str
+    def __init__(self, subjects: _Optional[_Iterable[_Union[SubjectRef, _Mapping]]] = ..., sources: _Optional[_Union[SourceChoice, _Mapping]] = ..., at_ns: _Optional[int] = ..., valid_from_ns: _Optional[int] = ..., valid_until_ns: _Optional[int] = ..., as_of_ns: _Optional[int] = ..., page_size: _Optional[int] = ..., cursor: _Optional[str] = ...) -> None: ...
+
+class ListQuotesResult(_message.Message):
+    __slots__ = ("quotes", "unanswered", "datasets", "watermark", "next_cursor")
+    QUOTES_FIELD_NUMBER: _ClassVar[int]
+    UNANSWERED_FIELD_NUMBER: _ClassVar[int]
+    DATASETS_FIELD_NUMBER: _ClassVar[int]
+    WATERMARK_FIELD_NUMBER: _ClassVar[int]
+    NEXT_CURSOR_FIELD_NUMBER: _ClassVar[int]
+    quotes: _containers.RepeatedCompositeFieldContainer[Quote]
+    unanswered: _containers.RepeatedCompositeFieldContainer[Unanswered]
+    datasets: _containers.RepeatedCompositeFieldContainer[DatasetRef]
+    watermark: Watermark
+    next_cursor: str
+    def __init__(self, quotes: _Optional[_Iterable[_Union[Quote, _Mapping]]] = ..., unanswered: _Optional[_Iterable[_Union[Unanswered, _Mapping]]] = ..., datasets: _Optional[_Iterable[_Union[DatasetRef, _Mapping]]] = ..., watermark: _Optional[_Union[Watermark, _Mapping]] = ..., next_cursor: _Optional[str] = ...) -> None: ...
+
 class DeclineWantParams(_message.Message):
     __slots__ = ("want_id", "subjects", "reason", "acting_for")
     WANT_ID_FIELD_NUMBER: _ClassVar[int]
@@ -1383,7 +1559,7 @@ class ReceiveRequest(_message.Message):
     def __init__(self, rows: _Optional[_Iterable[str]] = ..., subjects: _Optional[_Iterable[str]] = ...) -> None: ...
 
 class Delivery(_message.Message):
-    __slots__ = ("meta", "lost", "statement_recorded", "custodial_position_updated", "position_changed", "break_changed", "account_figures_recorded", "account_attribute_changed", "activity_recorded", "sync_status_recorded", "activity_re_resolved", "prices_recorded", "bars_recorded", "observations_wanted", "want_withdrawn")
+    __slots__ = ("meta", "lost", "statement_recorded", "custodial_position_updated", "position_changed", "break_changed", "account_figures_recorded", "account_attribute_changed", "activity_recorded", "sync_status_recorded", "activity_re_resolved", "prices_recorded", "bars_recorded", "observations_wanted", "want_withdrawn", "trades_recorded", "quotes_recorded")
     META_FIELD_NUMBER: _ClassVar[int]
     LOST_FIELD_NUMBER: _ClassVar[int]
     STATEMENT_RECORDED_FIELD_NUMBER: _ClassVar[int]
@@ -1399,6 +1575,8 @@ class Delivery(_message.Message):
     BARS_RECORDED_FIELD_NUMBER: _ClassVar[int]
     OBSERVATIONS_WANTED_FIELD_NUMBER: _ClassVar[int]
     WANT_WITHDRAWN_FIELD_NUMBER: _ClassVar[int]
+    TRADES_RECORDED_FIELD_NUMBER: _ClassVar[int]
+    QUOTES_RECORDED_FIELD_NUMBER: _ClassVar[int]
     meta: DeliveryMeta
     lost: Lost
     statement_recorded: StatementRecordedEvent
@@ -1414,7 +1592,9 @@ class Delivery(_message.Message):
     bars_recorded: BarsRecordedEvent
     observations_wanted: ObservationsWantedEvent
     want_withdrawn: WantWithdrawnEvent
-    def __init__(self, meta: _Optional[_Union[DeliveryMeta, _Mapping]] = ..., lost: _Optional[_Union[Lost, _Mapping]] = ..., statement_recorded: _Optional[_Union[StatementRecordedEvent, _Mapping]] = ..., custodial_position_updated: _Optional[_Union[CustodialPositionUpdatedEvent, _Mapping]] = ..., position_changed: _Optional[_Union[PositionChangedEvent, _Mapping]] = ..., break_changed: _Optional[_Union[BreakChangedEvent, _Mapping]] = ..., account_figures_recorded: _Optional[_Union[AccountFiguresRecordedEvent, _Mapping]] = ..., account_attribute_changed: _Optional[_Union[AccountAttributeChangedEvent, _Mapping]] = ..., activity_recorded: _Optional[_Union[ActivityRecordedEvent, _Mapping]] = ..., sync_status_recorded: _Optional[_Union[SyncStatusRecordedEvent, _Mapping]] = ..., activity_re_resolved: _Optional[_Union[ActivityReResolvedEvent, _Mapping]] = ..., prices_recorded: _Optional[_Union[PricesRecordedEvent, _Mapping]] = ..., bars_recorded: _Optional[_Union[BarsRecordedEvent, _Mapping]] = ..., observations_wanted: _Optional[_Union[ObservationsWantedEvent, _Mapping]] = ..., want_withdrawn: _Optional[_Union[WantWithdrawnEvent, _Mapping]] = ...) -> None: ...
+    trades_recorded: TradesRecordedEvent
+    quotes_recorded: QuotesRecordedEvent
+    def __init__(self, meta: _Optional[_Union[DeliveryMeta, _Mapping]] = ..., lost: _Optional[_Union[Lost, _Mapping]] = ..., statement_recorded: _Optional[_Union[StatementRecordedEvent, _Mapping]] = ..., custodial_position_updated: _Optional[_Union[CustodialPositionUpdatedEvent, _Mapping]] = ..., position_changed: _Optional[_Union[PositionChangedEvent, _Mapping]] = ..., break_changed: _Optional[_Union[BreakChangedEvent, _Mapping]] = ..., account_figures_recorded: _Optional[_Union[AccountFiguresRecordedEvent, _Mapping]] = ..., account_attribute_changed: _Optional[_Union[AccountAttributeChangedEvent, _Mapping]] = ..., activity_recorded: _Optional[_Union[ActivityRecordedEvent, _Mapping]] = ..., sync_status_recorded: _Optional[_Union[SyncStatusRecordedEvent, _Mapping]] = ..., activity_re_resolved: _Optional[_Union[ActivityReResolvedEvent, _Mapping]] = ..., prices_recorded: _Optional[_Union[PricesRecordedEvent, _Mapping]] = ..., bars_recorded: _Optional[_Union[BarsRecordedEvent, _Mapping]] = ..., observations_wanted: _Optional[_Union[ObservationsWantedEvent, _Mapping]] = ..., want_withdrawn: _Optional[_Union[WantWithdrawnEvent, _Mapping]] = ..., trades_recorded: _Optional[_Union[TradesRecordedEvent, _Mapping]] = ..., quotes_recorded: _Optional[_Union[QuotesRecordedEvent, _Mapping]] = ...) -> None: ...
 
 class DeliveryMeta(_message.Message):
     __slots__ = ("message_id", "correlation_id", "causation_id", "published_at_ns", "row", "journal", "cause", "own")
@@ -1531,14 +1711,18 @@ class ReportedCollateral(_message.Message):
     def __init__(self, direction: _Optional[_Union[CollateralDirection, str]] = ..., instrument_id: _Optional[str] = ..., unresolved_identifiers: _Optional[_Iterable[_Union[Identifier, _Mapping]]] = ..., quantity: _Optional[_Union[Decimal, _Mapping]] = ..., value: _Optional[_Union[Money, _Mapping]] = ..., haircut: _Optional[_Union[Decimal, _Mapping]] = ..., value_after_haircut: _Optional[_Union[Money, _Mapping]] = ..., held_at: _Optional[str] = ..., reusable: bool = ...) -> None: ...
 
 class Identifier(_message.Message):
-    __slots__ = ("scheme", "value", "source")
+    __slots__ = ("scheme", "value", "source", "valid_from_ns", "valid_until_ns")
     SCHEME_FIELD_NUMBER: _ClassVar[int]
     VALUE_FIELD_NUMBER: _ClassVar[int]
     SOURCE_FIELD_NUMBER: _ClassVar[int]
+    VALID_FROM_NS_FIELD_NUMBER: _ClassVar[int]
+    VALID_UNTIL_NS_FIELD_NUMBER: _ClassVar[int]
     scheme: str
     value: str
     source: str
-    def __init__(self, scheme: _Optional[str] = ..., value: _Optional[str] = ..., source: _Optional[str] = ...) -> None: ...
+    valid_from_ns: int
+    valid_until_ns: int
+    def __init__(self, scheme: _Optional[str] = ..., value: _Optional[str] = ..., source: _Optional[str] = ..., valid_from_ns: _Optional[int] = ..., valid_until_ns: _Optional[int] = ...) -> None: ...
 
 class RawRecordRef(_message.Message):
     __slots__ = ("instance_id", "key")
@@ -1865,7 +2049,7 @@ class SyncStatusEvent(_message.Message):
     def __init__(self, source: _Optional[str] = ..., account_id: _Optional[str] = ..., last_synced_at_ns: _Optional[int] = ..., connection_healthy: bool = ..., status_detail: _Optional[str] = ..., observed_at_ns: _Optional[int] = ..., external_account_id: _Optional[str] = ..., state: _Optional[_Union[SyncState, str]] = ..., holdings_as_of_ns: _Optional[int] = ..., history_as_of_ns: _Optional[int] = ..., history_from: _Optional[str] = ...) -> None: ...
 
 class InstrumentRecord(_message.Message):
-    __slots__ = ("instrument_id", "identifiers", "asset_class", "currency", "exchange_mic", "description", "lifecycle_state", "version", "valid_from_ns", "record_time_ns", "sources", "offers", "instrument_type", "money_market_fund", "listing_venue_id")
+    __slots__ = ("instrument_id", "identifiers", "asset_class", "currency", "exchange_mic", "description", "lifecycle_state", "version", "valid_from_ns", "record_time_ns", "sources", "offers", "instrument_type", "money_market_fund", "listing_venue_id", "binary_event_contract")
     INSTRUMENT_ID_FIELD_NUMBER: _ClassVar[int]
     IDENTIFIERS_FIELD_NUMBER: _ClassVar[int]
     ASSET_CLASS_FIELD_NUMBER: _ClassVar[int]
@@ -1881,6 +2065,7 @@ class InstrumentRecord(_message.Message):
     INSTRUMENT_TYPE_FIELD_NUMBER: _ClassVar[int]
     MONEY_MARKET_FUND_FIELD_NUMBER: _ClassVar[int]
     LISTING_VENUE_ID_FIELD_NUMBER: _ClassVar[int]
+    BINARY_EVENT_CONTRACT_FIELD_NUMBER: _ClassVar[int]
     instrument_id: str
     identifiers: _containers.RepeatedCompositeFieldContainer[Identifier]
     asset_class: AssetClass
@@ -1896,7 +2081,8 @@ class InstrumentRecord(_message.Message):
     instrument_type: InstrumentType
     money_market_fund: MoneyMarketFund
     listing_venue_id: str
-    def __init__(self, instrument_id: _Optional[str] = ..., identifiers: _Optional[_Iterable[_Union[Identifier, _Mapping]]] = ..., asset_class: _Optional[_Union[AssetClass, str]] = ..., currency: _Optional[str] = ..., exchange_mic: _Optional[str] = ..., description: _Optional[str] = ..., lifecycle_state: _Optional[_Union[InstrumentLifecycleState, str]] = ..., version: _Optional[int] = ..., valid_from_ns: _Optional[int] = ..., record_time_ns: _Optional[int] = ..., sources: _Optional[_Iterable[_Union[InstrumentValueSource, _Mapping]]] = ..., offers: _Optional[_Iterable[_Union[OfferedValue, _Mapping]]] = ..., instrument_type: _Optional[_Union[InstrumentType, str]] = ..., money_market_fund: _Optional[_Union[MoneyMarketFund, _Mapping]] = ..., listing_venue_id: _Optional[str] = ...) -> None: ...
+    binary_event_contract: BinaryEventContract
+    def __init__(self, instrument_id: _Optional[str] = ..., identifiers: _Optional[_Iterable[_Union[Identifier, _Mapping]]] = ..., asset_class: _Optional[_Union[AssetClass, str]] = ..., currency: _Optional[str] = ..., exchange_mic: _Optional[str] = ..., description: _Optional[str] = ..., lifecycle_state: _Optional[_Union[InstrumentLifecycleState, str]] = ..., version: _Optional[int] = ..., valid_from_ns: _Optional[int] = ..., record_time_ns: _Optional[int] = ..., sources: _Optional[_Iterable[_Union[InstrumentValueSource, _Mapping]]] = ..., offers: _Optional[_Iterable[_Union[OfferedValue, _Mapping]]] = ..., instrument_type: _Optional[_Union[InstrumentType, str]] = ..., money_market_fund: _Optional[_Union[MoneyMarketFund, _Mapping]] = ..., listing_venue_id: _Optional[str] = ..., binary_event_contract: _Optional[_Union[BinaryEventContract, _Mapping]] = ...) -> None: ...
 
 class InstrumentValueSource(_message.Message):
     __slots__ = ("field", "identifier", "source", "person", "instance_id", "recorded_at_ns", "note", "acting_through_delegation", "client_name")
@@ -1931,13 +2117,14 @@ class OfferedValue(_message.Message):
     def __init__(self, value: _Optional[_Union[InstrumentValue, _Mapping]] = ..., instance_id: _Optional[str] = ..., offered_at_ns: _Optional[int] = ...) -> None: ...
 
 class InstrumentValue(_message.Message):
-    __slots__ = ("asset_class", "currency", "description", "identifier", "instrument_type", "money_market_fund", "source")
+    __slots__ = ("asset_class", "currency", "description", "identifier", "instrument_type", "money_market_fund", "binary_event_contract", "source")
     ASSET_CLASS_FIELD_NUMBER: _ClassVar[int]
     CURRENCY_FIELD_NUMBER: _ClassVar[int]
     DESCRIPTION_FIELD_NUMBER: _ClassVar[int]
     IDENTIFIER_FIELD_NUMBER: _ClassVar[int]
     INSTRUMENT_TYPE_FIELD_NUMBER: _ClassVar[int]
     MONEY_MARKET_FUND_FIELD_NUMBER: _ClassVar[int]
+    BINARY_EVENT_CONTRACT_FIELD_NUMBER: _ClassVar[int]
     SOURCE_FIELD_NUMBER: _ClassVar[int]
     asset_class: AssetClass
     currency: str
@@ -1945,8 +2132,9 @@ class InstrumentValue(_message.Message):
     identifier: Identifier
     instrument_type: InstrumentType
     money_market_fund: MoneyMarketFund
+    binary_event_contract: BinaryEventContract
     source: str
-    def __init__(self, asset_class: _Optional[_Union[AssetClass, str]] = ..., currency: _Optional[str] = ..., description: _Optional[str] = ..., identifier: _Optional[_Union[Identifier, _Mapping]] = ..., instrument_type: _Optional[_Union[InstrumentType, str]] = ..., money_market_fund: _Optional[_Union[MoneyMarketFund, _Mapping]] = ..., source: _Optional[str] = ...) -> None: ...
+    def __init__(self, asset_class: _Optional[_Union[AssetClass, str]] = ..., currency: _Optional[str] = ..., description: _Optional[str] = ..., identifier: _Optional[_Union[Identifier, _Mapping]] = ..., instrument_type: _Optional[_Union[InstrumentType, str]] = ..., money_market_fund: _Optional[_Union[MoneyMarketFund, _Mapping]] = ..., binary_event_contract: _Optional[_Union[BinaryEventContract, _Mapping]] = ..., source: _Optional[str] = ...) -> None: ...
 
 class MoneyMarketFund(_message.Message):
     __slots__ = ("category", "investors", "nav", "liquidity_fee")
@@ -1959,6 +2147,14 @@ class MoneyMarketFund(_message.Message):
     nav: MoneyMarketFundNav
     liquidity_fee: LiquidityFeeRegime
     def __init__(self, category: _Optional[_Union[MoneyMarketFundCategory, str]] = ..., investors: _Optional[_Union[MoneyMarketFundInvestors, str]] = ..., nav: _Optional[_Union[MoneyMarketFundNav, str]] = ..., liquidity_fee: _Optional[_Union[LiquidityFeeRegime, str]] = ...) -> None: ...
+
+class BinaryEventContract(_message.Message):
+    __slots__ = ("payout", "closes_at_ns")
+    PAYOUT_FIELD_NUMBER: _ClassVar[int]
+    CLOSES_AT_NS_FIELD_NUMBER: _ClassVar[int]
+    payout: Money
+    closes_at_ns: int
+    def __init__(self, payout: _Optional[_Union[Money, _Mapping]] = ..., closes_at_ns: _Optional[int] = ...) -> None: ...
 
 class AccountRecord(_message.Message):
     __slots__ = ("account_id", "name", "state", "created_at_ns", "custodian", "account_type", "owner", "note")
@@ -2606,6 +2802,62 @@ class Bar(_message.Message):
     trade_count: int
     def __init__(self, meta: _Optional[_Union[ObservationMeta, _Mapping]] = ..., open: _Optional[_Union[Money, _Mapping]] = ..., high: _Optional[_Union[Money, _Mapping]] = ..., low: _Optional[_Union[Money, _Mapping]] = ..., close: _Optional[_Union[Money, _Mapping]] = ..., volume: _Optional[_Union[Decimal, _Mapping]] = ..., vwap: _Optional[_Union[Money, _Mapping]] = ..., trade_count: _Optional[int] = ...) -> None: ...
 
+class Trade(_message.Message):
+    __slots__ = ("meta", "price", "quantity", "attributes", "aggressor", "source_sequence", "cancelled")
+    META_FIELD_NUMBER: _ClassVar[int]
+    PRICE_FIELD_NUMBER: _ClassVar[int]
+    QUANTITY_FIELD_NUMBER: _ClassVar[int]
+    ATTRIBUTES_FIELD_NUMBER: _ClassVar[int]
+    AGGRESSOR_FIELD_NUMBER: _ClassVar[int]
+    SOURCE_SEQUENCE_FIELD_NUMBER: _ClassVar[int]
+    CANCELLED_FIELD_NUMBER: _ClassVar[int]
+    meta: ObservationMeta
+    price: Money
+    quantity: Decimal
+    attributes: TradeAttributes
+    aggressor: Aggressor
+    source_sequence: int
+    cancelled: bool
+    def __init__(self, meta: _Optional[_Union[ObservationMeta, _Mapping]] = ..., price: _Optional[_Union[Money, _Mapping]] = ..., quantity: _Optional[_Union[Decimal, _Mapping]] = ..., attributes: _Optional[_Union[TradeAttributes, _Mapping]] = ..., aggressor: _Optional[_Union[Aggressor, str]] = ..., source_sequence: _Optional[int] = ..., cancelled: bool = ...) -> None: ...
+
+class TradeAttributes(_message.Message):
+    __slots__ = ("consolidated", "market_centre", "characteristics")
+    CONSOLIDATED_FIELD_NUMBER: _ClassVar[int]
+    MARKET_CENTRE_FIELD_NUMBER: _ClassVar[int]
+    CHARACTERISTICS_FIELD_NUMBER: _ClassVar[int]
+    consolidated: Eligibility
+    market_centre: Eligibility
+    characteristics: _containers.RepeatedScalarFieldContainer[TradeCharacteristic]
+    def __init__(self, consolidated: _Optional[_Union[Eligibility, _Mapping]] = ..., market_centre: _Optional[_Union[Eligibility, _Mapping]] = ..., characteristics: _Optional[_Iterable[_Union[TradeCharacteristic, str]]] = ...) -> None: ...
+
+class Eligibility(_message.Message):
+    __slots__ = ("high_low", "open", "close", "volume")
+    HIGH_LOW_FIELD_NUMBER: _ClassVar[int]
+    OPEN_FIELD_NUMBER: _ClassVar[int]
+    CLOSE_FIELD_NUMBER: _ClassVar[int]
+    VOLUME_FIELD_NUMBER: _ClassVar[int]
+    high_low: Eligible
+    open: Eligible
+    close: Eligible
+    volume: Eligible
+    def __init__(self, high_low: _Optional[_Union[Eligible, str]] = ..., open: _Optional[_Union[Eligible, str]] = ..., close: _Optional[_Union[Eligible, str]] = ..., volume: _Optional[_Union[Eligible, str]] = ...) -> None: ...
+
+class Quote(_message.Message):
+    __slots__ = ("meta", "bid", "ask", "bid_quantity", "ask_quantity", "characteristics")
+    META_FIELD_NUMBER: _ClassVar[int]
+    BID_FIELD_NUMBER: _ClassVar[int]
+    ASK_FIELD_NUMBER: _ClassVar[int]
+    BID_QUANTITY_FIELD_NUMBER: _ClassVar[int]
+    ASK_QUANTITY_FIELD_NUMBER: _ClassVar[int]
+    CHARACTERISTICS_FIELD_NUMBER: _ClassVar[int]
+    meta: ObservationMeta
+    bid: Money
+    ask: Money
+    bid_quantity: Decimal
+    ask_quantity: Decimal
+    characteristics: _containers.RepeatedScalarFieldContainer[QuoteCharacteristic]
+    def __init__(self, meta: _Optional[_Union[ObservationMeta, _Mapping]] = ..., bid: _Optional[_Union[Money, _Mapping]] = ..., ask: _Optional[_Union[Money, _Mapping]] = ..., bid_quantity: _Optional[_Union[Decimal, _Mapping]] = ..., ask_quantity: _Optional[_Union[Decimal, _Mapping]] = ..., characteristics: _Optional[_Iterable[_Union[QuoteCharacteristic, str]]] = ...) -> None: ...
+
 class SourceChoice(_message.Message):
     __slots__ = ("default", "named", "side_by_side")
     DEFAULT_FIELD_NUMBER: _ClassVar[int]
@@ -2841,3 +3093,15 @@ class WantWithdrawnEvent(_message.Message):
     want_id: str
     dataset: str
     def __init__(self, want_id: _Optional[str] = ..., dataset: _Optional[str] = ...) -> None: ...
+
+class TradesRecordedEvent(_message.Message):
+    __slots__ = ("trade",)
+    TRADE_FIELD_NUMBER: _ClassVar[int]
+    trade: Trade
+    def __init__(self, trade: _Optional[_Union[Trade, _Mapping]] = ...) -> None: ...
+
+class QuotesRecordedEvent(_message.Message):
+    __slots__ = ("quote",)
+    QUOTE_FIELD_NUMBER: _ClassVar[int]
+    quote: Quote
+    def __init__(self, quote: _Optional[_Union[Quote, _Mapping]] = ...) -> None: ...

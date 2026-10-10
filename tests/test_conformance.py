@@ -721,3 +721,112 @@ async def test_the_lakes_commands_and_reads_made_with_the_sdk_are_the_pinned_byt
     ):
         _, reply_pin = pinned(name, section)
         assert message.FromString(reply_pin).SerializeToString(deterministic=True) == reply_pin
+
+
+async def test_the_lakes_trades_and_quotes_made_with_the_sdk_are_the_pinned_bytes(
+    sidecar,
+) -> None:
+    """A dgm's batch of trades and of quotes, and a reader's reads of them --
+    over a range, and the latest quotes -- each made through the SDK's typed
+    operations, are the requests the lake's fixtures pin; and what the lake
+    answers and delivers reads back whole (W10.4 to W10.6, contract v19)."""
+    import meridian
+    from meridian.plugin.v1 import operations_pb2 as ops
+    from meridian.v1 import lake_pb2, sidecar_pb2
+
+    def pinned(name: str, section: str = "request") -> tuple[dict[str, Any], bytes]:
+        fixture = yaml.safe_load((fixtures_root() / _find(name)).read_text(encoding="utf-8"))
+        return (
+            fixture[section]["fields"],
+            base64.b64decode(fixture["expected_proto_bytes_b64"][section]),
+        )
+
+    def meta(given: dict[str, Any]) -> meridian.ObservationMeta:
+        return meridian.ObservationMeta(
+            row_key=given["row_key"],
+            subjects=[meridian.SubjectRef(**s) for s in given["subjects"]],
+            source=meridian.Source(**given["source"]),
+            valid_from_ns=given["valid_from_ns"],
+            source_times=[meridian.SourceTime(**t) for t in given.get("source_times", [])],
+            raw=meridian.RawRecordRef(**given["raw"]),
+        )
+
+    def money(given: dict[str, Any]) -> meridian.Money:
+        return meridian.Money(Decimal(given["amount"]), given["currency_code"])
+
+    trades, trades_pin = pinned("record-trades.yaml")
+    quotes, quotes_pin = pinned("record-quotes.yaml")
+    ranged, ranged_pin = pinned("list-trades.yaml")
+    latest, latest_pin = pinned("list-quotes.yaml")
+
+    service, address = sidecar
+    service.roles = ("dgm",)
+    service.operations.lake.datasets = {
+        "coinbase-1:trades": sidecar_pb2.DatasetDeclaration(key="trades", vendor="Coinbase"),
+        "coinbase-1:live": sidecar_pb2.DatasetDeclaration(key="live", vendor="Coinbase"),
+    }
+    plugin = await meridian.connect(address, heartbeat=False)
+    try:
+        trade = trades["trades"][0]
+        await plugin.record_trades(
+            trades=[
+                meridian.Trade(
+                    meta=meta(trade["meta"]),
+                    price=money(trade["price"]),
+                    quantity=Decimal(trade["quantity"]),
+                    attributes=meridian.TradeAttributes(
+                        consolidated=meridian.Eligibility(
+                            **trade["attributes"]["consolidated"]
+                        ),
+                        market_centre=meridian.Eligibility(
+                            **trade["attributes"]["market_centre"]
+                        ),
+                    ),
+                    aggressor=trade["aggressor"],
+                    source_sequence=trade["source_sequence"],
+                )
+            ]
+        )
+        quote = quotes["quotes"][0]
+        await plugin.record_quotes(
+            quotes=[
+                meridian.Quote(
+                    meta=meta(quote["meta"]),
+                    bid=money(quote["bid"]),
+                    ask=money(quote["ask"]),
+                    bid_quantity=Decimal(quote["bid_quantity"]),
+                    ask_quantity=Decimal(quote["ask_quantity"]),
+                )
+            ]
+        )
+        await plugin.list_trades(
+            subjects=[meridian.SubjectRef(**s) for s in ranged["subjects"]],
+            valid_from_ns=ranged["valid_from_ns"],
+            valid_until_ns=ranged["valid_until_ns"],
+        )
+        await plugin.list_quotes(
+            subjects=[meridian.SubjectRef(**s) for s in latest["subjects"]]
+        )
+    finally:
+        await plugin.leave()
+
+    by_type = {type(sent).__name__: sent for sent in service.operations.sent}
+    for params, domain, pin in (
+        ("RecordTradesParams", lake_pb2.RecordTradesRequest, trades_pin),
+        ("RecordQuotesParams", lake_pb2.RecordQuotesRequest, quotes_pin),
+        ("ListTradesParams", lake_pb2.ListTradesRequest, ranged_pin),
+        ("ListQuotesParams", lake_pb2.ListQuotesRequest, latest_pin),
+    ):
+        sent = domain.FromString(by_type[params].SerializeToString())
+        assert sent.SerializeToString(deterministic=True) == pin, params
+
+    for name, section, message in (
+        ("record-trades.yaml", "reply", ops.RecordTradesResult),
+        ("record-quotes.yaml", "reply", ops.RecordQuotesResult),
+        ("list-trades.yaml", "reply", ops.ListTradesResult),
+        ("list-quotes.yaml", "reply", ops.ListQuotesResult),
+        ("trades-recorded.yaml", "event", ops.TradesRecordedEvent),
+        ("quotes-recorded.yaml", "event", ops.QuotesRecordedEvent),
+    ):
+        _, reply_pin = pinned(name, section)
+        assert message.FromString(reply_pin).SerializeToString(deterministic=True) == reply_pin

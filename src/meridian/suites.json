@@ -937,10 +937,11 @@
     {
       "role": "dgm",
       "since": "v18",
-      "says": "A dgm plugin passing every case records each source's prices and bars exactly, under its dataset, its business date, its source's times and its raw record; restates a forming day under the same row key and sends an identical repeat unchanged; resolves every subject and venue before it records, reporting what does not resolve, and reads the record of a subject another source resolved to name it in its own; names a price in a token by the token's own cash instrument, never a fiat code; and records what a want asks, or declines it per subject.\n",
+      "says": "A dgm plugin passing every case records each source's prices and bars exactly, under its dataset, its business date, its source's times and its raw record; restates a forming day under the same row key and sends an identical repeat unchanged; resolves every subject and venue before it records, reporting what does not resolve, and reads the record of a subject another source resolved to name it in its own; names a price in a token by the token's own cash instrument, never a fiat code; and records what a want asks, or declines it per subject. From v19 it records each trade it publishes with the platform's trade attributes, converted at the edge, and the side that took liquidity where its source says it, a withdrawal as a new version; and each quote it publishes with the sides its source states; and keeps a standing want of a streamed dataset current. A case about a kind of data the plugin declares it never publishes is not presented, with why.\n",
       "cases": [
         {
           "name": "a-daily-close",
+          "about": "closes",
           "given": "the source states a daily close for a security, for a business date, with the time it published it",
           "expect": [
             {
@@ -975,6 +976,7 @@
         },
         {
           "name": "the-forming-day-restated",
+          "about": "closes",
           "given": "the source's candle for the day still forming changes as the day fills",
           "expect": [
             {
@@ -1011,6 +1013,7 @@
         },
         {
           "name": "a-daily-bar",
+          "about": "bars",
           "given": "the source states a day's open, high, low, close and volume, with no volume-weighted price",
           "expect": [
             {
@@ -1035,6 +1038,7 @@
         },
         {
           "name": "an-fx-rate",
+          "about": "a currency's rate against another currency",
           "given": "the source states a currency's rate against another currency for a business date",
           "expect": [
             {
@@ -1052,6 +1056,7 @@
         },
         {
           "name": "a-stablecoin-quote",
+          "about": "a crypto asset's price",
           "given": "the source quotes a crypto asset in a stablecoin with no ISO 4217 code",
           "expect": [
             {
@@ -1083,6 +1088,7 @@
         },
         {
           "name": "a-venue-resolved",
+          "about": "prices on a venue",
           "given": "the source names the venue a price originated on by its MIC",
           "expect": [
             {
@@ -1106,6 +1112,7 @@
         },
         {
           "name": "a-venue-not-held",
+          "about": "prices on a venue",
           "given": "the source names a venue the deployment does not hold",
           "expect": [
             {
@@ -1133,6 +1140,7 @@
         },
         {
           "name": "a-subject-another-source-resolved",
+          "about": "a security's price",
           "given": "the lake wants a business date's close for an instrument the deployment holds from another source, its record carrying that source's symbol and a CUSIP, which this source has never resolved",
           "expect": [
             {
@@ -1178,6 +1186,274 @@
             {
               "row": "RecordPrices",
               "sends": false
+            }
+          ]
+        },
+        {
+          "name": "a-trade-recorded",
+          "about": "trades",
+          "since": "v19",
+          "given": "the source's stream states a trade with no condition codes, its event time and the side that took liquidity",
+          "expect": [
+            {
+              "row": "RecordTrades",
+              "fields": {
+                "trades": [
+                  {
+                    "price": "<set>",
+                    "quantity": "<set>",
+                    "aggressor": "AGGRESSOR_BUY",
+                    "attributes": {
+                      "consolidated": {
+                        "high_low": "ELIGIBLE_ELIGIBLE",
+                        "open": "ELIGIBLE_ELIGIBLE",
+                        "close": "ELIGIBLE_ELIGIBLE",
+                        "volume": "ELIGIBLE_ELIGIBLE"
+                      },
+                      "market_centre": {
+                        "high_low": "ELIGIBLE_ELIGIBLE",
+                        "open": "ELIGIBLE_ELIGIBLE",
+                        "close": "ELIGIBLE_ELIGIBLE",
+                        "volume": "ELIGIBLE_ELIGIBLE"
+                      }
+                    },
+                    "meta": {
+                      "row_key": "<set>",
+                      "valid_from_ns": "<set>",
+                      "source": {
+                        "dataset": "<set>"
+                      },
+                      "raw": "<set>"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "the-makers-side-inverted",
+          "about": "trades",
+          "since": "v19",
+          "given": "the source states a trade naming the side of the resting order, a sell, rather than the side that took liquidity",
+          "expect": [
+            {
+              "row": "RecordTrades",
+              "fields": {
+                "trades": [
+                  {
+                    "aggressor": "AGGRESSOR_BUY"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "a-condition-converted",
+          "about": "trades",
+          "since": "v19",
+          "given": "the source states a trade whose condition says it was smaller than a round lot, not to set the high and low or the close, its volume counted",
+          "expect": [
+            {
+              "row": "RecordTrades",
+              "fields": {
+                "trades": [
+                  {
+                    "attributes": {
+                      "characteristics": [
+                        "TRADE_CHARACTERISTIC_ODD_LOT"
+                      ],
+                      "consolidated": {
+                        "high_low": "ELIGIBLE_NOT_ELIGIBLE",
+                        "close": "ELIGIBLE_NOT_ELIGIBLE",
+                        "volume": "ELIGIBLE_ELIGIBLE"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "a-condition-not-converted",
+          "about": "trades",
+          "since": "v19",
+          "given": "the source states a trade with a condition the plugin has no conversion for",
+          "expect": [
+            {
+              "row": "RecordTrades",
+              "fields": {
+                "trades": [
+                  {
+                    "meta": {
+                      "unconverted": "<set>"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "a-trade-withdrawn",
+          "about": "trades",
+          "since": "v19",
+          "given": "the source withdraws a trade it stated before",
+          "expect": [
+            {
+              "row": "RecordTrades",
+              "fields": {
+                "trades": [
+                  {
+                    "cancelled": true,
+                    "meta": {
+                      "row_key": "<set>"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "a-quote-recorded",
+          "about": "quotes",
+          "since": "v19",
+          "given": "the source states its best bid and offer, each with its size",
+          "expect": [
+            {
+              "row": "RecordQuotes",
+              "fields": {
+                "quotes": [
+                  {
+                    "bid": "<set>",
+                    "ask": "<set>",
+                    "bid_quantity": "<set>",
+                    "ask_quantity": "<set>",
+                    "meta": {
+                      "row_key": "<set>",
+                      "valid_from_ns": "<set>"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "a-one-sided-quote",
+          "about": "quotes",
+          "since": "v19",
+          "given": "the source states a best bid and no offer",
+          "expect": [
+            {
+              "row": "RecordQuotes",
+              "fields": {
+                "quotes": [
+                  {
+                    "bid": "<set>",
+                    "ask": "<unset>"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "a-standing-want-streamed",
+          "about": "trades",
+          "since": "v19",
+          "given": "the lake wants trades of a streamed dataset for a subject, standing, and the source's stream states a trade for it",
+          "expect": [
+            {
+              "row": "ObservationsWanted"
+            },
+            {
+              "row": "RecordTrades",
+              "fields": {
+                "trades": [
+                  {
+                    "meta": {
+                      "subjects": "<set>"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "role": "ems",
+      "since": "v19",
+      "says": "An ems plugin passing every case learns the datasets it may read, reads trades over a range and the latest quotes from the deployment's default sources unless it names others, hears every trade and the latest quotes the lake records after, narrowed to the subjects it asked for, and catches up the trades it lost after the watermark it last saw; it records nothing in the lake.\n",
+      "cases": [
+        {
+          "name": "reads-the-datasets-it-may-read",
+          "given": "an ems plugin starts in a deployment where it is entitled to datasets",
+          "expect": [
+            {
+              "row": "ListDatasets"
+            }
+          ]
+        },
+        {
+          "name": "reads-trades-over-a-range",
+          "given": "the plugin needs the trades of its subjects over a range within a day",
+          "expect": [
+            {
+              "row": "ListTrades",
+              "fields": {
+                "subjects": "<set>",
+                "valid_from_ns": "<set>",
+                "valid_until_ns": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "hears-a-trade-recorded",
+          "given": "the lake records a trade for a subject the plugin asked for",
+          "expect": [
+            {
+              "row": "TradesRecorded"
+            }
+          ]
+        },
+        {
+          "name": "catches-up-trades-after-a-watermark",
+          "given": "the plugin lost trades and reads those recorded after the watermark it last saw",
+          "expect": [
+            {
+              "row": "ListTrades",
+              "fields": {
+                "subjects": "<set>",
+                "after_watermark": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "reads-the-latest-quotes",
+          "given": "the plugin needs the latest quotes of its subjects",
+          "expect": [
+            {
+              "row": "ListQuotes",
+              "fields": {
+                "subjects": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "hears-a-quote-recorded",
+          "given": "the lake records a quote for a subject the plugin asked for",
+          "expect": [
+            {
+              "row": "QuotesRecorded"
             }
           ]
         }
@@ -1375,7 +1651,7 @@
     {
       "role": "reporting",
       "since": "v18",
-      "says": "A reporting plugin passing every case learns the datasets it may read, reads prices and bars by subject, a business date or a range, from the deployment's default sources unless it names others, and hears what the lake records after, narrowed to the subjects it asked for; it records nothing in the lake.\n",
+      "says": "A reporting plugin passing every case learns the datasets it may read, reads prices and bars by subject, a business date or a range, from the deployment's default sources unless it names others, and hears what the lake records after, narrowed to the subjects it asked for; it records nothing in the lake. From v19 it names an instrument by an identifier, such as its reporting currency by its ISO 4217 code, and has it resolved to the deployment's record, which mints nothing.\n",
       "cases": [
         {
           "name": "reads-the-datasets-it-may-read",
@@ -1433,13 +1709,31 @@
               "row": "BarsRecorded"
             }
           ]
+        },
+        {
+          "name": "resolves-its-reporting-currency",
+          "since": "v19",
+          "given": "the plugin's reporting currency is set by its ISO 4217 code, and no holding names that currency's cash instrument",
+          "expect": [
+            {
+              "row": "ResolveIdentifier",
+              "fields": {
+                "identifiers": [
+                  {
+                    "scheme": "iso4217",
+                    "value": "<set>"
+                  }
+                ]
+              }
+            }
+          ]
         }
       ]
     },
     {
       "role": "signal",
       "since": "v18",
-      "says": "A signal plugin passing every case learns the datasets it may read, reads prices and bars by subject, a business date or a range, from the deployment's default sources unless it names others, and hears what the lake records after, narrowed to the subjects it asked for; it records nothing in the lake.\n",
+      "says": "A signal plugin passing every case learns the datasets it may read, reads prices and bars by subject, a business date or a range, from the deployment's default sources unless it names others, and hears what the lake records after, narrowed to the subjects it asked for; from v19 it reads trades over a range and the latest quotes, hears every trade and the latest quotes recorded after, and catches up the trades it lost after the watermark it last saw; it records nothing in the lake.\n",
       "cases": [
         {
           "name": "reads-the-datasets-it-may-read",
@@ -1495,6 +1789,68 @@
           "expect": [
             {
               "row": "BarsRecorded"
+            }
+          ]
+        },
+        {
+          "name": "reads-trades-over-a-range",
+          "since": "v19",
+          "given": "the plugin needs the trades of its subjects over a range within a day",
+          "expect": [
+            {
+              "row": "ListTrades",
+              "fields": {
+                "subjects": "<set>",
+                "valid_from_ns": "<set>",
+                "valid_until_ns": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "hears-a-trade-recorded",
+          "since": "v19",
+          "given": "the lake records a trade for a subject the plugin asked for",
+          "expect": [
+            {
+              "row": "TradesRecorded"
+            }
+          ]
+        },
+        {
+          "name": "catches-up-trades-after-a-watermark",
+          "since": "v19",
+          "given": "the plugin lost trades and reads those recorded after the watermark it last saw",
+          "expect": [
+            {
+              "row": "ListTrades",
+              "fields": {
+                "subjects": "<set>",
+                "after_watermark": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "reads-the-latest-quotes",
+          "since": "v19",
+          "given": "the plugin needs the latest quotes of its subjects",
+          "expect": [
+            {
+              "row": "ListQuotes",
+              "fields": {
+                "subjects": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "hears-a-quote-recorded",
+          "since": "v19",
+          "given": "the lake records a quote for a subject the plugin asked for",
+          "expect": [
+            {
+              "row": "QuotesRecorded"
             }
           ]
         }

@@ -24,21 +24,35 @@ exactly where the store was, a change may be handed on twice rather than
 never.
 
 From contract v18 the lake's rows (`CONFLATED`: a price or a bar recorded, a
-want and its withdrawal) arrive on the same stream latest value first per
-key: under load the sidecar drops a superseded value rather than queueing
-it, so a gap between two of them is no loss, and no journal numbers them.
-Each is handed on as heard, unless one recorded after it under the same key
-was handed on already: a price's key its dataset, subjects, venue and kind,
-a bar's its dataset, subjects, venue and interval start (W10.5), and a row's
-place its sequence in its dataset, which the lake gives. A price or a
-bar is heard for the subjects the plugin names, and on its start, after a
-`Lost` naming it and after a broken stream it is read again, latest first,
-by its query (`caught_up_by`, every dataset side by side, as the stream
-delivers them), handed on marked `caught_up`. Each is handed on with the
-dataset it came from (`Heard.dataset`), as the catalogue declares it, which
-the lake's answer names once rather than on every row (spec/the-lake,
-requirement 6): learned once from `list_datasets`, where the plugin may list
-them.
+want and its withdrawal, and from v19 a quote recorded) arrive on the same
+stream latest value first per key: under load the sidecar drops a superseded
+value rather than queueing it, so a gap between two of them is no loss, and
+no journal numbers them. Each is handed on as heard, unless one recorded
+after it under the same key was handed on already: a price's key its
+dataset, subjects, venue, kind and, from v19, the asset it is in; a bar's
+its dataset, subjects, venue and interval start; a quote's its dataset,
+subjects, venue and asset (W10.5); and a row's place its sequence in its
+dataset, which the lake gives. A price, a bar or a quote is heard for the
+subjects the plugin names, and on its start, after a `Lost` naming it and
+after a broken stream it is read again, latest first, by its query
+(`caught_up_by`, every dataset side by side, as the stream delivers them),
+handed on marked `caught_up`. Each is handed on with the dataset it came
+from (`Heard.dataset`), as the catalogue declares it, which the lake's
+answer names once rather than on every row (spec/the-lake, requirement 6):
+learned once from `list_datasets`, where the plugin may list them.
+
+From contract v19 a trade recorded (`UNCONFLATED`) arrives in full: none is
+dropped for a later one, so every one is handed on, each once, in its
+dataset's order. What the plugin has had is the watermark it last saw, per
+dataset the sequence of the last trade handed on. After a `Lost` naming
+the row, and after a broken stream, the trades recorded after that
+watermark are read (`caught_up_by`, `after_watermark`, for the subjects
+named, every dataset side by side), a late or out-of-sequence print among
+them, and handed on marked `caught_up` before anything heard after. A
+dataset none of whose trades the plugin has had yet has no watermark to
+read after, and nothing is read of it; on its start nothing is read, since
+there is no latest trade to seed with: a plugin wanting the day's trades
+reads them by range (`list_trades`).
 """
 
 from __future__ import annotations
@@ -56,7 +70,7 @@ from meridian.plugin.v1 import operations_pb2 as ops
 
 from . import bounds
 from .errors import CallFailed, MeridianError, NotGranted
-from .operations import CONFLATED, DELIVERED, ConflatedRow, DeliveredRow
+from .operations import CONFLATED, DELIVERED, UNCONFLATED, ConflatedRow, DeliveredRow
 
 if TYPE_CHECKING:
     from .client import Plugin
@@ -113,9 +127,10 @@ class Heard(Generic[Message]):
     rest is the envelope's, empty for what was read.
 
     From contract v18, `dataset` is the dataset a price or a bar came from,
-    as its instance's catalogue declares it -- its vendor, its aggregator and
-    the instance serving it (spec/the-lake, requirement 6); None for any other
-    row, and where the plugin may not list the datasets.
+    and from v19 a trade or a quote, as its instance's catalogue declares it
+    -- its vendor, its aggregator and the instance serving it (spec/the-lake,
+    requirement 6); None for any other row, and where the plugin may not
+    list the datasets.
     """
 
     row: str
@@ -401,7 +416,8 @@ class _Follower:
 
 class _Latest:
     """The rows heard latest value first (contract v18), and the latest of
-    each key handed on."""
+    each key handed on; and what both they and the rows heard in full
+    (`_InFull`) share, the datasets they name."""
 
     def __init__(
         self,
@@ -447,20 +463,35 @@ class _Latest:
         return self.datasets.get(name)
 
     @staticmethod
-    def _key(row: ConflatedRow, record: Any) -> tuple[Any, ...]:
+    def _asset(*amounts: Any) -> str:
+        """The asset the first of `amounts` that is set is in: its cash
+        instrument, or its ISO 4217 code where only that is named."""
+        for money in amounts:
+            if money.instrument_id or money.currency_code:
+                return str(money.instrument_id or money.currency_code)
+        return ""
+
+    @classmethod
+    def _key(cls, row: ConflatedRow, record: Any) -> tuple[Any, ...]:
         """The key a row is delivered latest value first by (W10.5): its
-        dataset, subjects and venue, and a price's kind or a bar's interval
-        start."""
+        dataset, subjects and venue, and a price's kind and asset, a bar's
+        interval start, or a quote's asset (the asset from contract v19, so
+        BTC priced in USD and in USDC on one venue are two values)."""
         meta = record.meta
-        which = (
-            record.kind if "kind" in record.DESCRIPTOR.fields_by_name else meta.valid_from_ns
-        )
+        fields = record.DESCRIPTOR.fields_by_name
+        which: tuple[Any, ...]
+        if "kind" in fields:
+            which = (record.kind, cls._asset(record.price))
+        elif "bid" in fields:
+            which = (cls._asset(record.bid, record.ask),)
+        else:
+            which = (meta.valid_from_ns,)
         return (
             row.name,
             meta.source.dataset,
             tuple(subject.entity_id for subject in meta.subjects),
             meta.source.venue_id,
-            which,
+            *which,
         )
 
     async def hand(
@@ -468,14 +499,27 @@ class _Latest:
     ) -> None:
         """One row handed on, unless one recorded after it under its key was."""
         observation = self._meta(row, message)
-        dataset = None
         if observation is not None:
             key = self._key(row, getattr(message, row.within))
             if observation.sequence:
                 if self.handed.get(key, 0) >= observation.sequence:
                     return
                 self.handed[key] = observation.sequence
-            dataset = await self._dataset(observation.source.dataset)
+        await self._give(row, message, observation, caught_up=caught_up, meta=meta)
+
+    async def _give(
+        self,
+        row: ConflatedRow,
+        message: Any,
+        observation: Any,
+        *,
+        caught_up: bool,
+        meta: Any = None,
+    ) -> None:
+        """One row handed to its handler, with the dataset it came from."""
+        dataset = (
+            None if observation is None else await self._dataset(observation.source.dataset)
+        )
         own = (
             bool(meta.own)
             if meta is not None
@@ -541,6 +585,82 @@ class _Latest:
                         break
 
 
+class _InFull(_Latest):
+    """The rows heard in full (contract v19: the lake's trades), and the
+    watermark last seen of each: per dataset, the sequence of the last row
+    handed on."""
+
+    def __init__(
+        self,
+        plugin: Plugin,
+        rows: list[ConflatedRow],
+        handlers: Mapping[str, Handler],
+        subjects: tuple[str, ...],
+    ) -> None:
+        super().__init__(plugin, rows, handlers, subjects)
+        self.seen: dict[str, dict[str, int]] = {row.name: {} for row in rows}
+
+    async def hand(
+        self, row: ConflatedRow, message: Any, *, caught_up: bool, meta: Any = None
+    ) -> None:
+        """One row handed on, unless it was already: a row read after a loss
+        may be delivered too."""
+        observation = getattr(message, row.within).meta
+        seen = self.seen[row.name]
+        dataset = observation.source.dataset
+        if observation.sequence:
+            if observation.sequence <= seen.get(dataset, 0):
+                return
+            seen[dataset] = observation.sequence
+        await self._give(row, message, observation, caught_up=caught_up, meta=meta)
+
+    async def read(self, names: set[str] | None = None) -> None:
+        """Each row's records after the watermark last seen, for the subjects
+        named, every dataset side by side: after a loss or a broken stream.
+        All of them are read before any is handed on, in each dataset's
+        order, so the watermark moves only forward."""
+        if not self.subjects:
+            return
+        for row in self.rows:
+            seen = self.seen[row.name]
+            if not seen or (names is not None and row.name not in names):
+                continue
+            method = getattr(self.plugin, row.caught_up_by)
+            prefix = row.caught_up_by.upper()
+            most: int = getattr(bounds, f"{prefix}_REQUEST_SUBJECTS_COUNT").most
+            size: int = getattr(bounds, f"{prefix}_REQUEST_PAGE_SIZE_RANGE").most
+            after = ops.Watermark(
+                partitions=[
+                    ops.PartitionSequence(partition=dataset, sequence=sequence)
+                    for dataset, sequence in sorted(seen.items())
+                ]
+            )
+            records: list[Any] = []
+            for start in range(0, len(self.subjects), most):
+                subjects = [
+                    ops.SubjectRef(entity_id=entity)
+                    for entity in self.subjects[start : start + most]
+                ]
+                cursor = ""
+                while True:
+                    page = await method(
+                        subjects=subjects,
+                        sources=ops.SourceChoice(side_by_side=True),
+                        after_watermark=after,
+                        page_size=size,
+                        cursor=cursor,
+                    )
+                    records.extend(getattr(page, row.records))
+                    cursor = page.next_cursor
+                    if not cursor:
+                        break
+            records.sort(key=lambda record: (record.meta.source.dataset, record.meta.sequence))
+            for record in records:
+                message = row.message()
+                getattr(message, row.within).CopyFrom(record)
+                await self.hand(row, message, caught_up=True)
+
+
 async def follow(
     plugin: Plugin,
     handlers: Mapping[str, Handler | None],
@@ -552,7 +672,8 @@ async def follow(
     given = {name: handler for name, handler in handlers.items() if handler is not None}
     rows = [row for row in DELIVERED if row.name in given]
     latest_rows = [row for row in CONFLATED if row.name in given]
-    if not rows and not latest_rows:
+    full_rows = [row for row in UNCONFLATED if row.name in given]
+    if not rows and not latest_rows and not full_rows:
         raise ValueError("receive() names no row to hear: give a handler for at least one")
     if isinstance(subjects, str):
         raise TypeError("subjects is a sequence of entity IDs, not one string")
@@ -562,6 +683,9 @@ async def follow(
         raise ValueError(f"subjects names {len(wanted)}; at most {most}")
     follower = _Follower(plugin, rows, given)
     latest = _Latest(plugin, latest_rows, given, wanted)
+    full = _InFull(plugin, full_rows, given, wanted)
+    # One listing of the datasets, shared: each is learned once.
+    full.datasets, full.asked = latest.datasets, latest.asked
     watching = asyncio.create_task(_watch_scope(plugin, follower)) if rows else None
     started = False
     wait = RETRY_SECONDS
@@ -569,7 +693,11 @@ async def follow(
         while True:
             call = plugin._operations().Receive(
                 ops.ReceiveRequest(
-                    rows=[*(row.name for row in rows), *(row.name for row in latest_rows)],
+                    rows=[
+                        *(row.name for row in rows),
+                        *(row.name for row in latest_rows),
+                        *(row.name for row in full_rows),
+                    ],
                     subjects=list(wanted),
                 )
             )
@@ -594,6 +722,7 @@ async def follow(
                     else:
                         await follower.catch_up_all()
                         await latest.read()
+                        await full.read()
                 wait = RETRY_SECONDS
                 async for delivery in call:
                     async with follower.lock:
@@ -601,10 +730,14 @@ async def follow(
                         if which in latest.by_arm:
                             await latest.delivered(delivery)
                             continue
+                        if which in full.by_arm:
+                            await full.delivered(delivery)
+                            continue
                         await follower.delivered(delivery)
                         if which == "lost":
                             named = set(delivery.lost.rows)
                             await latest.read(named or None)
+                            await full.read(named or None)
                 _log.warning("the delivery stream ended; opening it again")
             except grpc.aio.AioRpcError as failed:
                 if failed.code() is grpc.StatusCode.PERMISSION_DENIED:

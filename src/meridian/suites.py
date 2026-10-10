@@ -20,9 +20,18 @@ not send is expected with its provenance stated, however the plugin closed it.
     assert report.passed, report.failures
 
 A case asserting one value of a closed list (`closed_list`) a plugin's source
-never presents may be named in `not_presented`, with why; every other case is
-required, and a case with no producer fails. The suites are meridian-schema's
-`boundaries/suites.json`, vendored with the bindings.
+never presents may be named in `not_presented`, with why; so, from contract
+v19, may a case about one kind of data (`about`: closes, bars, trades,
+quotes, prices on a venue) where the plugin declares it never publishes that
+kind -- a source of daily closes no trades, a crypto venue no rate between
+two currencies:
+
+    report = run("dgm", producers, not_presented={
+        "a-trade-recorded": "daily closes and bars only; this source states no trades",
+    })
+
+Every other case is required, and a case with no producer fails. The suites
+are meridian-schema's `boundaries/suites.json`, vendored with the bindings.
 
 A case may name a row the plugin hears rather than sends (a want delivered to
 a `dgm`, contract v18; an activity recorded, to an operations plugin): the
@@ -41,7 +50,13 @@ checks it beside what the plugin sent after:
 From contract v18 the suites hold the `dgm`'s (prices and bars recorded
 exactly, a forming day restated, every subject and venue resolved, a token's
 price on its own cash instrument, wants recorded against or declined), and
-the reading roles' (`reporting`, `portfolio`, `compliance`, `signal`).
+the reading roles' (`reporting`, `portfolio`, `compliance`, `signal`). From
+v19 the `dgm`'s hold trades and quotes (the platform's trade attributes, the
+side that took liquidity, a condition converted or kept as reported, a
+withdrawal, a quote two-sided or one-sided, a standing want streamed);
+`signal`'s and the new `ems` suite's, trades and quotes read, heard and
+caught up after a watermark; and `reporting`'s, its reporting currency
+resolved by its ISO 4217 code.
 """
 
 from __future__ import annotations
@@ -56,11 +71,17 @@ from typing import Any, cast
 
 from google.protobuf.message import Message
 
-from .operations import CONFLATED, DELIVERED, Operations, as_decimal
+from .operations import CONFLATED, DELIVERED, UNCONFLATED, Operations, as_decimal
 from .plugin.v1 import operations_pb2 as ops
 
 #: The rows a plugin hears rather than sends, by name.
-HEARD = frozenset({*(row.name for row in DELIVERED), *(row.name for row in CONFLATED)})
+HEARD = frozenset(
+    {
+        *(row.name for row in DELIVERED),
+        *(row.name for row in CONFLATED),
+        *(row.name for row in UNCONFLATED),
+    }
+)
 
 SET, UNSET = "<set>", "<unset>"
 
@@ -78,6 +99,9 @@ class Case:
     given: str
     expect: tuple[Expectation, ...]
     closed_list: str = ""
+    #: The kind of data the case is about, in the contract's words (contract
+    #: v19); empty for a case every plugin of the role answers.
+    about: str = ""
 
 
 @dataclass(frozen=True)
@@ -108,6 +132,7 @@ def suites() -> dict[str, Suite]:
                     name=case["name"],
                     given=case["given"],
                     closed_list=case.get("closed_list", ""),
+                    about=case.get("about", ""),
                     expect=tuple(
                         Expectation(
                             row=expected["row"],
@@ -152,11 +177,12 @@ class Recorder(Operations):
     Each call is kept as a `Sent` and answered as a sidecar would answer it
     in the ordinary case: a statement opened, a row recorded and resolved, an
     identifier resolved to a record this recorder names, a link made, no
-    accounts to link to; from contract v18 a batch of prices or bars recorded
-    whole, a venue resolved to a record this recorder names, a want declined,
-    a read answering nothing. `raw_record` and `note_not_carried` behave as a
-    plugin's do. Use `answer` to answer a row otherwise, and to give a row the
-    plugin hears what is delivered on it."""
+    accounts to link to; from contract v18 a batch of prices or bars (from v19
+    of trades or quotes) recorded whole, a venue resolved to a record this
+    recorder names, a want declined, a read answering nothing. `raw_record`
+    and `note_not_carried` behave as a plugin's do. Use `answer` to answer a
+    row otherwise, and to give a row the plugin hears what is delivered on
+    it."""
 
     def __init__(self, instance_id: str = "suite-plugin") -> None:
         self.instance_id = instance_id
@@ -247,6 +273,10 @@ def _ordinary(row: str, params: Any, n: int) -> Message:
         return ops.RecordPricesResult(recorded=len(params.prices))
     if row == "RecordBars":
         return ops.RecordBarsResult(recorded=len(params.bars))
+    if row == "RecordTrades":
+        return ops.RecordTradesResult(recorded=len(params.trades))
+    if row == "RecordQuotes":
+        return ops.RecordQuotesResult(recorded=len(params.quotes))
     if row == "ResolveVenue":
         return ops.ResolveVenueResult(
             found=True, venue=ops.VenueRecord(venue_id=f"VEN-suite-{n}")
@@ -405,7 +435,9 @@ async def run_async(
     `producers` maps each case's name to an async function that runs the
     plugin's own conversion, from its own exchange with its source for the
     case, against the `Recorder` it is given. `not_presented` names the
-    closed-list cases its source never presents, each with why."""
+    cases its source never presents, each with why: a closed-list case, or
+    from contract v19 a case about a kind of data (`about`) the plugin
+    declares it never publishes."""
     held = suite(role)
     report = Report(role)
     skipped = dict(not_presented or {})
@@ -414,9 +446,10 @@ async def run_async(
         report.failures[name] = f"no case of the {role} suite is named {name!r}"
     for case in held.cases:
         if case.name in skipped:
-            if not case.closed_list:
+            if not case.closed_list and not case.about:
                 report.failures[case.name] = (
-                    "only a closed-list case may be not presented; this one is required"
+                    "only a closed-list case, or one about a kind of data the plugin "
+                    "never publishes, may be not presented; this one is required"
                 )
             elif not skipped[case.name].strip():
                 report.failures[case.name] = "a case not presented says why"
