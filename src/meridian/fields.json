@@ -44,6 +44,18 @@
         {
           "message": "meridian.v1.ExternalAccountLink",
           "intent": "which account of the deployment an external account a plugin reported is recorded against"
+        },
+        {
+          "message": "meridian.v1.PluginSettingsRecord",
+          "intent": "a plugin instance's settings as the dashboard and core's tools may show them: values that are not secret, which secrets are set, and who last changed each"
+        },
+        {
+          "message": "meridian.v1.Hold",
+          "intent": "a hold on raw records: the least time a record is kept, for an edge role or every one, and who set it"
+        },
+        {
+          "message": "meridian.v1.MoveRecord",
+          "intent": "one move of an edge plugin's raw records, as the conductor recorded it"
         }
       ]
     },
@@ -62,6 +74,10 @@
         {
           "message": "meridian.v1.Notice",
           "intent": "one change to a ticket, told to a person in their inbox, naming the ticket and never quoting it"
+        },
+        {
+          "message": "meridian.v1.SettingShown",
+          "intent": "one declared setting as the Settings form and core's settings tool show it to the person reading it: the declaration, and whether they may set it and why not (contract v17)"
         }
       ]
     },
@@ -89,8 +105,36 @@
       ],
       "records": [
         {
+          "message": "meridian.v1.VenueRecord",
+          "intent": "the venue master's record of a venue the deployment pulled: its ID, kind, time zone, operating venue and dated identifiers (contract v18)"
+        },
+        {
           "message": "meridian.v1.InstrumentRecord",
           "intent": "the deployment's record of an instrument: its identifiers, asset class and currency, each value with where it came from"
+        }
+      ]
+    },
+    {
+      "name": "lake",
+      "proto_files": [
+        "meridian/v1/lake.proto"
+      ],
+      "records": [
+        {
+          "message": "meridian.v1.Price",
+          "intent": "a price of one kind for one subject, as one source stated it: closes, last prices, net asset values, settlement prices, bids, asks and mids, and FX rates as the price of a currency's cash instrument"
+        },
+        {
+          "message": "meridian.v1.Bar",
+          "intent": "open, high, low and close over an interval, as one source stated them"
+        },
+        {
+          "message": "meridian.v1.DatasetEntitlement",
+          "intent": "a plugin instance's entitlement to a dataset, every field or some, as a deployment admin set it"
+        },
+        {
+          "message": "meridian.v1.SourcePriority",
+          "intent": "the deployment's order of datasets a default read takes for one data type and kind, with who set it"
         }
       ]
     },
@@ -157,35 +201,44 @@
   },
   "identifiers": {
     "instrument": "meridian.v1.InstrumentRecord",
-    "account": "meridian.v1.AccountRecord"
+    "account": "meridian.v1.AccountRecord",
+    "venue": "meridian.v1.VenueRecord"
   },
   "operations": {
     "CloseBreaksAsCleared": "meridian.v1.CloseBreaksAsClearedRequest",
+    "DeclineWant": "meridian.v1.DeclineWantRequest",
     "HandleBreak": "meridian.v1.HandleBreakRequest",
     "LinkExternalAccount": "meridian.v1.LinkExternalAccountRequest",
     "ListAccountAttributes": "meridian.v1.ListAccountAttributesRequest",
     "ListAccountFigures": "meridian.v1.ListAccountFiguresRequest",
     "ListActivities": "meridian.v1.ListActivitiesRequest",
+    "ListBars": "meridian.v1.ListBarsRequest",
     "ListBreaks": "meridian.v1.ListBreaksRequest",
     "ListCustodialPositions": "meridian.v1.ListCustodialPositionsRequest",
+    "ListDatasets": "meridian.v1.ListDatasetsRequest",
     "ListPositions": "meridian.v1.ListPositionsRequest",
+    "ListPrices": "meridian.v1.ListPricesRequest",
     "ListStatements": "meridian.v1.ListStatementsRequest",
     "ListSyncStatuses": "meridian.v1.ListSyncStatusesRequest",
     "ReResolveActivity": "meridian.v1.ReResolveActivityRequest",
     "ReadAccountsForLinking": "meridian.v1.AccountsRequest",
     "RecordAccountFigures": "meridian.v1.RecordAccountFiguresRequest",
     "RecordActivity": "meridian.v1.RecordActivityRequest",
+    "RecordBars": "meridian.v1.RecordBarsRequest",
     "RecordBreak": "meridian.v1.RecordBreakRequest",
     "RecordEncumbrances": "meridian.v1.RecordEncumbrancesRequest",
     "RecordHolding": "meridian.v1.RecordHoldingRequest",
     "RecordHoldingsStatement": "meridian.v1.RecordHoldingsStatementRequest",
     "RecordOpeningBalance": "meridian.v1.RecordOpeningBalanceRequest",
+    "RecordPrices": "meridian.v1.RecordPricesRequest",
     "ReportExternalAccounts": "meridian.v1.ExternalAccountsEvent",
     "ReportMissingInstrument": "meridian.v1.MissingInstrumentDetectedEvent",
+    "ReportMissingVenue": "meridian.v1.MissingVenueDetectedEvent",
     "ReportSyncStatus": "meridian.v1.SyncStatusEvent",
     "ResolveBreak": "meridian.v1.ResolveBreakRequest",
     "ResolveIdentifier": "meridian.v1.ResolveIdentifierRequest",
     "ResolveInstrument": "meridian.v1.ResolveInstrumentRequest",
+    "ResolveVenue": "meridian.v1.ResolveVenueRequest",
     "SidecarFileTicket": "meridian.v1.FileTicketRequest",
     "SidecarHeartbeat": "meridian.v1.HeartbeatRequest",
     "SidecarLeave": "meridian.v1.LeaveRequest",
@@ -5244,6 +5297,611 @@
       "store": "conductor"
     },
     {
+      "name": "meridian.v1.SetPluginSettingsRequest.plugin_instance_id",
+      "type": "identifier instance",
+      "empty": "never empty",
+      "intent": "names the plugin instance whose settings change",
+      "meaning": "the instance as the deployment knows it, launched or installed by the chart",
+      "not_meaning": "a plugin's name or version",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v2",
+      "stability": "stable",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.SetPluginSettingsRequest.values",
+      "type": "repeated message PluginSettingValue",
+      "empty": "empty where the change only clears",
+      "intent": "lists the settings set or replaced",
+      "meaning": "each a declared setting's name and the value set, a table's rows written as its text; a secret's value only as a person typed it at the Settings form, never through /mcp",
+      "not_meaning": "every setting the plugin holds: one not named is left as it is",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v2",
+      "stability": "stable",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.SetPluginSettingsRequest.cleared",
+      "type": "repeated text",
+      "empty": "empty where nothing is cleared",
+      "intent": "lists the settings cleared",
+      "meaning": "declared settings' names whose values are removed, so the plugin's default applies; a secret cleared as the form's Clear does",
+      "not_meaning": "settings left unset by not being named",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v2",
+      "stability": "stable",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.SetPluginSettingsRequest.note",
+      "type": "text",
+      "empty": "empty where a person at the page gave none; never empty through /mcp, which refuses a change without one",
+      "intent": "says why the settings changed, kept with the change's record",
+      "meaning": "the words of the person, or of the agent acting for them, saying why (decisions/031's why); at most 2,000 characters, as a note on an instrument record",
+      "not_meaning": "an instruction to anyone who reads it: it is data, written by whoever made the change",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v17",
+      "stability": "stable",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.SetPluginSettingsRequest.against_updated_at_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "0: against a record read as never saved, refused once anything has been saved for the instance (contract v18); through /mcp it is required, and refused by name when left out",
+      "intent": "guards a change against a stale read",
+      "meaning": "the settings record's updated_at_ns as it was read; the conductor refuses the change, naming this field, where the record has changed since, a record never saved included",
+      "not_meaning": "when the change is made",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v17",
+      "changes": [
+        {
+          "version": "v18",
+          "kind": "clarified",
+          "what": "0 is a read of a record never saved, checked as any read is: refused once anything has been saved, where before v18 a change naming 0 went unchecked (v17's security review, I1, ruled 2026-10-09)"
+        }
+      ],
+      "stability": "stable",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.PluginSettingValue.name",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names a setting the plugin declared",
+      "meaning": "the declared setting's name (W4.1)",
+      "not_meaning": "its label, which a person reads",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v2",
+      "stability": "stable",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.PluginSettingValue.value",
+      "type": "text",
+      "empty": "never empty: clearing names the setting in cleared",
+      "intent": "carries the value set",
+      "meaning": "the value as its declared type reads it, a table's rows as their written text; on the record, never a secret's",
+      "not_meaning": "a value a plugin chose for itself, or a default, which is never stored",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v2",
+      "stability": "stable",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.PluginSettingsRecord.plugin_instance_id",
+      "type": "identifier instance",
+      "empty": "never empty",
+      "intent": "names the instance the settings are for",
+      "meaning": "the instance as the deployment knows it",
+      "not_meaning": "a plugin's name or version",
+      "filled": "decided",
+      "filled_by": "conductor",
+      "since": "v2",
+      "stability": "stable",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.PluginSettingsRecord.values",
+      "type": "repeated message PluginSettingValue",
+      "empty": "empty while none that is not secret is set",
+      "intent": "lists the values set that are not secret",
+      "meaning": "each setting set, as it stands, a table's rows included; a secret never",
+      "not_meaning": "the values the plugin uses, which take its defaults where none is set",
+      "filled": "decided",
+      "filled_by": "conductor",
+      "since": "v2",
+      "stability": "stable",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.PluginSettingsRecord.secrets_set",
+      "type": "repeated text",
+      "empty": "empty while no secret is set",
+      "intent": "says which secrets are set, never what they are",
+      "meaning": "the names of the secret settings, and of those held sealed, that hold a value",
+      "not_meaning": "a value, a hint of one, or whether it works",
+      "filled": "decided",
+      "filled_by": "conductor",
+      "since": "v2",
+      "stability": "stable",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.PluginSettingsRecord.updated_at_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "0 while nothing was ever changed",
+      "intent": "says when the settings last changed, any of them; a change names it to guard against a stale read",
+      "meaning": "the time of the latest change, a clear included",
+      "not_meaning": "when any one setting changed: changes says that",
+      "filled": "decided",
+      "filled_by": "conductor",
+      "since": "v2",
+      "stability": "stable",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.PluginSettingsRecord.declared_settings",
+      "type": "repeated message SettingDeclaration",
+      "empty": "empty before the plugin has registered",
+      "intent": "carries what the plugin declared, which the form and the tools are built from",
+      "meaning": "the settings declared at the plugin's latest registration (W4.8), every value checked against them",
+      "not_meaning": "what an older version declared",
+      "filled": "decided",
+      "filled_by": "conductor",
+      "since": "v2",
+      "stability": "stable",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.PluginSettingsRecord.updated_by",
+      "type": "text",
+      "empty": "empty while nothing was ever changed, and for a clear a re-declaration made",
+      "intent": "names who made the latest change",
+      "meaning": "the deployment-local subject of the person the dashboard stamped",
+      "not_meaning": "who changed any one setting: changes says that",
+      "filled": "stamped",
+      "filled_by": "dashboard",
+      "since": "v14",
+      "stability": "stable",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.PluginSettingsRecord.changes",
+      "type": "repeated message SettingLastChange",
+      "empty": "empty while nothing was ever changed, and from a conductor before v17",
+      "intent": "says, per setting, who last changed it and when, so a secret's being set is dated without its value",
+      "meaning": "one per setting ever changed, its latest change as its own record says it",
+      "not_meaning": "the history of changes, each its own record in the conductor, which no row reads yet",
+      "filled": "decided",
+      "filled_by": "conductor",
+      "since": "v17",
+      "stability": "stable",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.SettingLastChange.name",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the setting",
+      "meaning": "a declared setting's name, a secret's included",
+      "not_meaning": "its value",
+      "filled": "decided",
+      "filled_by": "conductor",
+      "since": "v17",
+      "stability": "stable",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.SettingLastChange.changed_by",
+      "type": "text",
+      "empty": "empty for a clear a re-declaration made",
+      "intent": "names who last changed the setting",
+      "meaning": "the deployment-local subject of the person the dashboard stamped",
+      "not_meaning": "who last changed any other setting",
+      "filled": "stamped",
+      "filled_by": "dashboard",
+      "since": "v17",
+      "stability": "stable",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.SettingLastChange.changed_at_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "never 0",
+      "intent": "says when the setting last changed",
+      "meaning": "the time of its latest change, set or cleared; for a secret, when it was set",
+      "not_meaning": "when the plugin received it",
+      "filled": "decided",
+      "filled_by": "conductor",
+      "since": "v17",
+      "stability": "stable",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.SettingLastChange.acting_through_delegation",
+      "type": "text",
+      "empty": "empty where the change was made in a browser, through no delegation, and on every record before v17, each of which was",
+      "intent": "names the delegation the person who last changed the setting acted through, beside them",
+      "meaning": "the delegation's identifier as the dashboard stamped it on the envelope: the CLI's, or an agent's through /mcp (W6.20)",
+      "not_meaning": "an actor of its own: the person is the actor, the delegation provenance",
+      "filled": "stamped",
+      "filled_by": "dashboard",
+      "since": "v17",
+      "stability": "stable",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.SettingLastChange.client_name",
+      "type": "text",
+      "empty": "empty whenever acting_through_delegation is",
+      "intent": "names the client the person who last changed the setting acted through, so the record reads \"by the person, through that client\" without a second read",
+      "meaning": "the client's registered name, as stamped beside the delegation",
+      "not_meaning": "a person's name, or anything that decides access",
+      "filled": "stamped",
+      "filled_by": "dashboard",
+      "since": "v17",
+      "stability": "stable",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.SettingLastChange.note",
+      "type": "text",
+      "empty": "empty where none was given: a person at the form may give none, and every change before v17 carried none",
+      "intent": "says why the setting last changed, beside who changed it, so an agent reads the reason a page shows",
+      "meaning": "the words of the person, or of the agent acting for them, saying why (decisions/031's why), as kept with the change; at most 2,000 characters; where the store backfilled or redacted the record, its own words saying so",
+      "not_meaning": "an instruction to anyone who reads it: it is data, written by whoever made the change",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v17",
+      "stability": "stable",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.SetHoldRequest.role",
+      "type": "text",
+      "empty": "empty for a hold over every edge role",
+      "intent": "names the edge role the hold covers",
+      "meaning": "one of decisions/028's edge roles; another is refused, naming it",
+      "not_meaning": "a plugin instance, or a person's role",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v16",
+      "stability": "stable",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.SetHoldRequest.days",
+      "type": "integer",
+      "unit": "days",
+      "empty": "0 clears the hold",
+      "intent": "sets the least time a record is kept",
+      "meaning": "the least number of days a record is kept anywhere, storage or archive, from when it was received; at most 36,500",
+      "not_meaning": "a window, which a plugin admin sets within it",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v16",
+      "stability": "stable",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.SetHoldRequest.write_once",
+      "type": "boolean",
+      "empty": "false: the hold is the deployment's policy, not enforced by the storage",
+      "intent": "asks for records that cannot be altered",
+      "meaning": "met only by an archive with object lock for the hold's length; refused where the archive cannot lock",
+      "not_meaning": "a regulatory claim: the deployment says what it enforces, never that a rule is met",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v16",
+      "stability": "stable",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.SetHoldRequest.note",
+      "type": "text",
+      "empty": "empty where a person at the page gave none; never empty through /mcp, which refuses a change without one",
+      "intent": "says why the hold is set, changed or cleared, kept with the change's record",
+      "meaning": "the words of the person, or of the agent acting for them, saying why (decisions/031's why); at most 2,000 characters, as a note on an instrument record",
+      "not_meaning": "an instruction to anyone who reads it: it is data, written by whoever made the change",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v17",
+      "stability": "stable",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.Hold.role",
+      "type": "text",
+      "empty": "empty for a hold over every edge role",
+      "intent": "names the edge role the hold covers",
+      "meaning": "as set",
+      "not_meaning": "a plugin instance",
+      "filled": "decided",
+      "filled_by": "conductor",
+      "since": "v16",
+      "stability": "stable",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.Hold.days",
+      "type": "integer",
+      "unit": "days",
+      "empty": "never 0: a cleared hold is not answered",
+      "intent": "says the least time a record is kept",
+      "meaning": "the least number of days, from when a record was received, as set",
+      "not_meaning": "a window",
+      "filled": "decided",
+      "filled_by": "conductor",
+      "since": "v16",
+      "stability": "stable",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.Hold.write_once",
+      "type": "boolean",
+      "empty": "false: not enforced by the storage",
+      "intent": "says whether the hold needs records that cannot be altered",
+      "meaning": "as set, met by an archive with object lock",
+      "not_meaning": "a regulatory claim",
+      "filled": "decided",
+      "filled_by": "conductor",
+      "since": "v16",
+      "stability": "stable",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.Hold.updated_by",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names who set the hold",
+      "meaning": "the deployment-local subject of the deployment admin the dashboard stamped",
+      "not_meaning": "an agent: an agent acts for the person, named by the delegation beside them",
+      "filled": "stamped",
+      "filled_by": "dashboard",
+      "since": "v16",
+      "stability": "stable",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.Hold.updated_at_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "never 0",
+      "intent": "says when the hold was set",
+      "meaning": "the time of its latest change, its own record",
+      "not_meaning": "when it began to apply to a record",
+      "filled": "decided",
+      "filled_by": "conductor",
+      "since": "v16",
+      "stability": "stable",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.Hold.acting_through_delegation",
+      "type": "text",
+      "empty": "empty where the change was made in a browser, through no delegation, and on every record before v17, each of which was",
+      "intent": "names the delegation the person who set the hold acted through, beside them",
+      "meaning": "the delegation's identifier as the dashboard stamped it on the envelope: the CLI's, or an agent's through /mcp (W6.20)",
+      "not_meaning": "an actor of its own: the person is the actor, the delegation provenance",
+      "filled": "stamped",
+      "filled_by": "dashboard",
+      "since": "v17",
+      "stability": "stable",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.Hold.client_name",
+      "type": "text",
+      "empty": "empty whenever acting_through_delegation is",
+      "intent": "names the client the person who set the hold acted through, so the record reads \"by the person, through that client\" without a second read",
+      "meaning": "the client's registered name, as stamped beside the delegation",
+      "not_meaning": "a person's name, or anything that decides access",
+      "filled": "stamped",
+      "filled_by": "dashboard",
+      "since": "v17",
+      "stability": "stable",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.Hold.note",
+      "type": "text",
+      "empty": "empty where none was given: a person at the page may give none, and every change before v17 carried none",
+      "intent": "says why the hold was last set or changed, beside who set it",
+      "meaning": "the words of the person, or of the agent acting for them, saying why (decisions/031's why), as kept with the change; at most 2,000 characters",
+      "not_meaning": "an instruction to anyone who reads it: it is data, written by whoever made the change",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v17",
+      "stability": "stable",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.MoveRecord.move",
+      "type": "message RecordMoveRequest",
+      "empty": "never unset",
+      "intent": "carries the move as the sidecar reported it",
+      "meaning": "the kind, the unit, its count and span, the outcome and the rule",
+      "not_meaning": "the content of a record, which no move carries",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v16",
+      "stability": "stable",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.MoveRecord.person",
+      "type": "text",
+      "empty": "empty for a window's move, whose rule the move names",
+      "intent": "names the person a move was done for",
+      "meaning": "the deployment-local subject from the envelope",
+      "not_meaning": "the plugin, which moves its own records",
+      "filled": "stamped",
+      "filled_by": "sidecar",
+      "since": "v16",
+      "stability": "stable",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.MoveRecord.at_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "never 0",
+      "intent": "says when the conductor recorded the move",
+      "meaning": "the record's time",
+      "not_meaning": "when the unit's records were received",
+      "filled": "decided",
+      "filled_by": "conductor",
+      "since": "v16",
+      "stability": "stable",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.MoveRecord.acting_through_delegation",
+      "type": "text",
+      "empty": "empty where the change was made in a browser, through no delegation, and on every record before v17, each of which was",
+      "intent": "names the delegation the person who asked for the move acted through, beside them",
+      "meaning": "the delegation's identifier as the dashboard stamped it on the envelope: the CLI's, or an agent's through /mcp (W6.20)",
+      "not_meaning": "an actor of its own: the person is the actor, the delegation provenance",
+      "filled": "stamped",
+      "filled_by": "dashboard",
+      "since": "v17",
+      "stability": "stable",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.MoveRecord.client_name",
+      "type": "text",
+      "empty": "empty whenever acting_through_delegation is",
+      "intent": "names the client the person who asked for the move acted through, so the record reads \"by the person, through that client\" without a second read",
+      "meaning": "the client's registered name, as stamped beside the delegation",
+      "not_meaning": "a person's name, or anything that decides access",
+      "filled": "stamped",
+      "filled_by": "dashboard",
+      "since": "v17",
+      "stability": "stable",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.SetDatasetLicenceRequest.dataset",
+      "type": "identifier dataset",
+      "empty": "never empty",
+      "intent": "names the dataset licensed",
+      "meaning": "a dataset a launched instance's catalogue declares; another is refused",
+      "not_meaning": "a vendor's product",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v18",
+      "stability": "preview",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.SetDatasetLicenceRequest.licence",
+      "type": "message DatasetLicence",
+      "empty": "never unset",
+      "intent": "carries the terms a deployment admin sets",
+      "meaning": "the terms, confirming or replacing the catalogue's default; its dataset and author are the request's and the dashboard's, whatever it carries",
+      "not_meaning": "a claim that the deployment meets the vendor's terms",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v18",
+      "stability": "preview",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.SetDatasetLicenceRequest.note",
+      "type": "text",
+      "empty": "empty where a person at the page gave none; never empty through /mcp, which refuses a change without one",
+      "intent": "says why the licence changed, kept with the change's record",
+      "meaning": "the words of the person, or of the agent acting for them",
+      "not_meaning": "an instruction to anyone who reads it: it is data",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v18",
+      "stability": "preview",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.SetDatasetEntitlementRequest.dataset",
+      "type": "identifier dataset",
+      "empty": "never empty",
+      "intent": "names the dataset",
+      "meaning": "a dataset a launched instance's catalogue declares",
+      "not_meaning": "a vendor's product",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v18",
+      "stability": "preview",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.SetDatasetEntitlementRequest.instance",
+      "type": "identifier instance",
+      "empty": "never empty",
+      "intent": "names the plugin instance entitled",
+      "meaning": "a launched instance",
+      "not_meaning": "a person",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v18",
+      "stability": "preview",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.SetDatasetEntitlementRequest.allowed",
+      "type": "boolean",
+      "empty": "false withdraws the entitlement",
+      "intent": "says whether the instance may read the dataset",
+      "meaning": "true entitles it; false withdraws it",
+      "not_meaning": "a licence to keep rows",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v18",
+      "stability": "preview",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.SetDatasetEntitlementRequest.fields",
+      "type": "repeated text",
+      "bounds": {
+        "count": [
+          0,
+          64
+        ]
+      },
+      "empty": "none: every field",
+      "intent": "narrows the entitlement to some fields",
+      "meaning": "fields by their dictionary entries, each an entry of the dataset's data types, or refused",
+      "not_meaning": "what the dataset fills",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v18",
+      "stability": "preview",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.SetDatasetEntitlementRequest.note",
+      "type": "text",
+      "empty": "empty where a person at the page gave none; never empty through /mcp",
+      "intent": "says why the entitlement changed",
+      "meaning": "the words of the person, or of the agent acting for them",
+      "not_meaning": "an instruction to anyone who reads it: it is data",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v18",
+      "stability": "preview",
+      "store": "conductor"
+    },
+    {
       "name": "meridian.v1.Ticket.filed_by",
       "type": "message TicketAuthor",
       "empty": "never unset",
@@ -5943,6 +6601,34 @@
       "store": "dashboard"
     },
     {
+      "name": "meridian.v1.SettingShown.may_set",
+      "type": "boolean",
+      "empty": "false where the setting serves a role the person does not administer through the delegation",
+      "intent": "says whether the person reading may set the setting",
+      "meaning": "true where they hold admin on every role the setting serves, through the delegation where they read through one (decisions/033 point 2), as the Settings form shows it editable; for a secret, that they may clear it, never type it through /mcp",
+      "not_meaning": "whether the value is set, or whether the change would be accepted: the conductor still checks it, and a window below a hold is refused",
+      "filled": "derived",
+      "filled_by": "dashboard",
+      "since": "v17",
+      "stability": "stable",
+      "kept_by": "dashboard",
+      "store": "dashboard"
+    },
+    {
+      "name": "meridian.v1.SettingShown.detail",
+      "type": "text",
+      "empty": "empty whenever may_set is true",
+      "intent": "says why the person may not set the setting",
+      "meaning": "the roles the setting serves, set by an admin of every one, as the form's read-only field says it on hover",
+      "not_meaning": "a refusal of a change: nothing was asked",
+      "filled": "derived",
+      "filled_by": "dashboard",
+      "since": "v17",
+      "stability": "stable",
+      "kept_by": "dashboard",
+      "store": "dashboard"
+    },
+    {
       "name": "meridian.v1.Envelope.meta",
       "type": "message MessageMeta",
       "empty": "never unset",
@@ -6143,11 +6829,18 @@
       "type": "text",
       "empty": "never empty",
       "intent": "says what kind of identifier a value is",
-      "meaning": "a global scheme -- figi, isin, cusip, sedol, iso4217 for a currency's cash, caip19 for a crypto asset, open_meridian for the platform's own -- or symbol, a source-scoped one",
+      "meaning": "a global scheme -- figi, isin, cusip, sedol, iso4217 for a currency's cash, caip19 for a crypto asset, open_meridian for the platform's own, and from v18 iso10383 for a venue's MIC -- or symbol, a source-scoped one",
       "not_meaning": "a source: a symbol means something only beside the source it came from",
       "filled": "as-reported",
       "filled_by": "custody",
       "since": "v2",
+      "changes": [
+        {
+          "version": "v18",
+          "kind": "clarified",
+          "what": "iso10383 names a venue's MIC, on a venue's identifiers (W3.14)"
+        }
+      ],
       "stability": "stable",
       "store": "instrument"
     },
@@ -6313,7 +7006,25 @@
       "filled": "decided",
       "filled_by": "instrument",
       "since": "v2",
+      "deprecated": {
+        "version": "v18",
+        "use": "meridian.v1.InstrumentRecord.listing_venue_id",
+        "why": "a listing venue is the venue master's ID, the MIC one of its identifiers; read until the platform's and the deployments' records carry venue IDs"
+      },
       "stability": "stable",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.InstrumentRecord.listing_venue_id",
+      "type": "identifier venue",
+      "empty": "empty where it is listed on no venue, or its venue is not yet known",
+      "intent": "names the venue an instrument is listed on",
+      "meaning": "the venue master's ID (VEN-): a segment's venue where the listing is on one",
+      "not_meaning": "where an account traded it, or a MIC",
+      "filled": "decided",
+      "filled_by": "instrument",
+      "since": "v18",
+      "stability": "preview",
       "store": "instrument"
     },
     {
@@ -7317,6 +8028,2561 @@
       "store": "instrument"
     },
     {
+      "name": "meridian.v1.VenueRecord.venue_id",
+      "type": "identifier venue",
+      "empty": "never empty",
+      "intent": "identifies a venue for life",
+      "meaning": "the venue master's ID, VEN-, minted by the platform; never changed and never reused",
+      "not_meaning": "a MIC, which is one of its identifiers, and which a crypto exchange or a dealer network lacks",
+      "filled": "minted",
+      "filled_by": "platform",
+      "since": "v18",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.VenueRecord.name",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the venue for a person",
+      "meaning": "its name as curation recorded it; a rename is an amend, the old name kept in its dated history",
+      "not_meaning": "its operator's legal name",
+      "filled": "decided",
+      "filled_by": "platform",
+      "since": "v18",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.VenueRecord.country_code",
+      "type": "text",
+      "bounds": {
+        "length": [
+          2,
+          2
+        ]
+      },
+      "empty": "never empty",
+      "intent": "says where the venue operates",
+      "meaning": "the ISO 3166-1 alpha-2 code",
+      "not_meaning": "where its operator is incorporated",
+      "filled": "decided",
+      "filled_by": "platform",
+      "since": "v18",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.VenueRecord.kind",
+      "type": "enum VenueKind",
+      "allowed": [
+        {
+          "value": "VENUE_KIND_UNSPECIFIED",
+          "meaning": "never on a record the platform answers"
+        },
+        {
+          "value": "VENUE_KIND_EXCHANGE",
+          "meaning": "a regulated exchange"
+        },
+        {
+          "value": "VENUE_KIND_ALTERNATIVE_TRADING_SYSTEM",
+          "meaning": "an alternative trading system or a multilateral trading facility, FX's anonymous central books among them"
+        },
+        {
+          "value": "VENUE_KIND_CRYPTO_EXCHANGE",
+          "meaning": "an exchange of crypto assets"
+        },
+        {
+          "value": "VENUE_KIND_DEALER_NETWORK",
+          "meaning": "a network of dealers quoting on request, over the counter or by indication: RFQ, OTC and, for now, IOI networks"
+        },
+        {
+          "value": "VENUE_KIND_REPORTING_FACILITY",
+          "meaning": "a facility trades are reported to, not traded on: a trade reporting facility, an alternative display facility, an approved publication arrangement"
+        }
+      ],
+      "empty": "never unspecified on a read",
+      "intent": "says what kind of venue it is",
+      "meaning": "the venue's kind, a closed list grown by revision",
+      "not_meaning": "its regulator, or the asset classes traded on it",
+      "filled": "decided",
+      "filled_by": "platform",
+      "since": "v18",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.VenueRecord.identifiers",
+      "type": "repeated message Identifier",
+      "empty": "none: a venue known by its name alone",
+      "intent": "carries the codes a venue is known by",
+      "meaning": "its ISO 10383 MIC under iso10383, operating or segment, where it has one, and vendors' codes as symbol with their source, in force from valid_from_ns",
+      "not_meaning": "a key: the venue's key is its venue_id",
+      "filled": "decided",
+      "filled_by": "platform",
+      "since": "v18",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.VenueRecord.operating_venue_id",
+      "type": "identifier venue",
+      "empty": "empty for a venue that is its own operating venue",
+      "intent": "names a segment's operating venue",
+      "meaning": "the venue master's ID of the operating venue a segment belongs to",
+      "not_meaning": "its operator's legal entity, which a later revision may point to by LEI",
+      "filled": "decided",
+      "filled_by": "platform",
+      "since": "v18",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.VenueRecord.time_zone",
+      "type": "text",
+      "bounds": {
+        "length": [
+          1,
+          64
+        ]
+      },
+      "empty": "never empty",
+      "intent": "says the venue's local time",
+      "meaning": "the IANA zone its trading day is defined in: America/New_York for US equity venues and FX venues' 17:00 roll, Etc/UTC for a crypto exchange",
+      "not_meaning": "a holiday calendar, which settlement calendars bring",
+      "filled": "decided",
+      "filled_by": "platform",
+      "since": "v18",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.VenueRecord.version",
+      "type": "integer",
+      "unit": "versions of the record",
+      "empty": "never 0",
+      "intent": "orders a venue's versions",
+      "meaning": "monotonic, assigned by the platform, from 1",
+      "not_meaning": "a count of the deployment's changes: a deployment keeps the platform's version",
+      "filled": "decided",
+      "filled_by": "platform",
+      "since": "v18",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.VenueRecord.valid_from_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "never 0",
+      "intent": "says when a version became true",
+      "meaning": "when this version's values and identifiers came into force",
+      "not_meaning": "when the platform recorded it",
+      "filled": "decided",
+      "filled_by": "platform",
+      "since": "v18",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.VenueRecord.record_time_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "never 0",
+      "intent": "says when the platform knew a version",
+      "meaning": "the platform's record time, never back-dated",
+      "not_meaning": "when the version became true",
+      "filled": "decided",
+      "filled_by": "platform",
+      "since": "v18",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.VenueRecord.lifecycle_state",
+      "type": "enum InstrumentLifecycleState",
+      "allowed": [
+        {
+          "value": "INSTRUMENT_LIFECYCLE_STATE_UNSPECIFIED",
+          "meaning": "never on a record the platform answers"
+        },
+        {
+          "value": "INSTRUMENT_LIFECYCLE_STATE_DEFINE",
+          "meaning": "never on a venue"
+        },
+        {
+          "value": "INSTRUMENT_LIFECYCLE_STATE_ACTIVE",
+          "meaning": "in force"
+        },
+        {
+          "value": "INSTRUMENT_LIFECYCLE_STATE_DECOMMISSIONED",
+          "meaning": "closed, or its MIC expired; it still resolves for a date it was in force"
+        }
+      ],
+      "empty": "never unspecified on a read",
+      "intent": "says whether a venue is in force",
+      "meaning": "active or decommissioned, the security master's lifecycle",
+      "not_meaning": "whether a deployment uses it",
+      "filled": "decided",
+      "filled_by": "platform",
+      "since": "v18",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.ResolveVenueRequest.identifiers",
+      "type": "repeated message Identifier",
+      "empty": "never empty",
+      "intent": "carries the codes a source named a venue by",
+      "meaning": "a MIC under iso10383, or a vendor's code as symbol with its source",
+      "not_meaning": "a venue ID, which needs no resolving",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v18",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.ResolveVenueRequest.as_of_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "0: now",
+      "intent": "says the date a venue resolution is for",
+      "meaning": "the reference time: a MIC names the venue in force then",
+      "not_meaning": "when the plugin asked",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v18",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.ResolveVenueReply.found",
+      "type": "boolean",
+      "empty": "false: a miss",
+      "intent": "says whether one venue the deployment holds was named",
+      "meaning": "true when exactly one did",
+      "not_meaning": "whether the platform holds it",
+      "filled": "decided",
+      "filled_by": "instrument",
+      "since": "v18",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.ResolveVenueReply.venue",
+      "type": "message VenueRecord",
+      "empty": "unset on a miss",
+      "intent": "answers the venue named",
+      "meaning": "the venue master's record as the deployment holds it",
+      "not_meaning": "a venue the deployment minted: it mints none",
+      "filled": "decided",
+      "filled_by": "instrument",
+      "since": "v18",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.ResolveVenueReply.miss_reason",
+      "type": "enum MissReason",
+      "allowed": [
+        {
+          "value": "MISS_REASON_UNSPECIFIED",
+          "meaning": "found"
+        },
+        {
+          "value": "MISS_REASON_NOT_FOUND",
+          "meaning": "no venue the deployment holds is named"
+        },
+        {
+          "value": "MISS_REASON_AMBIGUOUS",
+          "meaning": "more than one is"
+        }
+      ],
+      "empty": "unspecified when found",
+      "intent": "says why a venue did not resolve",
+      "meaning": "not found, or ambiguous",
+      "not_meaning": "an error",
+      "filled": "decided",
+      "filled_by": "instrument",
+      "since": "v18",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.MissingVenueDetectedEvent.source",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the namespace a venue miss occurred in",
+      "meaning": "the plugin's scheme for its source",
+      "not_meaning": "the venue",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v18",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.MissingVenueDetectedEvent.identifiers",
+      "type": "repeated message Identifier",
+      "empty": "never empty",
+      "intent": "carries everything the plugin held of the venue",
+      "meaning": "the codes the source gave, for the platform to answer by",
+      "not_meaning": "a request to mint: a deployment never mints a venue",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v18",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.MissingVenueDetectedEvent.as_of_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "0: now",
+      "intent": "says the date of the missed resolve",
+      "meaning": "its reference time",
+      "not_meaning": "when it was reported",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v18",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.MissingVenueDetectedEvent.publisher_instance_id",
+      "type": "identifier instance",
+      "empty": "empty from a plugin: the sidecar stamps it",
+      "intent": "names the instance that reported the miss",
+      "meaning": "the instance the sidecar serves",
+      "not_meaning": "the vendor",
+      "filled": "stamped",
+      "filled_by": "sidecar",
+      "since": "v18",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.MissingVenueDetectedEvent.reason",
+      "type": "enum MissReason",
+      "allowed": [
+        {
+          "value": "MISS_REASON_UNSPECIFIED",
+          "meaning": "not said"
+        },
+        {
+          "value": "MISS_REASON_NOT_FOUND",
+          "meaning": "no venue the deployment holds is named"
+        },
+        {
+          "value": "MISS_REASON_AMBIGUOUS",
+          "meaning": "more than one is"
+        }
+      ],
+      "empty": "unspecified where the publisher did not say",
+      "intent": "says why the venue resolve missed",
+      "meaning": "not found, or ambiguous",
+      "not_meaning": "an error",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v18",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.MissingVenueDetectedEvent.observed_at_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "never 0",
+      "intent": "says when the plugin saw the miss",
+      "meaning": "the time on the plugin's clock",
+      "not_meaning": "the reference time",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v18",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.ObservationMeta.row_key",
+      "type": "text",
+      "bounds": {
+        "length": [
+          1,
+          128
+        ]
+      },
+      "empty": "never empty",
+      "intent": "names one observation, so recording it again changes nothing",
+      "meaning": "the dgm's identity for this observation, made from its raw record: the same key with the same values is a repeat, with different values a restatement",
+      "not_meaning": "a key unique across datasets, or a trade identifier a venue would recognise",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "required": [
+        {
+          "row": "RecordPrices",
+          "since": "v18"
+        },
+        {
+          "row": "RecordBars",
+          "since": "v18"
+        }
+      ],
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ObservationMeta.subjects",
+      "type": "repeated message SubjectRef",
+      "bounds": {
+        "count": [
+          1,
+          8
+        ]
+      },
+      "empty": "never empty",
+      "intent": "names the entities a row is about",
+      "meaning": "the deployment's own entities, each resolved through W3.1 before the row is sent: for a price, the instrument priced; for an FX rate, the currency's cash instrument",
+      "not_meaning": "every entity a row mentions: a venue or a dealer is its source, not a subject",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "required": [
+        {
+          "row": "RecordPrices",
+          "since": "v18"
+        },
+        {
+          "row": "RecordBars",
+          "since": "v18"
+        }
+      ],
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ObservationMeta.source",
+      "type": "message Source",
+      "empty": "never unset",
+      "intent": "says where a row came from",
+      "meaning": "the writing instance and its version, the dataset, and the venue where the row is one venue's",
+      "not_meaning": "the dataset's vendor or aggregator, which its catalogue declares once and every answer carries",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "required": [
+        {
+          "row": "RecordPrices",
+          "since": "v18"
+        },
+        {
+          "row": "RecordBars",
+          "since": "v18"
+        }
+      ],
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ObservationMeta.valid_from_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "never 0",
+      "intent": "says when a value became true",
+      "meaning": "when the value became true, the event happened, or the period began, in UTC",
+      "not_meaning": "when anyone learnt it, which the source's times and the recorded time say",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "required": [
+        {
+          "row": "RecordPrices",
+          "since": "v18"
+        },
+        {
+          "row": "RecordBars",
+          "since": "v18"
+        }
+      ],
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ObservationMeta.valid_until_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "0: an instant, or a value in force until the next",
+      "intent": "says when a period ends",
+      "meaning": "the end of the period a value covers, exclusive; a daily value's is its day's end, so a value whose end lies after a read is still forming",
+      "not_meaning": "an expiry the source declared, which is a value of its own",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ObservationMeta.business_date",
+      "type": "date",
+      "empty": "empty: not a daily value",
+      "intent": "says which business day a daily value is for",
+      "meaning": "a plain date, YYYY-MM-DD, in the day the dataset declares (its time zone and the minute its day ends); an invalid date is refused",
+      "not_meaning": "the valid time's date in UTC, or a moment",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ObservationMeta.source_times",
+      "type": "repeated message SourceTime",
+      "bounds": {
+        "count": [
+          0,
+          6
+        ]
+      },
+      "empty": "none: the source gave no times of its own",
+      "intent": "keeps the source's own clocks beside the valid time",
+      "meaning": "each timestamp the source gave, at most one of each kind",
+      "not_meaning": "the lake's or the sidecar's times",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ObservationMeta.sent_at_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "0 from a plugin: the sidecar sends it empty, and the lake records the envelope's publication time, which the sidecar stamped",
+      "intent": "says when the row left the dgm's sidecar",
+      "meaning": "the envelope's publication time",
+      "not_meaning": "the source's time, or a time the plugin chose",
+      "filled": "stamped",
+      "filled_by": "sidecar",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ObservationMeta.recorded_at_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "never 0 on a row the lake answers; a plugin's value is never read",
+      "intent": "says when the lake committed this version",
+      "meaning": "the recorded time a point-in-time read cuts at",
+      "not_meaning": "when the value was true",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ObservationMeta.version",
+      "type": "integer",
+      "unit": "versions of the row key",
+      "empty": "never 0 on a row the lake answers; a plugin's value is never read",
+      "intent": "tells a restatement from the first record",
+      "meaning": "1 for the first record of the row key, one more for each restatement",
+      "not_meaning": "a count of identical repeats, which change nothing",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ObservationMeta.sequence",
+      "type": "integer",
+      "unit": "rows in the dataset's partition",
+      "empty": "never 0 on a row the lake answers; a plugin's value is never read",
+      "intent": "places a row in its dataset",
+      "meaning": "the dataset partition's next number, taken in the change's own transaction, so the numbers have no holes",
+      "not_meaning": "comparable across datasets",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ObservationMeta.previous_sequence",
+      "type": "integer",
+      "unit": "rows in the dataset's partition",
+      "empty": "0: the first row of its subject, data type and dataset",
+      "intent": "lets a reader narrowed to some subjects see a gap in its own",
+      "meaning": "the sequence of the previous row of the same subject, data type and dataset",
+      "not_meaning": "the previous row in the partition, which another subject's row may hold",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ObservationMeta.raw",
+      "type": "message RawRecordRef",
+      "empty": "never unset on a dgm's row",
+      "intent": "points to the raw record a row was converted from",
+      "meaning": "the record in the writing plugin's own storage, followed only through that plugin",
+      "not_meaning": "a channel to that storage",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "required": [
+        {
+          "row": "RecordPrices",
+          "since": "v18"
+        },
+        {
+          "row": "RecordBars",
+          "since": "v18"
+        }
+      ],
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ObservationMeta.unconverted",
+      "type": "repeated message AsReported",
+      "bounds": {
+        "count": [
+          0,
+          16
+        ]
+      },
+      "empty": "none: every value converted",
+      "intent": "carries each vendor value that failed conversion, beside the field left not known",
+      "meaning": "the vendor's value as sent, its scheme naming the plugin and the field; a venue the deployment does not hold yet travels here, its venue left not known",
+      "not_meaning": "a meaning: nothing past the plugin interprets it",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.SubjectRef.entity_id",
+      "type": "identifier entity",
+      "bounds": {
+        "length": [
+          1,
+          64
+        ]
+      },
+      "empty": "never empty",
+      "intent": "names one entity a row is about",
+      "meaning": "the deployment's own ID for an entity the entity store holds: in the lake's 1a an instrument's",
+      "not_meaning": "a vendor's identifier, which is resolved and never a key",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.Source.instance",
+      "type": "identifier instance",
+      "empty": "empty from a plugin: the sidecar stamps it",
+      "intent": "names the plugin instance that recorded a row",
+      "meaning": "the instance the writing sidecar serves",
+      "not_meaning": "the vendor",
+      "filled": "stamped",
+      "filled_by": "sidecar",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.Source.plugin_version",
+      "type": "text",
+      "bounds": {
+        "length": [
+          0,
+          64
+        ]
+      },
+      "empty": "empty from a plugin: the sidecar sends it empty, and the lake records the version the deployment launched the instance at",
+      "intent": "makes a parser's fix traceable",
+      "meaning": "the writing plugin's version when it recorded the row",
+      "not_meaning": "the contract version, or a version the plugin claims",
+      "filled": "stamped",
+      "filled_by": "sidecar",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.Source.dataset",
+      "type": "identifier dataset",
+      "bounds": {
+        "length": [
+          1,
+          96
+        ]
+      },
+      "empty": "never empty",
+      "intent": "names the dataset a row belongs to",
+      "meaning": "a dataset the writing instance's catalogue declares: the instance, a colon and the dataset's key",
+      "not_meaning": "a vendor's product code",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "required": [
+        {
+          "row": "RecordPrices",
+          "since": "v18"
+        },
+        {
+          "row": "RecordBars",
+          "since": "v18"
+        }
+      ],
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.Source.venue_id",
+      "type": "identifier venue",
+      "empty": "empty: not venue-specific, which is the consolidated view; a venue not yet held is not known, and its value as reported is in unconverted",
+      "intent": "names the venue an observation originated on",
+      "meaning": "the venue master's ID (VEN-), resolved through W3.14",
+      "not_meaning": "a MIC, which is one of the venue's identifiers; the dataset's distributor",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.SourceTime.kind",
+      "type": "enum SourceTimeKind",
+      "allowed": [
+        {
+          "value": "SOURCE_TIME_KIND_UNSPECIFIED",
+          "meaning": "refused"
+        },
+        {
+          "value": "SOURCE_TIME_KIND_EVENT",
+          "meaning": "when it happened at its origin"
+        },
+        {
+          "value": "SOURCE_TIME_KIND_CONSOLIDATED",
+          "meaning": "when a consolidator published it"
+        },
+        {
+          "value": "SOURCE_TIME_KIND_REPORTED",
+          "meaning": "when a reporting facility received it"
+        },
+        {
+          "value": "SOURCE_TIME_KIND_VENDOR_RECEIVED",
+          "meaning": "when the vendor received it"
+        },
+        {
+          "value": "SOURCE_TIME_KIND_PUBLISHED",
+          "meaning": "when the source released it: a close, a panel, a model"
+        }
+      ],
+      "empty": "unspecified is refused",
+      "intent": "says which of the source's clocks a timestamp is",
+      "meaning": "the clock",
+      "not_meaning": "a ranking of trust",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.SourceTime.at_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "never 0",
+      "intent": "carries one of the source's timestamps",
+      "meaning": "that clock's reading, in UTC, as the source gave it",
+      "not_meaning": "a time the dgm adjusted",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.DatasetRef.dataset",
+      "type": "identifier dataset",
+      "empty": "never empty",
+      "intent": "names a dataset an answer includes",
+      "meaning": "the dataset's ID in the deployment",
+      "not_meaning": "a vendor's product",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.DatasetRef.instance",
+      "type": "identifier instance",
+      "empty": "never empty",
+      "intent": "names the instance serving a dataset",
+      "meaning": "the plugin instance whose catalogue declares it",
+      "not_meaning": "the vendor",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.DatasetRef.vendor",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "says who originated a dataset's data",
+      "meaning": "the vendor its catalogue declares",
+      "not_meaning": "who distributed it",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.DatasetRef.aggregator",
+      "type": "text",
+      "empty": "empty: reached directly",
+      "intent": "says who carried a dataset's data, when an aggregator did",
+      "meaning": "the aggregator its catalogue declares",
+      "not_meaning": "the vendor",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.DatasetRef.declaration",
+      "type": "message DatasetDeclaration",
+      "empty": "unset in a read's answer; set in a listing of datasets and on an entitlements change",
+      "intent": "carries a dataset's catalogue entry",
+      "meaning": "the entry as its instance declared it",
+      "not_meaning": "the deployment's licence, which is the admin's",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.Price.meta",
+      "type": "message ObservationMeta",
+      "empty": "never unset",
+      "intent": "carries a price's envelope",
+      "meaning": "its key, subject, source, times, version and sequence",
+      "not_meaning": "the price",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "required": [
+        {
+          "row": "RecordPrices",
+          "since": "v18"
+        }
+      ],
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.Price.kind",
+      "type": "enum PriceKind",
+      "allowed": [
+        {
+          "value": "PRICE_KIND_UNSPECIFIED",
+          "meaning": "refused"
+        },
+        {
+          "value": "PRICE_KIND_CLOSE",
+          "meaning": "the dataset's declared close for the business date: the official close where the venue has one, otherwise the last price of the day the dataset declares"
+        },
+        {
+          "value": "PRICE_KIND_LAST",
+          "meaning": "the last eligible trade's price at the valid time"
+        },
+        {
+          "value": "PRICE_KIND_NAV",
+          "meaning": "a fund's net asset value per share, for the business date"
+        },
+        {
+          "value": "PRICE_KIND_SETTLEMENT",
+          "meaning": "a contract's settlement price, for the business date"
+        },
+        {
+          "value": "PRICE_KIND_BID",
+          "meaning": "the best bid at the valid time, or the business date's closing bid"
+        },
+        {
+          "value": "PRICE_KIND_ASK",
+          "meaning": "the best ask at the valid time, or the business date's closing ask"
+        },
+        {
+          "value": "PRICE_KIND_MID",
+          "meaning": "the mid at the valid time, or the business date's closing mid"
+        }
+      ],
+      "empty": "unspecified is refused",
+      "intent": "says which price a row is",
+      "meaning": "the kind of price",
+      "not_meaning": "the last trade at some hour, for a close",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.Price.price",
+      "type": "Money",
+      "unit": "the major unit of the asset the Money names, per one unit of the subject",
+      "required": [
+        {
+          "row": "RecordPrices",
+          "since": "v18"
+        }
+      ],
+      "empty": "never; a price with no amount is refused, and one whose value failed conversion is not known, its value as reported in unconverted",
+      "intent": "says what one unit of the subject was priced at, by this source",
+      "meaning": "the source's price of one unit of the subject, in the asset it was quoted in, that asset's cash instrument named; for a currency's cash instrument, the rate to the Money's asset; for an event contract, what one contract costs in the asset it pays out in",
+      "not_meaning": "a value of a position; a price converted into another asset by the dgm; a probability; adjusted for splits or dividends unless the dataset declares it so",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.Price.basis",
+      "type": "enum PriceBasis",
+      "allowed": [
+        {
+          "value": "PRICE_BASIS_UNSPECIFIED",
+          "meaning": "refused"
+        },
+        {
+          "value": "PRICE_BASIS_PER_UNIT",
+          "meaning": "per unit of the subject"
+        }
+      ],
+      "empty": "unspecified is refused",
+      "intent": "says what one unit of a price is",
+      "meaning": "per unit of the subject in the lake's 1a",
+      "not_meaning": "a percent of par, a yield or a spread, which come with fixed income",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.Bar.meta",
+      "type": "message ObservationMeta",
+      "empty": "never unset",
+      "intent": "carries a bar's envelope; its valid time is the interval",
+      "meaning": "its key, subject, source, interval, version and sequence; a daily bar names its business date",
+      "not_meaning": "the bar's prices",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "required": [
+        {
+          "row": "RecordBars",
+          "since": "v18"
+        }
+      ],
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.Bar.open",
+      "type": "Money",
+      "unit": "the major unit of the asset the Money names, per one unit of the subject",
+      "required": [
+        {
+          "row": "RecordBars",
+          "since": "v18"
+        }
+      ],
+      "empty": "never",
+      "intent": "says the interval's first eligible price",
+      "meaning": "the open, by the source's eligibility rules, in the same asset as the bar's other prices",
+      "not_meaning": "the official open, unless the dataset declares it",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.Bar.high",
+      "type": "Money",
+      "unit": "the major unit of the asset the Money names, per one unit of the subject",
+      "required": [
+        {
+          "row": "RecordBars",
+          "since": "v18"
+        }
+      ],
+      "empty": "never",
+      "intent": "says the interval's highest eligible price",
+      "meaning": "the high, by the source's eligibility rules",
+      "not_meaning": "a quote",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.Bar.low",
+      "type": "Money",
+      "unit": "the major unit of the asset the Money names, per one unit of the subject",
+      "required": [
+        {
+          "row": "RecordBars",
+          "since": "v18"
+        }
+      ],
+      "empty": "never",
+      "intent": "says the interval's lowest eligible price",
+      "meaning": "the low, by the source's eligibility rules",
+      "not_meaning": "a quote",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.Bar.close",
+      "type": "Money",
+      "unit": "the major unit of the asset the Money names, per one unit of the subject",
+      "required": [
+        {
+          "row": "RecordBars",
+          "since": "v18"
+        }
+      ],
+      "empty": "never",
+      "intent": "says the interval's last eligible price",
+      "meaning": "the interval's last eligible price",
+      "not_meaning": "the official close, which is a price of kind close",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.Bar.volume",
+      "type": "Decimal",
+      "bounds": {
+        "digits": 38,
+        "scale": [
+          0,
+          18
+        ]
+      },
+      "unit": "units of the instrument",
+      "required": [
+        {
+          "row": "RecordBars",
+          "since": "v18"
+        }
+      ],
+      "empty": "0 is a value: nothing traded",
+      "intent": "says how much traded in the interval",
+      "meaning": "the eligible quantity over the interval, never negative",
+      "not_meaning": "notional",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.Bar.vwap",
+      "type": "Money",
+      "unit": "the major unit of the asset the Money names, per one unit of the subject",
+      "empty": "unset: the source gave none",
+      "intent": "says the interval's volume-weighted average price",
+      "meaning": "the volume-weighted average price over the interval, in the bar's asset",
+      "not_meaning": "a price of kind close",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.Bar.trade_count",
+      "type": "integer",
+      "unit": "trades",
+      "empty": "unset: the source gave none; 0 is a value",
+      "intent": "says how many trades the interval held",
+      "meaning": "trades counted in the bar",
+      "not_meaning": "the volume",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.RecordPricesRequest.prices",
+      "type": "repeated message Price",
+      "bounds": {
+        "count": [
+          1,
+          500
+        ]
+      },
+      "empty": "never empty",
+      "intent": "carries a batch of prices",
+      "meaning": "1 to 500 prices, recorded whole or refused naming the item and field",
+      "not_meaning": "a transaction across datasets: each row is recorded in its own dataset's partition",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.RecordPricesRequest.want_id",
+      "type": "text",
+      "empty": "empty: recorded unasked",
+      "intent": "names the want a batch answers",
+      "meaning": "the want's identifier as it was delivered",
+      "not_meaning": "a key the plugin made",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.RecordBarsRequest.bars",
+      "type": "repeated message Bar",
+      "bounds": {
+        "count": [
+          1,
+          500
+        ]
+      },
+      "empty": "never empty",
+      "intent": "carries a batch of bars",
+      "meaning": "1 to 500 bars, recorded whole or refused naming the item and field",
+      "not_meaning": "a transaction across datasets",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.RecordBarsRequest.want_id",
+      "type": "text",
+      "empty": "empty: recorded unasked",
+      "intent": "names the want a batch answers",
+      "meaning": "the want's identifier as it was delivered",
+      "not_meaning": "a key the plugin made",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.RecordObservationsReply.recorded",
+      "type": "integer",
+      "unit": "rows",
+      "empty": "0 when none was new",
+      "intent": "counts the rows recorded for the first time",
+      "meaning": "rows whose key the lake had not held",
+      "not_meaning": "rows received",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.RecordObservationsReply.restated",
+      "type": "integer",
+      "unit": "rows",
+      "empty": "0 when none restated",
+      "intent": "counts the restatements",
+      "meaning": "rows recorded as a new version of a key held, its values different by value",
+      "not_meaning": "repeats at another scale: 764.2 and 764.20 are one value",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.RecordObservationsReply.unchanged",
+      "type": "integer",
+      "unit": "rows",
+      "empty": "0 when none repeated",
+      "intent": "counts the repeats",
+      "meaning": "rows identical to the version in force, which changed nothing",
+      "not_meaning": "rows refused",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.RecordObservationsReply.watermark",
+      "type": "message Watermark",
+      "empty": "never unset",
+      "intent": "says where the batch left its dataset",
+      "meaning": "the dataset partition's sequence once the batch committed",
+      "not_meaning": "a time",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.PricesRecordedEvent.price",
+      "type": "message Price",
+      "empty": "never unset",
+      "intent": "delivers a price the lake recorded",
+      "meaning": "the row as recorded, with its version and sequence",
+      "not_meaning": "every price: a reader hears what it is entitled to and asked for, latest first under load",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.BarsRecordedEvent.bar",
+      "type": "message Bar",
+      "empty": "never unset",
+      "intent": "delivers a bar the lake recorded",
+      "meaning": "the row as recorded, with its version and sequence",
+      "not_meaning": "every bar",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.SourceChoice.default",
+      "type": "boolean",
+      "empty": "false, with nothing else set, is the default too",
+      "intent": "asks for the deployment's priority",
+      "meaning": "the datasets the deployment's priority orders for the data type and kind, with failover",
+      "not_meaning": "the first dataset the reader is entitled to",
+      "filled": "as-reported",
+      "filled_by": "reporting",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.SourceChoice.named",
+      "type": "repeated identifier dataset",
+      "bounds": {
+        "count": [
+          0,
+          16
+        ]
+      },
+      "empty": "none: not named",
+      "intent": "asks for named datasets",
+      "meaning": "these datasets, in this order",
+      "not_meaning": "datasets the reader is not entitled to, which are answered as not entitled",
+      "filled": "as-reported",
+      "filled_by": "reporting",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.SourceChoice.side_by_side",
+      "type": "boolean",
+      "empty": "false: one source per value",
+      "intent": "asks for every entitled dataset at once",
+      "meaning": "each row from every dataset the reader is entitled to, each naming its own",
+      "not_meaning": "a mix: no read silently mixes sources",
+      "filled": "as-reported",
+      "filled_by": "reporting",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.Unanswered.subject",
+      "type": "message SubjectRef",
+      "empty": "unset where the whole dataset went unanswered",
+      "intent": "names the subject a part of a read was not answered for",
+      "meaning": "the entity asked about",
+      "not_meaning": "a subject that answered",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.Unanswered.dataset",
+      "type": "identifier dataset",
+      "empty": "empty where no dataset could serve it",
+      "intent": "names the dataset that did not answer",
+      "meaning": "the dataset asked, or the one a default read fell back past",
+      "not_meaning": "the dataset that did answer",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.Unanswered.field",
+      "type": "text",
+      "empty": "empty for the whole row",
+      "intent": "names the field not answered",
+      "meaning": "the field by its dictionary entry, meridian.v1.Bar.vwap",
+      "not_meaning": "a path into a request",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.Unanswered.reason",
+      "type": "enum UnansweredReason",
+      "allowed": [
+        {
+          "value": "UNANSWERED_REASON_UNSPECIFIED",
+          "meaning": "never sent"
+        },
+        {
+          "value": "UNANSWERED_REASON_NOT_ENTITLED",
+          "meaning": "the reader is not entitled to the dataset, or the field"
+        },
+        {
+          "value": "UNANSWERED_REASON_NOT_COVERED",
+          "meaning": "no dataset covers the subject"
+        },
+        {
+          "value": "UNANSWERED_REASON_ASKED_SOURCE",
+          "meaning": "the lake asked the dataset's source for it; the reader hears the rows once recorded"
+        },
+        {
+          "value": "UNANSWERED_REASON_SOURCE_SILENT",
+          "meaning": "the dataset recorded nothing for the subject within its cadence"
+        },
+        {
+          "value": "UNANSWERED_REASON_UNRESOLVED",
+          "meaning": "the subject is not one the deployment's entities resolve"
+        },
+        {
+          "value": "UNANSWERED_REASON_BEYOND_HISTORY",
+          "meaning": "older than the history the dataset reaches, or the lake keeps"
+        },
+        {
+          "value": "UNANSWERED_REASON_NOT_KEPT",
+          "meaning": "the dataset's licence forbids keeping it, and it was served, not kept"
+        }
+      ],
+      "empty": "never unspecified",
+      "intent": "says why a part of a read was not answered",
+      "meaning": "the reason",
+      "not_meaning": "a failure of the read: the rest still answer",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListPricesRequest.subjects",
+      "type": "repeated message SubjectRef",
+      "bounds": {
+        "count": [
+          1,
+          500
+        ]
+      },
+      "empty": "never empty",
+      "intent": "names the entities a read is about",
+      "meaning": "1 to 500 entities",
+      "not_meaning": "vendor identifiers",
+      "filled": "as-reported",
+      "filled_by": "reporting",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListPricesRequest.kinds",
+      "type": "repeated enum PriceKind",
+      "allowed": [
+        {
+          "value": "PRICE_KIND_UNSPECIFIED",
+          "meaning": "never asked"
+        },
+        {
+          "value": "PRICE_KIND_CLOSE",
+          "meaning": "closes"
+        },
+        {
+          "value": "PRICE_KIND_LAST",
+          "meaning": "last prices"
+        },
+        {
+          "value": "PRICE_KIND_NAV",
+          "meaning": "net asset values"
+        },
+        {
+          "value": "PRICE_KIND_SETTLEMENT",
+          "meaning": "settlement prices"
+        },
+        {
+          "value": "PRICE_KIND_BID",
+          "meaning": "bids"
+        },
+        {
+          "value": "PRICE_KIND_ASK",
+          "meaning": "asks"
+        },
+        {
+          "value": "PRICE_KIND_MID",
+          "meaning": "mids"
+        }
+      ],
+      "empty": "none: every kind",
+      "intent": "narrows a read to some kinds of price",
+      "meaning": "the kinds wanted",
+      "not_meaning": "a basis",
+      "filled": "as-reported",
+      "filled_by": "reporting",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListPricesRequest.sources",
+      "type": "message SourceChoice",
+      "empty": "unset: the deployment's default",
+      "intent": "says which datasets a read is answered from",
+      "meaning": "the default, named datasets, or every entitled dataset side by side",
+      "not_meaning": "an entitlement",
+      "filled": "as-reported",
+      "filled_by": "reporting",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListPricesRequest.at_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "0 with no business date and no range: the latest in force now",
+      "intent": "asks for the latest in force at a valid time",
+      "meaning": "the valid time",
+      "not_meaning": "a recorded time, which as_of_ns cuts",
+      "filled": "as-reported",
+      "filled_by": "reporting",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListPricesRequest.business_date",
+      "type": "date",
+      "empty": "empty: not a read by date",
+      "intent": "asks for a business date's prices",
+      "meaning": "a plain date, YYYY-MM-DD; an invalid date is refused",
+      "not_meaning": "a moment",
+      "filled": "as-reported",
+      "filled_by": "reporting",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListPricesRequest.valid_from_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "0: not a range",
+      "intent": "opens a valid-time range",
+      "meaning": "the range's start, inclusive",
+      "not_meaning": "a recorded time",
+      "filled": "as-reported",
+      "filled_by": "reporting",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListPricesRequest.valid_until_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "0: not a range",
+      "intent": "closes a valid-time range",
+      "meaning": "the range's end, exclusive",
+      "not_meaning": "a recorded time",
+      "filled": "as-reported",
+      "filled_by": "reporting",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListPricesRequest.as_of_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "0: what the lake knows now",
+      "intent": "reads what the lake knew at a recorded time",
+      "meaning": "the recorded-time cut-off: nothing recorded after it answers",
+      "not_meaning": "a valid time",
+      "filled": "as-reported",
+      "filled_by": "reporting",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListPricesRequest.page_size",
+      "type": "integer",
+      "unit": "rows",
+      "bounds": {
+        "range": {
+          "least": "0",
+          "most": "500"
+        },
+        "past": "capped"
+      },
+      "empty": "0 is 100; past 500, answered at 500",
+      "intent": "bounds a page",
+      "meaning": "how many rows a page holds at most",
+      "not_meaning": "a promise that a page is full",
+      "filled": "as-reported",
+      "filled_by": "reporting",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListPricesRequest.cursor",
+      "type": "text",
+      "empty": "empty for the first page",
+      "intent": "asks for the next page",
+      "meaning": "the previous reply's next_cursor, as given",
+      "not_meaning": "a position a plugin computes",
+      "filled": "as-reported",
+      "filled_by": "reporting",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListPricesReply.prices",
+      "type": "repeated message Price",
+      "empty": "none answered",
+      "intent": "carries a page of prices",
+      "meaning": "the rows, each naming its dataset",
+      "not_meaning": "every subject asked: unanswered says which were not",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListPricesReply.unanswered",
+      "type": "repeated message Unanswered",
+      "empty": "none: every part answered",
+      "intent": "says what a read could not serve, and why",
+      "meaning": "each subject, dataset and field not answered, with its reason; a default read's fallback names why the datasets above it did not answer",
+      "not_meaning": "a refusal of the read",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListPricesReply.datasets",
+      "type": "repeated message DatasetRef",
+      "empty": "none when no row answered",
+      "intent": "says what each dataset in the answer is, once",
+      "meaning": "each dataset with its instance, vendor and aggregator",
+      "not_meaning": "the datasets the reader may read, which ListDatasets answers",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListPricesReply.watermark",
+      "type": "message Watermark",
+      "empty": "never unset",
+      "intent": "says where the read was answered",
+      "meaning": "the sequence per dataset partition the read was answered at",
+      "not_meaning": "a time",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListPricesReply.next_cursor",
+      "type": "text",
+      "empty": "empty when the read is exhausted",
+      "intent": "lets a reader ask for the next page",
+      "meaning": "an opaque cursor",
+      "not_meaning": "a count",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListBarsRequest.subjects",
+      "type": "repeated message SubjectRef",
+      "bounds": {
+        "count": [
+          1,
+          500
+        ]
+      },
+      "empty": "never empty",
+      "intent": "names the entities a read is about",
+      "meaning": "1 to 500 entities",
+      "not_meaning": "vendor identifiers",
+      "filled": "as-reported",
+      "filled_by": "reporting",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListBarsRequest.interval_ns",
+      "type": "integer",
+      "unit": "nanoseconds",
+      "empty": "0: every length",
+      "intent": "narrows a read to bars of one length",
+      "meaning": "the bars' length: a day's, a minute's",
+      "not_meaning": "a time range",
+      "filled": "as-reported",
+      "filled_by": "reporting",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListBarsRequest.sources",
+      "type": "message SourceChoice",
+      "empty": "unset: the deployment's default",
+      "intent": "says which datasets a read is answered from",
+      "meaning": "the default, named datasets, or every entitled dataset side by side",
+      "not_meaning": "an entitlement",
+      "filled": "as-reported",
+      "filled_by": "reporting",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListBarsRequest.at_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "0 with no business date and no range: the latest in force now",
+      "intent": "asks for the latest bar in force at a valid time",
+      "meaning": "the valid time",
+      "not_meaning": "a recorded time",
+      "filled": "as-reported",
+      "filled_by": "reporting",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListBarsRequest.business_date",
+      "type": "date",
+      "empty": "empty: not a read by date",
+      "intent": "asks for a business date's bars",
+      "meaning": "a plain date, YYYY-MM-DD; an invalid date is refused",
+      "not_meaning": "a moment",
+      "filled": "as-reported",
+      "filled_by": "reporting",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListBarsRequest.valid_from_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "0: not a range",
+      "intent": "opens a valid-time range",
+      "meaning": "the range's start, inclusive",
+      "not_meaning": "a recorded time",
+      "filled": "as-reported",
+      "filled_by": "reporting",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListBarsRequest.valid_until_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "0: not a range",
+      "intent": "closes a valid-time range",
+      "meaning": "the range's end, exclusive",
+      "not_meaning": "a recorded time",
+      "filled": "as-reported",
+      "filled_by": "reporting",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListBarsRequest.as_of_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "0: what the lake knows now",
+      "intent": "reads what the lake knew at a recorded time",
+      "meaning": "the recorded-time cut-off",
+      "not_meaning": "a valid time",
+      "filled": "as-reported",
+      "filled_by": "reporting",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListBarsRequest.page_size",
+      "type": "integer",
+      "unit": "rows",
+      "bounds": {
+        "range": {
+          "least": "0",
+          "most": "500"
+        },
+        "past": "capped"
+      },
+      "empty": "0 is 100; past 500, answered at 500",
+      "intent": "bounds a page",
+      "meaning": "how many rows a page holds at most",
+      "not_meaning": "a promise that a page is full",
+      "filled": "as-reported",
+      "filled_by": "reporting",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListBarsRequest.cursor",
+      "type": "text",
+      "empty": "empty for the first page",
+      "intent": "asks for the next page",
+      "meaning": "the previous reply's next_cursor, as given",
+      "not_meaning": "a position a plugin computes",
+      "filled": "as-reported",
+      "filled_by": "reporting",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListBarsReply.bars",
+      "type": "repeated message Bar",
+      "empty": "none answered",
+      "intent": "carries a page of bars",
+      "meaning": "the rows, each naming its dataset",
+      "not_meaning": "every subject asked",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListBarsReply.unanswered",
+      "type": "repeated message Unanswered",
+      "empty": "none: every part answered",
+      "intent": "says what a read could not serve, and why",
+      "meaning": "each subject, dataset and field not answered, with its reason",
+      "not_meaning": "a refusal of the read",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListBarsReply.datasets",
+      "type": "repeated message DatasetRef",
+      "empty": "none when no row answered",
+      "intent": "says what each dataset in the answer is, once",
+      "meaning": "each dataset with its instance, vendor and aggregator",
+      "not_meaning": "the datasets the reader may read",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListBarsReply.watermark",
+      "type": "message Watermark",
+      "empty": "never unset",
+      "intent": "says where the read was answered",
+      "meaning": "the sequence per dataset partition the read was answered at",
+      "not_meaning": "a time",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListBarsReply.next_cursor",
+      "type": "text",
+      "empty": "empty when the read is exhausted",
+      "intent": "lets a reader ask for the next page",
+      "meaning": "an opaque cursor",
+      "not_meaning": "a count",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ObservationsWantedEvent.want_id",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names a want",
+      "meaning": "the want's identifier, which the rows recorded for it name",
+      "not_meaning": "a reader's identity: readers' identical wants are one",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ObservationsWantedEvent.dataset",
+      "type": "identifier dataset",
+      "empty": "never empty",
+      "intent": "names the dataset a want is of",
+      "meaning": "a dataset the hearing instance serves",
+      "not_meaning": "another instance's dataset: a want is delivered to the instance serving it alone",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ObservationsWantedEvent.data_type",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the data type wanted",
+      "meaning": "the data type by its message's full name: meridian.v1.Price or meridian.v1.Bar",
+      "not_meaning": "a kind of price",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ObservationsWantedEvent.subjects",
+      "type": "repeated message SubjectRef",
+      "bounds": {
+        "count": [
+          1,
+          500
+        ]
+      },
+      "empty": "never empty",
+      "intent": "names the entities wanted",
+      "meaning": "the deployment's entities, which the dgm resolves to its vendor's codes at the edge",
+      "not_meaning": "vendor identifiers",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ObservationsWantedEvent.kinds",
+      "type": "repeated enum PriceKind",
+      "allowed": [
+        {
+          "value": "PRICE_KIND_UNSPECIFIED",
+          "meaning": "never sent"
+        },
+        {
+          "value": "PRICE_KIND_CLOSE",
+          "meaning": "closes"
+        },
+        {
+          "value": "PRICE_KIND_LAST",
+          "meaning": "last prices"
+        },
+        {
+          "value": "PRICE_KIND_NAV",
+          "meaning": "net asset values"
+        },
+        {
+          "value": "PRICE_KIND_SETTLEMENT",
+          "meaning": "settlement prices"
+        },
+        {
+          "value": "PRICE_KIND_BID",
+          "meaning": "bids"
+        },
+        {
+          "value": "PRICE_KIND_ASK",
+          "meaning": "asks"
+        },
+        {
+          "value": "PRICE_KIND_MID",
+          "meaning": "mids"
+        }
+      ],
+      "empty": "none: every kind, or not a want of prices",
+      "intent": "narrows a want of prices to some kinds",
+      "meaning": "the kinds wanted",
+      "not_meaning": "a basis",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ObservationsWantedEvent.interval_ns",
+      "type": "integer",
+      "unit": "nanoseconds",
+      "empty": "0: not a want of bars",
+      "intent": "names the length of the bars wanted",
+      "meaning": "the bars' length",
+      "not_meaning": "a time range",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ObservationsWantedEvent.business_date",
+      "type": "date",
+      "empty": "empty: not a want by date",
+      "intent": "names the business date wanted",
+      "meaning": "a plain date, YYYY-MM-DD, in the dataset's declared day",
+      "not_meaning": "a moment",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ObservationsWantedEvent.valid_from_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "0: not a range",
+      "intent": "opens the valid-time range wanted",
+      "meaning": "the range's start, inclusive",
+      "not_meaning": "a recorded time",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ObservationsWantedEvent.valid_until_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "0: not a range",
+      "intent": "closes the valid-time range wanted",
+      "meaning": "the range's end, exclusive",
+      "not_meaning": "a recorded time",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ObservationsWantedEvent.standing",
+      "type": "boolean",
+      "empty": "false: fetch once",
+      "intent": "asks the dgm to keep subjects current",
+      "meaning": "keep the subjects current, by stream or schedule, until the want is withdrawn",
+      "not_meaning": "a subscription a plugin holds: the lake withdraws it when no reader asks",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.WantWithdrawnEvent.want_id",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the want withdrawn",
+      "meaning": "a standing want no reader asked within the dataset's cadence",
+      "not_meaning": "a decline",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.WantWithdrawnEvent.dataset",
+      "type": "identifier dataset",
+      "empty": "never empty",
+      "intent": "names the dataset of the want withdrawn",
+      "meaning": "a dataset the hearing instance serves",
+      "not_meaning": "another instance's dataset",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.DeclineWantRequest.want_id",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the want declined",
+      "meaning": "the want's identifier as it was delivered",
+      "not_meaning": "a key the plugin made",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.DeclineWantRequest.subjects",
+      "type": "repeated message SubjectRef",
+      "bounds": {
+        "count": [
+          1,
+          500
+        ]
+      },
+      "empty": "never empty",
+      "intent": "names the subjects declined",
+      "meaning": "subjects of the want the dgm cannot serve",
+      "not_meaning": "subjects it served, which it recorded",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.DeclineWantRequest.reason",
+      "type": "enum UnansweredReason",
+      "allowed": [
+        {
+          "value": "UNANSWERED_REASON_UNSPECIFIED",
+          "meaning": "refused"
+        },
+        {
+          "value": "UNANSWERED_REASON_NOT_ENTITLED",
+          "meaning": "refused: entitlement is the lake's to answer"
+        },
+        {
+          "value": "UNANSWERED_REASON_NOT_COVERED",
+          "meaning": "the source does not cover the subjects"
+        },
+        {
+          "value": "UNANSWERED_REASON_ASKED_SOURCE",
+          "meaning": "refused: the lake's to answer"
+        },
+        {
+          "value": "UNANSWERED_REASON_SOURCE_SILENT",
+          "meaning": "the source did not answer"
+        },
+        {
+          "value": "UNANSWERED_REASON_UNRESOLVED",
+          "meaning": "refused: the lake's to answer"
+        },
+        {
+          "value": "UNANSWERED_REASON_BEYOND_HISTORY",
+          "meaning": "older than the source reaches"
+        },
+        {
+          "value": "UNANSWERED_REASON_NOT_KEPT",
+          "meaning": "refused: the lake's to answer"
+        }
+      ],
+      "empty": "unspecified is refused",
+      "intent": "says why the dgm cannot serve subjects of a want",
+      "meaning": "not covered, source silent or beyond history; the readers' next answers carry it",
+      "not_meaning": "an error in the plugin",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.DatasetEntitlement.dataset",
+      "type": "identifier dataset",
+      "empty": "never empty",
+      "intent": "names the dataset entitled",
+      "meaning": "a dataset a launched instance's catalogue declares",
+      "not_meaning": "a vendor's product",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.DatasetEntitlement.instance",
+      "type": "identifier instance",
+      "empty": "never empty",
+      "intent": "names the plugin instance entitled",
+      "meaning": "a launched instance, which may read the dataset",
+      "not_meaning": "a person: entitlements per person come later",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.DatasetEntitlement.allowed",
+      "type": "boolean",
+      "empty": "false: withdrawn",
+      "intent": "says whether the instance may read the dataset",
+      "meaning": "true, it may; false, the entitlement withdrawn",
+      "not_meaning": "a licence to keep the rows",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.DatasetEntitlement.fields",
+      "type": "repeated text",
+      "bounds": {
+        "count": [
+          0,
+          64
+        ]
+      },
+      "empty": "none: every field",
+      "intent": "narrows an entitlement to some fields",
+      "meaning": "the fields by their dictionary entries; the sidecar strips the rest from every delivery and reply, naming each not entitled",
+      "not_meaning": "the fields a dataset fills",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.DatasetEntitlement.updated_by",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names who set the entitlement",
+      "meaning": "the deployment-local subject the dashboard stamped",
+      "not_meaning": "an email address",
+      "filled": "stamped",
+      "filled_by": "dashboard",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.DatasetEntitlement.updated_at_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "never 0",
+      "intent": "says when it was set",
+      "meaning": "when the conductor recorded the change",
+      "not_meaning": "when it takes effect at the broker, which is at once",
+      "filled": "decided",
+      "filled_by": "conductor",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.DatasetEntitlement.acting_through_delegation",
+      "type": "text",
+      "empty": "empty: set in a browser",
+      "intent": "names the delegation a person acted through",
+      "meaning": "the delegation's ID, as the dashboard stamped it",
+      "not_meaning": "an access token",
+      "filled": "stamped",
+      "filled_by": "dashboard",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.DatasetEntitlement.client_name",
+      "type": "text",
+      "empty": "empty: set in a browser",
+      "intent": "names the client a person acted through",
+      "meaning": "the client's name, as its delegation recorded it",
+      "not_meaning": "a person",
+      "filled": "stamped",
+      "filled_by": "dashboard",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.DatasetEntitlement.note",
+      "type": "text",
+      "empty": "empty where none was given at the page; never through /mcp",
+      "intent": "says why the entitlement was set",
+      "meaning": "the note kept with the change's record",
+      "not_meaning": "a description of the dataset",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.SourcePriority.data_type",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the data type a priority is for",
+      "meaning": "meridian.v1.Price or meridian.v1.Bar",
+      "not_meaning": "a kind of price",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.SourcePriority.kind",
+      "type": "enum PriceKind",
+      "allowed": [
+        {
+          "value": "PRICE_KIND_UNSPECIFIED",
+          "meaning": "for bars"
+        },
+        {
+          "value": "PRICE_KIND_CLOSE",
+          "meaning": "closes"
+        },
+        {
+          "value": "PRICE_KIND_LAST",
+          "meaning": "last prices"
+        },
+        {
+          "value": "PRICE_KIND_NAV",
+          "meaning": "net asset values"
+        },
+        {
+          "value": "PRICE_KIND_SETTLEMENT",
+          "meaning": "settlement prices"
+        },
+        {
+          "value": "PRICE_KIND_BID",
+          "meaning": "bids"
+        },
+        {
+          "value": "PRICE_KIND_ASK",
+          "meaning": "asks"
+        },
+        {
+          "value": "PRICE_KIND_MID",
+          "meaning": "mids"
+        }
+      ],
+      "empty": "unspecified for bars",
+      "intent": "names the kind of price a priority is for",
+      "meaning": "the kind",
+      "not_meaning": "a basis",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.SourcePriority.datasets",
+      "type": "repeated identifier dataset",
+      "bounds": {
+        "count": [
+          0,
+          16
+        ]
+      },
+      "empty": "none: no default, so a default read is answered not covered",
+      "intent": "orders the datasets a default read takes",
+      "meaning": "first to last, a dataset silent beyond its cadence passed over for the next",
+      "not_meaning": "the datasets a reader is entitled to",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.SourcePriority.updated_by",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names who set the priority",
+      "meaning": "the deployment-local subject the dashboard stamped",
+      "not_meaning": "an email address",
+      "filled": "stamped",
+      "filled_by": "dashboard",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.SourcePriority.updated_at_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "never 0",
+      "intent": "says when it was set, and guards against a stale change",
+      "meaning": "when the lake journalled the change",
+      "not_meaning": "a version number",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.SourcePriority.acting_through_delegation",
+      "type": "text",
+      "empty": "empty: set in a browser",
+      "intent": "names the delegation a person acted through",
+      "meaning": "the delegation's ID, as the dashboard stamped it",
+      "not_meaning": "an access token",
+      "filled": "stamped",
+      "filled_by": "dashboard",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.SourcePriority.client_name",
+      "type": "text",
+      "empty": "empty: set in a browser",
+      "intent": "names the client a person acted through",
+      "meaning": "the client's name, as its delegation recorded it",
+      "not_meaning": "a person",
+      "filled": "stamped",
+      "filled_by": "dashboard",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.SourcePriority.note",
+      "type": "text",
+      "empty": "empty where none was given at the page; never through /mcp",
+      "intent": "says why the priority was set",
+      "meaning": "the note kept with the change's record",
+      "not_meaning": "a description of a dataset",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.SetSourcePriorityRequest.data_type",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the data type a priority is for",
+      "meaning": "meridian.v1.Price or meridian.v1.Bar",
+      "not_meaning": "a kind of price",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.SetSourcePriorityRequest.kind",
+      "type": "enum PriceKind",
+      "allowed": [
+        {
+          "value": "PRICE_KIND_UNSPECIFIED",
+          "meaning": "for bars"
+        },
+        {
+          "value": "PRICE_KIND_CLOSE",
+          "meaning": "closes"
+        },
+        {
+          "value": "PRICE_KIND_LAST",
+          "meaning": "last prices"
+        },
+        {
+          "value": "PRICE_KIND_NAV",
+          "meaning": "net asset values"
+        },
+        {
+          "value": "PRICE_KIND_SETTLEMENT",
+          "meaning": "settlement prices"
+        },
+        {
+          "value": "PRICE_KIND_BID",
+          "meaning": "bids"
+        },
+        {
+          "value": "PRICE_KIND_ASK",
+          "meaning": "asks"
+        },
+        {
+          "value": "PRICE_KIND_MID",
+          "meaning": "mids"
+        }
+      ],
+      "empty": "unspecified for bars",
+      "intent": "names the kind of price a priority is for",
+      "meaning": "the kind",
+      "not_meaning": "a basis",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.SetSourcePriorityRequest.datasets",
+      "type": "repeated identifier dataset",
+      "bounds": {
+        "count": [
+          0,
+          16
+        ]
+      },
+      "empty": "none: clears the priority",
+      "intent": "replaces the order whole",
+      "meaning": "first to last",
+      "not_meaning": "a change to one place in the order",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.SetSourcePriorityRequest.note",
+      "type": "text",
+      "empty": "empty only at the page; through /mcp refused",
+      "intent": "says why",
+      "meaning": "the note kept with the change's record",
+      "not_meaning": "a description of a dataset",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.SetSourcePriorityRequest.against_updated_at_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "0 when no priority was set",
+      "intent": "refuses a change made over another unseen",
+      "meaning": "the priority's updated_at_ns as it was read; refused when it has changed since",
+      "not_meaning": "when the change takes effect",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListSourcePrioritiesReply.priorities",
+      "type": "repeated message SourcePriority",
+      "empty": "none set",
+      "intent": "lists the deployment's priorities",
+      "meaning": "each with who set it and when",
+      "not_meaning": "the datasets themselves",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListDatasetsReply.datasets",
+      "type": "repeated message DatasetRef",
+      "empty": "none the reader may read",
+      "intent": "lists the datasets a reader may read, with their catalogue entries",
+      "meaning": "each with its instance, vendor, aggregator and declaration; to the dashboard, every launched dataset",
+      "not_meaning": "the rows",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListDatasetsReply.licences",
+      "type": "repeated message DatasetLicence",
+      "empty": "none set: each dataset is kept and read by its catalogue's default",
+      "intent": "says each dataset's licence",
+      "meaning": "the deployment's licence of each dataset listed, as a deployment admin set it",
+      "not_meaning": "a claim that a deployment meets a vendor's terms",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListDatasetsReply.entitlements",
+      "type": "repeated message DatasetEntitlement",
+      "empty": "none",
+      "intent": "says who may read the datasets listed",
+      "meaning": "to the dashboard every entitlement; to a plugin, its own",
+      "not_meaning": "another plugin's entitlement, which a plugin never reads",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
       "name": "meridian.v1.Decimal.high",
       "type": "integer",
       "unit": "none: the upper 64 bits of the value's integer",
@@ -7400,6 +10666,14 @@
         {
           "row": "RecordActivity",
           "since": "v14"
+        },
+        {
+          "row": "RecordPrices",
+          "since": "v18"
+        },
+        {
+          "row": "RecordBars",
+          "since": "v18"
         }
       ],
       "empty": "never unset in an amount that is set: the amount is the Money",
@@ -7414,13 +10688,32 @@
     {
       "name": "meridian.v1.Money.currency_code",
       "type": "text",
-      "empty": "never empty on an amount that is set",
-      "intent": "names the currency an amount is in",
-      "meaning": "the ISO 4217 code, USD",
-      "not_meaning": "a symbol or a currency's name; a pseudo-currency a source reports for an account's base, which a plugin converts to the base's code",
+      "empty": "never empty on an amount that is set, before v18; from v18 empty for an asset with no ISO 4217 code, which instrument_id alone names",
+      "intent": "names the currency an amount is in, where it has an ISO 4217 code",
+      "meaning": "the ISO 4217 code, USD; from v18 a plugin may name a fiat currency by it alone, and core resolves it, dated, to the currency's cash instrument",
+      "not_meaning": "a symbol or a currency's name; a pseudo-currency a source reports for an account's base, which a plugin converts to the base's code; a token's code (USDC, USDT), which is refused here",
       "filled": "as-reported",
       "since": "v2",
+      "changes": [
+        {
+          "version": "v18",
+          "kind": "clarified",
+          "what": "a Money names its cash instrument (decisions/023 as amended): the code is one of that instrument's identifiers, empty for an asset with none, and a token's code is refused"
+        }
+      ],
       "stability": "stable",
+      "store": "shared"
+    },
+    {
+      "name": "meridian.v1.Money.instrument_id",
+      "type": "identifier instrument",
+      "empty": "empty from a plugin that named a fiat currency by currency_code alone, which core resolves; never empty on what core keeps and answers",
+      "intent": "names the cash instrument an amount is in",
+      "meaning": "the deployment's own ID for the asset's cash instrument, fiat and tokens alike: a USDT amount names USDT's instrument and is never a USD amount; both set must name the same asset, and neither set is refused",
+      "not_meaning": "the instrument an amount prices: a price's subject is the row's",
+      "filled": "as-reported",
+      "since": "v18",
+      "stability": "preview",
       "store": "shared"
     },
     {
@@ -8262,6 +11555,414 @@
       "filled_by": "plugin",
       "since": "v11",
       "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.PluginDeclaration.catalogue",
+      "type": "message Catalogue",
+      "empty": "unset serves the lake no dataset",
+      "intent": "declares the datasets a dgm serves the lake (W8.1, W10.4)",
+      "meaning": "its catalogue, approved at launch with its roles; only on a version holding dgm, refused otherwise",
+      "not_meaning": "a declaration of support: the canonical role is the requirement",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v18",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.Catalogue.datasets",
+      "type": "repeated message DatasetDeclaration",
+      "bounds": {
+        "count": [
+          0,
+          32
+        ]
+      },
+      "empty": "none: the catalogue serves nothing",
+      "intent": "lists the datasets a dgm serves",
+      "meaning": "each dataset, its key once",
+      "not_meaning": "a licence: the deployment licenses each",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v18",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.DatasetDeclaration.key",
+      "type": "text",
+      "bounds": {
+        "length": [
+          1,
+          40
+        ]
+      },
+      "empty": "never empty",
+      "intent": "names a dataset within its plugin",
+      "meaning": "1 to 40 characters, lowercase letters, digits and underscores, beginning with a letter; the dataset's ID in a deployment is the instance, a colon, and this",
+      "not_meaning": "a vendor's product code",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v18",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.DatasetDeclaration.vendor",
+      "type": "text",
+      "bounds": {
+        "length": [
+          1,
+          64
+        ]
+      },
+      "empty": "never empty",
+      "intent": "says who originated the data",
+      "meaning": "the vendor, as the plugin names it: data, not vocabulary",
+      "not_meaning": "who distributes it",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v18",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.DatasetDeclaration.aggregator",
+      "type": "text",
+      "bounds": {
+        "length": [
+          0,
+          64
+        ]
+      },
+      "empty": "empty: reached directly",
+      "intent": "says who carries the data when an aggregator does",
+      "meaning": "the aggregator, as the plugin names it",
+      "not_meaning": "the vendor",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v18",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.DatasetDeclaration.data_types",
+      "type": "repeated text",
+      "bounds": {
+        "count": [
+          1,
+          32
+        ]
+      },
+      "empty": "never empty",
+      "intent": "says what a dataset holds",
+      "meaning": "the lake's data types it serves and the optional fields it fills, each by its dictionary entry: a type by its message (meridian.v1.Price), a field by its entry (meridian.v1.Bar.vwap)",
+      "not_meaning": "a capability: what a dataset fills is its content",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v18",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.DatasetDeclaration.modes",
+      "type": "repeated enum ObservationMode",
+      "allowed": [
+        {
+          "value": "OBSERVATION_MODE_UNSPECIFIED",
+          "meaning": "refused"
+        },
+        {
+          "value": "OBSERVATION_MODE_PULL",
+          "meaning": "fetched when a reader's read is wanted (W10.7)"
+        },
+        {
+          "value": "OBSERVATION_MODE_PUSH",
+          "meaning": "recorded on the source's own timetable, unasked"
+        },
+        {
+          "value": "OBSERVATION_MODE_STREAM",
+          "meaning": "kept current from the source's stream while a standing want stands"
+        }
+      ],
+      "bounds": {
+        "count": [
+          1,
+          3
+        ]
+      },
+      "empty": "never empty",
+      "intent": "says how a dataset's rows can arrive",
+      "meaning": "pull, push or stream, each once, among which the deployment chooses",
+      "not_meaning": "how the plugin reaches its vendor",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v18",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.DatasetDeclaration.cadence",
+      "type": "integer",
+      "unit": "seconds",
+      "empty": "0: it updates only when asked",
+      "intent": "says how often a dataset updates, and so when it is silent",
+      "meaning": "seconds between the source's updates; a dataset that recorded nothing for a subject within it is silent, and a default read falls through",
+      "not_meaning": "a schedule the plugin keeps",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v18",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.DatasetDeclaration.history",
+      "type": "integer",
+      "unit": "days",
+      "empty": "0: it states none",
+      "intent": "says how far back a dataset reaches",
+      "meaning": "days of history the source serves",
+      "not_meaning": "what the lake keeps, which its licence says",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v18",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.DatasetDeclaration.licence_default",
+      "type": "message DatasetLicence",
+      "empty": "unset: the vendor's terms say nothing the platform records",
+      "intent": "carries the terms a vendor's standard terms impose",
+      "meaning": "keep or not, derived use, display, the default fields and whether the terms are one person's; the deployment's licence confirms or replaces it (W10.1)",
+      "not_meaning": "the deployment's licence, which is enforced; a claim that a deployment meets the vendor's terms",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v18",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.DatasetDeclaration.day_time_zone",
+      "type": "text",
+      "bounds": {
+        "length": [
+          0,
+          64
+        ]
+      },
+      "empty": "empty: not a daily dataset",
+      "intent": "says the time zone a daily value's business date is in",
+      "meaning": "an IANA zone: Etc/UTC for a crypto venue's daily candle, America/New_York for a US close and FX's 17:00 roll; an invalid zone refuses the registration",
+      "not_meaning": "a holiday calendar",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v18",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.DatasetDeclaration.day_end_minute",
+      "type": "integer",
+      "unit": "minutes after local midnight",
+      "bounds": {
+        "range": {
+          "least": "0",
+          "most": "1439"
+        }
+      },
+      "empty": "0: the day ends at local midnight",
+      "intent": "says when a dataset's business day ends",
+      "meaning": "minutes after local midnight the day ends, which says which candle or session counts as a business date and when it is final",
+      "not_meaning": "a market's trading hours",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v18",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.DatasetDeclaration.venue_id",
+      "type": "identifier venue",
+      "empty": "empty: not one venue's, the consolidated view",
+      "intent": "names the venue a dataset is",
+      "meaning": "the venue master's ID; a row naming no venue is the dataset's view",
+      "not_meaning": "a MIC, or the dataset's distributor",
+      "filled": "as-reported",
+      "filled_by": "dgm",
+      "since": "v18",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.DatasetLicence.dataset",
+      "type": "identifier dataset",
+      "empty": "empty in a catalogue's default",
+      "intent": "names the dataset licensed",
+      "meaning": "the dataset's ID in the deployment",
+      "not_meaning": "a vendor's product",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v18",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.DatasetLicence.kept",
+      "type": "boolean",
+      "empty": "false: served, not kept",
+      "intent": "says whether the lake may keep the rows",
+      "meaning": "true, kept for retention_days; false, served to the waiting reader and recorded only as served (W10.7)",
+      "not_meaning": "whether a reader may see them",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v18",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.DatasetLicence.retention_days",
+      "type": "integer",
+      "unit": "days",
+      "bounds": {
+        "range": {
+          "least": "0",
+          "most": "36500"
+        }
+      },
+      "empty": "0: kept as long as the licence allows, no limit set",
+      "intent": "says how long the lake keeps a row",
+      "meaning": "days from when a row was recorded; past it the lake removes the row and records the removal",
+      "not_meaning": "how long the plugin keeps its raw records",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v18",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.DatasetLicence.derived_use",
+      "type": "boolean",
+      "empty": "false: no derived data",
+      "intent": "says whether data derived from the dataset may be made",
+      "meaning": "true where the terms allow a value computed from it to be kept or shown",
+      "not_meaning": "display of the data itself",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v18",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.DatasetLicence.display",
+      "type": "boolean",
+      "empty": "false: not shown",
+      "intent": "says whether the data may be shown to people",
+      "meaning": "true where the terms allow display",
+      "not_meaning": "redistribution outside the deployment, which no licence here grants",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v18",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.DatasetLicence.default_fields",
+      "type": "repeated text",
+      "bounds": {
+        "count": [
+          0,
+          64
+        ]
+      },
+      "empty": "none: every field",
+      "intent": "says the fields readable by default",
+      "meaning": "fields by their dictionary entries, which an entitlement naming no fields reads",
+      "not_meaning": "an entitlement",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v18",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.DatasetLicence.personal_use",
+      "type": "boolean",
+      "empty": "false",
+      "intent": "says whether the terms are one person's",
+      "meaning": "true for a feed licensed to one person, such as a retail account holder's; the Data sources page warns when more than one person holds read on a plugin entitled to it",
+      "not_meaning": "enforcement per person, which comes later",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v18",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.DatasetLicence.updated_by",
+      "type": "text",
+      "empty": "empty in a catalogue's default",
+      "intent": "names who set the licence",
+      "meaning": "the deployment-local subject the dashboard stamped",
+      "not_meaning": "an email address",
+      "filled": "stamped",
+      "filled_by": "dashboard",
+      "since": "v18",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.DatasetLicence.updated_at_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "0 in a catalogue's default",
+      "intent": "says when it was set",
+      "meaning": "when the conductor recorded the change",
+      "not_meaning": "when the vendor's terms changed",
+      "filled": "decided",
+      "filled_by": "conductor",
+      "since": "v18",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.DatasetLicence.acting_through_delegation",
+      "type": "text",
+      "empty": "empty in a browser, and in a default",
+      "intent": "names the delegation a person acted through",
+      "meaning": "the delegation's ID",
+      "not_meaning": "an access token",
+      "filled": "stamped",
+      "filled_by": "dashboard",
+      "since": "v18",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.DatasetLicence.client_name",
+      "type": "text",
+      "empty": "empty in a browser, and in a default",
+      "intent": "names the client a person acted through",
+      "meaning": "the client's name",
+      "not_meaning": "a person",
+      "filled": "stamped",
+      "filled_by": "dashboard",
+      "since": "v18",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.DatasetLicence.note",
+      "type": "text",
+      "empty": "empty where none was given at the page; never through /mcp",
+      "intent": "says why the licence was set",
+      "meaning": "the note kept with the change's record",
+      "not_meaning": "the vendor's terms",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v18",
+      "stability": "preview",
       "store": "sidecar"
     },
     {
@@ -11331,6 +15032,116 @@
       "store": "sidecar"
     },
     {
+      "name": "meridian.plugin.v1.ReceiveRequest.subjects",
+      "type": "repeated text",
+      "bounds": {
+        "count": [
+          0,
+          500
+        ]
+      },
+      "empty": "none: no conflated row is delivered",
+      "intent": "names the subjects a plugin wants of the conflated rows",
+      "meaning": "entity IDs; the sidecar delivers only the conflated rows about them",
+      "not_meaning": "rows to hear, which rows names",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v18",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.plugin.v1.Delivery.prices_recorded",
+      "type": "message PricesRecordedEvent",
+      "empty": "unset unless the delivery is a price the lake recorded",
+      "intent": "delivers a price the lake recorded (W10.5)",
+      "meaning": "a price the lake recorded, latest value first per key under load",
+      "not_meaning": "a record with a journal: a lake row carries its sequence in its own envelope",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v18",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.plugin.v1.Delivery.bars_recorded",
+      "type": "message BarsRecordedEvent",
+      "empty": "unset unless the delivery is a bar the lake recorded",
+      "intent": "delivers a bar the lake recorded (W10.5)",
+      "meaning": "a bar the lake recorded, latest value first per key under load",
+      "not_meaning": "a record with a journal: a lake row carries its sequence in its own envelope",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v18",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.plugin.v1.Delivery.observations_wanted",
+      "type": "message ObservationsWantedEvent",
+      "empty": "unset unless the delivery is a want of the plugin's dataset",
+      "intent": "delivers a want of the plugin's dataset (W10.7)",
+      "meaning": "a want of the plugin's dataset, latest value first per key under load",
+      "not_meaning": "a record with a journal: a lake row carries its sequence in its own envelope",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v18",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.plugin.v1.Delivery.want_withdrawn",
+      "type": "message WantWithdrawnEvent",
+      "empty": "unset unless the delivery is a want withdrawn",
+      "intent": "delivers a want withdrawn (W10.7)",
+      "meaning": "a want withdrawn, latest value first per key under load",
+      "not_meaning": "a record with a journal: a lake row carries its sequence in its own envelope",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v18",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.plugin.v1.RecordPricesParams.acting_for",
+      "type": "message CallerAssertion",
+      "empty": "unset, the plugin acts as itself",
+      "intent": "names the person RecordPrices is sent for",
+      "meaning": "the assertion the plugin was handed for them, the same bytes, never altered; a dgm records as itself",
+      "not_meaning": "the plugin's own identity, which the sidecar knows",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v18",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.plugin.v1.RecordBarsParams.acting_for",
+      "type": "message CallerAssertion",
+      "empty": "unset, the plugin acts as itself",
+      "intent": "names the person RecordBars is sent for",
+      "meaning": "the assertion the plugin was handed for them, the same bytes, never altered; a dgm records as itself",
+      "not_meaning": "the plugin's own identity, which the sidecar knows",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v18",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.plugin.v1.DeclineWantParams.acting_for",
+      "type": "message CallerAssertion",
+      "empty": "unset, the plugin acts as itself",
+      "intent": "names the person DeclineWant is sent for",
+      "meaning": "the assertion the plugin was handed for them, the same bytes, never altered; a dgm records as itself",
+      "not_meaning": "the plugin's own identity, which the sidecar knows",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v18",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
       "name": "meridian.plugin.v1.RecordHoldingsStatementParams.acting_for",
       "type": "message CallerAssertion",
       "empty": "unset, the plugin acts as itself",
@@ -11532,6 +15343,523 @@
       "filled": "as-reported",
       "filled_by": "plugin",
       "since": "v8",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.LaunchPluginRequest.name",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the plugin to launch",
+      "meaning": "a name in the catalogue (W8.2)",
+      "not_meaning": "an instance",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v2",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.LaunchPluginRequest.version",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the version to launch",
+      "meaning": "a version of the named plugin in the catalogue, run by its digest",
+      "not_meaning": "a tag that could move",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v2",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.LaunchPluginRequest.instance_id",
+      "type": "identifier instance",
+      "empty": "never empty",
+      "intent": "names the instance it runs as",
+      "meaning": "unique among the deployment's live plugins; what its sidecar's credential and grants are for",
+      "not_meaning": "the plugin's name",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v2",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.LaunchPluginRequest.approved_roles",
+      "type": "repeated text",
+      "empty": "empty only for a version naming no role",
+      "intent": "carries the roles the deployment admin was shown and approved",
+      "meaning": "refused unless exactly the version's metadata: an approval of something other than what runs is no approval",
+      "not_meaning": "roles a person holds, or grants on them",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v2",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.LaunchPluginRequest.live",
+      "type": "boolean",
+      "empty": "false: the plugin shape",
+      "intent": "asks for the live shape",
+      "meaning": "on a development deployment alone; the launcher refuses it anywhere else",
+      "not_meaning": "a running plugin's state",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v2",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.LaunchPluginRequest.note",
+      "type": "text",
+      "empty": "empty where a person at the page gave none; never empty through /mcp, which refuses a change without one",
+      "intent": "says why the plugin is launched, kept with the change's record",
+      "meaning": "the words of the person, or of the agent acting for them, saying why (decisions/031's why); at most 2,000 characters, as a note on an instrument record",
+      "not_meaning": "an instruction to anyone who reads it: it is data, written by whoever made the change",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v17",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.StopPluginRequest.instance_id",
+      "type": "identifier instance",
+      "empty": "never empty",
+      "intent": "names the instance to stop",
+      "meaning": "a launched instance",
+      "not_meaning": "the plugin's name",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v2",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.StopPluginRequest.note",
+      "type": "text",
+      "empty": "empty where a person at the page gave none; never empty through /mcp, which refuses a change without one",
+      "intent": "says why the plugin is stopped, kept with the change's record",
+      "meaning": "the words of the person, or of the agent acting for them, saying why (decisions/031's why); at most 2,000 characters, as a note on an instrument record",
+      "not_meaning": "an instruction to anyone who reads it: it is data, written by whoever made the change",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v17",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.PluginLaunch.instance_id",
+      "type": "identifier instance",
+      "empty": "never empty",
+      "intent": "names the instance launched",
+      "meaning": "as the launch named it",
+      "not_meaning": "the plugin's name",
+      "filled": "decided",
+      "filled_by": "conductor",
+      "since": "v2",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.PluginLaunch.name",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the plugin launched",
+      "meaning": "its name in the catalogue",
+      "not_meaning": "the instance",
+      "filled": "decided",
+      "filled_by": "conductor",
+      "since": "v2",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.PluginLaunch.version",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the version launched",
+      "meaning": "a version in the catalogue",
+      "not_meaning": "the contract version it was built against",
+      "filled": "decided",
+      "filled_by": "conductor",
+      "since": "v2",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.PluginLaunch.image_digest",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "pins what runs",
+      "meaning": "the image manifest's digest, sha256:<hex>, in the deployment's registry",
+      "not_meaning": "a tag",
+      "filled": "decided",
+      "filled_by": "conductor",
+      "since": "v2",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.PluginLaunch.roles",
+      "type": "repeated text",
+      "empty": "empty for a plugin holding no role",
+      "intent": "lists the roles it was launched with",
+      "meaning": "the roles approved at launch",
+      "not_meaning": "who holds them",
+      "filled": "decided",
+      "filled_by": "conductor",
+      "since": "v2",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.PluginLaunch.launched_by",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names who launched it",
+      "meaning": "the deployment-local subject of the deployment admin the dashboard stamped",
+      "not_meaning": "an agent: an agent acts for the person, named by the delegation beside them",
+      "filled": "stamped",
+      "filled_by": "dashboard",
+      "since": "v2",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.PluginLaunch.launched_at_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "never 0",
+      "intent": "says when it was launched",
+      "meaning": "the time the conductor recorded the launch",
+      "not_meaning": "when it registered",
+      "filled": "decided",
+      "filled_by": "conductor",
+      "since": "v2",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.PluginLaunch.state",
+      "type": "enum PluginLaunchState",
+      "allowed": [
+        {
+          "value": "PLUGIN_LAUNCH_STATE_UNSPECIFIED",
+          "meaning": "not said"
+        },
+        {
+          "value": "PLUGIN_LAUNCH_STATE_LAUNCHED",
+          "meaning": "recorded, and the launcher asked"
+        },
+        {
+          "value": "PLUGIN_LAUNCH_STATE_STOPPED",
+          "meaning": "stopped by an administrator; the instance may be launched again"
+        },
+        {
+          "value": "PLUGIN_LAUNCH_STATE_FAILED",
+          "meaning": "the launcher refused or failed, failure saying why"
+        }
+      ],
+      "empty": "never unspecified",
+      "intent": "says what became of the launch",
+      "meaning": "launched, stopped, or failed with why",
+      "not_meaning": "its health, which its sidecar's reports say",
+      "filled": "decided",
+      "filled_by": "conductor",
+      "since": "v2",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.PluginLaunch.stopped_by",
+      "type": "text",
+      "empty": "empty while not stopped",
+      "intent": "names who stopped it",
+      "meaning": "the deployment-local subject of the deployment admin the dashboard stamped",
+      "not_meaning": "an agent",
+      "filled": "stamped",
+      "filled_by": "dashboard",
+      "since": "v2",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.PluginLaunch.stopped_at_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "0 while not stopped",
+      "intent": "says when it was stopped",
+      "meaning": "the time the conductor recorded the stop",
+      "not_meaning": "when its workload went",
+      "filled": "decided",
+      "filled_by": "conductor",
+      "since": "v2",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.PluginLaunch.failure",
+      "type": "text",
+      "empty": "empty unless it failed",
+      "intent": "says why a launch failed",
+      "meaning": "the launcher's or the conductor's words",
+      "not_meaning": "a refusal at the request, which records no launch",
+      "filled": "decided",
+      "filled_by": "conductor",
+      "since": "v2",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.PluginLaunch.live",
+      "type": "boolean",
+      "empty": "false: the plugin shape",
+      "intent": "says it was launched in the live shape",
+      "meaning": "as the launch asked, on a development deployment",
+      "not_meaning": "whether it is running",
+      "filled": "decided",
+      "filled_by": "conductor",
+      "since": "v2",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.PluginLaunch.acting_through_delegation",
+      "type": "text",
+      "empty": "empty where the change was made in a browser, through no delegation, and on every record before v17, each of which was",
+      "intent": "names the delegation the person who launched it acted through, beside them",
+      "meaning": "the delegation's identifier as the dashboard stamped it on the envelope: the CLI's, or an agent's through /mcp (W6.20)",
+      "not_meaning": "an actor of its own: the person is the actor, the delegation provenance",
+      "filled": "stamped",
+      "filled_by": "dashboard",
+      "since": "v17",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.PluginLaunch.client_name",
+      "type": "text",
+      "empty": "empty whenever acting_through_delegation is",
+      "intent": "names the client the person who launched it acted through, so the record reads \"by the person, through that client\" without a second read",
+      "meaning": "the client's registered name, as stamped beside the delegation",
+      "not_meaning": "a person's name, or anything that decides access",
+      "filled": "stamped",
+      "filled_by": "dashboard",
+      "since": "v17",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.PluginLaunch.stopped_through_delegation",
+      "type": "text",
+      "empty": "empty while not stopped, for a stop made in a browser, and on every stop before v17, each of which has a gap record saying it went unrecorded",
+      "intent": "names the delegation the person who stopped it acted through, beside stopped_by",
+      "meaning": "the delegation's identifier as the dashboard stamped it",
+      "not_meaning": "an actor of its own",
+      "filled": "stamped",
+      "filled_by": "dashboard",
+      "since": "v17",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.PluginLaunch.stopped_client_name",
+      "type": "text",
+      "empty": "empty whenever stopped_through_delegation is",
+      "intent": "names the client the person who stopped it acted through",
+      "meaning": "the client's registered name, as stamped",
+      "not_meaning": "a person's name",
+      "filled": "stamped",
+      "filled_by": "dashboard",
+      "since": "v17",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.PluginLaunch.note",
+      "type": "text",
+      "empty": "empty where none was given, and on every launch before v17",
+      "intent": "says why it was launched, beside who launched it",
+      "meaning": "the words of the person, or of the agent acting for them, saying why (decisions/031's why), as kept with the change; at most 2,000 characters; the launch's, not its stop's",
+      "not_meaning": "an instruction to anyone who reads it: it is data, written by whoever made the change",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v17",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.AllowArchiveRequest.instance_id",
+      "type": "identifier instance",
+      "empty": "never empty",
+      "intent": "names the edge instance allowed an archive",
+      "meaning": "a launched instance holding an edge role",
+      "not_meaning": "a bucket or a path",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v16",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.AllowArchiveRequest.most_bytes",
+      "type": "integer",
+      "unit": "bytes",
+      "empty": "0 for no bound",
+      "intent": "bounds the archive",
+      "meaning": "the most bytes the instance's archive may hold",
+      "not_meaning": "what it holds now",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v16",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.AllowArchiveRequest.note",
+      "type": "text",
+      "empty": "empty where a person at the page gave none; never empty through /mcp, which refuses a change without one",
+      "intent": "says why the archive is allowed or its bound changed, kept with the change's record",
+      "meaning": "the words of the person, or of the agent acting for them, saying why (decisions/031's why); at most 2,000 characters, as a note on an instrument record",
+      "not_meaning": "an instruction to anyone who reads it: it is data, written by whoever made the change",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v17",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.WithdrawArchiveRequest.instance_id",
+      "type": "identifier instance",
+      "empty": "never empty",
+      "intent": "names the instance whose archive is withdrawn",
+      "meaning": "an instance allowed one",
+      "not_meaning": "a deletion of what it holds, which is kept",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v16",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.WithdrawArchiveRequest.note",
+      "type": "text",
+      "empty": "empty where a person at the page gave none; never empty through /mcp, which refuses a change without one",
+      "intent": "says why the archive is withdrawn, kept with the change's record",
+      "meaning": "the words of the person, or of the agent acting for them, saying why (decisions/031's why); at most 2,000 characters, as a note on an instrument record",
+      "not_meaning": "an instruction to anyone who reads it: it is data, written by whoever made the change",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v17",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.PluginArchive.instance_id",
+      "type": "identifier instance",
+      "empty": "never empty",
+      "intent": "names the instance",
+      "meaning": "as allowed",
+      "not_meaning": "a bucket or a path",
+      "filled": "decided",
+      "filled_by": "conductor",
+      "since": "v16",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.PluginArchive.allowed",
+      "type": "boolean",
+      "empty": "false once withdrawn",
+      "intent": "says whether the instance has an archive now",
+      "meaning": "allowed by a deployment admin and not withdrawn",
+      "not_meaning": "whether it holds anything",
+      "filled": "decided",
+      "filled_by": "conductor",
+      "since": "v16",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.PluginArchive.most_bytes",
+      "type": "integer",
+      "unit": "bytes",
+      "empty": "0 for no bound",
+      "intent": "says the archive's bound",
+      "meaning": "the most bytes it may hold",
+      "not_meaning": "what it holds now, which the plugin's report says",
+      "filled": "decided",
+      "filled_by": "conductor",
+      "since": "v16",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.PluginArchive.updated_by",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names who last allowed, changed or withdrew it",
+      "meaning": "the deployment-local subject of the deployment admin the dashboard stamped",
+      "not_meaning": "an agent",
+      "filled": "stamped",
+      "filled_by": "dashboard",
+      "since": "v16",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.PluginArchive.updated_at_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "never 0",
+      "intent": "says when",
+      "meaning": "the time of its latest change, its own record",
+      "not_meaning": "when it was made",
+      "filled": "decided",
+      "filled_by": "conductor",
+      "since": "v16",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.PluginArchive.acting_through_delegation",
+      "type": "text",
+      "empty": "empty where the change was made in a browser, through no delegation, and on every record before v17, each of which was",
+      "intent": "names the delegation the person who last allowed, changed or withdrew it acted through, beside them",
+      "meaning": "the delegation's identifier as the dashboard stamped it on the envelope: the CLI's, or an agent's through /mcp (W6.20)",
+      "not_meaning": "an actor of its own: the person is the actor, the delegation provenance",
+      "filled": "stamped",
+      "filled_by": "dashboard",
+      "since": "v17",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.PluginArchive.client_name",
+      "type": "text",
+      "empty": "empty whenever acting_through_delegation is",
+      "intent": "names the client the person who last allowed, changed or withdrew it acted through, so the record reads \"by the person, through that client\" without a second read",
+      "meaning": "the client's registered name, as stamped beside the delegation",
+      "not_meaning": "a person's name, or anything that decides access",
+      "filled": "stamped",
+      "filled_by": "dashboard",
+      "since": "v17",
+      "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.PluginArchive.note",
+      "type": "text",
+      "empty": "empty where none was given: a person at the page may give none, and every change before v17 carried none",
+      "intent": "says why the archive was last allowed, changed or withdrawn, beside who did it",
+      "meaning": "the words of the person, or of the agent acting for them, saying why (decisions/031's why), as kept with the change; at most 2,000 characters",
+      "not_meaning": "an instruction to anyone who reads it: it is data, written by whoever made the change",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v17",
       "stability": "stable",
       "store": "sidecar"
     },

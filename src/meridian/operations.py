@@ -5,8 +5,9 @@ The operations a plugin performs, one per bus row its roles may publish.
 A quantity is a Python Decimal (or an int) here and a meridian.v1.Decimal on
 the wire: its integer, in two 64-bit halves, and the scale it was stated
 with, which is the Decimal's own exponent -- 1.50 crosses as 150 at scale 2
-and reads back as 1.50. An amount of currency is a Money, a Decimal and its
-ISO 4217 code. Converted once, in this file, and refused rather than
+and reads back as 1.50. An amount of currency is a Money, a Decimal and the
+asset it is in: its ISO 4217 code, or its cash instrument, or both. Converted
+once, in this file, and refused rather than
 rounded: a float, more than 18 decimal places, or more than 38 digits
 (decisions/023).
 
@@ -29,7 +30,13 @@ from typing import TYPE_CHECKING, Any, TypeVar
 from meridian.plugin.v1 import operations_pb2 as ops
 from meridian.v1 import sidecar_pb2
 
-from .bounds import DECIMAL_DIGITS, DECIMAL_SCALE
+from .bounds import (
+    DECIMAL_DIGITS,
+    DECIMAL_SCALE,
+    RECORD_BARS_REQUEST_BARS_COUNT,
+    RECORD_PRICES_REQUEST_PRICES_COUNT,
+    Count,
+)
 
 if TYPE_CHECKING:
     from .receive import Heard
@@ -45,14 +52,18 @@ _LOW_HALF = 2**64 - 1
 
 @dataclass(frozen=True)
 class Money:
-    """An amount of currency: a Decimal (or an int) and its ISO 4217 code.
+    """An amount of currency: a Decimal (or an int) and the asset it is in.
 
     One value rather than an amount with its currency beside it, so a call
     carrying amounts in two currencies cannot pair either with the wrong one.
+    From contract v18 a Money names its cash instrument: a fiat currency by
+    its ISO 4217 code, Money("12.50", "USD"), which core resolves; an asset
+    with no ISO 4217 code by `instrument_id` alone, as W3.1 resolved it.
     """
 
     amount: Decimal | int
-    currency_code: str
+    currency_code: str = ""
+    instrument_id: str = ""
 
 
 def _decimal(value: Decimal | int, name: str) -> ops.Decimal:
@@ -85,7 +96,15 @@ def _money(value: Money, name: str) -> ops.Money:
         raise TypeError(f"{name} is a meridian.Money, not {type(value).__name__}")
     if not isinstance(value.currency_code, str):
         raise TypeError(f"{name}'s currency_code is a str, not {type(value.currency_code).__name__}")
-    return ops.Money(amount=_decimal(value.amount, name), currency_code=value.currency_code)
+    if not isinstance(value.instrument_id, str):
+        raise TypeError(f"{name}'s instrument_id is a str, not {type(value.instrument_id).__name__}")
+    if not value.currency_code and not value.instrument_id:
+        raise ValueError(f"{name} names no asset: a currency_code or an instrument_id")
+    return ops.Money(
+        amount=_decimal(value.amount, name),
+        currency_code=value.currency_code,
+        instrument_id=value.instrument_id,
+    )
 
 
 def _enum(kind: Any, value: Any, name: str) -> Any:
@@ -111,9 +130,10 @@ def _enum(kind: Any, value: Any, name: str) -> Any:
     )
 
 
-def _stated(**flags: bool | None) -> dict[str, Any]:
-    """An optional flag as keyword arguments for the wire's message: absent
-    when None, which is "not stated" and never False (contract v8)."""
+def _stated(**flags: bool | int | None) -> dict[str, Any]:
+    """An optional flag or count as keyword arguments for the wire's message:
+    absent when None, which is "not stated" and never False or 0 (contract v8,
+    v18)."""
     return {name: value for name, value in flags.items() if value is not None}
 
 
@@ -130,6 +150,13 @@ def _arm(oneof: str, **arms: Any) -> dict[str, Any]:
     return given
 
 
+def _batch(rows: Sequence[Any], bound: Count, name: str) -> None:
+    """A batch's rows within the data dictionary's bound, or refused naming
+    the field before anything is sent (contract v18)."""
+    if not bound.least <= len(rows) <= bound.most:
+        raise ValueError(f"{name} holds {len(rows)} rows; a batch is {bound.least} to {bound.most}")
+
+
 def as_decimal(message: ops.Decimal) -> Decimal:
     """A Decimal read back from the wire exactly as it was stated: 150 at scale
     2 is Decimal('1.50'). Built from its digits rather than by arithmetic,
@@ -143,7 +170,7 @@ def as_decimal(message: ops.Decimal) -> Decimal:
 
 def as_money(message: ops.Money) -> Money:
     """A Money read back from the wire, its amount as as_decimal reads it."""
-    return Money(as_decimal(message.amount), message.currency_code)
+    return Money(as_decimal(message.amount), message.currency_code, message.instrument_id)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -860,6 +887,134 @@ def _basis_adjustment(value: BasisAdjustment, name: str) -> ops.BasisAdjustment:
     )
 
 
+@dataclass(frozen=True, kw_only=True)
+class Price:
+    """A price of one kind for one subject.
+
+    The SDK's form of the wire's Price: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    meta: ObservationMeta | None = None
+    kind: ops.PriceKind | str | None = None
+    price: Money
+    basis: ops.PriceBasis | str | None = None
+
+
+def _price(value: Price, name: str) -> ops.Price:
+    """A Price as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, Price):
+        raise TypeError(f"{name} is a meridian.Price, not {type(value).__name__}")
+    return ops.Price(
+        meta=None if value.meta is None else _observation_meta(value.meta, f"{name}.meta"),
+        kind=_enum(ops.PriceKind, value.kind, f"{name}.kind"),
+        price=_money(value.price, f"{name}.price"),
+        basis=_enum(ops.PriceBasis, value.basis, f"{name}.basis"),
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class ObservationMeta:
+    """The envelope every row of every data type carries, as its first field
+    (spec/the-lake, requirement 4).
+
+    The SDK's form of the wire's ObservationMeta: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    row_key: str = ""
+    subjects: Sequence[ops.SubjectRef] = ()
+    source: ops.Source | None = None
+    valid_from_ns: int = 0
+    valid_until_ns: int = 0
+    business_date: str = ""
+    source_times: Sequence[SourceTime] = ()
+    recorded_at_ns: int = 0
+    version: int = 0
+    sequence: int = 0
+    previous_sequence: int = 0
+    raw: ops.RawRecordRef | None = None
+    unconverted: Sequence[ops.AsReported] = ()
+
+
+def _observation_meta(value: ObservationMeta, name: str) -> ops.ObservationMeta:
+    """A ObservationMeta as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, ObservationMeta):
+        raise TypeError(f"{name} is a meridian.ObservationMeta, not {type(value).__name__}")
+    return ops.ObservationMeta(
+        row_key=value.row_key,
+        subjects=list(value.subjects),
+        source=value.source,
+        valid_from_ns=value.valid_from_ns,
+        valid_until_ns=value.valid_until_ns,
+        business_date=value.business_date,
+        source_times=[_source_time(each, f"{name}.source_times[{i}]") for i, each in enumerate(value.source_times)],
+        recorded_at_ns=value.recorded_at_ns,
+        version=value.version,
+        sequence=value.sequence,
+        previous_sequence=value.previous_sequence,
+        raw=value.raw,
+        unconverted=list(value.unconverted),
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class SourceTime:
+    """One of the source's own timestamps.
+
+    The SDK's form of the wire's SourceTime: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    kind: ops.SourceTimeKind | str | None = None
+    at_ns: int = 0
+
+
+def _source_time(value: SourceTime, name: str) -> ops.SourceTime:
+    """A SourceTime as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, SourceTime):
+        raise TypeError(f"{name} is a meridian.SourceTime, not {type(value).__name__}")
+    return ops.SourceTime(
+        kind=_enum(ops.SourceTimeKind, value.kind, f"{name}.kind"),
+        at_ns=value.at_ns,
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class Bar:
+    """Open, high, low and close over an interval, the envelope's valid
+    time: a daily bar names its business date.
+
+    The SDK's form of the wire's Bar: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    meta: ObservationMeta | None = None
+    open: Money
+    high: Money
+    low: Money
+    close: Money
+    volume: Decimal | int
+    vwap: Money | None = None
+    trade_count: int | None = None
+
+
+def _bar(value: Bar, name: str) -> ops.Bar:
+    """A Bar as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, Bar):
+        raise TypeError(f"{name} is a meridian.Bar, not {type(value).__name__}")
+    return ops.Bar(
+        meta=None if value.meta is None else _observation_meta(value.meta, f"{name}.meta"),
+        open=_money(value.open, f"{name}.open"),
+        high=_money(value.high, f"{name}.high"),
+        low=_money(value.low, f"{name}.low"),
+        close=_money(value.close, f"{name}.close"),
+        volume=_decimal(value.volume, f"{name}.volume"),
+        vwap=None if value.vwap is None else _money(value.vwap, f"{name}.vwap"),
+        **_stated(trade_count=value.trade_count),
+    )
+
+
 def _assertion(header: str | None) -> sidecar_pb2.CallerAssertion | None:
     """The person a command is sent for, from the Meridian-Caller header as the
     plugin received it: base64url, unpadded. Handed back to the sidecar, which
@@ -1484,6 +1639,153 @@ class Operations:
         )
         return await self._operate(self._operations().ListAccountAttributes, params)
 
+    async def resolve_venue(
+        self,
+        *,
+        identifiers: Sequence[ops.Identifier] = (),
+        as_of_ns: int = 0,
+    ) -> ops.ResolveVenueResult:
+        """W3.14: W3.14: which venue a set of identifiers names on a date, in the venues the (preview)."""
+        params = ops.ResolveVenueParams(
+            identifiers=list(identifiers),
+            as_of_ns=as_of_ns,
+        )
+        return await self._operate(self._operations().ResolveVenue, params)
+
+    async def report_missing_venue(
+        self,
+        *,
+        source: str = "",
+        identifiers: Sequence[ops.Identifier] = (),
+        as_of_ns: int = 0,
+        reason: ops.MissReason | str | None = None,
+        observed_at_ns: int = 0,
+    ) -> ops.Published:
+        """W3.15: W3.15: a venue a plugin's source named resolved to none the deployment (preview)."""
+        params = ops.ReportMissingVenueParams(
+            source=source,
+            identifiers=list(identifiers),
+            as_of_ns=as_of_ns,
+            reason=_enum(ops.MissReason, reason, "reason"),
+            observed_at_ns=observed_at_ns,
+        )
+        return await self._operate(self._operations().ReportMissingVenue, params)
+
+    async def record_prices(
+        self,
+        *,
+        prices: Sequence[Price] = (),
+        want_id: str = "",
+        acting_for: str | None = None,
+    ) -> ops.RecordPricesResult:
+        """W10.4: A batch of prices, recorded whole or refused naming the item and field: (preview)."""
+        _batch(prices, RECORD_PRICES_REQUEST_PRICES_COUNT, "prices")
+        params = ops.RecordPricesParams(
+            prices=[_price(each, f"prices[{i}]") for i, each in enumerate(prices)],
+            want_id=want_id,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().RecordPrices, params)
+
+    async def record_bars(
+        self,
+        *,
+        bars: Sequence[Bar] = (),
+        want_id: str = "",
+        acting_for: str | None = None,
+    ) -> ops.RecordBarsResult:
+        """W10.4: A batch of bars, recorded whole or refused naming the item and field: (preview)."""
+        _batch(bars, RECORD_BARS_REQUEST_BARS_COUNT, "bars")
+        params = ops.RecordBarsParams(
+            bars=[_bar(each, f"bars[{i}]") for i, each in enumerate(bars)],
+            want_id=want_id,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().RecordBars, params)
+
+    async def list_prices(
+        self,
+        *,
+        subjects: Sequence[ops.SubjectRef] = (),
+        kinds: Sequence[ops.PriceKind | str] = (),
+        sources: ops.SourceChoice | None = None,
+        at_ns: int = 0,
+        business_date: str = "",
+        valid_from_ns: int = 0,
+        valid_until_ns: int = 0,
+        as_of_ns: int = 0,
+        page_size: int = 0,
+        cursor: str = "",
+    ) -> ops.ListPricesResult:
+        """W10.6: Prices for subjects, at one of: the latest in force at a valid time (preview)."""
+        params = ops.ListPricesParams(
+            subjects=list(subjects),
+            kinds=[_enum(ops.PriceKind, value, "kinds") for value in kinds],
+            sources=sources,
+            at_ns=at_ns,
+            business_date=business_date,
+            valid_from_ns=valid_from_ns,
+            valid_until_ns=valid_until_ns,
+            as_of_ns=as_of_ns,
+            page_size=page_size,
+            cursor=cursor,
+        )
+        return await self._operate(self._operations().ListPrices, params)
+
+    async def list_bars(
+        self,
+        *,
+        subjects: Sequence[ops.SubjectRef] = (),
+        interval_ns: int = 0,
+        sources: ops.SourceChoice | None = None,
+        at_ns: int = 0,
+        business_date: str = "",
+        valid_from_ns: int = 0,
+        valid_until_ns: int = 0,
+        as_of_ns: int = 0,
+        page_size: int = 0,
+        cursor: str = "",
+    ) -> ops.ListBarsResult:
+        """W10.6: Bars for subjects, at a valid time, a business date or a range, as a (preview)."""
+        params = ops.ListBarsParams(
+            subjects=list(subjects),
+            interval_ns=interval_ns,
+            sources=sources,
+            at_ns=at_ns,
+            business_date=business_date,
+            valid_from_ns=valid_from_ns,
+            valid_until_ns=valid_until_ns,
+            as_of_ns=as_of_ns,
+            page_size=page_size,
+            cursor=cursor,
+        )
+        return await self._operate(self._operations().ListBars, params)
+
+    async def decline_want(
+        self,
+        *,
+        want_id: str = "",
+        subjects: Sequence[ops.SubjectRef] = (),
+        reason: ops.UnansweredReason | str | None = None,
+        acting_for: str | None = None,
+    ) -> ops.DeclineWantResult:
+        """W10.7: What a `dgm` cannot serve of a want, per subject, with its reason (preview)."""
+        params = ops.DeclineWantParams(
+            want_id=want_id,
+            subjects=list(subjects),
+            reason=_enum(ops.UnansweredReason, reason, "reason"),
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().DeclineWant, params)
+
+    async def list_datasets(
+        self,
+    ) -> ops.ListDatasetsResult:
+        """W10.9: The datasets a reader may read, with their catalogue entries; and, to the (preview)."""
+        params = ops.ListDatasetsParams(
+        )
+        return await self._operate(self._operations().ListDatasets, params)
+
     async def receive(
         self,
         *,
@@ -1662,5 +1964,62 @@ DELIVERED: tuple[DeliveredRow, ...] = (
         within="re_resolution",
         record_journal="journal",
         record_account=("account_id",),
+    ),
+)
+
+
+@dataclass(frozen=True)
+class ConflatedRow:
+    """A row a plugin's roles may hear latest value first per key (contract
+    v18), as matrix/scoped.tsv declares it: the Delivery's arm carrying it,
+    its message, and the query reading it again by subject, empty where none
+    does."""
+
+    name: str
+    step: str
+    arm: str
+    message: Any
+    caught_up_by: str
+    records: str
+    within: str
+
+
+#: Every row a plugin's roles may hear latest value first, by arm number.
+CONFLATED: tuple[ConflatedRow, ...] = (
+    ConflatedRow(
+        name="PricesRecorded",
+        step="W10.5",
+        arm="prices_recorded",
+        message=ops.PricesRecordedEvent,
+        caught_up_by="list_prices",
+        records="prices",
+        within="price",
+    ),
+    ConflatedRow(
+        name="BarsRecorded",
+        step="W10.5",
+        arm="bars_recorded",
+        message=ops.BarsRecordedEvent,
+        caught_up_by="list_bars",
+        records="bars",
+        within="bar",
+    ),
+    ConflatedRow(
+        name="ObservationsWanted",
+        step="W10.7",
+        arm="observations_wanted",
+        message=ops.ObservationsWantedEvent,
+        caught_up_by="",
+        records="",
+        within="",
+    ),
+    ConflatedRow(
+        name="WantWithdrawn",
+        step="W10.7",
+        arm="want_withdrawn",
+        message=ops.WantWithdrawnEvent,
+        caught_up_by="",
+        records="",
+        within="",
     ),
 )

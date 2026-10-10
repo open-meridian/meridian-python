@@ -4,6 +4,70 @@
   "suites_are": "each role's conformance suite: a plugin holding the role is verified for it only by passing every case. A case's given is what the plugin's source presents, in the contract's words; its expect is what the plugin sends, each matched by one message on that row, fields by their paths in the row's message, `<set>` any value present and `<unset>` none, a list of partial messages each matched by one element; sends false is nothing on the row.",
   "suites": [
     {
+      "role": "compliance",
+      "since": "v18",
+      "says": "A compliance plugin passing every case learns the datasets it may read, reads prices and bars by subject, a business date or a range, from the deployment's default sources unless it names others, and hears what the lake records after, narrowed to the subjects it asked for; it records nothing in the lake.\n",
+      "cases": [
+        {
+          "name": "reads-the-datasets-it-may-read",
+          "given": "a compliance plugin starts in a deployment where it is entitled to datasets",
+          "expect": [
+            {
+              "row": "ListDatasets"
+            }
+          ]
+        },
+        {
+          "name": "reads-a-business-dates-closes",
+          "given": "the plugin needs the closes of its subjects for a business date",
+          "expect": [
+            {
+              "row": "ListPrices",
+              "fields": {
+                "subjects": "<set>",
+                "kinds": [
+                  "PRICE_KIND_CLOSE"
+                ],
+                "business_date": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "hears-a-price-recorded",
+          "given": "the lake records a close for a subject the plugin asked for",
+          "expect": [
+            {
+              "row": "PricesRecorded"
+            }
+          ]
+        },
+        {
+          "name": "reads-daily-bars-over-a-range",
+          "given": "the plugin needs daily bars of its subjects over a range",
+          "expect": [
+            {
+              "row": "ListBars",
+              "fields": {
+                "subjects": "<set>",
+                "valid_from_ns": "<set>",
+                "valid_until_ns": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "hears-a-bar-recorded",
+          "given": "the lake records a bar for a subject the plugin asked for",
+          "expect": [
+            {
+              "row": "BarsRecorded"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "role": "custody",
       "since": "v11",
       "says": "A custody plugin passing every case reports its source's accounts with their kinds, its sync state in the contract's own values, and each account's holdings counted once, every row referencing the raw record it was converted from, the settled and pending quantities stated, the custodian named, and every value it closed rather than read carrying its provenance; it sends a value it cannot convert as not known beside the value as reported, and withholds a statement it cannot serve clean.\n",
@@ -871,6 +935,234 @@
       ]
     },
     {
+      "role": "dgm",
+      "since": "v18",
+      "says": "A dgm plugin passing every case records each source's prices and bars exactly, under its dataset, its business date, its source's times and its raw record; restates a forming day under the same row key and sends an identical repeat unchanged; resolves every subject and venue before it records, reporting what does not resolve; names a price in a token by the token's own cash instrument, never a fiat code; and records what a want asks, or declines it per subject.\n",
+      "cases": [
+        {
+          "name": "a-daily-close",
+          "given": "the source states a daily close for a security, for a business date, with the time it published it",
+          "expect": [
+            {
+              "row": "ResolveIdentifier"
+            },
+            {
+              "row": "RecordPrices",
+              "fields": {
+                "prices": [
+                  {
+                    "kind": "PRICE_KIND_CLOSE",
+                    "basis": "PRICE_BASIS_PER_UNIT",
+                    "price": "<set>",
+                    "meta": {
+                      "row_key": "<set>",
+                      "business_date": "<set>",
+                      "source": {
+                        "dataset": "<set>"
+                      },
+                      "raw": "<set>",
+                      "source_times": [
+                        {
+                          "kind": "SOURCE_TIME_KIND_PUBLISHED"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "the-forming-day-restated",
+          "given": "the source's candle for the day still forming changes as the day fills",
+          "expect": [
+            {
+              "row": "RecordPrices",
+              "fields": {
+                "prices": [
+                  {
+                    "kind": "PRICE_KIND_CLOSE",
+                    "meta": {
+                      "row_key": "<set>",
+                      "valid_until_ns": "<set>"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "an-exact-price",
+          "given": "the source states a price with more decimal places than a binary float holds",
+          "expect": [
+            {
+              "row": "RecordPrices",
+              "fields": {
+                "prices": [
+                  {
+                    "price": "<set>"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "a-daily-bar",
+          "given": "the source states a day's open, high, low, close and volume, with no volume-weighted price",
+          "expect": [
+            {
+              "row": "RecordBars",
+              "fields": {
+                "bars": [
+                  {
+                    "open": "<set>",
+                    "high": "<set>",
+                    "low": "<set>",
+                    "close": "<set>",
+                    "volume": "<set>",
+                    "vwap": "<unset>",
+                    "meta": {
+                      "business_date": "<set>"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "an-fx-rate",
+          "given": "the source states a currency's rate against another currency for a business date",
+          "expect": [
+            {
+              "row": "RecordPrices",
+              "fields": {
+                "prices": [
+                  {
+                    "kind": "PRICE_KIND_CLOSE",
+                    "price": "<set>"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "a-stablecoin-quote",
+          "given": "the source quotes a crypto asset in a stablecoin with no ISO 4217 code",
+          "expect": [
+            {
+              "row": "RecordPrices",
+              "fields": {
+                "prices": [
+                  {
+                    "price": {
+                      "instrument_id": "<set>",
+                      "currency_code": "<unset>"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "an-asset-that-does-not-resolve",
+          "given": "the source names an asset whose identifiers meet two of the deployment's records",
+          "expect": [
+            {
+              "row": "ReportMissingInstrument",
+              "fields": {
+                "reason": "MISS_REASON_AMBIGUOUS"
+              }
+            }
+          ]
+        },
+        {
+          "name": "a-venue-resolved",
+          "given": "the source names the venue a price originated on by its MIC",
+          "expect": [
+            {
+              "row": "ResolveVenue"
+            },
+            {
+              "row": "RecordPrices",
+              "fields": {
+                "prices": [
+                  {
+                    "meta": {
+                      "source": {
+                        "venue_id": "<set>"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "a-venue-not-held",
+          "given": "the source names a venue the deployment does not hold",
+          "expect": [
+            {
+              "row": "ReportMissingVenue",
+              "fields": {
+                "reason": "MISS_REASON_NOT_FOUND"
+              }
+            }
+          ]
+        },
+        {
+          "name": "a-want-recorded-against",
+          "given": "the lake wants a business date's closes for subjects the source covers",
+          "expect": [
+            {
+              "row": "ObservationsWanted"
+            },
+            {
+              "row": "RecordPrices",
+              "fields": {
+                "want_id": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "a-subject-declined",
+          "given": "the lake wants a subject the source does not cover",
+          "expect": [
+            {
+              "row": "ObservationsWanted"
+            },
+            {
+              "row": "DeclineWant",
+              "fields": {
+                "want_id": "<set>",
+                "reason": "UNANSWERED_REASON_NOT_COVERED"
+              }
+            }
+          ]
+        },
+        {
+          "name": "a-standing-want-withdrawn",
+          "given": "the lake withdraws a standing want no reader asked within the dataset's cadence",
+          "expect": [
+            {
+              "row": "WantWithdrawn"
+            },
+            {
+              "row": "RecordPrices",
+              "sends": false
+            }
+          ]
+        }
+      ]
+    },
+    {
       "role": "operations",
       "since": "v14",
       "says": "An operations plugin passing every case reads the account's activity when it reconciles, hears each activity recorded, and offers the activity that explains a break as its candidate cause, linked by value, under the category that fits; it books nothing from activity and confirms nothing without a person.\n",
@@ -990,6 +1282,198 @@
             {
               "row": "ResolveBreak",
               "sends": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "role": "portfolio",
+      "since": "v18",
+      "says": "A portfolio plugin passing every case learns the datasets it may read, reads prices and bars by subject, a business date or a range, from the deployment's default sources unless it names others, and hears what the lake records after, narrowed to the subjects it asked for; it records nothing in the lake.\n",
+      "cases": [
+        {
+          "name": "reads-the-datasets-it-may-read",
+          "given": "a portfolio plugin starts in a deployment where it is entitled to datasets",
+          "expect": [
+            {
+              "row": "ListDatasets"
+            }
+          ]
+        },
+        {
+          "name": "reads-a-business-dates-closes",
+          "given": "the plugin needs the closes of its subjects for a business date",
+          "expect": [
+            {
+              "row": "ListPrices",
+              "fields": {
+                "subjects": "<set>",
+                "kinds": [
+                  "PRICE_KIND_CLOSE"
+                ],
+                "business_date": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "hears-a-price-recorded",
+          "given": "the lake records a close for a subject the plugin asked for",
+          "expect": [
+            {
+              "row": "PricesRecorded"
+            }
+          ]
+        },
+        {
+          "name": "reads-daily-bars-over-a-range",
+          "given": "the plugin needs daily bars of its subjects over a range",
+          "expect": [
+            {
+              "row": "ListBars",
+              "fields": {
+                "subjects": "<set>",
+                "valid_from_ns": "<set>",
+                "valid_until_ns": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "hears-a-bar-recorded",
+          "given": "the lake records a bar for a subject the plugin asked for",
+          "expect": [
+            {
+              "row": "BarsRecorded"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "role": "reporting",
+      "since": "v18",
+      "says": "A reporting plugin passing every case learns the datasets it may read, reads prices and bars by subject, a business date or a range, from the deployment's default sources unless it names others, and hears what the lake records after, narrowed to the subjects it asked for; it records nothing in the lake.\n",
+      "cases": [
+        {
+          "name": "reads-the-datasets-it-may-read",
+          "given": "a reporting plugin starts in a deployment where it is entitled to datasets",
+          "expect": [
+            {
+              "row": "ListDatasets"
+            }
+          ]
+        },
+        {
+          "name": "reads-a-business-dates-closes",
+          "given": "the plugin needs the closes of its subjects for a business date",
+          "expect": [
+            {
+              "row": "ListPrices",
+              "fields": {
+                "subjects": "<set>",
+                "kinds": [
+                  "PRICE_KIND_CLOSE"
+                ],
+                "business_date": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "hears-a-price-recorded",
+          "given": "the lake records a close for a subject the plugin asked for",
+          "expect": [
+            {
+              "row": "PricesRecorded"
+            }
+          ]
+        },
+        {
+          "name": "reads-daily-bars-over-a-range",
+          "given": "the plugin needs daily bars of its subjects over a range",
+          "expect": [
+            {
+              "row": "ListBars",
+              "fields": {
+                "subjects": "<set>",
+                "valid_from_ns": "<set>",
+                "valid_until_ns": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "hears-a-bar-recorded",
+          "given": "the lake records a bar for a subject the plugin asked for",
+          "expect": [
+            {
+              "row": "BarsRecorded"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "role": "signal",
+      "since": "v18",
+      "says": "A signal plugin passing every case learns the datasets it may read, reads prices and bars by subject, a business date or a range, from the deployment's default sources unless it names others, and hears what the lake records after, narrowed to the subjects it asked for; it records nothing in the lake.\n",
+      "cases": [
+        {
+          "name": "reads-the-datasets-it-may-read",
+          "given": "a signal plugin starts in a deployment where it is entitled to datasets",
+          "expect": [
+            {
+              "row": "ListDatasets"
+            }
+          ]
+        },
+        {
+          "name": "reads-a-business-dates-closes",
+          "given": "the plugin needs the closes of its subjects for a business date",
+          "expect": [
+            {
+              "row": "ListPrices",
+              "fields": {
+                "subjects": "<set>",
+                "kinds": [
+                  "PRICE_KIND_CLOSE"
+                ],
+                "business_date": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "hears-a-price-recorded",
+          "given": "the lake records a close for a subject the plugin asked for",
+          "expect": [
+            {
+              "row": "PricesRecorded"
+            }
+          ]
+        },
+        {
+          "name": "reads-daily-bars-over-a-range",
+          "given": "the plugin needs daily bars of its subjects over a range",
+          "expect": [
+            {
+              "row": "ListBars",
+              "fields": {
+                "subjects": "<set>",
+                "valid_from_ns": "<set>",
+                "valid_until_ns": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "hears-a-bar-recorded",
+          "given": "the lake records a bar for a subject the plugin asked for",
+          "expect": [
+            {
+              "row": "BarsRecorded"
             }
           ]
         }

@@ -6,6 +6,13 @@ from typing import ClassVar as _ClassVar, Iterable as _Iterable, Mapping as _Map
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
+class ObservationMode(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    OBSERVATION_MODE_UNSPECIFIED: _ClassVar[ObservationMode]
+    OBSERVATION_MODE_PULL: _ClassVar[ObservationMode]
+    OBSERVATION_MODE_PUSH: _ClassVar[ObservationMode]
+    OBSERVATION_MODE_STREAM: _ClassVar[ObservationMode]
+
 class NotCarriedReason(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
     NOT_CARRIED_REASON_UNSPECIFIED: _ClassVar[NotCarriedReason]
@@ -113,6 +120,10 @@ class RefusalReason(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     REFUSAL_REASON_RECORD_CHANGED: _ClassVar[RefusalReason]
     REFUSAL_REASON_REFERENCE_UNAVAILABLE: _ClassVar[RefusalReason]
     REFUSAL_REASON_WITHIN_HOLD: _ClassVar[RefusalReason]
+OBSERVATION_MODE_UNSPECIFIED: ObservationMode
+OBSERVATION_MODE_PULL: ObservationMode
+OBSERVATION_MODE_PUSH: ObservationMode
+OBSERVATION_MODE_STREAM: ObservationMode
 NOT_CARRIED_REASON_UNSPECIFIED: NotCarriedReason
 NOT_CARRIED_REASON_NO_CONTRACT_MEANING: NotCarriedReason
 NOT_CARRIED_REASON_NOT_CONVERTED: NotCarriedReason
@@ -227,14 +238,76 @@ class ToolDeclaration(_message.Message):
     def __init__(self, name: _Optional[str] = ..., title: _Optional[str] = ..., description: _Optional[str] = ..., method: _Optional[str] = ..., path: _Optional[str] = ..., levels: _Optional[_Iterable[_Union[AccessLevel, str]]] = ..., reads: bool = ..., input_schema: _Optional[str] = ..., output_schema: _Optional[str] = ..., roles: _Optional[_Iterable[str]] = ...) -> None: ...
 
 class PluginDeclaration(_message.Message):
-    __slots__ = ("secret_settings", "not_carried", "storage")
+    __slots__ = ("secret_settings", "not_carried", "storage", "catalogue")
     SECRET_SETTINGS_FIELD_NUMBER: _ClassVar[int]
     NOT_CARRIED_FIELD_NUMBER: _ClassVar[int]
     STORAGE_FIELD_NUMBER: _ClassVar[int]
+    CATALOGUE_FIELD_NUMBER: _ClassVar[int]
     secret_settings: _containers.RepeatedScalarFieldContainer[str]
     not_carried: _containers.RepeatedCompositeFieldContainer[NotCarried]
     storage: StorageDeclaration
-    def __init__(self, secret_settings: _Optional[_Iterable[str]] = ..., not_carried: _Optional[_Iterable[_Union[NotCarried, _Mapping]]] = ..., storage: _Optional[_Union[StorageDeclaration, _Mapping]] = ...) -> None: ...
+    catalogue: Catalogue
+    def __init__(self, secret_settings: _Optional[_Iterable[str]] = ..., not_carried: _Optional[_Iterable[_Union[NotCarried, _Mapping]]] = ..., storage: _Optional[_Union[StorageDeclaration, _Mapping]] = ..., catalogue: _Optional[_Union[Catalogue, _Mapping]] = ...) -> None: ...
+
+class Catalogue(_message.Message):
+    __slots__ = ("datasets",)
+    DATASETS_FIELD_NUMBER: _ClassVar[int]
+    datasets: _containers.RepeatedCompositeFieldContainer[DatasetDeclaration]
+    def __init__(self, datasets: _Optional[_Iterable[_Union[DatasetDeclaration, _Mapping]]] = ...) -> None: ...
+
+class DatasetDeclaration(_message.Message):
+    __slots__ = ("key", "vendor", "aggregator", "data_types", "modes", "cadence", "history", "licence_default", "day_time_zone", "day_end_minute", "venue_id")
+    KEY_FIELD_NUMBER: _ClassVar[int]
+    VENDOR_FIELD_NUMBER: _ClassVar[int]
+    AGGREGATOR_FIELD_NUMBER: _ClassVar[int]
+    DATA_TYPES_FIELD_NUMBER: _ClassVar[int]
+    MODES_FIELD_NUMBER: _ClassVar[int]
+    CADENCE_FIELD_NUMBER: _ClassVar[int]
+    HISTORY_FIELD_NUMBER: _ClassVar[int]
+    LICENCE_DEFAULT_FIELD_NUMBER: _ClassVar[int]
+    DAY_TIME_ZONE_FIELD_NUMBER: _ClassVar[int]
+    DAY_END_MINUTE_FIELD_NUMBER: _ClassVar[int]
+    VENUE_ID_FIELD_NUMBER: _ClassVar[int]
+    key: str
+    vendor: str
+    aggregator: str
+    data_types: _containers.RepeatedScalarFieldContainer[str]
+    modes: _containers.RepeatedScalarFieldContainer[ObservationMode]
+    cadence: int
+    history: int
+    licence_default: DatasetLicence
+    day_time_zone: str
+    day_end_minute: int
+    venue_id: str
+    def __init__(self, key: _Optional[str] = ..., vendor: _Optional[str] = ..., aggregator: _Optional[str] = ..., data_types: _Optional[_Iterable[str]] = ..., modes: _Optional[_Iterable[_Union[ObservationMode, str]]] = ..., cadence: _Optional[int] = ..., history: _Optional[int] = ..., licence_default: _Optional[_Union[DatasetLicence, _Mapping]] = ..., day_time_zone: _Optional[str] = ..., day_end_minute: _Optional[int] = ..., venue_id: _Optional[str] = ...) -> None: ...
+
+class DatasetLicence(_message.Message):
+    __slots__ = ("dataset", "kept", "retention_days", "derived_use", "display", "default_fields", "personal_use", "updated_by", "updated_at_ns", "acting_through_delegation", "client_name", "note")
+    DATASET_FIELD_NUMBER: _ClassVar[int]
+    KEPT_FIELD_NUMBER: _ClassVar[int]
+    RETENTION_DAYS_FIELD_NUMBER: _ClassVar[int]
+    DERIVED_USE_FIELD_NUMBER: _ClassVar[int]
+    DISPLAY_FIELD_NUMBER: _ClassVar[int]
+    DEFAULT_FIELDS_FIELD_NUMBER: _ClassVar[int]
+    PERSONAL_USE_FIELD_NUMBER: _ClassVar[int]
+    UPDATED_BY_FIELD_NUMBER: _ClassVar[int]
+    UPDATED_AT_NS_FIELD_NUMBER: _ClassVar[int]
+    ACTING_THROUGH_DELEGATION_FIELD_NUMBER: _ClassVar[int]
+    CLIENT_NAME_FIELD_NUMBER: _ClassVar[int]
+    NOTE_FIELD_NUMBER: _ClassVar[int]
+    dataset: str
+    kept: bool
+    retention_days: int
+    derived_use: bool
+    display: bool
+    default_fields: _containers.RepeatedScalarFieldContainer[str]
+    personal_use: bool
+    updated_by: str
+    updated_at_ns: int
+    acting_through_delegation: str
+    client_name: str
+    note: str
+    def __init__(self, dataset: _Optional[str] = ..., kept: bool = ..., retention_days: _Optional[int] = ..., derived_use: bool = ..., display: bool = ..., default_fields: _Optional[_Iterable[str]] = ..., personal_use: bool = ..., updated_by: _Optional[str] = ..., updated_at_ns: _Optional[int] = ..., acting_through_delegation: _Optional[str] = ..., client_name: _Optional[str] = ..., note: _Optional[str] = ...) -> None: ...
 
 class NotCarried(_message.Message):
     __slots__ = ("role", "scheme", "name", "reason")
