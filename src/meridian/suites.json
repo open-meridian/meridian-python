@@ -937,7 +937,7 @@
     {
       "role": "dgm",
       "since": "v18",
-      "says": "A dgm plugin passing every case records each source's prices and bars exactly, under its dataset, its business date, its source's times and its raw record; restates a forming day under the same row key and sends an identical repeat unchanged; resolves every subject and venue before it records, reporting what does not resolve; names a price in a token by the token's own cash instrument, never a fiat code; and records what a want asks, or declines it per subject.\n",
+      "says": "A dgm plugin passing every case records each source's prices and bars exactly, under its dataset, its business date, its source's times and its raw record; restates a forming day under the same row key and sends an identical repeat unchanged; resolves every subject and venue before it records, reporting what does not resolve, and reads the record of a subject another source resolved to name it in its own; names a price in a token by the token's own cash instrument, never a fiat code; and records what a want asks, or declines it per subject.\n",
       "cases": [
         {
           "name": "a-daily-close",
@@ -1122,6 +1122,27 @@
           "expect": [
             {
               "row": "ObservationsWanted"
+            },
+            {
+              "row": "RecordPrices",
+              "fields": {
+                "want_id": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "a-subject-another-source-resolved",
+          "given": "the lake wants a business date's close for an instrument the deployment holds from another source, its record carrying that source's symbol and a CUSIP, which this source has never resolved",
+          "expect": [
+            {
+              "row": "ObservationsWanted"
+            },
+            {
+              "row": "ResolveInstrument",
+              "fields": {
+                "instrument_id": "<set>"
+              }
             },
             {
               "row": "RecordPrices",

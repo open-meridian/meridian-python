@@ -25,6 +25,13 @@ datasets it may read (list_datasets), and hears prices and bars for the
 subjects it names (receive(prices_recorded=, bars_recorded=, subjects=[...])),
 latest value first, each with its dataset (Heard.dataset).
 
+A dgm reads an instrument's record (resolve_instrument, W3.6; ruled
+2026-10-10): a want names the deployment's ID, which may be an instrument
+another source resolved -- a custodian's, by its symbol and CUSIP -- and the
+dgm finds in its identifiers one its vendor takes. The dgm suite holds it to
+that in its case a-subject-another-source-resolved, which a dgm maps as it
+maps the others.
+
 A Money names the asset's cash instrument (Money.instrument_id). Money(amount,
 "USD") still works: core resolves the ISO 4217 code, dated, to the currency's
 instrument, and what core keeps and answers names it, so a Money read back

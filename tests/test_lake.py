@@ -45,6 +45,19 @@ USDC = "LCL-01JA0000000000000USDC1"
 COINBASE = "VEN-01JA0000000000000CBEXC"
 DAY = 1_791_331_200_000_000_000  # 2026-10-08 00:00 UTC
 NS_A_DAY = 86_400_000_000_000
+#: An instrument the deployment holds from a custodian, which the toy dgm
+#: never resolved: its record carries the custodian's symbol and a CUSIP.
+ELSEWHERE = "LCL-01JA0000000000000QQQ1"
+RECORD_ELSEWHERE = ops.ResolveInstrumentResult(
+    found=True,
+    instrument=ops.InstrumentRecord(
+        instrument_id=ELSEWHERE,
+        identifiers=[
+            ops.Identifier(scheme="cusip", value="46090E103"),
+            ops.Identifier(scheme="symbol", value="QQQ", source="snaptrade"),
+        ],
+    ),
+)
 
 CATALOGUE = [
     DatasetDeclaration(
@@ -490,6 +503,28 @@ async def test_a_venue_resolves_by_its_mic_and_one_not_held_is_reported(sidecar)
         await plugin.leave()
 
 
+async def test_a_dgm_reads_the_record_of_an_instrument_another_source_resolved(sidecar) -> None:
+    # Contract v18, ruled 2026-10-10: a dgm asks ResolveInstrument (W3.6) to
+    # name to its vendor an instrument the book holds from a custodian.
+    service, _ = sidecar
+    plugin = await dgm(sidecar)
+    try:
+        found = await plugin.resolve_instrument(instrument_id=ELSEWHERE, as_of_ns=DAY)
+        assert found.found
+        assert [(i.scheme, i.value, i.source) for i in found.instrument.identifiers] == [
+            ("cusip", "46090E103", ""),
+            ("symbol", "QQQ", "snaptrade"),
+        ]
+        missing = await plugin.resolve_instrument(instrument_id="LCL-NOT-HELD", as_of_ns=DAY)
+        assert not missing.found
+        assert [r.instrument_id for r in service.operations.sent[-2:]] == [
+            ELSEWHERE,
+            "LCL-NOT-HELD",
+        ]
+    finally:
+        await plugin.leave()
+
+
 # ── Hearing ─────────────────────────────────────────────────────────────────
 
 
@@ -630,11 +665,19 @@ class ToyDgm:
     source's synthetic exchange, against whatever operations it is given."""
 
     def __init__(
-        self, plugin: object, *, through_float: bool = False, forming_as_new: bool = False
+        self,
+        plugin: object,
+        *,
+        through_float: bool = False,
+        forming_as_new: bool = False,
+        reads_no_record: bool = False,
     ) -> None:
         self.plugin = plugin
         self.through_float = through_float
         self.forming_as_new = forming_as_new
+        # The mutation: a subject the toy did not resolve itself declined,
+        # its record never read.
+        self.reads_no_record = reads_no_record
 
     def amount(self, text: str) -> Decimal:
         # The mutation: a candle's JSON number read through a float.
@@ -745,15 +788,31 @@ class ToyDgm:
             reason="not_found",
         )
 
+    async def served(self, subject: str) -> bool:
+        """Whether the toy's source serves `subject`: one it resolved itself,
+        or one another source resolved whose record (W3.6) carries a symbol
+        it can name to its source (contract v18, ruled 2026-10-10)."""
+        if subject == "LCL-NOT-COVERED":
+            return False
+        if subject != ELSEWHERE:
+            return True
+        if self.reads_no_record:
+            return False
+        found = await self.plugin.resolve_instrument(instrument_id=subject, as_of_ns=DAY)  # type: ignore[attr-defined]
+        return bool(found.found) and any(
+            i.scheme == "symbol" for i in found.instrument.identifiers
+        )
+
     async def on_want(self, heard: meridian.Heard[ops.ObservationsWantedEvent]) -> None:
         want = heard.message
-        covered = [s for s in want.subjects if s.entity_id != "LCL-NOT-COVERED"]
+        served = [await self.served(s.entity_id) for s in want.subjects]
+        covered = [s for s, ok in zip(want.subjects, served, strict=True) if ok]
         if covered:
             await self.plugin.record_prices(  # type: ignore[attr-defined]
                 prices=[self.price(s.entity_id, Decimal("62431.27")) for s in covered],
                 want_id=want.want_id,
             )
-        declined = [s for s in want.subjects if s.entity_id == "LCL-NOT-COVERED"]
+        declined = [s for s, ok in zip(want.subjects, served, strict=True) if not ok]
         if declined:
             await self.plugin.decline_want(
                 want_id=want.want_id, subjects=declined, reason="not_covered"
@@ -778,6 +837,7 @@ def producers(**mutations: bool) -> dict[str, object]:
             del want.subjects[:]
             want.subjects.extend(ops.SubjectRef(entity_id=s) for s in subjects)
             recorder.answer("ObservationsWanted", lambda _: want)
+            recorder.answer("ResolveInstrument", lambda _: RECORD_ELSEWHERE)
             await recorder.receive(observations_wanted=toy.on_want)
 
         return produce
@@ -800,22 +860,31 @@ def producers(**mutations: bool) -> dict[str, object]:
         "a-venue-resolved": made("venue"),
         "a-venue-not-held": made("venue_not_held"),
         "a-want-recorded-against": wanted([BTC]),
+        "a-subject-another-source-resolved": wanted([ELSEWHERE]),
         "a-subject-declined": wanted(["LCL-NOT-COVERED"]),
         "a-standing-want-withdrawn": withdrawn,
     }
 
 
-def test_the_dgm_suite_is_carried_with_its_twelve_cases() -> None:
+def test_the_dgm_suite_is_carried_with_its_thirteen_cases() -> None:
     held = suite("dgm")
     assert held.since == "v18"
-    assert len(held.cases) == 12
+    assert len(held.cases) == 13
     assert "a-want-recorded-against" in names("dgm")
+    assert "a-subject-another-source-resolved" in names("dgm")
 
 
 def test_a_dgm_converting_exactly_passes_every_case_of_its_suite() -> None:
     report = run("dgm", producers(), instance_id="toy-1")
     assert report.passed, report.failures
-    assert len(report.passed_cases) == 12
+    assert len(report.passed_cases) == 13
+
+
+def test_a_dgm_declining_a_subject_another_source_resolved_fails_the_suite() -> None:
+    # Contract v18, ruled 2026-10-10: a dgm reads the record of an instrument
+    # it did not resolve itself (W3.6) and names it to its source.
+    report = run("dgm", producers(reads_no_record=True))
+    assert set(report.failures) == {"a-subject-another-source-resolved"}
 
 
 def test_a_candle_read_through_a_float_fails_the_suite() -> None:

@@ -73,6 +73,13 @@ first in `priority`, then the catalogue's order, that holds one), named
 datasets in order, or side by side; with each dataset named once and each
 subject no dataset covers unanswered. Venues resolve by their identifiers
 (`venues`); a miss is reported. A want's decline is kept (`declined`).
+
+And it answers ResolveInstrument (W3.6) from the deployment's records
+(`instruments`), as the instrument store does, to any role that asks: a
+dgm reads the record of an instrument another source resolved (contract
+v18, ruled 2026-10-10) -- a custodian's QQQ, by its symbol and CUSIP --
+and a record the store does not hold is not found. Who may ask is the
+sidecar's to enforce, tested in meridian-core.
 """
 
 from __future__ import annotations
@@ -129,6 +136,10 @@ class FakeOperations(operations_pb2_grpc.PluginOperationsServicer):
     re_resolutions: list[operations_pb2.ActivityReResolution] = field(default_factory=list)
     # The lake (W10, contract v18).
     lake: FakeLake = field(default_factory=lambda: FakeLake())
+    # The deployment's instrument records, as ResolveInstrument answers them.
+    instruments: dict[str, operations_pb2.InstrumentRecord] = field(
+        default_factory=lambda: dict(INSTRUMENTS)
+    )
 
     async def _lake(self, params, context, answer):
         """A lake call kept as sent and answered, or refused as the sidecar
@@ -432,6 +443,15 @@ class FakeOperations(operations_pb2_grpc.PluginOperationsServicer):
         answer = operations_pb2.RecordHoldingResult(holding_id="H-1", resolved=True)
         return await self._answer(request, answer, context)
 
+    async def ResolveInstrument(self, request, context):  # noqa: N802
+        held = self.instruments.get(request.instrument_id)
+        answer = (
+            operations_pb2.ResolveInstrumentResult(found=True, instrument=held)
+            if held is not None
+            else operations_pb2.ResolveInstrumentResult(found=False)
+        )
+        return await self._answer(request, answer, context)
+
     async def ResolveIdentifier(self, request, context):  # noqa: N802
         answer = operations_pb2.ResolveIdentifierResult(found=True, instrument_id="INS-1")
         return await self._answer(request, answer, context)
@@ -515,6 +535,20 @@ def _venue(venue_id: str, name: str, mic: str, kind: int, zone: str) -> object:
 
 
 #: The venues the fake deployment holds, by ID.
+#: An instrument the book holds from a custodian, known by the custodian's
+#: symbol and its CUSIP, which no dgm resolved (contract v18, W3.6).
+INSTRUMENTS = {
+    "LCL-01JA0000000000000QQQ1": operations_pb2.InstrumentRecord(
+        instrument_id="LCL-01JA0000000000000QQQ1",
+        identifiers=[
+            operations_pb2.Identifier(scheme="cusip", value="46090E103"),
+            operations_pb2.Identifier(scheme="symbol", value="QQQ", source="snaptrade"),
+        ],
+        asset_class=operations_pb2.ASSET_CLASS_FUND,
+        currency="USD",
+    ),
+}
+
 VENUES = {
     venue.venue_id: venue
     for venue in (
