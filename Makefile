@@ -18,7 +18,7 @@ help:
 	@echo "  make build          install the package and prove it imports"
 	@echo "  make package        build the wheel and prove it installs alone"
 	@echo "  make base-image     the plugin base image, plugin-python, from that wheel"
-	@echo "  make check-scaffold the template, built on that base, holding only itself"
+	@echo "  make check-scaffold the template and each role's, built on that base, holding only themselves"
 	@echo "  make check-migrations each recorded migration's plugin, migrated, passes plugin check"
 	@echo "  make vendor-schema  move the bundled wire bindings to SCHEMA_REV"
 	@echo "  make test           run the unit tests"
@@ -142,10 +142,19 @@ base-image:
 		     echo "  DOCKER_BUILDKIT=1 docker build -f Dockerfile.python --target plugin-base --build-arg SDK_VERSION=$(SDK_VERSION) --progress=plain ." >&2; exit 1; }
 	@echo "base-image OK: $(BASE_IMAGE), Python and open-meridian $(SDK_VERSION)"
 
+# The roles' templates, which `meridian plugin new --role <role>` writes:
+# each a whole plugin holding that role, sharing these files with template/
+# byte for byte, so the agents' instructions, the CI and the image are one.
+ROLE_TEMPLATES := dgm reporting
+SHARED := AGENTS.md CLAUDE.md Dockerfile .dockerignore .gitignore \
+          .claude/skills/develop-live/SKILL.md .github/workflows/check.yaml
+
 # What a plugin author gets: the template built on the base, as its Dockerfile
 # says. It must hold the base's SDK rather than a second copy -- what it adds
 # on top is small, where the SDK and its gRPC are tens of megabytes -- carry
-# the base's label, run as 65532, and start.
+# the base's label, run as 65532, and start. Each role's template shares its
+# files, declares its role, builds on the base and starts; the dgm's
+# declaration prints from its image, as `meridian plugin upload` reads it.
 check-scaffold: base-image
 	@grep -q '^dependencies = \["open-meridian==$(SDK_VERSION)"\]' template/pyproject.toml \
 		|| { echo "check-scaffold FAILED: the template does not pin open-meridian==$(SDK_VERSION)" >&2; exit 1; }
@@ -166,7 +175,22 @@ check-scaffold: base-image
 		|| { echo "check-scaffold FAILED: the plugin's image does not import the SDK and itself" >&2; exit 1; }
 	@docker run --rm --entrypoint sh reference-plugin:check -c "test ! -e /plugin/AGENTS.md && test ! -e /plugin/CLAUDE.md && test ! -e /plugin/.claude" \
 		|| { echo "check-scaffold FAILED: the plugin's image holds the agents' files, which .dockerignore keeps out" >&2; exit 1; }
-	@echo "check-scaffold OK: the template builds on plugin-python:$(SDK_VERSION) and adds only itself, without the agents' files"
+	@for role in $(ROLE_TEMPLATES); do \
+		for shared in $(SHARED); do \
+			cmp -s template/$$shared templates/$$role/$$shared \
+				|| { echo "check-scaffold FAILED: templates/$$role/$$shared is not template/$$shared; the role's templates share the reference plugin's" >&2; exit 1; }; \
+		done; \
+		grep -q "^roles = \[\"$$role\"\]$$" templates/$$role/pyproject.toml \
+			|| { echo "check-scaffold FAILED: templates/$$role does not declare roles = [\"$$role\"]" >&2; exit 1; }; \
+		$(DOCKER) build --build-arg BASE=$(BASE_IMAGE) -t reference-$$role:check templates/$$role >/dev/null 2>&1 \
+			|| { echo "check-scaffold FAILED: templates/$$role does not build on the base; see it with:" >&2; \
+			     echo "  DOCKER_BUILDKIT=1 docker build --build-arg BASE=$(BASE_IMAGE) --progress=plain templates/$$role" >&2; exit 1; }; \
+		docker run --rm --entrypoint python reference-$$role:check -c "import meridian, reference_plugin.__main__" \
+			|| { echo "check-scaffold FAILED: templates/$$role's image does not import the SDK and itself" >&2; exit 1; }; \
+	done
+	@docker run --rm --entrypoint meridian-declaration reference-dgm:check reference_plugin.declaration:DECLARATION >/dev/null \
+		|| { echo "check-scaffold FAILED: the dgm template's declaration does not print from its image" >&2; exit 1; }
+	@echo "check-scaffold OK: the template and each role's ($(ROLE_TEMPLATES)) build on plugin-python:$(SDK_VERSION); the template adds only itself, without the agents' files"
 
 test:
 	@$(DOCKER) build $(CONTEXTS) -f Dockerfile.python --target test . >/dev/null 2>&1 \
@@ -214,7 +238,7 @@ lint:
 # Applied in a container and written back, because the host has no toolchain.
 fmt:
 	@docker run --rm -v "$(CURDIR)":/w -w /w python:$(PY_VERSION)-slim \
-		sh -c 'pip install -q ruff >/dev/null 2>&1; python -m ruff check --fix src tests template/src template/tests >/dev/null; python -m ruff format src tests template/src template/tests'
+		sh -c 'pip install -q ruff >/dev/null 2>&1; python -m ruff check --fix src tests template/src template/tests templates >/dev/null; python -m ruff format src tests template/src template/tests templates'
 	@echo "fmt: applied"
 
 install-hooks:

@@ -21,6 +21,14 @@ with the kit, hold the plugin to `meridian plugin check`, and the live loop
 template at a pinned commit, so a CLI release carries it. See
 [meridian-cli](https://github.com/open-meridian/meridian-cli).
 
+`plugin new --role dgm` and `--role reporting` write `templates/dgm/` and
+`templates/reporting/` instead: a `dgm` putting a stand-in vendor's prices
+into the lake, its catalogue declared, its Connection and Datasets pages
+with their read tools, and its tests running the `dgm` suite; and a
+`reporting` plugin valuing the book's positions at the close from the lake,
+its tests running the `reporting` suite. Each is a whole plugin, its agents'
+files, CI and `Dockerfile` the reference plugin's own.
+
 ## The SDK
 
 A plugin talks only to its local sidecar. Its process holds nothing it cannot

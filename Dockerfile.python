@@ -24,6 +24,7 @@ RUN mkdir -p src/meridian && touch src/meridian/__init__.py \
  && pip install -e ".[dev,migrate]"
 COPY src/ src/
 COPY template/ template/
+COPY templates/ templates/
 
 # The domain messages the tests encode payloads with. They are meridian-core's,
 # not this package's, and the package never ships them: they are generated
@@ -128,9 +129,14 @@ WORKDIR /plugin
 #
 # The template's own tests too, as a plugin made from it runs them (`meridian
 # plugin check --run-tests`): against this SDK, with its sidecar stood in for.
+# And each role's template under templates/, from its own directory, as the
+# plugin it becomes runs them; their suites among them.
 FROM base AS test
 RUN python -m pytest -q --ignore=tests/test_conformance.py --ignore=tests/test_interop.py --ignore=tests/test_book.py \
- && PYTHONPATH=template/src python -m pytest -q -p no:cacheprovider template/tests
+ && PYTHONPATH=template/src python -m pytest -q -p no:cacheprovider template/tests \
+ && for role in templates/*/; do \
+      (cd "$role" && PYTHONPATH=src python -m pytest -q -p no:cacheprovider tests) || exit 1; \
+    done
 
 # meridian, the command line, as a plugin's own CI installs it: its installer
 # from the release's tag, which checks the binary against the checksum
@@ -154,9 +160,12 @@ RUN MERIDIAN_PLUGIN_CHECK=required python -m pytest -q -p no:cacheprovider \
       tests/test_migrations.py -k passes_plugin_check
 
 FROM base AS lint
-RUN python -m ruff check src tests template/src template/tests \
- && python -m ruff format --check src tests template/src template/tests \
- && python -m mypy
+RUN python -m ruff check src tests template/src template/tests templates \
+ && python -m ruff format --check src tests template/src template/tests templates \
+ && python -m mypy \
+ && for role in templates/*/; do \
+      MYPYPATH="${role}src" python -m mypy "${role}src/reference_plugin" "${role}tests" || exit 1; \
+    done
 
 # Conformance against the contract's pinned bytes. The fixtures live in
 # meridian-design and are mounted rather than copied, because a copy is a copy
