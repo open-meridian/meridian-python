@@ -2629,18 +2629,22 @@ class Unanswered(_message.Message):
     def __init__(self, subject: _Optional[_Union[SubjectRef, _Mapping]] = ..., dataset: _Optional[str] = ..., field: _Optional[str] = ..., reason: _Optional[_Union[UnansweredReason, str]] = ...) -> None: ...
 
 class DatasetRef(_message.Message):
-    __slots__ = ("dataset", "instance", "vendor", "aggregator", "declaration")
+    __slots__ = ("dataset", "instance", "vendor", "aggregator", "declaration", "unconverted_count", "miss_count")
     DATASET_FIELD_NUMBER: _ClassVar[int]
     INSTANCE_FIELD_NUMBER: _ClassVar[int]
     VENDOR_FIELD_NUMBER: _ClassVar[int]
     AGGREGATOR_FIELD_NUMBER: _ClassVar[int]
     DECLARATION_FIELD_NUMBER: _ClassVar[int]
+    UNCONVERTED_COUNT_FIELD_NUMBER: _ClassVar[int]
+    MISS_COUNT_FIELD_NUMBER: _ClassVar[int]
     dataset: str
     instance: str
     vendor: str
     aggregator: str
     declaration: DatasetDeclaration
-    def __init__(self, dataset: _Optional[str] = ..., instance: _Optional[str] = ..., vendor: _Optional[str] = ..., aggregator: _Optional[str] = ..., declaration: _Optional[_Union[DatasetDeclaration, _Mapping]] = ...) -> None: ...
+    unconverted_count: int
+    miss_count: int
+    def __init__(self, dataset: _Optional[str] = ..., instance: _Optional[str] = ..., vendor: _Optional[str] = ..., aggregator: _Optional[str] = ..., declaration: _Optional[_Union[DatasetDeclaration, _Mapping]] = ..., unconverted_count: _Optional[int] = ..., miss_count: _Optional[int] = ...) -> None: ...
 
 class DatasetDeclaration(_message.Message):
     __slots__ = ("key", "vendor", "aggregator", "data_types", "modes", "cadence", "history", "licence_default", "day_time_zone", "day_end_minute", "venue_id")
