@@ -26,7 +26,8 @@ template at a pinned commit, so a CLI release carries it. See
 into the lake, its catalogue declared, its Connection and Datasets pages
 with their read tools, and its tests running the `dgm` suite; and a
 `reporting` plugin valuing the book's positions at the close from the lake,
-its tests running the `reporting` suite. Each is a whole plugin, its agents'
+its Closes page with its read tool, `read_report`, and its tests running the
+`reporting` suite. Each is a whole plugin, its agents'
 files, CI and `Dockerfile` the reference plugin's own.
 
 ## The SDK
