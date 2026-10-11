@@ -897,3 +897,25 @@ def test_account_links_take_a_map_its_grouping_and_several_links(tmp_path: Path)
     assert "no-new-account" not in head
     assert '"number": "Z123"' in page and '"connection_id": "c-2"' in page
     assert "<form>own forms</form>" in page and "<strong>Roth IRA</strong>" not in page
+
+
+def test_connect_is_in_the_connections_section_head_never_the_pages(tmp_path: Path) -> None:
+    (tmp_path / "c.html").write_text('{% extends "meridian/roles/custody/connections.html" %}')
+    pages = meridian.Pages("Plugin", templates=tmp_path)
+
+    @pages.page("/", "Connections", levels="admin")
+    async def view(request: meridian.Request) -> str:
+        record = custody.ConnectionsRead(connections=[custody.ConnectionRead("Fidelity")])
+        return pages.render("c.html", data=record, action="/connect")
+
+    page = PageClient(pages).get("/", "admin").text
+    head = page[page.index('<header class="page-head">') : page.index("</header>")]
+    assert "Connect" not in head and "data-om-action" not in page
+    section = page[page.index('<div class="section-head">') :]
+    assert section.index("<h2>Connections</h2>") < section.index(">Connect</button>")
+    assert section.index(">Connect</button>") < section.index("</div>")
+    assert 'action="/connect"' in section
+
+
+def test_the_account_map_pages_what_fits_the_screen(tmp_path: Path) -> None:
+    assert 'page-size="auto"' in _map_head(account_links(tmp_path))

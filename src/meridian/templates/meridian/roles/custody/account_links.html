@@ -10,7 +10,8 @@
     `group_by`, the map's grouping to start with (none); `link_several`,
     whether its handler takes several links in one form (false);
     `no_new_account`, whether no new account is offered (true unless the
-    person is a deployment admin). The plain table the map holds for a
+    person is a deployment admin). The map pages as many rows as fit the
+    screen (`page-size="auto"`). The plain table the map holds for a
     browser without the kit is `vendor_rows`'s, which a plugin may replace
     with its own forms. -#}
 {% extends "meridian/base.html" %}
@@ -27,7 +28,7 @@
 {% block vendor_notices %}{% endblock %}
 {% set no_new = no_new_account if no_new_account is defined else not caller.deployment_admin %}
 {% set handed = map if map is defined else {"external_accounts": data.external_accounts|map("om_record")|list, "accounts": data.accounts|map("om_record")|list, "links": data.links|map("om_record")|list} %}
-<om-account-map action="{{ action|default('') }}" token-name="csrf" token="{{ csrf_token }}" empty="No accounts reported yet."
+<om-account-map action="{{ action|default('') }}" token-name="csrf" token="{{ csrf_token }}" empty="No accounts reported yet." page-size="auto"
 {%- if group_by is defined and group_by %} group-by="{{ group_by }}"{% endif %}
 {%- if link_several is defined and link_several %} link-several{% endif %}
 {%- if no_new %} no-new-account{% endif %}>

@@ -2,8 +2,11 @@
     notices, then "Connections", a row each, then the vendor's sections.
     `data` is a meridian.roles.custody.ConnectionsRead, or the plugin's
     record extending it. "Refresh" and "Reconnect" on a row, as the vendor
-    allows, go in `vendor_columns`; "Connect" in the head's actions. -#}
+    allows, go in `vendor_columns`. "Connect" is drawn in the Connections
+    section's head, never the page's (no header action), where the vendor
+    connects through a portal of its own: `action`, where its form posts. -#}
 {% extends "meridian/base.html" %}
+{% import "meridian/kit.html" as kit %}
 {% import "meridian/roles/_rows.html" as om %}
 {% block content %}
 {% if data.credentials and not data.credentials|selectattr("set")|list %}
@@ -11,7 +14,7 @@
 {% endif %}
 {% block vendor_notices %}{% endblock %}
 <section class="panel">
-<h2>Connections</h2>
+<div class="section-head"><h2>Connections</h2>{% if action is defined and action %}{{ kit.action(action, "Connect") }}{% endif %}</div>
 {% if data.connections %}
 <table class="one-line">
 {% for row in [none] + data.connections %}
