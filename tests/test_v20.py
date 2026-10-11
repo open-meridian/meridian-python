@@ -828,3 +828,72 @@ def test_breaks_say_no_breaks_yet_only_before_any_reconciliation(tmp_path: Path)
         last_reconciliation="2026-10-11 09:00 UTC",
     )
     assert "Open breaks" in open_ones and "No open breaks" not in open_ones
+
+
+def _map_head(page: str) -> str:
+    """The account map's opening tag."""
+    at = page.index("<om-account-map")
+    return page[at : page.index(">", at)]
+
+
+def account_links(
+    tmp_path: Path, child: str = "", admin: bool = False, **context: object
+) -> str:
+    (tmp_path / "l.html").write_text(
+        '{% extends "meridian/roles/custody/account_links.html" %}' + child
+    )
+    pages = meridian.Pages("Plugin", templates=tmp_path)
+    record = custody.AccountLinksRead(
+        external_accounts=[custody.ExternalAccountRead("SNAP-1", "Roth IRA")],
+        accounts=[custody.AccountRead("ACC-1", "Main")],
+    )
+
+    @pages.page("/", "Account links", levels="admin")
+    async def view(request: meridian.Request) -> str:
+        return pages.render("l.html", data=record, **context)
+
+    return PageClient(pages, deployment_admin=admin).get("/", "admin").text
+
+
+def test_account_links_defaults_offer_no_new_account_to_a_plugin_admin(tmp_path: Path) -> None:
+    page = account_links(tmp_path)
+    head = _map_head(page)
+    assert "no-new-account" in head
+    assert "group-by" not in head and "link-several" not in head
+    assert '"external_account_id": "SNAP-1", "name": "Roth IRA"' in page
+    assert "<strong>Roth IRA</strong>" in page
+    admin = account_links(tmp_path, admin=True)
+    assert "no-new-account" not in _map_head(admin)
+
+
+def test_account_links_take_a_map_its_grouping_and_several_links(tmp_path: Path) -> None:
+    handed = {
+        "external_accounts": [
+            {
+                "external_account_id": "SNAP-1",
+                "number": "Z123",
+                "connection": "Fidelity",
+                "connection_id": "c-2",
+                "custodian": "Fidelity",
+                "account_type": "IRA",
+                "note": "",
+                "open": True,
+            }
+        ],
+        "accounts": [],
+        "links": [],
+    }
+    page = account_links(
+        tmp_path,
+        child="{% block vendor_rows %}<form>own forms</form>{% endblock %}",
+        admin=True,
+        map=handed,
+        group_by="connection",
+        link_several=True,
+        no_new_account=False,
+    )
+    head = _map_head(page)
+    assert 'group-by="connection"' in head and "link-several" in head
+    assert "no-new-account" not in head
+    assert '"number": "Z123"' in page and '"connection_id": "c-2"' in page
+    assert "<form>own forms</form>" in page and "<strong>Roth IRA</strong>" not in page

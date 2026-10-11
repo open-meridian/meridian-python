@@ -3,7 +3,16 @@
     beside the accounts granted to this instance, linked with "Link" -- then
     the vendor's sections. `data` is a
     meridian.roles.custody.AccountLinksRead; `action`, where the map's forms
-    post, the plugin's linking route. -#}
+    post, the plugin's linking route. Optional, each with its default:
+    `map`, the JSON object handed to the account map, its accounts' extra
+    fields (number, custodian, account_type, note, connection, connection_id,
+    open) passed through untouched -- built from `data` when not given;
+    `group_by`, the map's grouping to start with (none); `link_several`,
+    whether its handler takes several links in one form (false);
+    `no_new_account`, whether no new account is offered (true unless the
+    person is a deployment admin). The plain table the map holds for a
+    browser without the kit is `vendor_rows`'s, which a plugin may replace
+    with its own forms. -#}
 {% extends "meridian/base.html" %}
 {% import "meridian/roles/_rows.html" as om %}
 {% block content %}
@@ -16,14 +25,21 @@
 {% endif %}
 {{ om.second_pair_of_eyes("link_account", caller) }}
 {% block vendor_notices %}{% endblock %}
-<om-account-map action="{{ action|default('') }}" token-name="csrf" token="{{ csrf_token }}" empty="No accounts reported yet.">
-<script type="application/json">{{ {"external_accounts": data.external_accounts|map("om_record")|list, "accounts": data.accounts|map("om_record")|list, "links": data.links|map("om_record")|list}|tojson }}</script>
+{% set no_new = no_new_account if no_new_account is defined else not caller.deployment_admin %}
+{% set handed = map if map is defined else {"external_accounts": data.external_accounts|map("om_record")|list, "accounts": data.accounts|map("om_record")|list, "links": data.links|map("om_record")|list} %}
+<om-account-map action="{{ action|default('') }}" token-name="csrf" token="{{ csrf_token }}" empty="No accounts reported yet."
+{%- if group_by is defined and group_by %} group-by="{{ group_by }}"{% endif %}
+{%- if link_several is defined and link_several %} link-several{% endif %}
+{%- if no_new %} no-new-account{% endif %}>
+<script type="application/json">{{ handed|tojson }}</script>
+{% block vendor_rows scoped %}
 <table class="one-line"><thead><tr><th>External account</th><th>Linked to</th></tr></thead><tbody>
 {% for account in data.external_accounts %}
 {% set link = data.links|selectattr("external_account_id", "equalto", account.external_account_id)|first %}
 <tr><td><strong>{{ account.name or account.external_account_id }}</strong>{% if account.detail %} <span class="hint">{{ account.detail }}</span>{% endif %}</td><td>{{ link.account_name if link else "Not linked" }}</td></tr>
 {% endfor %}
 </tbody></table>
+{% endblock %}
 </om-account-map>
 {% block vendor_sections %}{% endblock %}
 {% endblock %}
