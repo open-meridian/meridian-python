@@ -14,6 +14,7 @@
 {{ om.next_step("No accounts granted yet", "A deployment admin grants this plugin the accounts it may link to. Ask a deployment admin to grant some.") }}
 {% endif %}
 {% endif %}
+{{ om.second_pair_of_eyes("link_account", caller) }}
 {% block vendor_notices %}{% endblock %}
 <om-account-map action="{{ action|default('') }}" token-name="csrf" token="{{ csrf_token }}" empty="No accounts reported yet.">
 <script type="application/json">{{ {"external_accounts": data.external_accounts|map("om_record")|list, "accounts": data.accounts|map("om_record")|list, "links": data.links|map("om_record")|list}|tojson }}</script>

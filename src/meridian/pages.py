@@ -253,6 +253,15 @@ class Request:
         declared = getattr(self.plugin, "_declared", ())
         return _own(declared, self.caller.own_settings)
 
+    @property
+    def second_pair_of_eyes(self) -> frozenset[str]:
+        """The plugin's acts, by their tool names, whose second pair of eyes
+        is on for this person now (contract v20, W6.29): a page hides Save
+        for such an act, offering Prepare, and says a second person makes a
+        change this person prepared, or their agent did. For showing only:
+        the dashboard refuses a direct make whatever the page draws."""
+        return self.caller.second_pair_of_eyes
+
     async def prepared(self) -> sidecar_pb2.PreparedCall | None:
         """The prepared change this page was opened from (contract v20,
         W4.14, W6.27), for the person whose page it is, read through the

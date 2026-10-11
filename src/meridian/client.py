@@ -733,6 +733,12 @@ class Caller:
     # as text, a table's as its JSON rows: under Open and View, never under
     # Manage. `request.own_settings` reads them typed.
     own_settings: Mapping[str, str] = field(default_factory=dict, hash=False)
+    # The plugin's acts, by their tool names, whose second pair of eyes is on
+    # for this person now (contract v20, W6.29): their change is prepared and
+    # made by someone else, so a page hides Save for them, offering Prepare,
+    # and says a second person makes a change this person prepared. For
+    # showing only: the dashboard refuses a direct make whatever is drawn.
+    second_pair_of_eyes: frozenset[str] = frozenset()
 
     @classmethod
     def from_header(cls, header: str) -> Caller:
@@ -774,6 +780,7 @@ class Caller:
             _reach=reach,
             prepared_call_id=claims.prepared_call_id,
             own_settings={held.name: held.value for held in claims.own_settings},
+            second_pair_of_eyes=frozenset(claims.second_pair_of_eyes),
         )
 
     def level_for(self, role: str) -> int:

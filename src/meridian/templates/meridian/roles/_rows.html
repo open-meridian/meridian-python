@@ -8,3 +8,18 @@
 {%- macro next_step(title, text, opens="", where="") -%}
 <div class="empty-state"><strong>{{ title }}</strong><p>{{ text }}{% if opens %} <a href="#{{ opens }}" data-om-opens="{{ opens }}">{{ where }}</a>{% endif %}</p></div>
 {%- endmacro -%}
+
+{#- An act whose second pair of eyes is on for this person (contract v20,
+    W6.29): `tool`, the act's tool name; `person`, the request's caller;
+    `prepared`, the prepared change the page was opened from, if any. Says a
+    second person makes the change, and to its preparer that it is not
+    theirs to make. -#}
+{%- macro second_pair_of_eyes(tool, person, prepared=none) -%}
+{%- if tool in person.second_pair_of_eyes -%}
+{%- if prepared and prepared.prepared_by_subject == person.subject -%}
+<div class="notice warn" role="status">Needs a second person: you prepared this change, so someone other than you makes it.</div>
+{%- else -%}
+<div class="notice info" role="status">Needs a second person: prepare this change, and someone other than you makes it.</div>
+{%- endif -%}
+{%- endif -%}
+{%- endmacro -%}

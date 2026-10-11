@@ -110,6 +110,7 @@ def caller_header(
     roles: _Roles = (),
     prepared_call_id: str = "",
     own_settings: Mapping[str, str] | None = None,
+    second_pair_of_eyes: Iterable[str] = (),
 ) -> str:
     """The `Meridian-Caller` header a sidecar forwards for a session at
     `level`, with the accounts cut to it: `read` and `write` are those the
@@ -129,7 +130,8 @@ def caller_header(
     From contract v20 `prepared_call_id` is the prepared change a page was
     opened from, and `own_settings` the person's own values of the plugin's
     per-person settings, each as text, which the dashboard hands over under
-    Open and View, never under Manage."""
+    Open and View, never under Manage; `second_pair_of_eyes` the plugin's
+    acts, by tool name, whose second pair of eyes is on for this person."""
     at = _levels(level, "the session")[0] if level else sidecar_pb2.ACCESS_LEVEL_UNSPECIFIED
     writes = sorted(set(write))
     reads = sorted(set(read) | set(writes))
@@ -165,6 +167,7 @@ def caller_header(
         tool_name=tool_name,
         roles=entries,
         prepared_call_id=prepared_call_id,
+        second_pair_of_eyes=sorted(set(second_pair_of_eyes)),
         own_settings=(
             []
             if at == sidecar_pb2.ACCESS_LEVEL_ADMIN
@@ -265,9 +268,11 @@ class PageClient:
         deployment_admin: bool = False,
         roles: Iterable[str] = (),
         own_settings: Mapping[str, str] | None = None,
+        second_pair_of_eyes: Iterable[str] = (),
     ) -> None:
         self.pages = pages
         self.own_settings = dict(own_settings or {})
+        self.second_pair_of_eyes = frozenset(second_pair_of_eyes)
         self.plugin = plugin
         self.read = frozenset(read)
         self.write = frozenset(write)
@@ -329,6 +334,7 @@ class PageClient:
                 roles=self._held(roles),
                 prepared_call_id=prepared_call_id,
                 own_settings=self.own_settings,
+                second_pair_of_eyes=self.second_pair_of_eyes,
             )
         )
 

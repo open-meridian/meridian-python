@@ -750,3 +750,27 @@ def test_a_custody_plugins_history_and_raw_records(tmp_path: Path) -> None:
         "Connections",
         "Updated in place",
     )
+
+
+def test_a_second_pair_of_eyes_is_carried_and_said_to_its_preparer(tmp_path: Path) -> None:
+    header = caller_header("write", write={"ACC-1"}, second_pair_of_eyes=["link_account"])
+    assert Caller.from_header(header).second_pair_of_eyes == frozenset({"link_account"})
+    (tmp_path / "o.html").write_text(
+        '{% extends "meridian/roles/operations/opening_balances.html" %}'
+    )
+    pages = meridian.Pages("Plugin", templates=tmp_path)
+    seen: list[frozenset[str]] = []
+
+    @pages.page("/", "Opening balances", levels="write")
+    async def view(request: meridian.Request) -> str:
+        seen.append(request.second_pair_of_eyes)
+        mine = sidecar_pb2.PreparedCall(prepared_by_subject=request.caller.subject)
+        return pages.render("o.html", data=operations.OpeningBalancesRead(1), prepared=mine)
+
+    gated = PageClient(pages, write={"ACC-1"}, second_pair_of_eyes=["confirm_opening_balance"])
+    page = gated.get("/", "write").text
+    assert seen[-1] == frozenset({"confirm_opening_balance"})
+    assert "you prepared this change, so someone other than you makes it" in page
+    assert (
+        "Needs a second person" not in PageClient(pages, write={"ACC-1"}).get("/", "write").text
+    )

@@ -92,3 +92,17 @@ def test_a_page_opened_from_a_prepared_change_starts_from_it() -> None:
         "confirm_opening_balance", {"account_id": "ACC-1", "as_of_date": "2026-09-30"}
     )
     assert made.outcome == "made" and sidecar.recorded[0]["account_id"] == "ACC-1"
+
+
+def test_under_a_second_pair_of_eyes_the_page_offers_prepare_and_no_confirm() -> None:
+    gated = PageClient(
+        pages,
+        Sidecar(),
+        read={"ACC-1"},
+        write={"ACC-1"},
+        second_pair_of_eyes=["confirm_opening_balance"],
+    )
+    page = gated.get("/opening", "write").text
+    assert "Needs a second person" in page
+    assert ">Confirm</button>" not in page and ">Prepare</button>" in page
+    assert ">Confirm</button>" in client().get("/opening", "write").text
