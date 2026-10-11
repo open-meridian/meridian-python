@@ -1,12 +1,18 @@
 {#- An operations plugin's Breaks (spec/plugin-pages-follow-their-role),
     the daily page: notices, the counts, then the plugin's breaks in
-    `vendor_sections`. `data` is a meridian.roles.operations.BreaksRead. -#}
+    `vendor_sections`. `data` is a meridian.roles.operations.BreaksRead;
+    `last_reconciliation`, when the last reconciliation ran, as the role's
+    figure of that name says it, empty for never. With no open break, "No
+    breaks yet" is the next step only where none has run; after one, the page
+    says it found none. -#}
 {% extends "meridian/base.html" %}
 {% import "meridian/roles/_rows.html" as om %}
 {% block content %}
 {% block vendor_notices %}{% endblock %}
-{% if not data.open_breaks %}
+{% if not data.open_breaks and not last_reconciliation|default("") %}
 {{ om.next_step("No breaks yet", "Nothing is reconciled until each account's opening balance is confirmed, under Opening balances.") }}
+{% elif not data.open_breaks %}
+<div class="empty-state"><strong>No open breaks</strong><p>The last reconciliation, {{ last_reconciliation }}, left no break open.</p></div>
 {% else %}
 <section class="panel">
 <h2>Breaks</h2>

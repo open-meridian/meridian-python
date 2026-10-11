@@ -1,0 +1,23 @@
+Metadata-Version: 2.4
+Name: open-meridian
+Version: 0.24.0
+Summary: Build Meridian plugins
+License: Apache-2.0
+Requires-Python: >=3.11
+License-File: LICENSE
+License-File: NOTICE
+Requires-Dist: grpcio<2,>=1.68
+Requires-Dist: protobuf<7,>=5.28
+Requires-Dist: jinja2<4,>=3.1
+Provides-Extra: migrate
+Requires-Dist: libcst<2,>=1.4; extra == "migrate"
+Provides-Extra: dev
+Requires-Dist: pytest>=8; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.24; extra == "dev"
+Requires-Dist: grpcio-tools<2,>=1.68; extra == "dev"
+Requires-Dist: mypy>=1.11; extra == "dev"
+Requires-Dist: grpc-stubs>=1.53; extra == "dev"
+Requires-Dist: types-protobuf>=5.28; extra == "dev"
+Requires-Dist: ruff>=0.6; extra == "dev"
+Requires-Dist: pyyaml>=6; extra == "dev"
+Dynamic: license-file

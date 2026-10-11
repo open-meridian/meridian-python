@@ -1,7 +1,9 @@
 {#- An operations plugin's Opening balances (spec/plugin-pages-follow-their-
     role): notices, how many await one, then the plugin's form in
     `vendor_sections`, "Confirm" its verb. `data` is a
-    meridian.roles.operations.OpeningBalancesRead; `prepared`, where the
+    meridian.roles.operations.OpeningBalancesRead. "Nothing to confirm" is
+    said only where the person reaches no account here; with accounts and
+    none awaiting, the count is not drawn. `prepared`, where the
     page was opened from a prepared change, `request.prepared()`'s answer.
     Where "confirm_opening_balance" is in `caller.second_pair_of_eyes` the
     page says a second person makes the change, and the plugin's form
@@ -14,9 +16,9 @@
 {% endif %}
 {{ om.second_pair_of_eyes("confirm_opening_balance", caller, prepared) }}
 {% block vendor_notices %}{% endblock %}
-{% if not data.awaiting_an_opening_balance %}
+{% if not caller.read %}
 {{ om.next_step("Nothing to confirm", "No account is in this plugin's scope yet; a deployment admin grants it.") }}
-{% else %}
+{% elif data.awaiting_an_opening_balance %}
 <section class="panel">
 <h2>Opening balances</h2>
 <table class="one-line"><tbody>

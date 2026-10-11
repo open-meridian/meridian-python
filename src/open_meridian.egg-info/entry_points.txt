@@ -1,0 +1,3 @@
+[console_scripts]
+meridian-declaration = meridian.declaration:main
+meridian-dev = meridian.dev:main

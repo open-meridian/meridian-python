@@ -595,7 +595,8 @@ def test_an_operations_plugins_pages_say_their_next_steps(tmp_path: Path) -> Non
     opening_page = role_pages(
         "operations", "opening_balances", operations.OpeningBalancesRead(), tmp_path
     )
-    assert "Nothing to confirm" in opening_page
+    # Accounts in scope, none awaiting: nothing to say, not "Nothing to confirm".
+    assert "Nothing to confirm" not in opening_page
     reconciled = role_pages(
         "operations", "reconciliations", operations.ReconciliationsRead(), tmp_path
     )
@@ -774,3 +775,56 @@ def test_a_second_pair_of_eyes_is_carried_and_said_to_its_preparer(tmp_path: Pat
     assert (
         "Needs a second person" not in PageClient(pages, write={"ACC-1"}).get("/", "write").text
     )
+
+
+def operations_page(page: str, tmp_path: Path, read: set[str], **context: object) -> str:
+    (tmp_path / "p.html").write_text(
+        '{% extends "meridian/roles/operations/' + page + '.html" %}'
+    )
+    pages = meridian.Pages("Plugin", templates=tmp_path)
+
+    @pages.page("/", "Page", levels=["write", "read"])
+    async def view(request: meridian.Request) -> str:
+        return pages.render("p.html", **context)
+
+    return PageClient(pages, read=read, write=read).get("/", "write").text
+
+
+def test_opening_balances_say_nothing_to_confirm_only_with_no_account(tmp_path: Path) -> None:
+    none_reached = operations_page(
+        "opening_balances", tmp_path, set(), data=operations.OpeningBalancesRead(0)
+    )
+    assert "Nothing to confirm" in none_reached
+    all_confirmed = operations_page(
+        "opening_balances", tmp_path, {"ACC-1"}, data=operations.OpeningBalancesRead(0)
+    )
+    assert "Nothing to confirm" not in all_confirmed
+    assert "Awaiting an opening balance" not in all_confirmed
+    awaiting = operations_page(
+        "opening_balances", tmp_path, {"ACC-1"}, data=operations.OpeningBalancesRead(2)
+    )
+    assert "Nothing to confirm" not in awaiting and "Awaiting an opening balance" in awaiting
+
+
+def test_breaks_say_no_breaks_yet_only_before_any_reconciliation(tmp_path: Path) -> None:
+    never = operations_page(
+        "breaks", tmp_path, {"ACC-1"}, data=operations.BreaksRead(), last_reconciliation=""
+    )
+    assert "No breaks yet" in never
+    found_none = operations_page(
+        "breaks",
+        tmp_path,
+        {"ACC-1"},
+        data=operations.BreaksRead(),
+        last_reconciliation="2026-10-11 09:00 UTC",
+    )
+    assert "No breaks yet" not in found_none
+    assert "No open breaks" in found_none and "2026-10-11 09:00 UTC" in found_none
+    open_ones = operations_page(
+        "breaks",
+        tmp_path,
+        {"ACC-1"},
+        data=operations.BreaksRead(open_breaks=2),
+        last_reconciliation="2026-10-11 09:00 UTC",
+    )
+    assert "Open breaks" in open_ones and "No open breaks" not in open_ones
