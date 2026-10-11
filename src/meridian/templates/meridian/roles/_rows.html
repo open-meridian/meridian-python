@@ -1,0 +1,10 @@
+{#- The role templates' one-line fact row, the kit's "Facts" pattern. -#}
+{%- macro row(label, value, note="", name="facts") -%}
+<tr><th scope="row">{{ label }}</th><td>{{ value }}{% if note %} <span class="hint">{{ note }}</span>{% endif %}</td><td class="more"><details class="row-detail" name="{{ name }}"><summary aria-label="Details of {{ label }}">…</summary><div class="row-detail-pop"><h3>{{ label }}</h3><dl><dt>{{ label }}</dt><dd>{{ value }}</dd></dl>{% if note %}<p class="hint">{{ note }}</p>{% endif %}</div></details></td></tr>
+{%- endmacro -%}
+
+{#- A "not set up yet" state: its title, what to do, and where, a link the
+    frame opens as one of core's tabs (`data-om-opens`, kit 0.12.0). -#}
+{%- macro next_step(title, text, opens="", where="") -%}
+<div class="empty-state"><strong>{{ title }}</strong><p>{{ text }}{% if opens %} <a href="#{{ opens }}" data-om-opens="{{ opens }}">{{ where }}</a>{% endif %}</p></div>
+{%- endmacro -%}

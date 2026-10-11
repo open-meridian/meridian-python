@@ -1,0 +1,118 @@
+{#- The kit's patterns as macros (meridian-ui's README, "Patterns"; ruled
+    2026-10-02, spec/plugins-share-one-framework-in-code Q1; "Facts" from
+    spec/plugin-pages-follow-their-role). Each writes exactly its pattern's
+    markup, and none is required: a page written as plain kit HTML is as good.
+
+        {% import "meridian/kit.html" as kit %}
+
+    A value with `state`, `label`, `text` and the like is read by attribute
+    or key alike, so a dataclass or a dict will do. -#}
+
+{%- macro _sentence(text) -%}{{ text }}{% if text and text[-1] not in ".!?" %}.{% endif %}{%- endmacro -%}
+
+{#- The plugin's status for the head: `s.state` (ok, busy, warn or error),
+    `s.label`, and `s.detail`, `s.at` and `s.at_label` where it has them. -#}
+{%- macro status(s) -%}
+{%- set at = om_moment(s.at) if s.at else ("", "") -%}
+<om-status data-om-header state="{{ s.state }}" label="{{ s.label }}"
+{%- if s.detail %} detail="{{ s.detail }}"{% endif %}
+{%- if at[0] %} at="{{ at[0] }}" at-label="{{ s.at_label }}"{% endif %}>
+{{- [_sentence(s.label), _sentence(s.detail) if s.detail else "", _sentence(s.at_label ~ " " ~ at[1]) if at[0] else ""]|select|join(" ") -}}
+</om-status>
+{%- endmacro -%}
+
+{#- A one-button form posting to the page's own server with its token. -#}
+{%- macro action(path, said, kind="", fields={}, header="", icon="", label="") -%}
+<form method="post" action="{{ path }}" class="inline"><input type="hidden" name="csrf" value="{{ om_csrf() }}">
+{%- for name, value in fields.items() %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor -%}
+<button
+{%- if kind in ("primary", "danger") %} class="{{ kind }}"{% endif %}
+{%- if header %} data-om-action="{{ header }}"{% endif %}
+{%- if icon %} data-om-icon="{{ icon }}" title="{{ label or said }}"{% endif %}
+{%- if label %} aria-label="{{ label }}"{% endif %}>{{ said }}</button></form>
+{%- endmacro -%}
+
+{#- What an action came to: `n.text`, `n.tone` (info, good, warn or bad) and
+    `n.items`. -#}
+{%- macro notice(n) -%}
+{%- set tone = n.tone or "info" -%}
+<div class="notice {{ tone }}" role="{{ 'alert' if tone == 'bad' else 'status' }}">{{ n.text }}
+{%- if n["items"] %}<ul class="plain">{% for item in n["items"] %}<li>{{ item }}</li>{% endfor %}</ul>{% endif -%}
+</div>
+{%- endmacro -%}
+
+{%- macro badge(label, tone="") -%}
+<span class="badge{% if tone %} {{ tone }}{% endif %}">{{ label }}</span>
+{%- endmacro -%}
+
+{#- Figures at the head of the content: each `label`, `value`, and `delta`
+    with its `ink` where it has one. -#}
+{%- macro tiles(items) -%}
+<div class="tiles">
+{%- for item in items %}
+<div class="panel tile"><div class="tile-label">{{ item.label }}</div><div class="tile-value">{{ item.value }}</div>
+{%- if item.delta %}<div class="tile-delta{% if item.ink %} {{ item.ink }}{% endif %}">{{ item.delta }}</div>{% endif -%}
+</div>
+{%- endfor %}
+</div>
+{%- endmacro -%}
+
+{#- A moment to read: in UTC to the minute, or a date as it is; none, the
+    faint words given. -#}
+{%- macro when(moment, empty="not reported") -%}
+{%- set at = om_moment(moment) -%}
+{%- if at[0] -%}<time datetime="{{ at[0] }}">{{ at[1] }}</time>
+{%- else -%}<span class="faint">{{ empty }}</span>{%- endif -%}
+{%- endmacro -%}
+
+{%- macro _cell(column, row) -%}
+{%- set value = row[column.key] if column.key in row else "" -%}
+{%- if value in ("", none) -%}{% if column.blank %}<span class="faint">{{ column.blank }}</span>{% endif -%}
+{%- elif column.type == "code" -%}<code>{{ value }}</code>
+{%- elif column.type == "badge" -%}{{ badge(value, row[column.tone.field] if column.tone and column.tone.field in row else "") }}
+{%- elif column.strong -%}<strong>{{ value }}</strong>
+{%- else -%}{{ value }}{%- endif -%}
+{%- if column.hint and row[column.hint] %} <span class="hint">{{ row[column.hint] }}</span>{% endif -%}
+{%- endmacro -%}
+
+{#- Records in an om-grid, its columns and rows as JSON, and the same table
+    beside them for a browser without the kit. -#}
+{%- macro grid(id, columns, rows, key, caption="", empty="", narrow="cards") -%}
+<om-grid id="{{ id }}" row-key="{{ key }}"{% if narrow %} narrow="{{ narrow }}"{% endif %}
+{%- if caption %} caption="{{ caption }}"{% endif %}{% if empty %} empty="{{ empty }}"{% endif %}>
+<script type="application/json">{{ {"columns": columns, "rows": rows}|tojson }}</script>
+<div class="table-wrap"><table><thead><tr>
+{%- for column in columns %}<th{% if column.type in ("decimal", "number") %} class="num"{% endif %}>{{ column.label }}</th>{% endfor -%}
+</tr></thead><tbody>
+{%- for row in rows %}
+<tr>{% for column in columns %}<td{% if column.type in ("decimal", "number") %} class="num"{% endif %}>{{ _cell(column, row) }}</td>{% endfor %}</tr>
+{%- else %}
+<tr><td colspan="{{ columns|length }}">{{ empty }}</td></tr>
+{%- endfor %}
+</tbody></table></div>
+</om-grid>
+{%- endmacro -%}
+
+{#- The whole content for somebody who may read none of the accounts the
+    plugin reaches: `what`, the plugin's sentence saying what it does. -#}
+{%- macro nothing_here(what) -%}
+<section class="panel padded narrow">
+<h2>Nothing here for you</h2>
+<p>{{ _sentence(what)[:-1] }}, and you may read none of them. If you should, ask whoever administers this deployment.</p>
+</section>
+{%- endmacro -%}
+
+{%- macro empty(title, text="") -%}
+<div class="empty-state"><strong>{{ title }}</strong>{% if text %}<p>{{ text }}</p>{% endif %}</div>
+{%- endmacro -%}
+
+{#- Facts: a section's label, value and note on one line, the whole a click
+    away. Each row's `label`, `value`, and `note` and `detail` where it has
+    them; `name` keeps one detail open. -#}
+{%- macro facts(rows, name="facts") -%}
+<table class="one-line"><tbody>
+{%- for row in rows %}
+<tr><th scope="row">{{ row.label }}</th><td>{{ row.value }}{% if row.note %} <span class="hint">{{ row.note }}</span>{% endif %}</td><td class="more"><details class="row-detail" name="{{ name }}"><summary aria-label="Details of {{ row.label }}">…</summary><div class="row-detail-pop"><h3>{{ row.label }}</h3><dl><dt>{{ row.label }}</dt><dd>{{ row.value }}</dd></dl>{% if row.note %}<p class="hint">{{ row.note }}</p>{% endif %}{% if row.detail %}<p>{{ row.detail }}</p>{% endif %}</div></details></td></tr>
+{%- endfor %}
+</tbody></table>
+{%- endmacro -%}

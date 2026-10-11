@@ -27,7 +27,14 @@ import json
 import os
 import re
 import warnings
-from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
+from collections.abc import (
+    AsyncGenerator,
+    AsyncIterator,
+    Awaitable,
+    Callable,
+    Mapping,
+    Sequence,
+)
 from dataclasses import dataclass, field
 from enum import StrEnum
 from types import TracebackType
@@ -39,10 +46,12 @@ from meridian.plugin.v1 import operations_pb2_grpc
 from meridian.v1 import sidecar_pb2, sidecar_pb2_grpc
 
 from .bounds import (
+    CALLER_CLAIMS_OWN_SETTINGS_COUNT,
     FILE_TICKET_REQUEST_REFERENCES_COUNT,
     FILE_TICKET_REQUEST_SEEN_LENGTH,
     FILE_TICKET_REQUEST_TITLE_LENGTH,
     PAGE_DECLARATION_ROLES_COUNT,
+    SET_OWN_SETTINGS_REQUEST_VALUES_COUNT,
     TICKET_REFERENCE_VALUE_LENGTH,
     Length,
 )
@@ -62,6 +71,7 @@ from .statements import checked
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from ._settings import Typed as _Typed
     from .declaration import Declaration, Storage
     from .pages import Pages
 
@@ -87,7 +97,10 @@ if TYPE_CHECKING:
 #: heard and declined, the lake's reads, venues resolved, a Money naming its
 #: instrument and a date refused where it is no date, and from v19 trades and
 #: quotes recorded, read and heard, trades in full and caught up after a
-#: watermark -- and a newer sidecar still admits it. Raised with every
+#: watermark, and from v20 an act's check tool, its accounts and the page it
+#: is made on, the prepared change a page was opened from, a person's own
+#: settings, and a data plugin's datasets' licences and its own last trades
+#: -- and a newer sidecar still admits it. Raised with every
 #: contract revision that adds something a plugin can depend on.
 SCHEMA_VERSION = "v20"
 
@@ -170,6 +183,7 @@ _STAMPS = ("changed_by", "changed_at")
 _MOST_ROWS = 500
 
 _Answer = TypeVar("_Answer")
+_T = TypeVar("_T")
 
 
 @dataclass(frozen=True)
@@ -470,6 +484,14 @@ class Setting:
     person holding admin on every one. A plugin holding one role, or none,
     names none; one holding several names them on every setting. Not who may
     read the value: the plugin reads every setting it declared.
+
+    `per_person` (contract v20, W6.31): each person with write on a role it
+    serves sets it for themselves, on the plugin's pages -- a watchlist, a
+    chart's choices -- rather than an admin for everyone. It is not on the
+    Settings form, has no deployment-wide value and is never in
+    `Settings.values`; the plugin saves a person's own values for them
+    (`plugin.set_own_settings`) and reads them back from each of their
+    requests (`request.own_settings`). Never secret, never required.
     """
 
     name: str
@@ -486,6 +508,7 @@ class Setting:
     columns: tuple[Column, ...] = ()
     most_rows: int = 0
     roles: Sequence[str] = ()
+    per_person: bool = False
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "roles", _roles(self.roles, f"setting {self.name}"))
@@ -510,6 +533,15 @@ class Setting:
             raise TypeError(f"setting {self.name} has choices, so its kind is str")
         if self.secret and self.default is not None:
             raise ValueError(f"setting {self.name} is secret, so it declares no default")
+        if self.per_person and self.secret:
+            raise ValueError(
+                f"setting {self.name} is per person and secret; a secret is never per person"
+            )
+        if self.per_person and self.required:
+            raise ValueError(
+                f"setting {self.name} is per person and required; a person's own setting is "
+                "never required"
+            )
         if self.default is not None and not isinstance(self.default, self.kind):
             raise TypeError(f"setting {self.name}'s default is not a {self.kind.__name__}")
         values = {choice.value for choice in self.choices}
@@ -543,6 +575,7 @@ class Setting:
             columns=[column._declared(self.name) for column in self.columns],
             most_rows=self.most_rows,
             roles=list(self.roles),
+            per_person=self.per_person,
         )
 
     def _parsed(self, text: str) -> str | int | bool | list[dict[str, str]]:
@@ -570,10 +603,13 @@ class Setting:
         return text
 
 
-def _written(value: str | int | bool) -> str:
-    """A value as the form would take it, and as `_parsed` reads it back."""
+def _written(value: str | int | bool | Sequence[Mapping[str, str]]) -> str:
+    """A value as the form would take it, and as `_parsed` reads it back: a
+    table's rows as their JSON."""
     if isinstance(value, bool):
         return "true" if value else "false"
+    if isinstance(value, (list, tuple)):
+        return json.dumps([dict(row) for row in value], separators=(",", ":"))
     return str(value)
 
 
@@ -688,6 +724,16 @@ class Caller:
     _reach: Mapping[str, tuple[frozenset[str], frozenset[str]]] = field(
         default_factory=dict, hash=False, repr=False
     )
+    # The prepared change this request was reached from (contract v20,
+    # W6.27): set only by the dashboard, for a person's request to an act's
+    # page or route opened from a prepared change; `request.prepared()`
+    # reads it. Empty for every other request.
+    prepared_call_id: str = ""
+    # The person's own values of the settings the plugin declares
+    # `per_person` (contract v20, W6.31), as the dashboard keeps them, each
+    # as text, a table's as its JSON rows: under Open and View, never under
+    # Manage. `request.own_settings` reads them typed.
+    own_settings: Mapping[str, str] = field(default_factory=dict, hash=False)
 
     @classmethod
     def from_header(cls, header: str) -> Caller:
@@ -727,6 +773,8 @@ class Caller:
             tool_name=claims.tool_name,
             roles=roles,
             _reach=reach,
+            prepared_call_id=claims.prepared_call_id,
+            own_settings={held.name: held.value for held in claims.own_settings},
         )
 
     def level_for(self, role: str) -> int:
@@ -1002,17 +1050,33 @@ class Plugin(Operations):
         self._figures_sent = wire(given)
         self._figures = given
 
-    async def settings(self) -> AsyncIterator[Settings]:
+    def settings(self, typed: type[_Typed] | None = None) -> AsyncIterator[Any]:
         """The settings it declared, now and again on every change (W4.7).
 
         Each is typed by its declaration; a value that does not parse is
-        raised rather than guessed at.
+        raised rather than guessed at. A setting declared `per_person` has
+        no deployment-wide value and is not among them (contract v20).
+
+        Given a class decorated `@meridian.settings`, each delivery is an
+        instance of it: its fields typed and defaulted, `at_least` and
+        `at_most` held, and `.missing` the required settings holding nothing.
         """
+        if typed is None:
+            return self._settings()
+        return self._typed_settings(typed)
+
+    async def _typed_settings(self, typed: type[_Typed]) -> AsyncGenerator[_Typed, None]:
+        async for now in self._settings():
+            yield typed._of(now.values, now.missing_required)
+
+    async def _settings(self) -> AsyncIterator[Settings]:
         self._check_open()
-        by_name = {setting.name: setting for setting in self._declared}
+        by_name = {
+            setting.name: setting for setting in self._declared if not setting.per_person
+        }
         defaults: dict[str, str | int | bool | list[dict[str, str]]] = {
             setting.name: setting.default
-            for setting in self._declared
+            for setting in by_name.values()
             if setting.default is not None
         }
         async for delivered in self._stub.WatchSettings(sidecar_pb2.WatchSettingsRequest()):
@@ -1027,6 +1091,89 @@ class Plugin(Operations):
             )
             self._settings_now = dict(now.values)
             yield now
+
+    async def first_settings(self, typed: type[_T]) -> _T:
+        """The settings as first delivered, an instance of the class decorated
+        `@meridian.settings` that declared them."""
+        stream = self._typed_settings(cast(Any, typed))
+        try:
+            async for now in stream:
+                return cast(_T, now)
+        finally:
+            await stream.aclose()
+        raise NotRegistered("the sidecar delivered no settings")
+
+    async def on_settings(
+        self, typed: type[_T], apply: Callable[[_T], Awaitable[None] | None]
+    ) -> None:
+        """Apply every delivery of the settings, each an instance of the class
+        decorated `@meridian.settings`, to `apply`, until the stream ends: a
+        task to run beside the plugin's own work."""
+        async for now in self._typed_settings(cast(Any, typed)):
+            done = apply(cast(_T, now))
+            if done is not None:
+                await done
+
+    async def set_own_settings(
+        self,
+        values: Mapping[str, str | int | bool | Sequence[Mapping[str, str]]],
+        *,
+        for_caller: Caller | str,
+    ) -> dict[str, str | int | bool | list[dict[str, str]]]:
+        """Save the person's own values of settings this plugin declares
+        `per_person` (contract v20, W6.31): their watchlist, their chart's
+        choices. Sent through the sidecar acting for `for_caller` -- their
+        `Caller` or the header it was read from -- admitted only for a person
+        holding write on a role each setting serves, never as the plugin
+        itself; the dashboard keeps them under that person and hands them
+        back in their next request's claims (`request.own_settings`).
+
+        `values` names 1 to 64 settings, each typed as its declaration (a
+        table as its rows); an empty text clears one; those not named keep
+        their values. Answers the person's own values as they now stand,
+        typed. Refused here, naming it, for a setting this plugin does not
+        declare per person; by the sidecar (`NotGranted`) for a person
+        without write on a role it serves."""
+        self._check_open()
+        by_name = {setting.name: setting for setting in self._declared if setting.per_person}
+        if not SET_OWN_SETTINGS_REQUEST_VALUES_COUNT.admits(len(values)):
+            raise ValueError(
+                f"values names {len(values)} settings; a person saves 1 to "
+                f"{SET_OWN_SETTINGS_REQUEST_VALUES_COUNT.most} at once"
+            )
+        for name in values:
+            if name not in by_name:
+                raise ValueError(
+                    f"values names {name}, which this plugin does not declare per_person"
+                )
+        metadata = _caller_metadata(for_caller)
+        asked = sidecar_pb2.SetOwnSettingsRequest(
+            values=[
+                sidecar_pb2.SettingValue(name=name, value=_written(value))
+                for name, value in values.items()
+            ]
+        )
+        reply: sidecar_pb2.SetOwnSettingsReply = await self._for_person(
+            "SetOwnSettings", self._stub.SetOwnSettings(asked, metadata=metadata)
+        )
+        return _own(self._declared, {held.name: held.value for held in reply.values})
+
+    async def _read_prepared(
+        self, prepared_call_id: str, for_caller: Caller | str
+    ) -> sidecar_pb2.PreparedCall | None:
+        """The prepared change a page was opened from, for the person whose
+        page it is (W4.14, contract v20); None where the dashboard answers
+        none: not found, not shown to them, or one they may not make now."""
+        self._check_open()
+        metadata = _caller_metadata(for_caller)
+        reply: sidecar_pb2.ReadPreparedCallReply = await self._for_person(
+            "ReadPreparedCall",
+            self._stub.ReadPreparedCall(
+                sidecar_pb2.ReadPreparedCallRequest(prepared_call_id=prepared_call_id),
+                metadata=metadata,
+            ),
+        )
+        return reply.prepared_call if reply.HasField("prepared_call") else None
 
     async def account_scope(self) -> AsyncIterator[AccountScope]:
         """Its account scope and its links, now and again on every change
@@ -1437,7 +1584,7 @@ async def connect(
     heartbeat: bool = True,
     wait: float = SIDECAR_WAIT_SECONDS,
     interface: Interface | None = None,
-    settings: Sequence[Setting] = (),
+    settings: Sequence[Setting] | type[_Typed] = (),
     reads_external_accounts: bool = False,
     declaration: Declaration | None = None,
 ) -> Plugin:
@@ -1461,8 +1608,15 @@ async def connect(
     read from its image. Without one, its declaration is its secret settings'
     names alone. A declaration's own settings are the ones registered where
     `settings` names none; naming both, they must be the same.
+
+    `settings` may be a class decorated `@meridian.settings`, whose fields
+    are then the declaration; `plugin.settings(Config)` delivers instances of
+    it.
     """
+    from ._settings import declared_by
     from .declaration import Declaration as _Declaration
+
+    settings = declared_by(settings)
 
     if declaration is None:
         declaration = _Declaration(settings=tuple(settings))
@@ -1549,6 +1703,29 @@ async def connect(
 
     report_ready()
     return plugin
+
+
+def _own(
+    declared: Sequence[Setting], held: Mapping[str, str]
+) -> dict[str, str | int | bool | list[dict[str, str]]]:
+    """A person's own values (contract v20), typed by the per-person settings
+    `declared`: each declared one held, parsed, or its default where it has
+    one; a value naming no such setting is left out, as delivered settings
+    are. At most as many as the claims carry."""
+    if len(held) > CALLER_CLAIMS_OWN_SETTINGS_COUNT.most:
+        raise ValueError(
+            f"the claims carry {len(held)} own settings; at most "
+            f"{CALLER_CLAIMS_OWN_SETTINGS_COUNT.most}"
+        )
+    out: dict[str, str | int | bool | list[dict[str, str]]] = {}
+    for setting in declared:
+        if not setting.per_person:
+            continue
+        if held.get(setting.name):
+            out[setting.name] = setting._parsed(held[setting.name])
+        elif setting.default is not None:
+            out[setting.name] = setting.default
+    return out
 
 
 def _edge_roles(settings: Sequence[Setting], interface: Interface | None) -> tuple[str, ...]:

@@ -1,0 +1,33 @@
+{#- A custody plugin's Statements (spec/plugin-pages-follow-their-role): a
+    row per account the person may read, then the vendor's sections. `data`
+    is a meridian.roles.custody.StatementsRead; `what`, the plugin's sentence
+    saying what it does, for somebody who may read nothing here. -#}
+{% extends "meridian/base.html" %}
+{% import "meridian/kit.html" as kit %}
+{% import "meridian/roles/_rows.html" as om %}
+{% block content %}
+{% if not caller.read %}
+{{ kit.nothing_here(what|default("This plugin brings custodians' accounts into this deployment")) }}
+{% else %}
+{% block vendor_notices %}{% endblock %}
+<section class="panel">
+<h2>Statements</h2>
+{% if data.statements %}
+<table class="one-line">
+{% for row in [none] + data.statements %}
+{% if row is none %}
+<thead><tr><th>Account</th><th class="wide-only">Custodian</th><th>As of</th><th>State</th>
+{%- else %}
+<tr><td><strong>{{ row.account }}</strong></td><td class="wide-only">{{ row.custodian }}</td><td>{{ row.as_of }}</td><td>{{ row.state }}</td>
+{%- endif %}
+{% block vendor_columns scoped %}{% endblock %}
+{% if row is none %}</tr></thead><tbody>{% else %}</tr>{% endif %}
+{% endfor %}
+</tbody></table>
+{% else %}
+{{ om.next_step("No statements yet", "An account appears once it is linked, under Account links.") }}
+{% endif %}
+</section>
+{% block vendor_sections %}{% endblock %}
+{% endif %}
+{% endblock %}

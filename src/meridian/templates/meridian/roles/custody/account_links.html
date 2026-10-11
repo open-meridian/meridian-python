@@ -1,0 +1,28 @@
+{#- A custody plugin's Account links (spec/plugin-pages-follow-their-role):
+    notices, then the kit's account map -- the external accounts reported
+    beside the accounts granted to this instance, linked with "Link" -- then
+    the vendor's sections. `data` is a
+    meridian.roles.custody.AccountLinksRead; `action`, where the map's forms
+    post, the plugin's linking route. -#}
+{% extends "meridian/base.html" %}
+{% import "meridian/roles/_rows.html" as om %}
+{% block content %}
+{% if not data.accounts %}
+{% if caller.deployment_admin %}
+{{ om.next_step("No accounts granted yet", "A deployment admin grants this plugin the accounts it may link to, in the admin portal's Accounts tab.") }}
+{% else %}
+{{ om.next_step("No accounts granted yet", "A deployment admin grants this plugin the accounts it may link to. Ask a deployment admin to grant some.") }}
+{% endif %}
+{% endif %}
+{% block vendor_notices %}{% endblock %}
+<om-account-map action="{{ action|default('') }}" token-name="csrf" token="{{ csrf_token }}" empty="No accounts reported yet.">
+<script type="application/json">{{ {"external_accounts": data.external_accounts|map("om_record")|list, "accounts": data.accounts|map("om_record")|list, "links": data.links|map("om_record")|list}|tojson }}</script>
+<table class="one-line"><thead><tr><th>External account</th><th>Linked to</th></tr></thead><tbody>
+{% for account in data.external_accounts %}
+{% set link = data.links|selectattr("external_account_id", "equalto", account.external_account_id)|first %}
+<tr><td><strong>{{ account.name or account.external_account_id }}</strong>{% if account.detail %} <span class="hint">{{ account.detail }}</span>{% endif %}</td><td>{{ link.account_name if link else "Not linked" }}</td></tr>
+{% endfor %}
+</tbody></table>
+</om-account-map>
+{% block vendor_sections %}{% endblock %}
+{% endblock %}

@@ -1,0 +1,18 @@
+{#- An operations plugin's Reconciliations (spec/plugin-pages-follow-their-
+    role): notices, when it last ran, then the plugin's reconciliations in
+    `vendor_sections`; "Reconcile now" in the head's actions. `data` is a
+    meridian.roles.operations.ReconciliationsRead. -#}
+{% extends "meridian/base.html" %}
+{% import "meridian/roles/_rows.html" as om %}
+{% block content %}
+{% block vendor_notices %}{% endblock %}
+<section class="panel">
+<h2>Reconciliations</h2>
+<table class="one-line"><tbody>
+{% set section = "Reconciliations" %}
+{{ om.row("Last reconciliation", data.last_reconciliation or "None yet") }}
+{% block vendor_rows scoped %}{% endblock %}
+</tbody></table>
+</section>
+{% block vendor_sections %}{% endblock %}
+{% endblock %}

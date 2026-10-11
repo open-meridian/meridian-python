@@ -108,6 +108,8 @@ def caller_header(
     client_name: str = "",
     tool_name: str = "",
     roles: _Roles = (),
+    prepared_call_id: str = "",
+    own_settings: Mapping[str, str] | None = None,
 ) -> str:
     """The `Meridian-Caller` header a sidecar forwards for a session at
     `level`, with the accounts cut to it: `read` and `write` are those the
@@ -122,7 +124,12 @@ def caller_header(
     its own level within the button -- under Open write or read, under View
     read, under Manage admin. A role at write reaches the read and write
     accounts, one at read the read accounts, one at admin none; each as
-    positions in the claims' read accounts, as the dashboard mints them."""
+    positions in the claims' read accounts, as the dashboard mints them.
+
+    From contract v20 `prepared_call_id` is the prepared change a page was
+    opened from, and `own_settings` the person's own values of the plugin's
+    per-person settings, each as text, which the dashboard hands over under
+    Open and View, never under Manage."""
     at = _levels(level, "the session")[0] if level else sidecar_pb2.ACCESS_LEVEL_UNSPECIFIED
     writes = sorted(set(write))
     reads = sorted(set(read) | set(writes))
@@ -157,6 +164,15 @@ def caller_header(
         client_name=client_name,
         tool_name=tool_name,
         roles=entries,
+        prepared_call_id=prepared_call_id,
+        own_settings=(
+            []
+            if at == sidecar_pb2.ACCESS_LEVEL_ADMIN
+            else [
+                sidecar_pb2.SettingValue(name=name, value=value)
+                for name, value in (own_settings or {}).items()
+            ]
+        ),
     )
     assertion = sidecar_pb2.CallerAssertion(claims=claims.SerializeToString())
     return base64.urlsafe_b64encode(assertion.SerializeToString()).decode().rstrip("=")
@@ -248,8 +264,10 @@ class PageClient:
         display_name: str = "Ada Park",
         deployment_admin: bool = False,
         roles: Iterable[str] = (),
+        own_settings: Mapping[str, str] | None = None,
     ) -> None:
         self.pages = pages
+        self.own_settings = dict(own_settings or {})
         self.plugin = plugin
         self.read = frozenset(read)
         self.write = frozenset(write)
@@ -268,13 +286,15 @@ class PageClient:
         query: Mapping[str, str] | None = None,
         headers: Mapping[str, str] | None = None,
         roles: _Roles | None = None,
+        prepared_call_id: str = "",
     ) -> Response:
         """The request as given: no token is added. `roles` narrows the
-        session as `caller` does."""
+        session as `caller` does; `prepared_call_id` is the prepared change
+        the page was opened from (contract v20)."""
         request = Request(
             method=method.upper(),
             path=path,
-            caller=self.caller(level, roles=roles),
+            caller=self.caller(level, roles=roles, prepared_call_id=prepared_call_id),
             plugin=cast(Any, self.plugin),
             query=dict(query or {}),
             form=dict(form or {}),
@@ -289,6 +309,7 @@ class PageClient:
         *,
         roles: _Roles | None = None,
         deployment_admin: bool | None = None,
+        prepared_call_id: str = "",
     ) -> Caller:
         """This client's person, in a session at `level`: a deployment admin
         as the client was made, unless `deployment_admin` says. The session
@@ -306,6 +327,8 @@ class PageClient:
                     self.deployment_admin if deployment_admin is None else deployment_admin
                 ),
                 roles=self._held(roles),
+                prepared_call_id=prepared_call_id,
+                own_settings=self.own_settings,
             )
         )
 

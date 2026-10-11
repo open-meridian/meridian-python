@@ -1,0 +1,73 @@
+# open-meridian 0.23.0 to 0.24.0: the SDK declares contract v20: an agent's
+# prepared change waits for the person; a person's own settings; the
+# accounts a plugin may link to; a data plugin's licences and its restart's
+# backfill; the roles dgm, ccm and match renamed data, connectivity and
+# confirmation (sdk-contract/an-agents-prepared-change-contract;
+# plans/an-agents-prepared-change-waits-for-the-person); and each role's
+# common part (spec/plugin-pages-follow-their-role).
+from = "0.23.0"
+to = "0.24.0"
+summary = """
+The SDK declares contract v20 (meridian.SCHEMA_VERSION). Three roles are
+renamed: dgm is data ("data plugin"), ccm is connectivity and match is
+confirmation. A plugin's metadata (pyproject.toml's [tool.meridian] roles),
+the roles its pages, routes, tools and settings serve (roles=), and the
+suites it runs (meridian.suites.run("data", ...)) name the new ones; the dgm
+suite is the data suite, and `meridian plugin new --role data` writes the
+data template. A deployment's grants and access entries naming the old roles
+are rewritten once by core at its upgrade.
+
+An act can be prepared rather than made (W6.26): a route that changes
+something names its check tool, a read tool taking the same record
+(checked_by=), the paths in its record naming the accounts it touches
+(accounts=), and the page it is made on (made_on=, filled with the page the
+route is the form of, "" for the dashboard's Inbox). An act with no check
+cannot be prepared; `meridian plugin check --verified` fails a verified
+plugin's act without one. A page opened from a prepared change reads it,
+for the person whose page it is (await request.prepared()), and starts its
+form from its arguments, marked "prepared by" its preparer with its reason.
+The form field `prepare` is the kit's Prepare button's, so a route's record
+may not name a field so.
+
+A setting may be each person's own (Setting(per_person=True), never secret,
+never required): not on the Settings form, never in Settings.values; the
+plugin saves a person's values for them (plugin.set_own_settings(...,
+for_caller=)) and reads them from each of their requests
+(request.own_settings). A plugin that links external accounts reads only
+those the deployment admin granted its instance (read_accounts_for_linking),
+and a link naming another is refused (CommandRefused,
+REFUSAL_REASON_ACCOUNT_NOT_LINKABLE). A data plugin reads its own declared
+datasets' licences (list_datasets) and, on start, the last trade it recorded
+of each subject (list_trades(..., latest_recorded=True)), backfilling a
+restart's gap from the venue's history
+(meridian.roles.data.backfill_restart). The data suite gains
+the-takers-side-stated, a case about a field (about_field, not presented
+with why by a source that never states it), a-restarts-gap-backfilled and
+reads-its-datasets-licences.
+
+Each role's common part is meridian.roles (data, custody, operations,
+reporting): its pages' records, figures, common settings and templates
+(meridian/roles/<role>/<page>.html, with the vendor's blocks), and
+meridian.environment() for a vendor with more than one environment. Settings
+may be one typed class (@meridian.settings, with meridian.setting(...) and
+meridian.sample_data()); every page's loader holds the kit's macros,
+meridian/kit.html.
+
+`meridian plugin migrate` rewrites the old role names where a plugin names a
+role: its metadata's roles, a roles= argument, and the role a suite is run
+or an access is read for. Nothing else a plugin calls changed shape.
+"""
+breaking = true
+rewrite = "rewrite.py"
+
+[[rewrites]]
+rule = "role-renamed"
+what = """the role dgm, ccm or match named where a plugin names a role -- a roles= \
+argument, the role meridian.suites.run, run_async, suite or names is given, or \
+Caller.level_for, read_for or write_for asks -- rewritten to data, connectivity or \
+confirmation"""
+
+[[rewrites]]
+rule = "metadata-role-renamed"
+what = """the role dgm, ccm or match in pyproject.toml's [tool.meridian] roles, \
+rewritten to data, connectivity or confirmation"""

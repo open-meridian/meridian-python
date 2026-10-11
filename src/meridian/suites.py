@@ -30,6 +30,15 @@ two currencies:
         "a-trade-recorded": "daily closes and bars only; this source states no trades",
     })
 
+From contract v20 the same holds for a case about one field a source may
+never state (`about_field`, by its dictionary entry): a plugin whose source
+never states a trade's aggressor, or its conditions, names the case in
+`not_presented` with why:
+
+    report = run("data", producers, not_presented={
+        "the-takers-side-stated": "this source's trades name no side",
+    })
+
 Every other case is required, and a case with no producer fails. The suites
 are meridian-schema's `boundaries/suites.json`, vendored with the bindings.
 
@@ -56,7 +65,11 @@ side that took liquidity, a condition converted or kept as reported, a
 withdrawal, a quote two-sided or one-sided, a standing want streamed);
 `signal`'s and the new `ems` suite's, trades and quotes read, heard and
 caught up after a watermark; and `reporting`'s, its reporting currency
-resolved by its ISO 4217 code.
+resolved by its ISO 4217 code. From v20 the data suite holds a source's
+stated aggressor (`the-takers-side-stated`), a restart's gap backfilled from
+the venue's history after the last trade the lake holds of the plugin's own
+(`a-restarts-gap-backfilled`, `meridian.roles.data.backfill_restart`), and
+its datasets' licences read (`reads-its-datasets-licences`).
 """
 
 from __future__ import annotations
@@ -102,6 +115,9 @@ class Case:
     #: The kind of data the case is about, in the contract's words (contract
     #: v19); empty for a case every plugin of the role answers.
     about: str = ""
+    #: The field the case is about, by its dictionary entry (contract v20),
+    #: one a source may never state; empty for none.
+    about_field: str = ""
 
 
 @dataclass(frozen=True)
@@ -133,6 +149,7 @@ def suites() -> dict[str, Suite]:
                     given=case["given"],
                     closed_list=case.get("closed_list", ""),
                     about=case.get("about", ""),
+                    about_field=case.get("about_field", ""),
                     expect=tuple(
                         Expectation(
                             row=expected["row"],
@@ -437,7 +454,8 @@ async def run_async(
     case, against the `Recorder` it is given. `not_presented` names the
     cases its source never presents, each with why: a closed-list case, or
     from contract v19 a case about a kind of data (`about`) the plugin
-    declares it never publishes."""
+    declares it never publishes, or from v20 one about a field
+    (`about_field`) its source never states."""
     held = suite(role)
     report = Report(role)
     skipped = dict(not_presented or {})
@@ -446,10 +464,11 @@ async def run_async(
         report.failures[name] = f"no case of the {role} suite is named {name!r}"
     for case in held.cases:
         if case.name in skipped:
-            if not case.closed_list and not case.about:
+            if not case.closed_list and not case.about and not case.about_field:
                 report.failures[case.name] = (
                     "only a closed-list case, or one about a kind of data the plugin "
-                    "never publishes, may be not presented; this one is required"
+                    "never publishes or a field its source never states, may be not "
+                    "presented; this one is required"
                 )
             elif not skipped[case.name].strip():
                 report.failures[case.name] = "a case not presented says why"

@@ -1,0 +1,26 @@
+{#- An operations plugin's Opening balances (spec/plugin-pages-follow-their-
+    role): notices, how many await one, then the plugin's form in
+    `vendor_sections`, "Confirm" its verb. `data` is a
+    meridian.roles.operations.OpeningBalancesRead; `prepared`, where the
+    page was opened from a prepared change, `request.prepared()`'s answer. -#}
+{% extends "meridian/base.html" %}
+{% import "meridian/roles/_rows.html" as om %}
+{% block content %}
+{% if prepared %}
+<div class="notice info" role="status">Prepared by {{ prepared.prepared_through_client or prepared.prepared_by_display_name }}{% if prepared.reason %}: {{ prepared.reason }}{% endif %}</div>
+{% endif %}
+{% block vendor_notices %}{% endblock %}
+{% if not data.awaiting_an_opening_balance %}
+{{ om.next_step("Nothing to confirm", "No account is in this plugin's scope yet; a deployment admin grants it.") }}
+{% else %}
+<section class="panel">
+<h2>Opening balances</h2>
+<table class="one-line"><tbody>
+{% set section = "Opening balances" %}
+{{ om.row("Awaiting an opening balance", data.awaiting_an_opening_balance) }}
+{% block vendor_rows scoped %}{% endblock %}
+</tbody></table>
+</section>
+{% endif %}
+{% block vendor_sections %}{% endblock %}
+{% endblock %}

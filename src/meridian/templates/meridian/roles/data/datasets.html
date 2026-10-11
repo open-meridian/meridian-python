@@ -1,0 +1,51 @@
+{#- A data plugin's Datasets (spec/plugin-pages-follow-their-role): notices,
+    then "Served", "Wants" and "Subjects", then the vendor's sections. `data`
+    is a meridian.roles.data.DatasetsRead, or the plugin's record extending
+    it. -#}
+{% extends "meridian/base.html" %}
+{% import "meridian/roles/_rows.html" as om %}
+{% block content %}
+{% if not data.wants %}
+{% if caller.deployment_admin %}
+{{ om.next_step("No wants yet", "Nothing reads these datasets until a deployment admin licenses them and entitles a plugin on", "data-sources", "Data sources") }}
+{% else %}
+{{ om.next_step("No wants yet", "Nothing reads these datasets until a deployment admin licenses them and entitles a plugin on Data sources. Ask a deployment admin to license them.") }}
+{% endif %}
+{% endif %}
+{% block vendor_notices %}{% endblock %}
+<section class="panel">
+<h2>Served</h2>
+<table class="one-line">
+{% for row in [none] + data.served %}
+{% if row is none %}
+<thead><tr><th>Dataset</th><th class="wide-only">Data</th><th class="wide-only">Arrives</th><th class="wide-only">Day</th><th>Default terms</th><th class="wide-only">Entitled at the vendor</th><th class="num">Recorded</th><th class="num wide-only">Declined</th><th class="wide-only">Last recorded</th>
+{%- else %}
+<tr><td><code>{{ row.dataset }}</code></td><td class="wide-only">{{ row.data }}</td><td class="wide-only">{{ row.arrives }}</td><td class="wide-only">{{ row.day }}</td><td>{{ row.default_terms }} <span class="hint">{{ "Licensed" if row.licensed else "Not licensed yet" }}</span></td><td class="wide-only">{{ row.entitled_at_vendor }}</td><td class="num">{{ row.recorded }}</td><td class="num wide-only">{{ row.declined }}</td><td class="wide-only">{{ row.last_recorded or "None yet" }}</td>
+{%- endif %}
+{% block vendor_columns scoped %}{% endblock %}
+{% if row is none %}
+<th class="more"><span class="visually-hidden">Details</span></th></tr></thead><tbody>
+{% else %}
+<td class="more"><details class="row-detail" name="served"><summary aria-label="Details of {{ row.dataset }}">…</summary><div class="row-detail-pop"><h3>{{ row.dataset }}</h3><dl><dt>Data</dt><dd>{{ row.data }}</dd><dt>Arrives</dt><dd>{{ row.arrives }}</dd><dt>Day</dt><dd>{{ row.day }}</dd><dt>Default terms</dt><dd>{{ row.default_terms }}; {{ "Licensed" if row.licensed else "Not licensed yet" }}</dd><dt>Entitled at the vendor</dt><dd>{{ row.entitled_at_vendor }}</dd><dt>Recorded</dt><dd>{{ row.recorded }}</dd><dt>Declined</dt><dd>{{ row.declined }}</dd><dt>Last recorded</dt><dd>{{ row.last_recorded or "None yet" }}</dd></dl></div></details></td></tr>
+{% endif %}
+{% endfor %}
+</tbody></table>
+</section>
+<section class="panel">
+<h2>Wants</h2>
+{% if data.wants %}
+<table class="one-line"><thead><tr><th>Dataset</th><th>Asked</th><th class="num">Subjects</th><th class="num wide-only">Recorded</th><th class="num wide-only">Declined</th><th>State</th></tr></thead><tbody>
+{% for want in data.wants %}
+<tr><td><code>{{ want.dataset }}</code></td><td>{{ want.asked }}</td><td class="num">{{ want.subjects }}</td><td class="num wide-only">{{ want.recorded }}</td><td class="num wide-only">{{ want.declined }}</td><td>{{ want.state }}</td></tr>
+{% endfor %}
+</tbody></table>
+{% else %}
+<div class="empty-state"><strong>No wants yet</strong></div>
+{% endif %}
+</section>
+<section class="panel">
+<h2>Subjects</h2>
+<p>The deployment {{ "lets" if data.reads_instruments else "does not let" }} this plugin read an instrument's record.</p>
+</section>
+{% block vendor_sections %}{% endblock %}
+{% endblock %}

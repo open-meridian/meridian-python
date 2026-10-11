@@ -95,7 +95,7 @@ def test_every_release_since_the_first_recorded_has_its_step() -> None:
         ("0.6.0", "0.6.1"),
         ("0.6.1", "0.7.0"),
     ]
-    assert (steps[-1].source, steps[-1].target) == ("0.22.0", "0.23.0")
+    assert (steps[-1].source, steps[-1].target) == ("0.23.0", "0.24.0")
     # A release that moves the version records its step, if only the pins.
     assert steps[-1].target == SDK
 
@@ -722,3 +722,46 @@ def test_a_changing_route_with_no_typed_record_is_found_and_left_by_hand() -> No
     )
     assert result.files == {}
     assert left_by_hand(result) == [("typed-route", "src/p/x.py", 5)]
+
+
+def test_the_renamed_roles_are_rewritten_where_a_plugin_names_a_role() -> None:
+    # Contract v20 (the product owner, 2026-10-10): dgm is data, ccm is
+    # connectivity and match is confirmation, wherever a plugin names a role;
+    # "match" anywhere else is an English word and stays.
+    result = one(
+        """\
+        import meridian
+        from meridian.suites import run
+
+        pages = meridian.Pages("Prices")
+
+        @pages.page("/", "Connection", levels="admin", roles=["dgm"])
+        async def connection(request):
+            mode = "match" if request.caller.level_for("ccm") else ""
+            return mode
+
+        def test_suite():
+            assert run("dgm", {}).passed
+        """,
+        "0.23.0",
+        "0.24.0",
+    )
+    text = result.files["src/p/x.py"]
+    assert 'roles=["data"]' in text
+    assert 'level_for("connectivity")' in text
+    assert 'run("data", {})' in text
+    assert 'mode = "match"' in text
+    (step,) = result.steps
+    assert step.rewrote == {"src/p/x.py": {"role-renamed": 3}}
+    assert left_by_hand(result) == []
+
+
+def test_the_renamed_roles_are_rewritten_in_the_plugins_metadata() -> None:
+    files = {
+        "pyproject.toml": '[project]\nname = "p"\n\n[tool.meridian]\nroles = ["dgm"]\n'
+        'interface = true\n\n[tool.other]\nroles = ["dgm"]\n'
+    }
+    result = migrations.migrate(files, "0.23.0", "0.24.0")
+    text = result.files["pyproject.toml"]
+    assert '[tool.meridian]\nroles = ["data"]' in text
+    assert '[tool.other]\nroles = ["dgm"]' in text

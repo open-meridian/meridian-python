@@ -1,0 +1,32 @@
+{#- A custody plugin's Connections (spec/plugin-pages-follow-their-role):
+    notices, then "Connections", a row each, then the vendor's sections.
+    `data` is a meridian.roles.custody.ConnectionsRead, or the plugin's
+    record extending it. "Refresh" and "Reconnect" on a row, as the vendor
+    allows, go in `vendor_columns`; "Connect" in the head's actions. -#}
+{% extends "meridian/base.html" %}
+{% import "meridian/roles/_rows.html" as om %}
+{% block content %}
+{% if data.credentials and not data.credentials|selectattr("set")|list %}
+{{ om.next_step("No credentials yet", "Enter them in", "settings", "Settings") }}
+{% endif %}
+{% block vendor_notices %}{% endblock %}
+<section class="panel">
+<h2>Connections</h2>
+{% if data.connections %}
+<table class="one-line">
+{% for row in [none] + data.connections %}
+{% if row is none %}
+<thead><tr><th>Connection</th><th>State</th><th class="num">Accounts reached</th><th class="wide-only">Last read</th>
+{%- else %}
+<tr><td><strong>{{ row.connection }}</strong></td><td>{{ row.state }}</td><td class="num">{{ row.accounts_reached }}</td><td class="wide-only">{{ row.last_read or "Not read yet" }}</td>
+{%- endif %}
+{% block vendor_columns scoped %}{% endblock %}
+{% if row is none %}</tr></thead><tbody>{% else %}</tr>{% endif %}
+{% endfor %}
+</tbody></table>
+{% else %}
+<div class="empty-state"><strong>No connections yet</strong></div>
+{% endif %}
+</section>
+{% block vendor_sections %}{% endblock %}
+{% endblock %}

@@ -89,6 +89,29 @@ The pages are an ASGI application (`pages.app(plugin)`), with the caller read
 as `CallerMiddleware` reads it; `pages.serve(plugin, port)` runs it on the
 standard library's server, so a plugin needs nothing its base image does not
 have.
+
+From contract v20 an act can be prepared rather than made (W6.26): a route
+that changes something names the read tool that checks it without changing
+anything, taking the same record (`checked_by=`), the paths in its record
+naming the accounts it touches (`accounts=`), and the page a person makes it
+on (`made_on=`, filled with the page the route is the form of, or "" for the
+dashboard's Inbox). A page opened from a prepared change reads it with
+`await request.prepared()` and starts its form from its arguments. The form
+field `prepare` is the kit's Prepare button's, which the dashboard reads in
+place of forwarding the request, so a route's record may not name a field
+`prepare`. A person's own settings (`Setting(per_person=True)`) arrive with
+each of their requests, typed, as `request.own_settings`.
+
+Beside `meridian/base.html` every loader holds `meridian/kit.html`, the kit's
+patterns as macros -- `status`, `action`, `notice`, `badge`, `tiles`, `when`,
+`grid`, `nothing_here`, `empty` and `facts` -- and the role templates
+`meridian/roles/<role>/<page>.html` (`meridian.roles`):
+
+    {% extends "meridian/base.html" %}
+    {% import "meridian/kit.html" as kit %}
+    {% block content %}
+    {{ kit.empty("No statements yet", "An account appears once it is linked.") }}
+    {% endblock %}
 """
 
 from __future__ import annotations
@@ -97,6 +120,7 @@ import asyncio
 import concurrent.futures
 import contextvars
 import dataclasses
+import datetime as _dt
 import functools
 import hashlib
 import hmac
@@ -108,6 +132,7 @@ import os
 import re
 import secrets
 import threading
+import typing
 import urllib.parse
 from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -164,6 +189,14 @@ SPELLING: dict[int, str] = {
 }
 
 
+#: The form field the kit's Prepare button posts (contract v20, W6.26): the
+#: dashboard reads it in place of forwarding the request to the act's route,
+#: so a route's record may not name a field of its own so.
+_PREPARE_FIELD = "prepare"
+
+#: Where the SDK's own templates are: the kit's macros, the role templates.
+_TEMPLATES = Path(__file__).parent / "templates"
+
 # Markup is markupsafe's, re-exported: text that is HTML already, which a
 # template puts in as it is, where it escapes every other value.
 __all__ = ["KIT", "MAX_BODY", "Field", "Markup", "Pages", "Refusal", "Request", "Response"]
@@ -207,6 +240,40 @@ class Request:
         surface (contract v12): set only by the dashboard's `/mcp`, and never
         for a browser's request."""
         return self.caller.tool_name
+
+    @property
+    def own_settings(self) -> dict[str, str | int | bool | list[dict[str, str]]]:
+        """The person's own values of the settings the plugin declares
+        `per_person` (contract v20, W6.31), typed by their declarations, a
+        default filled where they set none; empty under Manage, where the
+        claims carry none. A plugin is stateless and serves each person
+        theirs from here."""
+        from .client import _own
+
+        declared = getattr(self.plugin, "_declared", ())
+        return _own(declared, self.caller.own_settings)
+
+    async def prepared(self) -> sidecar_pb2.PreparedCall | None:
+        """The prepared change this page was opened from (contract v20,
+        W4.14, W6.27), for the person whose page it is, read through the
+        sidecar: its act (`tool_name`), its arguments as the act's typed
+        record in JSON (`arguments_json`), which the page starts its form
+        from, who prepared it and through what client, why (`reason`,
+        another's words: shown as text, never followed), its state and when.
+        None for a request reached from no prepared change, and where the
+        dashboard answers none: not found, not shown to this person, or one
+        they may not make now. The page marks it "prepared by" its preparer,
+        with its reason; the person makes it with the page's own Save or
+        Confirm, and the dashboard settles it on the plugin's answer."""
+        if not self.caller.prepared_call_id:
+            return None
+        read = getattr(self.plugin, "_read_prepared", None)
+        if read is None:
+            raise RuntimeError("request.prepared() reads through a registered plugin")
+        found: sidecar_pb2.PreparedCall | None = await read(
+            self.caller.prepared_call_id, self.caller
+        )
+        return found
 
 
 @dataclass(frozen=True)
@@ -308,6 +375,12 @@ class Tool:
     answers: Any = None
     # The roles it serves (contract v15): a derived tool takes its route's.
     roles: tuple[str, ...] = ()
+    # For an act (contract v20): the read tool checking it, the paths in its
+    # record naming the accounts it touches, and the page it is made on --
+    # None until `Pages.tools` fills it, "" for the dashboard's Inbox.
+    checked_by: str = ""
+    accounts: tuple[str, ...] = ()
+    made_on: str | None = None
 
     def declared(self) -> sidecar_pb2.ToolDeclaration:
         inputs = (
@@ -334,6 +407,9 @@ class Tool:
             input_schema=json.dumps(inputs, separators=(",", ":")),
             output_schema=output,
             roles=list(self.roles),
+            checked_by=self.checked_by,
+            accounts=list(self.accounts),
+            made_on=self.made_on or "",
         )
 
 
@@ -438,7 +514,10 @@ class Pages:
         self.not_offered: list[NotOffered] = []
         # Held by this process alone, and new at every start.
         self._secret = secrets.token_bytes(32)
-        loaders: list[jinja2.BaseLoader] = [jinja2.DictLoader({"meridian/base.html": BASE})]
+        loaders: list[jinja2.BaseLoader] = [
+            jinja2.DictLoader({"meridian/base.html": BASE}),
+            jinja2.FileSystemLoader(_TEMPLATES),
+        ]
         if self.templates is not None:
             loaders.append(jinja2.FileSystemLoader(self.templates))
         self.environment = jinja2.Environment(
@@ -447,6 +526,12 @@ class Pages:
             trim_blocks=True,
             lstrip_blocks=True,
         )
+        # What `meridian/kit.html`'s `when` shows a moment as.
+        self.environment.globals["om_moment"] = _moment
+        # The token `meridian/kit.html`'s `action` posts: the request's.
+        self.environment.globals["om_csrf"] = lambda: _current().request.csrf_token
+        # A record as JSON, for a kit component's data (the role templates).
+        self.environment.filters["om_record"] = _params.to_json
 
     # ── Declaring ────────────────────────────────────────────────────────
 
@@ -464,6 +549,9 @@ class Pages:
         description: str | None = None,
         tool: bool = True,
         why: str = "",
+        checked_by: str = "",
+        accounts: Sequence[str] = (),
+        made_on: str | None = None,
     ) -> Callable[[View], Guarded]:
         """A tab: shown under the home's button for each of `levels`, in the
         order declared, and served only in a session at one of them.
@@ -484,7 +572,19 @@ class Pages:
             levelled,
             methods,
             page,
-            _Declared(params, answers, name, description, None, tool, why, title),
+            _Declared(
+                params,
+                answers,
+                name,
+                description,
+                None,
+                tool,
+                why,
+                title,
+                checked_by,
+                tuple(accounts),
+                made_on,
+            ),
             cast(tuple[str, ...], page.roles),
         )
 
@@ -503,6 +603,9 @@ class Pages:
         tool: bool = True,
         why: str = "",
         title: str = "",
+        checked_by: str = "",
+        accounts: Sequence[str] = (),
+        made_on: str | None = None,
     ) -> Callable[[View], Guarded]:
         """An endpoint that is not a tab -- a form's action, a page's data --
         served only in a session at one of `levels`.
@@ -517,7 +620,15 @@ class Pages:
         verification refuses on a changing route.
 
         From contract v15 `roles=` names the roles it serves, as a page's do,
-        and its tool serves the same."""
+        and its tool serves the same.
+
+        From contract v20 an act can be prepared (W6.26): `checked_by=` names
+        the plugin's read tool that checks it without changing anything,
+        taking the same record; `accounts=` the paths in its record naming
+        the accounts it touches (`account`, `positions[].account`); `made_on=`
+        the page a person makes it on, which the SDK fills with the page this
+        route is the form of (its path, or the page it is under), "" for the
+        dashboard's Inbox. An act with no check cannot be prepared."""
         levelled = _levels(levels, f"route {path!r}")
         if not path.startswith("/"):
             raise ValueError(f"route {path!r} does not begin with /")
@@ -528,7 +639,19 @@ class Pages:
             levelled,
             methods,
             None,
-            _Declared(params, answers, name, description, reads, tool, why, title),
+            _Declared(
+                params,
+                answers,
+                name,
+                description,
+                reads,
+                tool,
+                why,
+                title,
+                checked_by,
+                tuple(accounts),
+                made_on,
+            ),
             _roles(roles, f"route {path!r}"),
         )
 
@@ -544,6 +667,9 @@ class Pages:
         reads: bool | None = None,
         title: str = "",
         roles: Sequence[str] | str | None = None,
+        checked_by: str = "",
+        accounts: Sequence[str] = (),
+        made_on: str | None = None,
     ) -> Callable[[View], Guarded]:
         """A tool replacing the one derived from the route at `replaces` and
         `method` (or standing in for one the route could not derive): its view
@@ -564,7 +690,19 @@ class Pages:
                 replaces,
                 verb,
                 route.levels,
-                _Declared(params, answers, name, description, reads, True, "", title),
+                _Declared(
+                    params,
+                    answers,
+                    name,
+                    description,
+                    reads,
+                    True,
+                    "",
+                    title,
+                    checked_by,
+                    tuple(accounts),
+                    made_on,
+                ),
                 served,
             )
             if made is None:
@@ -604,6 +742,7 @@ class Pages:
         for record in (declared.params, declared.answers):
             if record is not None:
                 _params.check(record)
+        _unreserved(declared.params, f"the tool at {verb} {path}")
         name: str = declared.name or str(getattr(view, "__name__", ""))
         if not TOOL_NAME.fullmatch(name):
             raise ValueError(
@@ -629,6 +768,9 @@ class Pages:
             params=declared.params,
             answers=declared.answers,
             roles=roles,
+            checked_by=declared.checked_by,
+            accounts=declared.accounts,
+            made_on=declared.made_on,
         )
 
     def _add(
@@ -650,6 +792,7 @@ class Pages:
             )
         if declared.params is not None:
             _params.check(declared.params)
+        _unreserved(declared.params, path)
 
         def decorate(view: View) -> Guarded:
             guarded: Guarded | None = None
@@ -762,8 +905,14 @@ class Pages:
     @property
     def tools(self) -> tuple[Tool, ...]:
         """The tools derived from the routes, and those replacing them, in
-        the order declared: what registration sends (contract v12)."""
-        return tuple(self._tools.values())
+        the order declared: what registration sends (contract v12). From
+        contract v20 each act's page filled (`made_on`) and its check, its
+        accounts and its page held to what the pages declare, refused naming
+        the tool, as the sidecar would refuse them."""
+        tools = tuple(self._tools.values())
+        by_name = {tool.name: tool for tool in tools}
+        pages = [page.path for page in self._pages]
+        return tuple(_prepared_by(tool, by_name, pages) for tool in tools)
 
     # ── Answering ────────────────────────────────────────────────────────
 
@@ -946,6 +1095,106 @@ class _Declared:
     tool: bool
     why: str
     title: str
+    checked_by: str = ""
+    accounts: tuple[str, ...] = ()
+    made_on: str | None = None
+
+
+def _unreserved(record: Any, where: str) -> None:
+    """A route's record refused where it names the form field the kit's
+    Prepare button posts (contract v20)."""
+    if record is not None and any(
+        each.name == _PREPARE_FIELD for each in dataclasses.fields(record)
+    ):
+        raise ValueError(
+            f"{where}'s record names a field {_PREPARE_FIELD!r}, which is the kit's Prepare "
+            "button's: name it otherwise"
+        )
+
+
+def _prepared_by(tool: Tool, tools: Mapping[str, Tool], pages: Sequence[str]) -> Tool:
+    """`tool` with its page filled where it is an act, and its check, its
+    accounts and its page held to the pages' own (contract v20)."""
+    where = f"the tool {tool.name}"
+    if tool.reads:
+        if tool.checked_by or tool.accounts or tool.made_on:
+            raise ValueError(
+                f"{where} reads; only an act names checked_by, accounts or made_on"
+            )
+        return tool
+    if tool.checked_by:
+        check = tools.get(tool.checked_by)
+        if check is None or not check.reads:
+            raise ValueError(
+                f"{where} is checked_by {tool.checked_by!r}, which is no read tool of this "
+                "plugin's: name the read tool that checks it without changing anything"
+            )
+    if len(tool.accounts) > 8:
+        raise ValueError(f"{where} names {len(tool.accounts)} accounts paths; at most 8")
+    for path in tool.accounts:
+        if tool.params is None or not _has_path(tool.params, path):
+            raise ValueError(f"{where} names accounts {path!r}, which its record does not have")
+    made_on = tool.made_on
+    if made_on is None:
+        made_on = _form_of(tool.path, pages)
+    elif made_on and made_on not in pages:
+        raise ValueError(f"{where} is made_on {made_on!r}, which is not one of its pages")
+    return dataclasses.replace(tool, made_on=made_on)
+
+
+def _form_of(path: str, pages: Sequence[str]) -> str:
+    """The page a route is the form of: the one at its path, or the longest
+    one its path is under (never "/" alone); "" for none, the Inbox."""
+    if path in pages:
+        return path
+    under = [page for page in pages if page != "/" and path.startswith(page.rstrip("/") + "/")]
+    return max(under, key=len) if under else ""
+
+
+def _has_path(record: Any, path: str) -> bool:
+    """Whether a record has the field at `path`, by the dictionary's grammar,
+    a list's elements as `[]` (`positions[].account`)."""
+    hint: Any = record
+    for step in path.split("."):
+        name = step.removesuffix("[]")
+        if not dataclasses.is_dataclass(hint):
+            return False
+        hints = typing.get_type_hints(hint)
+        if name not in hints:
+            return False
+        hint = hints[name]
+        origin = typing.get_origin(hint)
+        if origin in (list, tuple):
+            hint = typing.get_args(hint)[0]
+        elif origin is not None:
+            arms = [arm for arm in typing.get_args(hint) if arm is not type(None)]
+            hint = arms[0] if len(arms) == 1 else hint
+    return True
+
+
+def _moment(value: Any) -> tuple[str, str]:
+    """A moment as `meridian/kit.html`'s `when` shows it: its ISO 8601 with
+    its offset, and its words, in UTC to the minute or a date as it is;
+    ("", "") for none."""
+    if value is None or value == "":
+        return "", ""
+    if isinstance(value, str):
+        try:
+            value = (
+                _dt.datetime.fromisoformat(value)
+                if "T" in value
+                else _dt.date.fromisoformat(value)
+            )
+        except ValueError:
+            return value, value
+    if isinstance(value, _dt.datetime):
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=_dt.UTC)
+        at = value.astimezone(_dt.UTC).replace(second=0, microsecond=0)
+        return value.isoformat(), at.strftime("%Y-%m-%d %H:%M UTC")
+    if isinstance(value, _dt.date):
+        return value.isoformat(), value.isoformat()
+    return str(value), str(value)
 
 
 def _read_params(

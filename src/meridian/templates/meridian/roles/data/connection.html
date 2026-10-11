@@ -1,0 +1,41 @@
+{#- A data plugin's Connection (spec/plugin-pages-follow-their-role): notices,
+    then "Key", "Limits and use" and "Stream", then the vendor's sections.
+    `data` is a meridian.roles.data.ConnectionRead, or the plugin's record
+    extending it. -#}
+{% extends "meridian/base.html" %}
+{% import "meridian/roles/_rows.html" as om %}
+{% block content %}
+{% if data.mode == "No key" %}
+{{ om.next_step("No key yet", "Enter it in", "settings", "Settings") }}
+{% elif data.mode == "Sample data" %}
+<div class="notice info" role="status">Sample data: the plugin answers from recorded responses; the vendor is not called.</div>
+{% endif %}
+{% if data.last_error %}<div class="notice bad" role="alert">{{ data.last_error }}</div>{% endif %}
+{% block vendor_notices %}{% endblock %}
+{% for section in ["Key", "Limits and use", "Stream"] %}
+<section class="panel">
+<h2>{{ section }}</h2>
+<table class="one-line"><tbody>
+{% if section == "Key" %}
+{{ om.row("Mode", data.mode, {"Live": "The vendor's live service.", "Sandbox": "The vendor's sandbox.", "Sample data": "Recorded responses; the vendor is not called.", "No key": "Nothing is read until a key is entered in Settings."}.get(data.mode, "")) }}
+{% set key %}{% for each in data.credentials %}{{ each.label }}: {{ "set" if each.set else "not set" }}{% if not loop.last %}; {% endif %}{% endfor %}{% endset %}
+{{ om.row("Key", key|trim or "No key needed") }}
+{{ om.row("Entitled at the vendor", data.entitled_at_vendor or "Not reported") }}
+{% elif section == "Limits and use" %}
+{{ om.row("Limit", data.limit or "Not reported") }}
+{{ om.row("Calls", data.calls, (data.rate_limited ~ " rate-limited and waited out") if data.rate_limited else "") }}
+{{ om.row("Last call", data.last_call_at or "None yet") }}
+{{ om.row("Last error", data.last_error or "None") }}
+{% else %}
+{% if data.sessions is none %}
+{{ om.row("Streaming", "Does not stream") }}
+{% else %}
+{{ om.row("Streaming", data.sessions ~ (" session" if data.sessions == 1 else " sessions") if data.sessions else "Off") }}
+{% endif %}
+{% endif %}
+{% block vendor_rows scoped %}{% endblock %}
+</tbody></table>
+</section>
+{% endfor %}
+{% block vendor_sections %}{% endblock %}
+{% endblock %}

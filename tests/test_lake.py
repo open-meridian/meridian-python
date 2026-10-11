@@ -39,6 +39,7 @@ from meridian import (
 )
 from meridian.edge import as_reported
 from meridian.plugin.v1 import operations_pb2 as ops
+from meridian.roles.data import backfill_restart
 from meridian.suites import Recorder, check, names, run, suite
 
 INSTANCE = "data-coinbase-1"
@@ -508,7 +509,9 @@ async def test_a_venue_resolves_by_its_mic_and_one_not_held_is_reported(sidecar)
         await plugin.leave()
 
 
-async def test_a_data_plugin_reads_the_record_of_an_instrument_another_source_resolved(sidecar) -> None:
+async def test_a_data_plugin_reads_the_record_of_an_instrument_another_source_resolved(
+    sidecar,
+) -> None:
     # Contract v18, ruled 2026-10-10: a data plugin asks ResolveInstrument (W3.6) to
     # name to its vendor an instrument the book holds from a custodian.
     service, _ = sidecar
@@ -932,6 +935,22 @@ class ToyDataPlugin:
         subject = await self.subject("BTC-USD")
         await self.plugin.record_quotes(quotes=[self.quote(subject, ask=False)])  # type: ignore[attr-defined]
 
+    async def backfilled(self) -> None:
+        """On start (contract v20): the last trade this instance recorded of
+        a streamed subject, as the lake answers it, and the two the venue's
+        history states since, recorded before the stream resumes."""
+        subject = await self.subject("BTC-USD")
+
+        async def history(last: ops.Trade) -> list[Trade]:
+            assert last.meta.subjects[0].entity_id == subject
+            return [self.trade(subject, row_key=f"BTC-USD:match:{n}") for n in (2, 3)]
+
+        await backfill_restart(self.plugin, [subject], history)
+
+    async def licences(self) -> None:
+        """On start (contract v20): its own declared datasets' licences."""
+        await self.plugin.list_datasets()  # type: ignore[attr-defined]
+
     async def on_trades_wanted(
         self, heard: meridian.Heard[ops.ObservationsWantedEvent]
     ) -> None:
@@ -983,6 +1002,18 @@ def producers(**mutations: bool) -> dict[str, object]:
         recorder.answer("ObservationsWanted", lambda _: want)
         await recorder.receive(observations_wanted=toy.on_trades_wanted)
 
+    async def restarted(recorder: Recorder) -> None:
+        last = ops.Trade(
+            meta=ops.ObservationMeta(
+                row_key="BTC-USD:match:1",
+                subjects=[ops.SubjectRef(entity_id="LCL-suite-1")],
+                source=ops.Source(dataset=LIVE, venue_id=COINBASE),
+                valid_from_ns=DAY,
+            )
+        )
+        recorder.answer("ListTrades", lambda _: ops.ListTradesResult(trades=[last]))
+        await ToyDataPlugin(recorder, **mutations).backfilled()
+
     return {
         "a-daily-close": made("daily_close"),
         "the-forming-day-restated": made("forming_day"),
@@ -1005,13 +1036,16 @@ def producers(**mutations: bool) -> dict[str, object]:
         "a-quote-recorded": made("a_quote"),
         "a-one-sided-quote": made("one_sided"),
         "a-standing-want-streamed": streamed,
+        "the-takers-side-stated": made("a_trade"),
+        "a-restarts-gap-backfilled": restarted,
+        "reads-its-datasets-licences": made("licences"),
     }
 
 
-def test_the_data_suite_is_carried_with_its_twenty_one_cases() -> None:
+def test_the_data_suite_is_carried_with_its_twenty_four_cases() -> None:
     held = suite("data")
     assert held.since == "v18"
-    assert len(held.cases) == 21
+    assert len(held.cases) == 24
     assert "a-want-recorded-against" in names("data")
     assert "a-subject-another-source-resolved" in names("data")
     # The 1b's eight (contract v19), each about trades or quotes.
@@ -1020,6 +1054,10 @@ def test_the_data_suite_is_carried_with_its_twenty_one_cases() -> None:
     assert {case.about for case in later} == {"trades", "quotes"}
     assert held.case("an-fx-rate").about == "a currency's rate against another currency"
     assert held.case("an-exact-price").about == ""
+    # Contract v20: a field a source may never state, and a restart's gap.
+    assert held.case("the-takers-side-stated").about_field == "meridian.v1.Trade.aggressor"
+    assert held.case("a-restarts-gap-backfilled").about == "trades"
+    assert "reads-its-datasets-licences" in names("data")
 
 
 V19_DATA_CASES = {
@@ -1037,7 +1075,7 @@ V19_DATA_CASES = {
 def test_a_data_plugin_converting_exactly_passes_every_case_of_its_suite() -> None:
     report = run("data", producers(), instance_id="toy-1")
     assert report.passed, report.failures
-    assert len(report.passed_cases) == 21
+    assert len(report.passed_cases) == 24
 
 
 def test_a_data_plugin_sending_the_makers_side_as_the_aggressor_fails_the_suite() -> None:
@@ -1059,10 +1097,33 @@ def test_a_case_about_a_kind_the_plugin_never_publishes_may_be_not_presented() -
     report = run("data", mapped, not_presented=never)
     assert report.passed, report.failures
     assert report.not_presented == never
-    assert len(report.passed_cases) == 21 - 9
+    assert len(report.passed_cases) == 24 - 9
 
 
-def test_a_case_every_data_plugin_answers_is_never_not_presented_and_one_that_is_says_why() -> None:
+def test_a_case_about_a_field_the_source_never_states_may_be_not_presented() -> None:
+    # Contract v20 (`about_field`): a source whose trades name no side.
+    every = producers()
+    why = "this source's trades name no side"
+    mapped = {name: made for name, made in every.items() if name != "the-takers-side-stated"}
+    report = run("data", mapped, not_presented={"the-takers-side-stated": why})
+    assert report.passed, report.failures
+    assert report.not_presented == {"the-takers-side-stated": why}
+
+
+def test_a_restart_that_does_not_read_its_last_trades_fails_the_suite() -> None:
+    async def from_the_stream(recorder: Recorder) -> None:
+        toy = ToyDataPlugin(recorder)
+        await toy.a_trade()
+
+    mapped = dict(producers(), **{"a-restarts-gap-backfilled": from_the_stream})
+    report = run("data", mapped)
+    assert set(report.failures) == {"a-restarts-gap-backfilled"}
+    assert "nothing was sent on ListTrades" in report.failures["a-restarts-gap-backfilled"]
+
+
+def test_a_case_every_data_plugin_answers_is_never_not_presented_and_one_that_is_says_why() -> (
+    None
+):
     every = producers()
     mapped = {
         name: made

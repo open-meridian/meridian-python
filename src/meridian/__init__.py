@@ -121,8 +121,31 @@ read them (`list_trades` over a range, or after the watermark last seen;
 (`receive(trades_recorded=..., quotes_recorded=..., subjects=[...])`):
 every trade, never conflated, and after a loss the trades recorded after the
 watermark last seen; the latest quote per subject, dataset, venue and asset.
+
+From contract v20 an act can be prepared rather than made: a route that
+changes something names the read tool that checks it (`checked_by=`), the
+paths in its record naming the accounts it touches (`accounts=`) and the
+page a person makes it on (`made_on=`, filled by the SDK), and a page opened
+from a prepared change reads it (`await request.prepared()`). A setting may
+be each person's own (`Setting(per_person=True)`): the plugin saves a
+person's values for them (`plugin.set_own_settings(...)`) and reads them
+from each of their requests (`request.own_settings`). A data plugin reads
+its own datasets' licences (`list_datasets`) and, on start, the last trade
+it recorded of each subject (`list_trades(..., latest_recorded=True)`), to
+backfill a restart's gap (`meridian.roles.data.backfill_restart`). The roles
+`dgm`, `ccm` and `match` are `data`, `connectivity` and `confirmation`.
+
+Each role's common part is `meridian.roles` (`data`, `custody`,
+`operations`, `reporting`): its pages' records, figures, settings and
+templates. Settings may be one typed class (`@meridian.settings`, its fields
+`meridian.setting(...)`, `meridian.environment()` and
+`meridian.sample_data()`), and every page's loader holds the kit's macros,
+`meridian/kit.html`.
 """
 
+# Each role's common part (contract v20, spec/plugin-pages-follow-their-role).
+from . import roles  # noqa: E402  (after what it imports)
+from ._settings import environment, sample_data, setting, settings
 from .asgi import CallerMiddleware
 from .client import (
     _RETIRED_BY_026,
@@ -394,6 +417,11 @@ __all__ = [
     "Trade",
     "TradeAttributes",
     "TradeCharacteristic",
+    "environment",
+    "roles",
+    "sample_data",
+    "setting",
+    "settings",
 ]
 
 

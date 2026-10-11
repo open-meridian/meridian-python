@@ -1166,6 +1166,12 @@ class FakeSidecar(sidecar_pb2_grpc.SidecarServiceServicer):
     hold_days: int = 0
     now_ns: int = 0
     move_refused: tuple[grpc.StatusCode, str] | None = None
+    # The prepared changes the dashboard would show (contract v20, W4.14),
+    # by ID, each read kept with the person it was read for; and each
+    # person's own settings (W6.31), by subject, as the dashboard keeps them.
+    prepared: dict[str, sidecar_pb2.PreparedCall] = field(default_factory=dict)
+    prepared_reads: list[tuple[str, str]] = field(default_factory=list)
+    own: dict[str, dict[str, str]] = field(default_factory=dict)
     # Told of each heartbeat as it is heard, so a test waits for the beats it
     # asserts on instead of sleeping and counting what happened to arrive.
     beat: asyncio.Condition = field(default_factory=asyncio.Condition, repr=False)
@@ -1463,6 +1469,48 @@ class FakeSidecar(sidecar_pb2_grpc.SidecarServiceServicer):
         kept.CopyFrom(request)
         self.moves.append((kept, caller, self.now_ns or time.time_ns()))
         return sidecar_pb2.RecordMoveReply()
+
+    async def ReadPreparedCall(  # noqa: N802
+        self, request: sidecar_pb2.ReadPreparedCallRequest, context: grpc.aio.ServicerContext
+    ) -> sidecar_pb2.ReadPreparedCallReply:
+        """The prepared change, for a person only, as the sidecar asks the
+        dashboard (W4.14): unset when it holds none by that ID."""
+        caller = _caller(context)
+        self.prepared_reads.append((request.prepared_call_id, caller))
+        if not caller:
+            await context.abort(
+                grpc.StatusCode.PERMISSION_DENIED,
+                "a plugin reads a prepared change for a person",
+            )
+        found = self.prepared.get(request.prepared_call_id)
+        return sidecar_pb2.ReadPreparedCallReply(prepared_call=found)
+
+    async def SetOwnSettings(  # noqa: N802
+        self, request: sidecar_pb2.SetOwnSettingsRequest, context: grpc.aio.ServicerContext
+    ) -> sidecar_pb2.SetOwnSettingsReply:
+        """A person's own settings kept under them (W6.31): refused for nobody,
+        and at no write, as the sidecar refuses them; an empty value clears."""
+        header = _caller(context)
+        if not header:
+            await context.abort(
+                grpc.StatusCode.PERMISSION_DENIED, "a person's own settings are saved for them"
+            )
+        from meridian import Caller
+
+        person = Caller.from_header(header)
+        if person.level != sidecar_pb2.ACCESS_LEVEL_WRITE:
+            await context.abort(
+                grpc.StatusCode.PERMISSION_DENIED, "a person saves their own settings at write"
+            )
+        held = self.own.setdefault(person.subject, {})
+        for each in request.values:
+            if each.value:
+                held[each.name] = each.value
+            else:
+                held.pop(each.name, None)
+        return sidecar_pb2.SetOwnSettingsReply(
+            values=[sidecar_pb2.SettingValue(name=n, value=v) for n, v in held.items()]
+        )
 
     def read_moves(self, request: object) -> object:
         """Core's ReadMoves (W6.9) over what was recorded here: the moves

@@ -120,14 +120,22 @@ async def test_the_sdk_declares_the_contract_it_was_built_for(
     first per asset (sdk-contract/the-lake-trades-and-quotes-contract): a
     sidecar still at v18 delivers no trade and answers no trades read, so it
     refuses the plugin at registration, naming both versions.
+
+    v20 is an agent's prepared change and a person's own settings: an act's
+    check tool, its accounts and its page, the prepared change a page was
+    opened from, a person's own settings saved and handed back, an account
+    not granted refused, a data plugin's licences and its own last trades
+    (sdk-contract/an-agents-prepared-change-contract): a sidecar still at v19
+    answers no prepared change, so it refuses the plugin at registration,
+    naming both versions.
     """
     service, address = sidecar
     plugin = await meridian.connect(address, heartbeat=False)
     await plugin.leave()
 
     (sent,) = service.registered
-    assert meridian.SCHEMA_VERSION == "v19"
-    assert sent.schema_version == "v19"
+    assert meridian.SCHEMA_VERSION == "v20"
+    assert sent.schema_version == "v20"
 
 
 async def test_identity_and_grants_come_back(sidecar: tuple[FakeSidecar, str]) -> None:
