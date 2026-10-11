@@ -145,7 +145,7 @@ base-image:
 # The roles' templates, which `meridian plugin new --role <role>` writes:
 # each a whole plugin holding that role, sharing these files with template/
 # byte for byte, so the agents' instructions, the CI and the image are one.
-ROLE_TEMPLATES := dgm reporting
+ROLE_TEMPLATES := data reporting
 SHARED := AGENTS.md CLAUDE.md Dockerfile .dockerignore .gitignore \
           .claude/skills/develop-live/SKILL.md .github/workflows/check.yaml
 
@@ -153,7 +153,7 @@ SHARED := AGENTS.md CLAUDE.md Dockerfile .dockerignore .gitignore \
 # says. It must hold the base's SDK rather than a second copy -- what it adds
 # on top is small, where the SDK and its gRPC are tens of megabytes -- carry
 # the base's label, run as 65532, and start. Each role's template shares its
-# files, declares its role, builds on the base and starts; the dgm's
+# files, declares its role, builds on the base and starts; the data plugin's
 # declaration prints from its image, as `meridian plugin upload` reads it.
 check-scaffold: base-image
 	@grep -q '^dependencies = \["open-meridian==$(SDK_VERSION)"\]' template/pyproject.toml \
@@ -188,8 +188,8 @@ check-scaffold: base-image
 		docker run --rm --entrypoint python reference-$$role:check -c "import meridian, reference_plugin.__main__" \
 			|| { echo "check-scaffold FAILED: templates/$$role's image does not import the SDK and itself" >&2; exit 1; }; \
 	done
-	@docker run --rm --entrypoint meridian-declaration reference-dgm:check reference_plugin.declaration:DECLARATION >/dev/null \
-		|| { echo "check-scaffold FAILED: the dgm template's declaration does not print from its image" >&2; exit 1; }
+	@docker run --rm --entrypoint meridian-declaration reference-data:check reference_plugin.declaration:DECLARATION >/dev/null \
+		|| { echo "check-scaffold FAILED: the data template's declaration does not print from its image" >&2; exit 1; }
 	@echo "check-scaffold OK: the template and each role's ($(ROLE_TEMPLATES)) build on plugin-python:$(SDK_VERSION); the template adds only itself, without the agents' files"
 
 test:

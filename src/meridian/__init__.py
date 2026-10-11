@@ -85,7 +85,7 @@ is mounted. What each kind holds in storage goes on its heartbeat
 (`plugin.stored`, `StoredSpan`s), and every edge plugin with pages offers
 `POST /archive/restore`, derived as a tool.
 
-From contract v18 the lake holds what sources say about prices. A `dgm`
+From contract v18 the lake holds what sources say about prices. A data plugin
 declares its catalogue in its declaration
 (`Declaration(catalogue=[DatasetDeclaration(...)])`: each dataset's key,
 vendor, data types, modes, cadence, the terms its vendor imposes
@@ -110,7 +110,7 @@ instrument alone (`Money(amount, instrument_id=...)`). A date is a
 `datetime.date`, or its ISO 8601 text, and one that is no date is refused
 naming the field before anything is sent.
 
-From contract v19 the lake hears trades and quotes. A `dgm` records them in
+From contract v19 the lake hears trades and quotes. A data plugin records them in
 batches of 1 to 500 (`plugin.record_trades`, `plugin.record_quotes`, each a
 `Trade` -- its price a `Money`, its quantity, its `TradeAttributes` with an
 `Eligibility` for the consolidated bar and its venue's, and the `Aggressor`

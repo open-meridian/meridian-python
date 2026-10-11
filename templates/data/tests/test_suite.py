@@ -1,6 +1,6 @@
-"""The `dgm` suite: the role's requirement, which this plugin holds itself to.
+"""The data suite: the role's requirement, which this plugin holds itself to.
 
-A plugin holding `dgm` is verified for it only by passing every case of the
+A plugin holding `data` is verified for it only by passing every case of the
 suite the SDK carries, and `meridian plugin check --verified` fails one with
 no test running it. Each case says, in the contract's words, what the
 vendor presents and what the plugin sends. Here each is mapped to one of the
@@ -162,11 +162,11 @@ DECLARED = {kind for dataset in DECLARATION.catalogue for kind in dataset.data_t
 
 NOT_PRESENTED: dict[str, str] = {
     case.name: f"its datasets publish daily closes and bars, and no {case.about}"
-    for case in suite("dgm").cases
+    for case in suite("data").cases
     if case.about in KINDS and KINDS[case.about] not in DECLARED
 }
 
 
-def test_every_case_of_the_dgm_suite_passes() -> None:
-    report = run("dgm", PRODUCERS, not_presented=NOT_PRESENTED, instance_id=INSTANCE)
+def test_every_case_of_the_data_suite_passes() -> None:
+    report = run("data", PRODUCERS, not_presented=NOT_PRESENTED, instance_id=INSTANCE)
     assert report.passed, report.failures

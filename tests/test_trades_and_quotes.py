@@ -5,7 +5,7 @@ quote per subject, dataset, venue and asset -- and the reading suites that
 hold `signal` and `ems` to them.
 
 Against the fake sidecar (conftest), which mirrors the lake as core's sidecar
-and lake answer it. The dgm suite's 1b cases are in tests/test_lake.py, with
+and lake answer it. The data suite's 1b cases are in tests/test_lake.py, with
 its 1a.
 """
 
@@ -36,7 +36,7 @@ from meridian.operations import UNCONFLATED
 from meridian.plugin.v1 import operations_pb2 as ops
 from meridian.suites import HEARD, Recorder, run, suite
 
-INSTANCE = "dgm-coinbase-1"
+INSTANCE = "data-coinbase-1"
 LIVE = f"{INSTANCE}:live"
 BTC = "LCL-01JA00000000000000BTC1"
 USDC = "LCL-01JA0000000000000USDC1"
@@ -61,7 +61,7 @@ EVERY = Eligibility(high_low="eligible", open="eligible", close="eligible", volu
 
 
 def trade(n: int, *, at: int = HOUR, price: str = "62431.27", cancelled: bool = False) -> Trade:
-    """A match on the venue's stream, as a crypto dgm records one."""
+    """A match on the venue's stream, as a crypto data plugin records one."""
     return Trade(
         meta=ObservationMeta(
             row_key=f"BTC-USD:match:{n}",
@@ -103,10 +103,10 @@ def quote(
     )
 
 
-async def dgm(sidecar: tuple[FakeSidecar, str]) -> meridian.Plugin:
+async def data_plugin(sidecar: tuple[FakeSidecar, str]) -> meridian.Plugin:
     service, address = sidecar
     service.instance_id = INSTANCE
-    service.roles = ("dgm",)
+    service.roles = ("data",)
     return await meridian.connect(
         address, heartbeat=False, declaration=Declaration(catalogue=CATALOGUE)
     )
@@ -138,7 +138,7 @@ async def test_a_trade_is_recorded_its_price_resolved_and_a_withdrawal_a_new_ver
     sidecar,
 ) -> None:
     service, _ = sidecar
-    plugin = await dgm(sidecar)
+    plugin = await data_plugin(sidecar)
     try:
         first = await plugin.record_trades(trades=[trade(1)])
         withdrawn = await plugin.record_trades(trades=[trade(1, cancelled=True)])
@@ -161,7 +161,7 @@ async def test_a_batch_of_trades_or_quotes_is_refused_outside_1_to_500_before_se
     sidecar,
 ) -> None:
     service, _ = sidecar
-    plugin = await dgm(sidecar)
+    plugin = await data_plugin(sidecar)
     try:
         with pytest.raises(ValueError, match="trades"):
             await plugin.record_trades(trades=[])
@@ -184,7 +184,7 @@ async def test_a_batch_of_trades_or_quotes_is_refused_outside_1_to_500_before_se
 
 async def test_a_one_sided_quote_is_recorded_and_one_in_two_assets_refused(sidecar) -> None:
     service, _ = sidecar
-    plugin = await dgm(sidecar)
+    plugin = await data_plugin(sidecar)
     try:
         answered = await plugin.record_quotes(quotes=[quote("q1", "62431.26")])
         mixed = Quote(
@@ -206,7 +206,7 @@ async def test_a_one_sided_quote_is_recorded_and_one_in_two_assets_refused(sidec
 
 async def test_trades_are_read_over_a_range_within_a_day_or_after_a_watermark(sidecar) -> None:
     service, address = sidecar
-    writer = await dgm(sidecar)
+    writer = await data_plugin(sidecar)
     reader = await meridian.connect(address, heartbeat=False)
     try:
         first = await writer.record_trades(trades=[trade(1), trade(2, at=HOUR + SECOND)])
@@ -238,7 +238,7 @@ async def test_trades_are_read_over_a_range_within_a_day_or_after_a_watermark(si
 
 async def test_the_latest_quotes_are_one_per_venue_and_asset(sidecar) -> None:
     service, address = sidecar
-    writer = await dgm(sidecar)
+    writer = await data_plugin(sidecar)
     reader = await meridian.connect(address, heartbeat=False)
     try:
         await writer.record_quotes(
@@ -269,7 +269,7 @@ async def test_every_trade_is_heard_and_a_loss_caught_up_after_the_watermark_las
     sidecar,
 ) -> None:
     service, address = sidecar
-    writer = await dgm(sidecar)
+    writer = await data_plugin(sidecar)
     await writer.record_trades(trades=[trade(1), trade(2)])
     one, two = service.operations.lake.published
     # Lost on the stream: recorded while the reader was too slow, one a late
@@ -321,7 +321,7 @@ async def test_quotes_are_heard_latest_first_per_asset_never_one_asset_for_anoth
     sidecar,
 ) -> None:
     service, address = sidecar
-    writer = await dgm(sidecar)
+    writer = await data_plugin(sidecar)
     await writer.record_quotes(quotes=[quote("usd-1", "62431.26")])
     await writer.record_quotes(quotes=[quote("usdc-1", "62440.10", in_usdc=True)])
     await writer.record_quotes(quotes=[quote("usd-2", "62431.50", at=HOUR + SECOND)])

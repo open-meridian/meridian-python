@@ -1,6 +1,6 @@
 # reference-plugin
 
-A Meridian `dgm` plugin, made by `meridian plugin new --role dgm`: it puts a
+A Meridian data plugin, made by `meridian plugin new --role data`: it puts a
 vendor's prices into the deployment's lake.
 
 It runs beside a sidecar in a Meridian deployment and reaches nothing of the
@@ -26,9 +26,9 @@ Hold it to the rules every Meridian plugin is built to, and run its tests:
     pip install -e . pytest
     meridian plugin check --verified --run-tests
 
-Its tests run the `dgm` suite the SDK carries (`tests/test_suite.py`): each
+Its tests run the data suite the SDK carries (`tests/test_suite.py`): each
 case of the role mapped to one of the vendor's responses and run through the
-plugin's own conversion (`convert.py`). A plugin holding `dgm` is verified
+plugin's own conversion (`convert.py`). A plugin holding `data` is verified
 for it only by passing every case: keep each passing as you replace the
 vendor. A case about trades or quotes, which its daily dataset never
 publishes, is marked not presented, with why, until a dataset declares them. Every price is parsed from the vendor's text as a `Decimal`, never

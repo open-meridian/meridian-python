@@ -21,10 +21,10 @@ with the kit, hold the plugin to `meridian plugin check`, and the live loop
 template at a pinned commit, so a CLI release carries it. See
 [meridian-cli](https://github.com/open-meridian/meridian-cli).
 
-`plugin new --role dgm` and `--role reporting` write `templates/dgm/` and
-`templates/reporting/` instead: a `dgm` putting a stand-in vendor's prices
+`plugin new --role data` and `--role reporting` write `templates/data/` and
+`templates/reporting/` instead: a data plugin putting a stand-in vendor's prices
 into the lake, its catalogue declared, its Connection and Datasets pages
-with their read tools, and its tests running the `dgm` suite; and a
+with their read tools, and its tests running the data suite; and a
 `reporting` plugin valuing the book's positions at the close from the lake,
 its Closes page with its read tool, `read_report`, and its tests running the
 `reporting` suite. Each is a whole plugin, its agents'
@@ -933,12 +933,12 @@ resolves them changes. Both rows are `preview` in v15.
 ### The lake (contract v18)
 
 The lake keeps what sources say about prices, append-only and point in time.
-A `dgm` plugin puts them in; the reading roles (`reporting`, `portfolio`,
+A data plugin puts them in; the reading roles (`reporting`, `portfolio`,
 `compliance`, `signal`) read and hear them. The SDK carries the typed
 operations and nothing of any vendor's: no HTTP or WebSocket client, no
 vendor-file parser.
 
-**A dgm declares its catalogue** in its declaration, from code, beside its
+**A data plugin declares its catalogue** in its declaration, from code, beside its
 storage: each dataset it serves, by a key its rows name as the instance, a
 colon and the key (`coinbase-1:daily`):
 
@@ -970,7 +970,7 @@ dictionary entry; the licence is what the vendor's standard terms say, which
 the deployment's licence confirms or replaces, never whether a deployment meets
 them. Each is refused here past the dictionary's bounds (a key, a zone that is
 no IANA zone, a mode twice, a venue that is no venue master ID), and a
-catalogue from a version not holding `dgm` is refused.
+catalogue from a version not holding `data` is refused.
 
 **It records prices and bars in batches** of 1 to 500, refused outside the
 bound before anything is sent, recorded whole or refused naming the item and
@@ -1057,7 +1057,7 @@ Each is handed on with its dataset as the catalogue declares it
 lake's answers name once rather than on every row. The lake's rows are
 `preview` in v18.
 
-**The dgm suite** (`meridian.suites`, `run("dgm", producers)`) holds a data
+**The data suite** (`meridian.suites`, `run("data", producers)`) holds a data
 plugin to its role: a daily close with its business date, kind, dataset, source
 times and raw record; the forming day restated under one row key; a price
 exact past a float; a bar with no vwap; an FX rate; a stablecoin quote on the
@@ -1069,7 +1069,7 @@ standing want withdrawn. A case naming a row the plugin hears gives it what
 ```python
 async def a_want_recorded_against(recorder):
     recorder.answer("ObservationsWanted", lambda _: synthetic_want())
-    await recorder.receive(observations_wanted=MyDgm(recorder).on_want)
+    await recorder.receive(observations_wanted=MyDataPlugin(recorder).on_want)
 ```
 
 Two plugins of one pair pass it unchanged; a candle read through a `float`, or
@@ -1078,11 +1078,11 @@ of their own.
 
 ### Trades and quotes (contract v19)
 
-The lake's 1b: a `dgm` records trades and top-of-book quotes, and `signal` and
+The lake's 1b: a data plugin records trades and top-of-book quotes, and `signal` and
 `ems` read and hear them (`reporting` reads neither). Still typed operations
 only: no WebSocket client, no reconnecting stream, no bar builder.
 
-**A dgm records them in batches** of 1 to 500, from a live dataset declaring
+**A data plugin records them in batches** of 1 to 500, from a live dataset declaring
 `data_types=["meridian.v1.Trade", "meridian.v1.Quote"]` and `modes=["stream"]`.
 Each is keyed by UTC instants and names no business date; a trade's venue is
 the venue it printed on, and its price a `Money` naming its cash instrument:
@@ -1141,7 +1141,7 @@ Quotes, like prices, are handed on latest value first, and read again at the
 latest after a loss. The 1b's rows are `preview` in v19. From v19 a price's key and a quote's hold the asset they
 are in, so BTC priced in USD and in USDC on one venue are two values.
 
-**The suites.** The dgm suite gains eight cases about trades and quotes: a
+**The suites.** The data suite gains eight cases about trades and quotes: a
 trade with its attributes and aggressor, the maker's side inverted, a
 condition converted and one not, a withdrawal, a quote two-sided and
 one-sided, a standing want streamed. A case about one kind of data says so
@@ -1150,7 +1150,7 @@ that declares it never publishes that kind names it in `not_presented`, with
 why, and is verified on the rest; every other case is still required:
 
 ```python
-report = run("dgm", producers, not_presented={
+report = run("data", producers, not_presented={
     "a-trade-recorded": "daily closes and bars only: this source states no trades",
 })
 ```
@@ -1219,8 +1219,8 @@ carries libcst.
 | 0.18.0 to 0.19.0: the SDK declares contract v14; a custody plugin reports the custodian's activity and operations reads, hears and links it (`plugin.record_activity`, `plugin.list_activities`, `CustodialActivity`, `ActivityKind`, `ActivityRef`, `receive(activity_recorded=)`); each sync status the street keeps (`plugin.list_sync_statuses`, `receive(sync_status_recorded=)`); a table setting (`meridian.Setting(name, list, columns=...)`, `meridian.Column`) | only the pins move | |
 | 0.19.0 to 0.20.0: the SDK declares contract v15, a person's access granted per role: `roles=` on `@pages.page`, `@pages.route`, `@pages.tool`, `meridian.Setting` and `meridian.Page`; `Caller.roles`, `Caller.level_for`, `Caller.read_for`, `Caller.write_for`; `PageClient(..., roles=)` and `roles=` on its sessions; an activity re-resolved (`plugin.re_resolve_activity`, `re_resolutions`, `receive(activity_re_resolved=)`); a plugin holding one role or none names no role, and one coming to hold a second names `roles=` on every page, route, tool and setting, which `meridian plugin check` reports | only the pins move | |
 | 0.20.0 to 0.21.0: the SDK declares contract v16, an edge plugin's older records move to the archive: the kinds of raw record (`Storage(kinds=[RecordKind(...)])`) and the two settings the SDK declares per kind (`<kind>_window_days`, `<kind>_past_window`), reserved; the archive (`edge.archive_dir()`, `MERIDIAN_ARCHIVE_BUCKET`); the moves with their index (`plugin.archive_unit`, `plugin.restore_unit`, `plugin.delete_unit`, `plugin.find_record`), a deletion inside the hold a `CommandRefused` with `REFUSAL_REASON_WITHIN_HOLD`; what each kind holds in storage on the heartbeat (`plugin.stored`, `StoredSpan`), with the bytes each uses of the archive (`StoredSpan.bytes`), which the SDK fills in; the archive's bound (`MERIDIAN_ARCHIVE_MOST_BYTES`), past which `archive_unit` refuses; `POST /archive/restore` on every edge plugin's host, derived as the `restore_unit` tool. A plugin declaring no kinds keeps `retention_days` as before, so `meridian plugin migrate` needs no change in the command line | only the pins move | a setting of the plugin's own that held a window, dropped, its release notes naming the kind's window it maps to for the admin to set once at upgrade (SnapTrade's two); a setting it declared as `<kind>_window_days` or `<kind>_past_window`, renamed |
-| 0.21.0 to 0.22.0: the SDK declares contract v18, the lake's 1a: a dgm's catalogue (`Declaration(catalogue=[DatasetDeclaration(...)])`, `DatasetLicence`, `ObservationMode`), prices and bars recorded in batches of 1 to 500 (`plugin.record_prices`, `plugin.record_bars`, `Price`, `Bar`, `ObservationMeta`, `SourceTime`, `Source`, `SubjectRef`), wants heard and declined (`receive(observations_wanted=, want_withdrawn=)`, `want_id=`, `plugin.decline_want`), the lake's reads by business date, as of and side by side (`list_prices`, `list_bars`, `list_datasets`, `SourceChoice`), prices and bars heard latest value first for the subjects named with their dataset (`receive(prices_recorded=, bars_recorded=, subjects=)`, `Heard.dataset`), venues resolved (`resolve_venue`, `report_missing_venue`), the dgm suite and the reading roles' (a heard row delivered by `answer`); a Money names its cash instrument (`Money.instrument_id`; `Money(amount, "USD")` resolved by core, dated); every date field takes a `datetime.date`, and refuses text that is no date. `Money(amount, code)` keeps its shape, so `meridian plugin migrate` needs no change in the command line | only the pins move | a test comparing a Money read back (`as_money`) with one it made, which now carries `instrument_id`: compare `amount` and `currency_code`; a date sent as text that is no date, refused |
-| 0.22.0 to 0.23.0: the SDK declares contract v19, the lake's 1b: trades and quotes recorded in batches of 1 to 500 (`plugin.record_trades`, `plugin.record_quotes`, `Trade`, `TradeAttributes`, `Eligibility`, `Quote`), read (`list_trades` over a range or `after_watermark=`, `list_quotes`) and heard (`receive(trades_recorded=, quotes_recorded=, subjects=)`: every trade, caught up after the watermark last seen; the latest quote per asset); a price heard is conflated per its asset too; `reporting` resolves an identifier; the dgm suite's eight 1b cases, a case about a kind of data the plugin never publishes not presented with why (`Case.about`), `signal`'s 1b cases, the `ems` suite, `reporting`'s `resolves-its-reporting-currency` | only the pins move | a dgm's suite test meeting the eight new cases: map each, or name those about trades or quotes in `not_presented` with why where it publishes neither |
+| 0.21.0 to 0.22.0: the SDK declares contract v18, the lake's 1a: a data plugin's catalogue (`Declaration(catalogue=[DatasetDeclaration(...)])`, `DatasetLicence`, `ObservationMode`), prices and bars recorded in batches of 1 to 500 (`plugin.record_prices`, `plugin.record_bars`, `Price`, `Bar`, `ObservationMeta`, `SourceTime`, `Source`, `SubjectRef`), wants heard and declined (`receive(observations_wanted=, want_withdrawn=)`, `want_id=`, `plugin.decline_want`), the lake's reads by business date, as of and side by side (`list_prices`, `list_bars`, `list_datasets`, `SourceChoice`), prices and bars heard latest value first for the subjects named with their dataset (`receive(prices_recorded=, bars_recorded=, subjects=)`, `Heard.dataset`), venues resolved (`resolve_venue`, `report_missing_venue`), the data suite and the reading roles' (a heard row delivered by `answer`); a Money names its cash instrument (`Money.instrument_id`; `Money(amount, "USD")` resolved by core, dated); every date field takes a `datetime.date`, and refuses text that is no date. `Money(amount, code)` keeps its shape, so `meridian plugin migrate` needs no change in the command line | only the pins move | a test comparing a Money read back (`as_money`) with one it made, which now carries `instrument_id`: compare `amount` and `currency_code`; a date sent as text that is no date, refused |
+| 0.22.0 to 0.23.0: the SDK declares contract v19, the lake's 1b: trades and quotes recorded in batches of 1 to 500 (`plugin.record_trades`, `plugin.record_quotes`, `Trade`, `TradeAttributes`, `Eligibility`, `Quote`), read (`list_trades` over a range or `after_watermark=`, `list_quotes`) and heard (`receive(trades_recorded=, quotes_recorded=, subjects=)`: every trade, caught up after the watermark last seen; the latest quote per asset); a price heard is conflated per its asset too; `reporting` resolves an identifier; the data suite's eight 1b cases, a case about a kind of data the plugin never publishes not presented with why (`Case.about`), `signal`'s 1b cases, the `ems` suite, `reporting`'s `resolves-its-reporting-currency` | only the pins move | a data plugin's suite test meeting the eight new cases: map each, or name those about trades or quotes in `not_presented` with why where it publishes neither |
 
 `tests/migrations/` holds the plugins the migrations are recorded for, as
 written and as their migration leaves them, and `make check-migrations` holds

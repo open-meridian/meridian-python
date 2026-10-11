@@ -23,7 +23,7 @@ from reference_plugin.vendor import Vendor
 class Sidecar:
     """Who the plugin was launched as: what its pages reach of it."""
 
-    identity = meridian.Identity("reference-1", roles=("dgm",))
+    identity = meridian.Identity("reference-1", roles=("data",))
     grants = meridian.Grants()
 
 

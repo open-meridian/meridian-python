@@ -594,7 +594,7 @@ async def test_the_v16_declaration_and_heartbeat_cases_are_what_the_sdk_sends(
 async def test_the_lakes_commands_and_reads_made_with_the_sdk_are_the_pinned_bytes(
     sidecar,
 ) -> None:
-    """A dgm's batch of prices and of bars, its decline of a want, a venue
+    """A data plugin's batch of prices and of bars, its decline of a want, a venue
     resolved, and a reader's reads, each made through the SDK's typed
     operations -- its dates given as dates, its numbers put on the wire by its
     own conversion -- are the requests the lake's fixtures pin; and what the
@@ -638,7 +638,7 @@ async def test_the_lakes_commands_and_reads_made_with_the_sdk_are_the_pinned_byt
     from meridian.v1 import sidecar_pb2
 
     service, address = sidecar
-    service.roles = ("dgm",)
+    service.roles = ("data",)
     # The two instances' datasets the fixtures' rows name, as declared.
     service.operations.lake.datasets = {
         "coinbase-1:daily": sidecar_pb2.DatasetDeclaration(key="daily", vendor="Coinbase"),
@@ -726,7 +726,7 @@ async def test_the_lakes_commands_and_reads_made_with_the_sdk_are_the_pinned_byt
 async def test_the_lakes_trades_and_quotes_made_with_the_sdk_are_the_pinned_bytes(
     sidecar,
 ) -> None:
-    """A dgm's batch of trades and of quotes, and a reader's reads of them --
+    """A data plugin's batch of trades and of quotes, and a reader's reads of them --
     over a range, and the latest quotes -- each made through the SDK's typed
     operations, are the requests the lake's fixtures pin; and what the lake
     answers and delivers reads back whole (W10.4 to W10.6, contract v19)."""
@@ -760,7 +760,7 @@ async def test_the_lakes_trades_and_quotes_made_with_the_sdk_are_the_pinned_byte
     latest, latest_pin = pinned("list-quotes.yaml")
 
     service, address = sidecar
-    service.roles = ("dgm",)
+    service.roles = ("data",)
     service.operations.lake.datasets = {
         "coinbase-1:trades": sidecar_pb2.DatasetDeclaration(key="trades", vendor="Coinbase"),
         "coinbase-1:live": sidecar_pb2.DatasetDeclaration(key="live", vendor="Coinbase"),

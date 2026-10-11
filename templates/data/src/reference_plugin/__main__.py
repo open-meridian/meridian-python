@@ -1,4 +1,4 @@
-"""A Meridian `dgm` plugin, as `meridian plugin new --role dgm` writes one.
+"""A Meridian data plugin, as `meridian plugin new --role data` writes one.
 
 It connects to the sidecar it is launched beside, declaring its catalogue and
 its pages, resolves the symbols its vendor serves it, then hears what the

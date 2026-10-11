@@ -12,7 +12,7 @@ changes nothing and the day still forming is restated under the same key,
 its business date the day the dataset's declared day says it is. A price in
 a token with no ISO 4217 code is in the token's own cash instrument.
 
-`meridian.suites.run("dgm", producers)` holds this to the role's suite
+`meridian.suites.run("data", producers)` holds this to the role's suite
 (tests/test_suite.py): each case mapped to one of the vendor's responses,
 run through this code, against a recorder standing in for the sidecar.
 """

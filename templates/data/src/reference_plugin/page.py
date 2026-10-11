@@ -1,7 +1,7 @@
 """The plugin's pages, as an admin of the plugin sees them through the
 deployment's dashboard.
 
-A `dgm` shows its connection and its datasets, never a price: prices are the
+A data plugin shows its connection and its datasets, never a price: prices are the
 reading roles', and an admin configures data without reaching any account.
 So both pages are at `admin`, under the dashboard's Manage:
 

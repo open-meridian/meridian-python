@@ -108,7 +108,7 @@ async def test_the_sdk_declares_the_contract_it_was_built_for(
     registration, naming both versions.
 
     v18 is the lake's 1a (v17 numbered a design revision and no contract): a
-    dgm's catalogue in the declaration, prices and bars recorded in batches
+    data plugin's catalogue in the declaration, prices and bars recorded in batches
     and heard latest value first, wants, the lake's reads, venues resolved, a
     Money naming its instrument and a date refused where it is no date
     (sdk-contract/the-lake-prices-the-book-contract): a sidecar still at v16

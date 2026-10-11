@@ -1,8 +1,8 @@
-"""The lake's 1a through the SDK (contract v18): a dgm's catalogue, prices and
+"""The lake's 1a through the SDK (contract v18): a data plugin's catalogue, prices and
 bars recorded in batches, wants heard, recorded against and declined, the
 readers' reads by business date, as of and side by side, the rows heard
 latest value first with their dataset, venues resolved, a Money naming its
-instrument, dates typed, and the dgm suite a data plugin holds itself to,
+instrument, dates typed, and the data suite a data plugin holds itself to,
 with its 1b cases from contract v19 (tests/test_trades_and_quotes.py has the
 rest of the 1b).
 
@@ -41,7 +41,7 @@ from meridian.edge import as_reported
 from meridian.plugin.v1 import operations_pb2 as ops
 from meridian.suites import Recorder, check, names, run, suite
 
-INSTANCE = "dgm-coinbase-1"
+INSTANCE = "data-coinbase-1"
 DAILY = f"{INSTANCE}:daily"
 LIVE = f"{INSTANCE}:live"
 BTC = "LCL-01JA00000000000000BTC1"
@@ -50,7 +50,7 @@ USDC = "LCL-01JA0000000000000USDC1"
 COINBASE = "VEN-01JA0000000000000CBEXC"
 DAY = 1_791_331_200_000_000_000  # 2026-10-08 00:00 UTC
 NS_A_DAY = 86_400_000_000_000
-#: An instrument the deployment holds from a custodian, which the toy dgm
+#: An instrument the deployment holds from a custodian, which the toy data plugin
 #: never resolved: its record carries the custodian's symbol and a CUSIP.
 ELSEWHERE = "LCL-01JA0000000000000QQQ1"
 RECORD_ELSEWHERE = ops.ResolveInstrumentResult(
@@ -98,7 +98,7 @@ def close(
     row_key: str | None = None,
     forming: bool = False,
 ) -> Price:
-    """A daily close as a crypto dgm records one: its candle's day."""
+    """A daily close as a crypto data plugin records one: its candle's day."""
     start = int(datetime(day.year, day.month, day.day, tzinfo=UTC).timestamp()) * 10**9
     return Price(
         meta=ObservationMeta(
@@ -117,10 +117,10 @@ def close(
     )
 
 
-async def dgm(sidecar: tuple[FakeSidecar, str]) -> meridian.Plugin:
+async def data_plugin(sidecar: tuple[FakeSidecar, str]) -> meridian.Plugin:
     service, address = sidecar
     service.instance_id = INSTANCE
-    service.roles = ("dgm",)
+    service.roles = ("data",)
     return await meridian.connect(
         address, heartbeat=False, declaration=Declaration(catalogue=CATALOGUE)
     )
@@ -129,9 +129,9 @@ async def dgm(sidecar: tuple[FakeSidecar, str]) -> meridian.Plugin:
 # ── The catalogue ───────────────────────────────────────────────────────────
 
 
-async def test_a_dgm_declares_its_catalogue_from_code(sidecar) -> None:
+async def test_a_data_plugin_declares_its_catalogue_from_code(sidecar) -> None:
     service, _ = sidecar
-    plugin = await dgm(sidecar)
+    plugin = await data_plugin(sidecar)
     await plugin.leave()
     (sent,) = service.registered
     datasets = sent.declaration.catalogue.datasets
@@ -179,21 +179,21 @@ def test_a_dataset_past_the_dictionarys_bounds_is_refused_here(change, said) -> 
         DatasetDeclaration(**given)
 
 
-def test_a_catalogue_holds_each_key_once_and_only_a_dgm_declares_one() -> None:
+def test_a_catalogue_holds_each_key_once_and_only_a_data_plugin_declares_one() -> None:
     with pytest.raises(ValueError, match="declared twice"):
         Declaration(catalogue=[CATALOGUE[0], CATALOGUE[0]])
     with pytest.raises(ValueError, match="no entry of the data dictionary"):
         DatasetLicence(default_fields=["meridian.v1.Bar.nothing"])
     declared = Declaration(catalogue=CATALOGUE)
-    assert declared.refused_for(["dgm"]) is None
-    assert "only a dgm" in (declared.refused_for(["custody"]) or "")
+    assert declared.refused_for(["data"]) is None
+    assert "only a data plugin" in (declared.refused_for(["custody"]) or "")
 
 
-async def test_a_catalogue_from_a_plugin_not_holding_dgm_is_refused_by_the_sidecar(
+async def test_a_catalogue_from_a_plugin_not_holding_data_is_refused_by_the_sidecar(
     sidecar,
 ) -> None:
     _, address = sidecar
-    with pytest.raises(meridian.Refused, match="dgm"):
+    with pytest.raises(meridian.Refused, match="data"):
         await meridian.connect(
             address, heartbeat=False, declaration=Declaration(catalogue=CATALOGUE)
         )
@@ -204,7 +204,7 @@ async def test_a_catalogue_from_a_plugin_not_holding_dgm_is_refused_by_the_sidec
 
 async def test_a_batch_is_refused_outside_1_to_500_before_anything_is_sent(sidecar) -> None:
     service, _ = sidecar
-    plugin = await dgm(sidecar)
+    plugin = await data_plugin(sidecar)
     try:
         with pytest.raises(ValueError, match="prices holds 0 rows; a batch is 1 to 500"):
             await plugin.record_prices(prices=[])
@@ -223,7 +223,7 @@ async def test_a_close_is_recorded_its_money_resolved_dated_to_the_cash_instrume
     sidecar,
 ) -> None:
     service, _ = sidecar
-    plugin = await dgm(sidecar)
+    plugin = await data_plugin(sidecar)
     try:
         done = await plugin.record_prices(prices=[close("62431.27")])
         assert (done.recorded, done.restated, done.unchanged) == (1, 0, 0)
@@ -250,7 +250,7 @@ async def test_a_close_is_recorded_its_money_resolved_dated_to_the_cash_instrume
 
 async def test_a_token_is_named_by_its_instrument_never_by_a_code(sidecar) -> None:
     service, _ = sidecar
-    plugin = await dgm(sidecar)
+    plugin = await data_plugin(sidecar)
     try:
         stable = close(
             "2410.5", subject=ETH, money=Money(Decimal("2410.5"), instrument_id=USDC)
@@ -274,7 +274,7 @@ async def test_the_forming_day_is_restated_and_a_repeat_by_value_changes_nothing
     sidecar,
 ) -> None:
     service, _ = sidecar
-    plugin = await dgm(sidecar)
+    plugin = await data_plugin(sidecar)
     try:
         await plugin.record_prices(prices=[close("764.2")])
         again = await plugin.record_prices(prices=[close("764.20")])
@@ -290,7 +290,7 @@ async def test_the_forming_day_is_restated_and_a_repeat_by_value_changes_nothing
 
 
 async def test_a_row_the_sidecar_refuses_is_named_by_its_item_and_field(sidecar) -> None:
-    plugin = await dgm(sidecar)
+    plugin = await data_plugin(sidecar)
     try:
         with pytest.raises(CallFailed, match=r"prices\[1\]\.meta\.source\.dataset"):
             await plugin.record_prices(
@@ -315,7 +315,7 @@ async def test_a_row_the_sidecar_refuses_is_named_by_its_item_and_field(sidecar)
 
 async def test_a_bar_without_a_vwap_is_recorded_and_one_in_two_assets_refused(sidecar) -> None:
     service, _ = sidecar
-    plugin = await dgm(sidecar)
+    plugin = await data_plugin(sidecar)
 
     def bar(close_in: Money, vwap: Money | None = None) -> Bar:
         return Bar(
@@ -352,7 +352,7 @@ async def test_a_bar_without_a_vwap_is_recorded_and_one_in_two_assets_refused(si
 
 async def test_a_date_is_a_date_and_text_that_is_no_date_is_refused_naming_it(sidecar) -> None:
     service, _ = sidecar
-    plugin = await dgm(sidecar)
+    plugin = await data_plugin(sidecar)
     try:
         for given in ("2026-02-30", "20261008", "2026-W41-4", "8 Oct 2026"):
             bad = close("1")
@@ -414,7 +414,7 @@ async def test_a_reader_reads_by_business_date_by_default_named_or_side_by_side(
     sidecar,
 ) -> None:
     service, _ = sidecar
-    plugin = await dgm(sidecar)
+    plugin = await data_plugin(sidecar)
     subjects = [SubjectRef(entity_id=BTC), SubjectRef(entity_id="LCL-NOBODY")]
     try:
         await recorded_two_datasets(plugin)
@@ -444,7 +444,7 @@ async def test_a_reader_reads_by_business_date_by_default_named_or_side_by_side(
 
 async def test_a_read_as_of_a_recorded_time_answers_what_the_lake_knew_then(sidecar) -> None:
     service, _ = sidecar
-    plugin = await dgm(sidecar)
+    plugin = await data_plugin(sidecar)
     try:
         await plugin.record_prices(prices=[close("764.2")])
         then = service.operations.lake.rows[0].meta.recorded_at_ns
@@ -469,7 +469,7 @@ async def test_a_read_as_of_a_recorded_time_answers_what_the_lake_knew_then(side
 async def test_a_reader_learns_the_datasets_it_may_read_with_their_catalogue_entries(
     sidecar,
 ) -> None:
-    plugin = await dgm(sidecar)
+    plugin = await data_plugin(sidecar)
     try:
         listed = await plugin.list_datasets()
         assert [d.dataset for d in listed.datasets] == [DAILY, LIVE]
@@ -487,7 +487,7 @@ async def test_a_reader_learns_the_datasets_it_may_read_with_their_catalogue_ent
 
 async def test_a_venue_resolves_by_its_mic_and_one_not_held_is_reported(sidecar) -> None:
     service, _ = sidecar
-    plugin = await dgm(sidecar)
+    plugin = await data_plugin(sidecar)
     try:
         found = await plugin.resolve_venue(
             identifiers=[meridian.Identifier(scheme="iso10383", value="XNAS")], as_of_ns=DAY
@@ -508,11 +508,11 @@ async def test_a_venue_resolves_by_its_mic_and_one_not_held_is_reported(sidecar)
         await plugin.leave()
 
 
-async def test_a_dgm_reads_the_record_of_an_instrument_another_source_resolved(sidecar) -> None:
-    # Contract v18, ruled 2026-10-10: a dgm asks ResolveInstrument (W3.6) to
+async def test_a_data_plugin_reads_the_record_of_an_instrument_another_source_resolved(sidecar) -> None:
+    # Contract v18, ruled 2026-10-10: a data plugin asks ResolveInstrument (W3.6) to
     # name to its vendor an instrument the book holds from a custodian.
     service, _ = sidecar
-    plugin = await dgm(sidecar)
+    plugin = await data_plugin(sidecar)
     try:
         found = await plugin.resolve_instrument(instrument_id=ELSEWHERE, as_of_ns=DAY)
         assert found.found
@@ -543,12 +543,12 @@ WANT = ops.ObservationsWantedEvent(
 )
 
 
-async def test_a_dgm_hears_a_want_records_against_it_and_declines_what_it_cannot_cover(
+async def test_a_data_plugin_hears_a_want_records_against_it_and_declines_what_it_cannot_cover(
     sidecar,
 ) -> None:
     service, _ = sidecar
     service.operations.streams = [Stream(deliveries=[ops.Delivery(observations_wanted=WANT)])]
-    plugin = await dgm(sidecar)
+    plugin = await data_plugin(sidecar)
     answered = asyncio.Event()
 
     async def wanted(heard: meridian.Heard[ops.ObservationsWantedEvent]) -> None:
@@ -582,7 +582,7 @@ async def test_a_reader_hears_prices_latest_first_for_its_subjects_with_their_da
     sidecar,
 ) -> None:
     service, address = sidecar
-    writer = await dgm(sidecar)
+    writer = await data_plugin(sidecar)
     await writer.record_prices(prices=[close("764.2")])
     await writer.record_prices(prices=[close("765.01")])
     await writer.record_prices(prices=[close("770", day=date(2026, 10, 9))])
@@ -662,11 +662,11 @@ async def test_a_reader_refused_a_read_is_told_so(sidecar) -> None:
         await plugin.leave()
 
 
-# ── The dgm suite ───────────────────────────────────────────────────────────
+# ── The data suite ───────────────────────────────────────────────────────────
 
 
-class ToyDgm:
-    """A dgm as a data plugin writes one: its own conversion from its
+class ToyDataPlugin:
+    """A data plugin as a data plugin writes one: its own conversion from its
     source's synthetic exchange, against whatever operations it is given."""
 
     def __init__(
@@ -947,13 +947,13 @@ class ToyDgm:
 def producers(**mutations: bool) -> dict[str, object]:
     def made(step: str):  # type: ignore[no-untyped-def]
         async def produce(recorder: Recorder) -> None:
-            await getattr(ToyDgm(recorder, **mutations), step)()
+            await getattr(ToyDataPlugin(recorder, **mutations), step)()
 
         return produce
 
     def wanted(subjects: list[str]):  # type: ignore[no-untyped-def]
         async def produce(recorder: Recorder) -> None:
-            toy = ToyDgm(recorder, **mutations)
+            toy = ToyDataPlugin(recorder, **mutations)
             want = ops.ObservationsWantedEvent()
             want.CopyFrom(WANT)
             del want.subjects[:]
@@ -965,14 +965,14 @@ def producers(**mutations: bool) -> dict[str, object]:
         return produce
 
     async def withdrawn(recorder: Recorder) -> None:
-        toy = ToyDgm(recorder, **mutations)
+        toy = ToyDataPlugin(recorder, **mutations)
         recorder.answer(
             "WantWithdrawn", lambda _: [ops.WantWithdrawnEvent(want_id="WNT-1", dataset=DAILY)]
         )
         await recorder.receive(want_withdrawn=toy.on_withdrawn)
 
     async def streamed(recorder: Recorder) -> None:
-        toy = ToyDgm(recorder, **mutations)
+        toy = ToyDataPlugin(recorder, **mutations)
         want = ops.ObservationsWantedEvent(
             want_id="WNT-2",
             dataset=LIVE,
@@ -1008,21 +1008,21 @@ def producers(**mutations: bool) -> dict[str, object]:
     }
 
 
-def test_the_dgm_suite_is_carried_with_its_twenty_one_cases() -> None:
-    held = suite("dgm")
+def test_the_data_suite_is_carried_with_its_twenty_one_cases() -> None:
+    held = suite("data")
     assert held.since == "v18"
     assert len(held.cases) == 21
-    assert "a-want-recorded-against" in names("dgm")
-    assert "a-subject-another-source-resolved" in names("dgm")
+    assert "a-want-recorded-against" in names("data")
+    assert "a-subject-another-source-resolved" in names("data")
     # The 1b's eight (contract v19), each about trades or quotes.
-    later = [case for case in held.cases if case.name in V19_DGM_CASES]
+    later = [case for case in held.cases if case.name in V19_DATA_CASES]
     assert len(later) == 8
     assert {case.about for case in later} == {"trades", "quotes"}
     assert held.case("an-fx-rate").about == "a currency's rate against another currency"
     assert held.case("an-exact-price").about == ""
 
 
-V19_DGM_CASES = {
+V19_DATA_CASES = {
     "a-trade-recorded",
     "the-makers-side-inverted",
     "a-condition-converted",
@@ -1034,14 +1034,14 @@ V19_DGM_CASES = {
 }
 
 
-def test_a_dgm_converting_exactly_passes_every_case_of_its_suite() -> None:
-    report = run("dgm", producers(), instance_id="toy-1")
+def test_a_data_plugin_converting_exactly_passes_every_case_of_its_suite() -> None:
+    report = run("data", producers(), instance_id="toy-1")
     assert report.passed, report.failures
     assert len(report.passed_cases) == 21
 
 
-def test_a_dgm_sending_the_makers_side_as_the_aggressor_fails_the_suite() -> None:
-    report = run("dgm", producers(keeps_makers_side=True))
+def test_a_data_plugin_sending_the_makers_side_as_the_aggressor_fails_the_suite() -> None:
+    report = run("data", producers(keeps_makers_side=True))
     assert set(report.failures) == {"the-makers-side-inverted"}
     assert "matches no element of trades" in report.failures["the-makers-side-inverted"]
 
@@ -1052,17 +1052,17 @@ def test_a_case_about_a_kind_the_plugin_never_publishes_may_be_not_presented() -
     every = producers()
     never = {
         name: "daily closes and bars only: this source states no trades or quotes"
-        for name in V19_DGM_CASES
+        for name in V19_DATA_CASES
     }
     never["a-daily-bar"] = "this source states no bars"
     mapped = {name: made for name, made in every.items() if name not in never}
-    report = run("dgm", mapped, not_presented=never)
+    report = run("data", mapped, not_presented=never)
     assert report.passed, report.failures
     assert report.not_presented == never
     assert len(report.passed_cases) == 21 - 9
 
 
-def test_a_case_every_dgm_answers_is_never_not_presented_and_one_that_is_says_why() -> None:
+def test_a_case_every_data_plugin_answers_is_never_not_presented_and_one_that_is_says_why() -> None:
     every = producers()
     mapped = {
         name: made
@@ -1070,7 +1070,7 @@ def test_a_case_every_dgm_answers_is_never_not_presented_and_one_that_is_says_wh
         if name not in {"an-exact-price", "a-want-recorded-against", "a-trade-recorded"}
     }
     report = run(
-        "dgm",
+        "data",
         mapped,
         not_presented={
             "an-exact-price": "this source rounds",
@@ -1084,29 +1084,29 @@ def test_a_case_every_dgm_answers_is_never_not_presented_and_one_that_is_says_wh
     assert report.not_presented == {}
 
 
-def test_a_dgm_declining_a_subject_another_source_resolved_fails_the_suite() -> None:
-    # Contract v18, ruled 2026-10-10: a dgm reads the record of an instrument
+def test_a_data_plugin_declining_a_subject_another_source_resolved_fails_the_suite() -> None:
+    # Contract v18, ruled 2026-10-10: a data plugin reads the record of an instrument
     # it did not resolve itself (W3.6) and names it to its source.
-    report = run("dgm", producers(reads_no_record=True))
+    report = run("data", producers(reads_no_record=True))
     assert set(report.failures) == {"a-subject-another-source-resolved"}
 
 
 def test_a_candle_read_through_a_float_fails_the_suite() -> None:
-    report = run("dgm", producers(through_float=True))
+    report = run("data", producers(through_float=True))
     assert not report.passed
     assert "decimal places" in report.failures["an-exact-price"]
 
 
 def test_a_forming_day_recorded_as_a_new_row_fails_the_suite() -> None:
-    report = run("dgm", producers(forming_as_new=True))
+    report = run("data", producers(forming_as_new=True))
     assert "matches no element of prices" in report.failures["the-forming-day-restated"]
 
 
 async def test_a_heard_row_is_kept_on_its_row_and_a_case_hearing_nothing_fails() -> None:
     recorder = Recorder("toy-1")
-    toy = ToyDgm(recorder)
+    toy = ToyDataPlugin(recorder)
     await recorder.receive(observations_wanted=toy.on_want)  # nothing delivered
-    case = suite("dgm").case("a-want-recorded-against")
+    case = suite("data").case("a-want-recorded-against")
     assert check(case, recorder) == "expect[0]: nothing was heard on ObservationsWanted"
     recorder.answer("ObservationsWanted", lambda _: WANT)
     await recorder.receive(observations_wanted=toy.on_want)

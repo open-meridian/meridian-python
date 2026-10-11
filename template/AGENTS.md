@@ -128,8 +128,8 @@ and subscribe to comes from the roles `pyproject.toml` declares under
   `already_recorded`. Re-resolve an account's activities whenever what
   resolves them changes.
 - **A plugin at the edge declares the kinds of raw record it keeps, and
-  moves them past their window through the SDK.** A plugin holding `ccm`,
-  `custody`, `servicing`, `match`, `settlement`, `dgm` or `reporting` keeps
+  moves them past their window through the SDK.** A plugin holding `connectivity`,
+  `custody`, `servicing`, `confirmation`, `settlement`, `data` or `reporting` keeps
   what its vendor sent in its own storage (`meridian.edge.storage_dir()`)
   and declares each kind in its declaration: `Storage(kinds=[
   meridian.RecordKind("activity", "Reported activity", window_days=2555)])`,
@@ -168,7 +168,7 @@ and subscribe to comes from the roles `pyproject.toml` declares under
   `activity_past_window` says, and say on the plugin's page how long they
   are kept, as set and as kept. So each activity the street holds can have
   its record read back, from storage or restored from the archive.
-- **A `dgm` plugin puts its source's prices into the lake, converted at the
+- **A data plugin puts its source's prices into the lake, converted at the
   edge, and shows none.** Declare each dataset in the declaration's
   catalogue, from code: `Declaration(catalogue=[meridian.DatasetDeclaration(
   key="daily", vendor=..., data_types=["meridian.v1.Price"], modes=["pull"],
@@ -188,9 +188,9 @@ and subscribe to comes from the roles `pyproject.toml` declares under
   want_withdrawn=...)`, record against each (`want_id=`) or decline it per
   subject (`plugin.decline_want`). Its pages show its connection and its
   datasets, never a price: prices are the reading roles'. Hold it to the
-  suite: `meridian.suites.run("dgm", producers)` on synthetic exchanges, each
+  suite: `meridian.suites.run("data", producers)` on synthetic exchanges, each
   case mapped to the plugin's own conversion.
-- **A `dgm` streaming trades and quotes records them as its source states
+- **A data plugin streaming trades and quotes records them as its source states
   them, converted at the edge.** Declare them in a live dataset apart
   (`data_types=["meridian.v1.Trade", "meridian.v1.Quote"]`, `modes=["stream"]`)
   and record in batches of at most 500 (`plugin.record_trades`,

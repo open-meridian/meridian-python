@@ -1,6 +1,6 @@
 """What this plugin declares beside its roles (W8.1): its catalogue.
 
-A `dgm` declares each dataset it serves the lake, from code: its key, its
+A data plugin declares each dataset it serves the lake, from code: its key, its
 vendor, the data types it fills by their dictionary entries, how its rows can
 arrive, how often its source updates and how far back it reaches, the terms
 the vendor's standard terms impose, and the day a daily value's business date

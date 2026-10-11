@@ -26,7 +26,7 @@ quotes, prices on a venue) where the plugin declares it never publishes that
 kind -- a source of daily closes no trades, a crypto venue no rate between
 two currencies:
 
-    report = run("dgm", producers, not_presented={
+    report = run("data", producers, not_presented={
         "a-trade-recorded": "daily closes and bars only; this source states no trades",
     })
 
@@ -34,7 +34,7 @@ Every other case is required, and a case with no producer fails. The suites
 are meridian-schema's `boundaries/suites.json`, vendored with the bindings.
 
 A case may name a row the plugin hears rather than sends (a want delivered to
-a `dgm`, contract v18; an activity recorded, to an operations plugin): the
+a data plugin, contract v18; an activity recorded, to an operations plugin): the
 plugin hears it through its own `receive`, called on the recorder, which
 hands each row given a handler what `answer` gives for it -- the delivered
 message, or a list of them -- and returns, where a sidecar's stream stays
@@ -43,15 +43,15 @@ checks it beside what the plugin sent after:
 
     async def a_want_recorded_against(recorder):
         recorder.answer("ObservationsWanted", lambda _: synthetic_want())
-        await recorder.receive(observations_wanted=MyDgm(recorder).on_want)
+        await recorder.receive(observations_wanted=MyDataPlugin(recorder).on_want)
 
-    report = run("dgm", {"a-want-recorded-against": a_want_recorded_against, ...})
+    report = run("data", {"a-want-recorded-against": a_want_recorded_against, ...})
 
-From contract v18 the suites hold the `dgm`'s (prices and bars recorded
+From contract v18 the suites hold the data plugin's (prices and bars recorded
 exactly, a forming day restated, every subject and venue resolved, a token's
 price on its own cash instrument, wants recorded against or declined), and
 the reading roles' (`reporting`, `portfolio`, `compliance`, `signal`). From
-v19 the `dgm`'s hold trades and quotes (the platform's trade attributes, the
+v19 the data plugin's hold trades and quotes (the platform's trade attributes, the
 side that took liquidity, a condition converted or kept as reported, a
 withdrawal, a quote two-sided or one-sided, a standing want streamed);
 `signal`'s and the new `ems` suite's, trades and quotes read, heard and

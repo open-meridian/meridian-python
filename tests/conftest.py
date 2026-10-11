@@ -52,8 +52,8 @@ kind uses of the archive) accepted, with records in storage or none; and
 report carries it to the Summary.
 
 And from contract v18 it mirrors the lake (W10), as core's sidecar and lake
-answer it. A `dgm`'s catalogue is held from its registration, refused from a
-plugin not launched with `dgm`. A batch of prices or bars is recorded whole
+answer it. A data plugin's catalogue is held from its registration, refused from a
+plugin not launched with `data`. A batch of prices or bars is recorded whole
 or refused, INVALID_ARGUMENT naming the item and field, as the sidecar
 refuses one: 1 to 500 rows; a dataset the instance's catalogue does not
 declare; no subject, no row key; a date that is no date; a venue the
@@ -85,7 +85,7 @@ valid time (`at_ns`, 0 for now), or a range within one day.
 
 And it answers ResolveInstrument (W3.6) from the deployment's records
 (`instruments`), as the instrument store does, to any role that asks: a
-dgm reads the record of an instrument another source resolved (contract
+data plugin reads the record of an instrument another source resolved (contract
 v18, ruled 2026-10-10) -- a custodian's QQQ, by its symbol and CUSIP --
 and a record the store does not hold is not found. Who may ask is the
 sidecar's to enforce, tested in meridian-core.
@@ -563,7 +563,7 @@ def _venue(venue_id: str, name: str, mic: str, kind: int, zone: str) -> object:
 
 #: The venues the fake deployment holds, by ID.
 #: An instrument the book holds from a custodian, known by the custodian's
-#: symbol and its CUSIP, which no dgm resolved (contract v18, W3.6).
+#: symbol and its CUSIP, which no data plugin resolved (contract v18, W3.6).
 INSTRUMENTS = {
     "LCL-01JA0000000000000QQQ1": operations_pb2.InstrumentRecord(
         instrument_id="LCL-01JA0000000000000QQQ1",
@@ -637,7 +637,7 @@ def _value(money: object) -> tuple[Decimal, str]:
 class FakeLake:
     """The lake behind the fake sidecar: what was recorded, as kept."""
 
-    instance_id: str = "dgm-coinbase-1"
+    instance_id: str = "data-coinbase-1"
     # The datasets the registered catalogue declares, by their ID.
     datasets: dict[str, object] = field(default_factory=dict)
     cash: dict[str, list[tuple[str, str]]] = field(default_factory=lambda: dict(CASH))
@@ -1180,10 +1180,10 @@ class FakeSidecar(sidecar_pb2_grpc.SidecarServiceServicer):
         if refused:
             return sidecar_pb2.RegisterReply(admitted=False, refusal_reason=refused)
         if request.declaration.HasField("catalogue"):
-            if "dgm" not in self.roles:
+            if "data" not in self.roles:
                 return sidecar_pb2.RegisterReply(
                     admitted=False,
-                    refusal_reason="declaration.catalogue: only a plugin holding dgm serves "
+                    refusal_reason="declaration.catalogue: only a plugin holding data serves "
                     "the lake",
                 )
             self.operations.lake.declare(self.instance_id, request.declaration.catalogue)

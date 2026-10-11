@@ -43,7 +43,7 @@ plugin declaring a setting of one of them itself is refused here, as the
 sidecar refuses its registration. A plugin declaring no kinds keeps the
 behaviour before v16 under `retention_days`.
 
-From contract v18 a `dgm` declares its catalogue (W8.1, W10.4; spec/the-lake,
+From contract v18 a data plugin declares its catalogue (W8.1, W10.4; spec/the-lake,
 "The catalogue"): each dataset it serves the lake, by its key, with its
 vendor, the data types and optional fields it fills by their dictionary
 entries, how its rows can arrive, its cadence and history, the terms its
@@ -65,7 +65,7 @@ and the venue it is, where it is one venue's:
 
 Its rows then name the dataset as the instance, a colon and the key
 (`coinbase-1:daily`). The catalogue is the lake's, not a declaration of
-support, and only a version holding `dgm` declares one.
+support, and only a version holding `data` declares one.
 """
 
 from __future__ import annotations
@@ -104,7 +104,7 @@ from .v1 import sidecar_pb2
 #: The roles at the edge, which alone may own storage for their raw records
 #: (decisions/028).
 EDGE_ROLES = frozenset(
-    {"ccm", "custody", "dgm", "match", "reporting", "servicing", "settlement"}
+    {"confirmation", "connectivity", "custody", "data", "reporting", "servicing", "settlement"}
 )
 
 Reason = Literal["no_contract_meaning", "not_converted"]
@@ -341,7 +341,7 @@ class DatasetLicence:
 
 @dataclass(frozen=True, kw_only=True)
 class DatasetDeclaration:
-    """One dataset a `dgm` serves the lake (contract v18): its identity in a
+    """One dataset a data plugin serves the lake (contract v18): its identity in a
     deployment is the instance and its key (spec/the-lake, Q19).
 
     `data_types` are the lake's data types it serves and the optional fields
@@ -483,7 +483,7 @@ class DatasetDeclaration:
 class Declaration:
     """A version's declaration. `settings` are the ones it declares at
     registration (`meridian.Setting`), whose secret ones' names it carries.
-    From contract v18 a `dgm`'s `catalogue`: the datasets it serves the lake."""
+    From contract v18 a data plugin's `catalogue`: the datasets it serves the lake."""
 
     settings: Sequence[Any] = ()
     not_carried: Sequence[NotCarried] = field(default=())
@@ -581,10 +581,10 @@ class Declaration:
                 + ", ".join(sorted(EDGE_ROLES))
                 + " own storage (decisions/028)"
             )
-        if self.catalogue and "dgm" not in roles:
+        if self.catalogue and "data" not in roles:
             return (
-                "a catalogue is declared by a plugin not holding dgm; "
-                "only a dgm serves the lake"
+                "a catalogue is declared by a plugin not holding data; "
+                "only a data plugin serves the lake"
             )
         return None
 

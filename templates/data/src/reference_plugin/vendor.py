@@ -1,6 +1,6 @@
 """A stand-in for the vendor this plugin reads: replace it with your own.
 
-A real `dgm` reads its vendor's API, a file it publishes, or a feed, with
+A real data plugin reads its vendor's API, a file it publishes, or a feed, with
 whichever library suits it: the SDK carries no HTTP or WebSocket client and
 no parser of a vendor's formats, so the choice is the plugin's. What it hands
 the conversion (convert.py) is what the vendor said, as text, exactly as it
@@ -8,7 +8,7 @@ came: the conversion parses it, once, at the edge.
 
 This one answers from the responses below, written the way a vendor writes
 JSON, prices as JSON numbers. It reaches nothing, so the plugin runs anywhere,
-and its tests map each case of the `dgm` suite to one of its responses.
+and its tests map each case of the data suite to one of its responses.
 """
 
 from __future__ import annotations
