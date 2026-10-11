@@ -1,0 +1,41 @@
+{#- A custody plugin's Raw records (spec/plugin-pages-follow-their-role): each
+    kind of raw record kept, its window, what becomes of it past the window,
+    and what storage holds of it; then a raw record followed from a row's
+    reference; then the vendor's sections. No tool of its own. `kinds` are
+    the declaration's `meridian.RecordKind`s, `stored` the plugin's
+    `plugin.stored`, `past` the settings as delivered (each kind's
+    `<kind>_past_window`), and `found`, where a row's reference was followed,
+    `plugin.find_record(key)`'s answer, with `key` the reference. -#}
+{% extends "meridian/base.html" %}
+{% import "meridian/kit.html" as kit %}
+{% block content %}
+{% block vendor_notices %}{% endblock %}
+{% if key is defined and key %}
+{% if found %}
+<div class="notice info" role="status">{{ key }}: {{ {1: "archived, restorable", 2: "restored, readable for seven days", 3: "returned to the archive", 4: "deleted"}.get(found.outcome, "moved") }}.</div>
+{% else %}
+<div class="notice info" role="status">{{ key }}: in storage, where the plugin put it.</div>
+{% endif %}
+{% endif %}
+<section class="panel">
+<h2>Raw records</h2>
+{% set held = {} %}
+{% for span in stored|default([]) %}{% set _ = held.update({span.record_kind: span.record_count}) %}{% endfor %}
+{% if kinds|default([]) %}
+<table class="one-line">
+{% for row in [none] + kinds %}
+{% if row is none %}
+<thead><tr><th>Kind</th><th>Window</th><th class="wide-only">Past the window</th><th class="num">In storage</th>
+{%- else %}
+<tr><td><strong>{{ row.label }}</strong></td><td>{{ row.window_days }} days</td><td class="wide-only">{{ (past|default({})).get(row.name ~ "_past_window", "As its admin chose") if row.archivable else "Updated in place" }}</td><td class="num">{{ held.get(row.name, 0) }}</td>
+{%- endif %}
+{% block vendor_columns scoped %}{% endblock %}
+{% if row is none %}</tr></thead><tbody>{% else %}</tr>{% endif %}
+{% endfor %}
+</tbody></table>
+{% else %}
+{{ kit.empty("No raw records kept", "This plugin declares no kind of raw record.") }}
+{% endif %}
+</section>
+{% block vendor_sections %}{% endblock %}
+{% endblock %}

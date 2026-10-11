@@ -1,0 +1,33 @@
+{#- A custody plugin's History (spec/plugin-pages-follow-their-role): the
+    custodian's activity per account, as reported, for the accounts the
+    person may read, then the vendor's sections. `data` is a
+    meridian.roles.custody.HistoryRead; `what`, the plugin's sentence saying
+    what it does, for somebody who may read nothing here. -#}
+{% extends "meridian/base.html" %}
+{% import "meridian/kit.html" as kit %}
+{% block content %}
+{% if not caller.read %}
+{{ kit.nothing_here(what|default("This plugin brings custodians' accounts into this deployment")) }}
+{% else %}
+{% block vendor_notices %}{% endblock %}
+<section class="panel">
+<h2>History</h2>
+{% if data.activities %}
+<table class="one-line">
+{% for row in [none] + data.activities %}
+{% if row is none %}
+<thead><tr><th>Account</th><th>Trade date</th><th class="wide-only">Settlement date</th><th>Kind</th><th class="wide-only">Instrument</th><th class="num wide-only">Units</th><th class="num">Amount</th><th class="wide-only">Description</th>
+{%- else %}
+<tr><td><strong>{{ row.account }}</strong></td><td>{{ row.trade_date }}</td><td class="wide-only">{{ row.settlement_date }}</td><td>{{ row.kind }}</td><td class="wide-only"><code>{{ row.instrument_id }}</code></td><td class="num wide-only">{{ row.units }}</td><td class="num">{{ row.amount }}</td><td class="wide-only">{{ row.description }}</td>
+{%- endif %}
+{% block vendor_columns scoped %}{% endblock %}
+{% if row is none %}</tr></thead><tbody>{% else %}</tr>{% endif %}
+{% endfor %}
+</tbody></table>
+{% else %}
+{{ kit.empty("No activity yet", "An account's activity appears once it is linked, under Account links.") }}
+{% endif %}
+</section>
+{% block vendor_sections %}{% endblock %}
+{% endif %}
+{% endblock %}

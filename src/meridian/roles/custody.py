@@ -15,9 +15,10 @@ schedule; the vendor's own; `meridian.sample_data()`.
 **Pages.** Manage: Connections (`read_connections`), then Account links
 (`read_account_links`; linking with `link_account`). Open and View, the daily
 page first: Statements (`read_statements`), History
-(`read_account_activities`), Raw records. Templates:
-`meridian/roles/custody/connections.html`, `account_links.html`,
-`statements.html`.
+(`read_account_activities`), Raw records (no tool of its own: a raw record is
+followed from a row's reference, and restored with `restore_unit`).
+Templates: `meridian/roles/custody/connections.html`, `account_links.html`,
+`statements.html`, `history.html`, `raw_records.html`.
 
 **Figures:** "Connections", "Accounts reached", "Last read" (`figures(...)`).
 
@@ -40,10 +41,12 @@ from .data import Credential
 __all__ = [
     "AccountLinksRead",
     "AccountRead",
+    "ActivityRead",
     "ConnectionRead",
     "ConnectionsRead",
     "Credential",
     "ExternalAccountRead",
+    "HistoryRead",
     "LinkRead",
     "StatementRead",
     "StatementsRead",
@@ -161,6 +164,31 @@ class StatementsRead:
     accounts the person may read."""
 
     statements: list[StatementRead] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class ActivityRead:
+    """One activity on an account as the custodian reported it, in
+    `meridian.CustodialActivity`'s words, each value as text: its kind, its
+    dates, its instrument, its units and amount, and its description."""
+
+    account: str
+    external_activity_id: str = ""
+    kind: str = ""
+    trade_date: str = ""
+    settlement_date: str = ""
+    instrument_id: str = ""
+    units: str = ""
+    amount: str = ""
+    description: str = ""
+
+
+@dataclass(frozen=True)
+class HistoryRead:
+    """History's common fields (`read_account_activities`'s answer), cut to
+    the accounts the person may read."""
+
+    activities: list[ActivityRead] = field(default_factory=list)
 
 
 def figures(

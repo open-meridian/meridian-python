@@ -700,3 +700,53 @@ async def test_a_restart_reads_its_last_trades_and_records_the_gap_in_batches() 
     assert all(read.latest_recorded for read in reads)
     assert [len(read.subjects) for read in reads] == [500, 500, 1]
     assert [len(batch.trades) for batch in recorder.on("RecordTrades")] == [500, 100]
+
+
+def test_a_custody_plugins_history_and_raw_records(tmp_path: Path) -> None:
+    history = role_pages(
+        "custody",
+        "history",
+        custody.HistoryRead(
+            activities=[
+                custody.ActivityRead(
+                    "Main", kind="dividend", trade_date="2026-10-01", amount="12.50"
+                )
+            ]
+        ),
+        tmp_path,
+    )
+    in_order(history, "<h2>History</h2>", "Main", "2026-10-01", "dividend", "12.50")
+    assert "No activity yet" in role_pages(
+        "custody", "history", custody.HistoryRead(), tmp_path
+    )
+    (tmp_path / "raw.html").write_text(
+        '{% extends "meridian/roles/custody/raw_records.html" %}'
+    )
+    pages = meridian.Pages("Plugin", templates=tmp_path)
+
+    @pages.page("/raw", "Raw records", levels=["write", "read"])
+    async def raw(request: meridian.Request) -> str:
+        return pages.render(
+            "raw.html",
+            kinds=[
+                meridian.RecordKind("activity", "Reported activity", window_days=2555),
+                meridian.RecordKind("state", "Connections", window_days=30, archivable=False),
+            ],
+            stored=[sidecar_pb2.StoredSpan(record_kind="activity", record_count=42)],
+            past={"activity_past_window": "archived"},
+            key="activity/2026-10-01.json",
+            found=sidecar_pb2.RecordMoveRequest(outcome=sidecar_pb2.MOVE_OUTCOME_ARCHIVED),
+        )
+
+    page = PageClient(pages, read={"ACC-1"}).get("/raw", "read").text
+    in_order(
+        page,
+        "activity/2026-10-01.json: archived, restorable",
+        "<h2>Raw records</h2>",
+        "Reported activity",
+        "2555 days",
+        ">archived<",
+        "42",
+        "Connections",
+        "Updated in place",
+    )
