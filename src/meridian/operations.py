@@ -1947,6 +1947,7 @@ class Operations:
         as_of_ns: int = 0,
         page_size: int = 0,
         cursor: str = "",
+        latest_recorded: bool = False,
     ) -> ops.ListTradesResult:
         """W10.6: Trades for subjects (contract v19): a valid-time range, from inclusive to (preview)."""
         params = ops.ListTradesParams(
@@ -1958,6 +1959,7 @@ class Operations:
             as_of_ns=as_of_ns,
             page_size=page_size,
             cursor=cursor,
+            latest_recorded=latest_recorded,
         )
         return await self._operate(self._operations().ListTrades, params)
 
@@ -1994,7 +1996,7 @@ class Operations:
         reason: ops.UnansweredReason | str | None = None,
         acting_for: str | None = None,
     ) -> ops.DeclineWantResult:
-        """W10.7: What a `dgm` cannot serve of a want, per subject, with its reason. It (preview)."""
+        """W10.7: What a data plugin cannot serve of a want, per subject, with its reason. It (preview)."""
         params = ops.DeclineWantParams(
             want_id=want_id,
             subjects=list(subjects),

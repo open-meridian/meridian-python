@@ -76,6 +76,18 @@
           "intent": "one change to a ticket, told to a person in their inbox, naming the ticket and never quoting it"
         },
         {
+          "message": "meridian.v1.AgentsMay",
+          "intent": "what agents may do with one act at one scope -- the deployment's ceiling, a plugin's act, an access group -- and whether its change needs a second pair of eyes (contract v20, W6.29)"
+        },
+        {
+          "message": "meridian.v1.AgentsMayChange",
+          "intent": "one change of an act's level or gate: who, when, the act, the scope, from, to and why (contract v20, decisions/031)"
+        },
+        {
+          "message": "meridian.v1.OwnSettingChange",
+          "intent": "one change of a person's own setting for a plugin, kept under them and shown to them alone (contract v20, W6.31)"
+        },
+        {
           "message": "meridian.v1.SettingShown",
           "intent": "one declared setting as the Settings form and core's settings tool show it to the person reading it: the declaration, and whether they may set it and why not (contract v17)"
         }
@@ -256,8 +268,10 @@
     "SidecarLeave": "meridian.v1.LeaveRequest",
     "SidecarPluginAccess": "meridian.v1.PluginAccessRequest",
     "SidecarReadFiledTickets": "meridian.v1.ReadFiledTicketsRequest",
+    "SidecarReadPreparedCall": "meridian.v1.ReadPreparedCallRequest",
     "SidecarRecordMove": "meridian.v1.RecordMoveRequest",
     "SidecarRegister": "meridian.v1.RegisterRequest",
+    "SidecarSetOwnSettings": "meridian.v1.SetOwnSettingsRequest",
     "SidecarWatchAccountScope": "meridian.v1.WatchAccountScopeRequest",
     "SidecarWatchSettings": "meridian.v1.WatchSettingsRequest"
   },
@@ -4922,6 +4936,19 @@
       "store": "bor"
     },
     {
+      "name": "meridian.v1.PersonActor.prepared_call_id",
+      "type": "text",
+      "empty": "empty where the change was not made from a prepared change, and on every change before v20",
+      "intent": "names the prepared change the change was made from (W6.27)",
+      "meaning": "the `PC-` ID the person's request carried, stamped beside the delegation, so the record says what prepared the change as well as who made it",
+      "not_meaning": "who made it, who stays the person; or that an agent made it: a person did, from what was prepared",
+      "filled": "stamped",
+      "filled_by": "sidecar",
+      "since": "v20",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
       "name": "meridian.v1.AccountRecord.account_id",
       "type": "identifier account",
       "empty": "never empty",
@@ -5914,6 +5941,51 @@
       "store": "conductor"
     },
     {
+      "name": "meridian.v1.SettingLastChange.prepared_call_id",
+      "type": "text",
+      "empty": "empty where the change was not made from a prepared change, and on every change before v20",
+      "intent": "names the prepared change the change was made from (W6.27)",
+      "meaning": "the `PC-` ID the person's request carried, stamped beside the delegation, so the record says what prepared the change as well as who made it",
+      "not_meaning": "who made it, who stays the person; or that an agent made it: a person did, from what was prepared",
+      "filled": "stamped",
+      "filled_by": "dashboard",
+      "since": "v20",
+      "stability": "preview",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.Hold.prepared_call_id",
+      "type": "text",
+      "empty": "empty where the change was not made from a prepared change, and on every change before v20",
+      "intent": "names the prepared change the change was made from (W6.27)",
+      "meaning": "the `PC-` ID the person's request carried, stamped beside the delegation, so the record says what prepared the change as well as who made it",
+      "not_meaning": "who made it, who stays the person; or that an agent made it: a person did, from what was prepared",
+      "filled": "stamped",
+      "filled_by": "dashboard",
+      "since": "v20",
+      "stability": "preview",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.SettingLastChange.hint",
+      "type": "text",
+      "bounds": {
+        "length": [
+          0,
+          4
+        ]
+      },
+      "empty": "empty for a setting that is not secret, a secret shorter than 16 characters, and every secret set before v20",
+      "intent": "helps a person tell which secret is set",
+      "meaning": "the secret's last four characters, kept apart from it by the conductor when it was set, never derived from it again (W6.11)",
+      "not_meaning": "the value, which is never read back, delivered elsewhere or logged",
+      "filled": "derived",
+      "filled_by": "conductor",
+      "since": "v20",
+      "stability": "preview",
+      "store": "conductor"
+    },
+    {
       "name": "meridian.v1.Ticket.filed_by",
       "type": "message TicketAuthor",
       "empty": "never unset",
@@ -6641,6 +6713,180 @@
       "store": "dashboard"
     },
     {
+      "name": "meridian.v1.AgentsMay.act",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the act a level is set for",
+      "meaning": "a tool's surface name, `dashboard__{name}` or `{instance}__{name}`",
+      "not_meaning": "a level of access: the levels here say only what agents may do",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v20",
+      "stability": "preview",
+      "kept_by": "dashboard",
+      "store": "dashboard"
+    },
+    {
+      "name": "meridian.v1.AgentsMay.scope",
+      "type": "text",
+      "empty": "empty for the deployment-wide ceiling",
+      "intent": "says where the level is set",
+      "meaning": "the deployment's ceiling (empty), the plugin's act itself (the instance), or an access group by its ID",
+      "not_meaning": "who may make the act by hand, which stays v15's access",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v20",
+      "stability": "preview",
+      "kept_by": "dashboard",
+      "store": "dashboard"
+    },
+    {
+      "name": "meridian.v1.AgentsMay.agents_may",
+      "type": "text",
+      "allowed": [
+        {
+          "value": "may_make",
+          "meaning": "agents may make the act, or prepare it"
+        },
+        {
+          "value": "prepare_only",
+          "meaning": "agents prepare it only; a direct call is refused"
+        },
+        {
+          "value": "may_not",
+          "meaning": "no agent reaches it: not listed, refused by name"
+        }
+      ],
+      "empty": "never unset: may_make at the upgrade",
+      "intent": "says what agents may do with the act at this scope",
+      "meaning": "the level set here; the level that applies to a call is the strictest of every scope reaching it, and the person's row",
+      "not_meaning": "what a person may do by hand",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v20",
+      "stability": "preview",
+      "kept_by": "dashboard",
+      "store": "dashboard"
+    },
+    {
+      "name": "meridian.v1.AgentsMay.second_pair_of_eyes",
+      "type": "boolean",
+      "empty": "false: off, as every act is at the upgrade",
+      "intent": "says whether the act's change needs a second pair of eyes",
+      "meaning": "on: nobody makes it directly; it is prepared, and made by someone other than whoever prepared it and the person behind the agent that did; on at any scope reaching a call wins",
+      "not_meaning": "a claim to meet any maker-checker, supervisory or regulatory rule",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v20",
+      "stability": "preview",
+      "kept_by": "dashboard",
+      "store": "dashboard"
+    },
+    {
+      "name": "meridian.v1.AgentsMayChange.from",
+      "type": "text",
+      "allowed": [
+        {
+          "value": "may_make",
+          "meaning": "agents may make the act, or prepare it"
+        },
+        {
+          "value": "prepare_only",
+          "meaning": "agents prepare it only; a direct call is refused"
+        },
+        {
+          "value": "may_not",
+          "meaning": "no agent reaches it: not listed, refused by name"
+        }
+      ],
+      "empty": "may_make for the upgrade's own record",
+      "intent": "says the level before the change",
+      "meaning": "the level the scope held before",
+      "not_meaning": "the level that applied to calls, which other scopes may have made stricter",
+      "filled": "decided",
+      "filled_by": "dashboard",
+      "since": "v20",
+      "stability": "preview",
+      "kept_by": "dashboard",
+      "store": "dashboard"
+    },
+    {
+      "name": "meridian.v1.AgentsMayChange.to",
+      "type": "text",
+      "allowed": [
+        {
+          "value": "may_make",
+          "meaning": "agents may make the act, or prepare it"
+        },
+        {
+          "value": "prepare_only",
+          "meaning": "agents prepare it only; a direct call is refused"
+        },
+        {
+          "value": "may_not",
+          "meaning": "no agent reaches it: not listed, refused by name"
+        }
+      ],
+      "empty": "never unset",
+      "intent": "says the level after the change",
+      "meaning": "the level the scope holds from the change",
+      "not_meaning": "a change to what a person may do by hand",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v20",
+      "stability": "preview",
+      "kept_by": "dashboard",
+      "store": "dashboard"
+    },
+    {
+      "name": "meridian.v1.AgentsMayChange.note",
+      "type": "text",
+      "bounds": {
+        "length": [
+          0,
+          2000
+        ]
+      },
+      "empty": "empty where none was given at the page",
+      "intent": "says why the level or gate was changed",
+      "meaning": "the person's words, kept with the change, at most 2,000 characters",
+      "not_meaning": "an instruction to anyone who reads it",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v20",
+      "stability": "preview",
+      "kept_by": "dashboard",
+      "store": "dashboard"
+    },
+    {
+      "name": "meridian.v1.OwnSettingChange.setting",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the per-person setting changed",
+      "meaning": "a setting the plugin declares per_person",
+      "not_meaning": "a setting an admin sets for everyone",
+      "filled": "decided",
+      "filled_by": "dashboard",
+      "since": "v20",
+      "stability": "preview",
+      "kept_by": "dashboard",
+      "store": "dashboard"
+    },
+    {
+      "name": "meridian.v1.OwnSettingChange.value",
+      "type": "text",
+      "empty": "empty for a clear",
+      "intent": "says what the person set it to",
+      "meaning": "the value as saved, shown to that person alone",
+      "not_meaning": "anything another person can read",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v20",
+      "stability": "preview",
+      "kept_by": "dashboard",
+      "store": "dashboard"
+    },
+    {
       "name": "meridian.v1.Envelope.meta",
       "type": "message MessageMeta",
       "empty": "never unset",
@@ -6834,6 +7080,19 @@
       "filled_by": "sidecar",
       "since": "v7",
       "stability": "stable",
+      "store": "envelope"
+    },
+    {
+      "name": "meridian.v1.MessageMeta.prepared_call_id",
+      "type": "text",
+      "empty": "empty unless the person made the command from a prepared change, and for a plugin acting as itself",
+      "intent": "names the prepared change a command for a person was made from",
+      "meaning": "the `PC-` ID the assertion named (W4.9, W6.27), set beside acting_for_subject and any delegation, which the store keeps",
+      "not_meaning": "the actor, who stays the person; or anything the plugin chose: it cannot set it",
+      "filled": "stamped",
+      "filled_by": "sidecar",
+      "since": "v20",
+      "stability": "preview",
       "store": "envelope"
     },
     {
@@ -8378,7 +8637,7 @@
       "meaning": "a MIC under iso10383, or a vendor's code as symbol with its source",
       "not_meaning": "a venue ID, which needs no resolving",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v18",
       "stability": "preview",
       "store": "instrument"
@@ -8392,7 +8651,7 @@
       "meaning": "the reference time: a MIC names the venue in force then",
       "not_meaning": "when the plugin asked",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v18",
       "stability": "preview",
       "store": "instrument"
@@ -8458,7 +8717,7 @@
       "meaning": "the plugin's scheme for its source",
       "not_meaning": "the venue",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v18",
       "stability": "preview",
       "store": "instrument"
@@ -8471,7 +8730,7 @@
       "meaning": "the codes the source gave, for the platform to answer by",
       "not_meaning": "a request to mint: a deployment never mints a venue",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v18",
       "stability": "preview",
       "store": "instrument"
@@ -8485,7 +8744,7 @@
       "meaning": "its reference time",
       "not_meaning": "when it was reported",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v18",
       "stability": "preview",
       "store": "instrument"
@@ -8525,7 +8784,7 @@
       "meaning": "not found, or ambiguous",
       "not_meaning": "an error",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v18",
       "stability": "preview",
       "store": "instrument"
@@ -8539,8 +8798,21 @@
       "meaning": "the time on the plugin's clock",
       "not_meaning": "the reference time",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v18",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.InstrumentValueSource.prepared_call_id",
+      "type": "text",
+      "empty": "empty where the change was not made from a prepared change, and on every change before v20",
+      "intent": "names the prepared change the change was made from (W6.27)",
+      "meaning": "the `PC-` ID the person's request carried, stamped beside the delegation, so the record says what prepared the change as well as who made it",
+      "not_meaning": "who made it, who stays the person; or that an agent made it: a person did, from what was prepared",
+      "filled": "stamped",
+      "filled_by": "dashboard",
+      "since": "v20",
       "stability": "preview",
       "store": "instrument"
     },
@@ -8555,10 +8827,10 @@
       },
       "empty": "never empty",
       "intent": "names one observation, so recording it again changes nothing",
-      "meaning": "the dgm's identity for this observation, made from its raw record: the same key with the same values is a repeat, with different values a restatement",
+      "meaning": "the data plugin's identity for this observation, made from its raw record: the same key with the same values is a repeat, with different values a restatement",
       "not_meaning": "a key unique across datasets, or a trade identifier a venue would recognise",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "required": [
         {
           "row": "RecordPrices",
@@ -8595,7 +8867,7 @@
       "meaning": "the deployment's own entities, each resolved through W3.1 before the row is sent: for a price, the instrument priced; for an FX rate, the currency's cash instrument",
       "not_meaning": "every entity a row mentions: a venue or a dealer is its source, not a subject",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "required": [
         {
           "row": "RecordPrices",
@@ -8626,7 +8898,7 @@
       "meaning": "the writing instance and its version, the dataset, and the venue where the row is one venue's",
       "not_meaning": "the dataset's vendor or aggregator, which its catalogue declares once and every answer carries",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "required": [
         {
           "row": "RecordPrices",
@@ -8658,7 +8930,7 @@
       "meaning": "when the value became true, the event happened, or the period began, in UTC",
       "not_meaning": "when anyone learnt it, which the source's times and the recorded time say",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "required": [
         {
           "row": "RecordPrices",
@@ -8690,7 +8962,7 @@
       "meaning": "the end of the period a value covers, exclusive; a daily value's is its day's end, so a value whose end lies after a read is still forming",
       "not_meaning": "an expiry the source declared, which is a value of its own",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v18",
       "stability": "preview",
       "store": "lake"
@@ -8703,7 +8975,7 @@
       "meaning": "a plain date, YYYY-MM-DD, in the day the dataset declares (its time zone and the minute its day ends); an invalid date is refused",
       "not_meaning": "the valid time's date in UTC, or a moment; a trade's or a quote's, which name none and are keyed by UTC instants",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v18",
       "changes": [
         {
@@ -8729,7 +9001,7 @@
       "meaning": "each timestamp the source gave, at most one of each kind",
       "not_meaning": "the lake's or the sidecar's times",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v18",
       "stability": "preview",
       "store": "lake"
@@ -8739,7 +9011,7 @@
       "type": "moment",
       "unit": "nanoseconds since the epoch",
       "empty": "0 from a plugin: the sidecar sends it empty, and the lake records the envelope's publication time, which the sidecar stamped",
-      "intent": "says when the row left the dgm's sidecar",
+      "intent": "says when the row left the data plugin's sidecar",
       "meaning": "the envelope's publication time",
       "not_meaning": "the source's time, or a time the plugin chose",
       "filled": "stamped",
@@ -8807,12 +9079,12 @@
     {
       "name": "meridian.v1.ObservationMeta.raw",
       "type": "message RawRecordRef",
-      "empty": "never unset on a dgm's row",
+      "empty": "never unset on a data plugin's row",
       "intent": "points to the raw record a row was converted from",
       "meaning": "the record in the writing plugin's own storage, followed only through that plugin",
       "not_meaning": "a channel to that storage",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "required": [
         {
           "row": "RecordPrices",
@@ -8849,7 +9121,7 @@
       "meaning": "the vendor's value as sent, its scheme naming the plugin and the field; a venue the deployment does not hold yet travels here, its venue left not known",
       "not_meaning": "a meaning: nothing past the plugin interprets it",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v18",
       "stability": "preview",
       "store": "lake"
@@ -8868,7 +9140,7 @@
       "meaning": "the deployment's own ID for an entity the entity store holds: in the lake's 1a an instrument's",
       "not_meaning": "a vendor's identifier, which is resolved and never a key",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v18",
       "stability": "preview",
       "store": "lake"
@@ -8919,7 +9191,7 @@
       "meaning": "a dataset the writing instance's catalogue declares: the instance, a colon and the dataset's key",
       "not_meaning": "a vendor's product code",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "required": [
         {
           "row": "RecordPrices",
@@ -8942,7 +9214,7 @@
       "meaning": "the venue master's ID (VEN-), resolved through W3.14; for a trade, the venue it printed on: the market centre a consolidated dataset's trade names, a FINRA print's reporting facility",
       "not_meaning": "a MIC, which is one of the venue's identifiers; the dataset's distributor",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v18",
       "changes": [
         {
@@ -8988,7 +9260,7 @@
       "meaning": "the clock",
       "not_meaning": "a ranking of trust",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v18",
       "stability": "preview",
       "store": "lake"
@@ -9000,9 +9272,9 @@
       "empty": "never 0",
       "intent": "carries one of the source's timestamps",
       "meaning": "that clock's reading, in UTC, as the source gave it",
-      "not_meaning": "a time the dgm adjusted",
+      "not_meaning": "a time the data plugin adjusted",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v18",
       "stability": "preview",
       "store": "lake"
@@ -9041,7 +9313,7 @@
       "meaning": "the vendor its catalogue declares",
       "not_meaning": "who distributed it",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v18",
       "stability": "preview",
       "store": "lake"
@@ -9054,7 +9326,7 @@
       "meaning": "the aggregator its catalogue declares",
       "not_meaning": "the vendor",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v18",
       "stability": "preview",
       "store": "lake"
@@ -9108,7 +9380,7 @@
       "meaning": "its key, subject, source, times, version and sequence",
       "not_meaning": "the price",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "required": [
         {
           "row": "RecordPrices",
@@ -9161,7 +9433,7 @@
       "meaning": "the kind of price",
       "not_meaning": "the last trade at some hour, for a close",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v18",
       "stability": "preview",
       "store": "lake"
@@ -9179,9 +9451,9 @@
       "empty": "never; a price with no amount is refused, and one whose value failed conversion is not known, its value as reported in unconverted",
       "intent": "says what one unit of the subject was priced at, by this source",
       "meaning": "the source's price of one unit of the subject, in the asset it was quoted in, that asset's cash instrument named; for a currency's cash instrument, the rate to the Money's asset; for an event contract, what one contract costs in the asset it pays out in",
-      "not_meaning": "a value of a position; a price converted into another asset by the dgm; a probability; adjusted for splits or dividends unless the dataset declares it so",
+      "not_meaning": "a value of a position; a price converted into another asset by the data plugin; a probability; adjusted for splits or dividends unless the dataset declares it so",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v18",
       "stability": "preview",
       "store": "lake"
@@ -9204,7 +9476,7 @@
       "meaning": "per unit of the subject in the lake's 1a",
       "not_meaning": "a percent of par, a yield or a spread, which come with fixed income",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v18",
       "stability": "preview",
       "store": "lake"
@@ -9217,7 +9489,7 @@
       "meaning": "its key, subject, source, interval, version and sequence; a daily bar names its business date",
       "not_meaning": "the bar's prices",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "required": [
         {
           "row": "RecordBars",
@@ -9243,7 +9515,7 @@
       "meaning": "the open, by the source's eligibility rules, in the same asset as the bar's other prices",
       "not_meaning": "the official open, unless the dataset declares it",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v18",
       "stability": "preview",
       "store": "lake"
@@ -9263,7 +9535,7 @@
       "meaning": "the high, by the source's eligibility rules",
       "not_meaning": "a quote",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v18",
       "stability": "preview",
       "store": "lake"
@@ -9283,7 +9555,7 @@
       "meaning": "the low, by the source's eligibility rules",
       "not_meaning": "a quote",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v18",
       "stability": "preview",
       "store": "lake"
@@ -9303,7 +9575,7 @@
       "meaning": "the interval's last eligible price",
       "not_meaning": "the official close, which is a price of kind close",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v18",
       "stability": "preview",
       "store": "lake"
@@ -9330,7 +9602,7 @@
       "meaning": "the eligible quantity over the interval, never negative",
       "not_meaning": "notional",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v18",
       "stability": "preview",
       "store": "lake"
@@ -9344,7 +9616,7 @@
       "meaning": "the volume-weighted average price over the interval, in the bar's asset",
       "not_meaning": "a price of kind close",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v18",
       "stability": "preview",
       "store": "lake"
@@ -9358,7 +9630,7 @@
       "meaning": "trades counted in the bar",
       "not_meaning": "the volume",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v18",
       "stability": "preview",
       "store": "lake"
@@ -9371,7 +9643,7 @@
       "meaning": "its key, subject, source and venue, event time, version and sequence; valid_until_ns 0 and no business date",
       "not_meaning": "the trade's price or quantity",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "required": [
         {
           "row": "RecordTrades",
@@ -9395,9 +9667,9 @@
       "empty": "never; a trade with no price is refused",
       "intent": "says what one unit of the subject traded at",
       "meaning": "the trade's price per unit of the subject, in the asset it traded in, that asset's cash instrument named; for an event contract, what one contract cost in the asset it pays out in",
-      "not_meaning": "a probability; a price converted into another asset by the dgm; the trade's notional",
+      "not_meaning": "a probability; a price converted into another asset by the data plugin; the trade's notional",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v19",
       "stability": "preview",
       "store": "lake"
@@ -9424,7 +9696,7 @@
       "meaning": "the quantity traded, more than zero",
       "not_meaning": "notional, or a count of contracts on another unit than the instrument's",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v19",
       "stability": "preview",
       "store": "lake"
@@ -9437,7 +9709,7 @@
       "meaning": "the platform's trade attributes, converted from the source's condition codes at the edge",
       "not_meaning": "a vendor's or a SIP's codes, which no reader needs",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v19",
       "stability": "preview",
       "store": "lake"
@@ -9464,7 +9736,7 @@
       "meaning": "the side the source says took liquidity: a venue's taker side as sent, or its maker side inverted",
       "not_meaning": "a side guessed from the price's movement; the side of anyone's order in the book",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v19",
       "stability": "preview",
       "store": "lake"
@@ -9478,7 +9750,7 @@
       "meaning": "the number the source gave the trade in its own feed",
       "not_meaning": "the lake's sequence, which the envelope carries; a trade identifier",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v19",
       "stability": "preview",
       "store": "lake"
@@ -9491,7 +9763,7 @@
       "meaning": "true in a version, under the trade's row key, saying the source withdrew it",
       "not_meaning": "a trade removed: the versions before it are kept, and an as-of read before the withdrawal answers it",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v19",
       "stability": "preview",
       "store": "lake"
@@ -9504,7 +9776,7 @@
       "meaning": "whether it may set the consolidated view's high and low, open, close and volume",
       "not_meaning": "whether it did",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v19",
       "stability": "preview",
       "store": "lake"
@@ -9517,7 +9789,7 @@
       "meaning": "whether it may set its market centre's high and low, open, close and volume",
       "not_meaning": "whether it did",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v19",
       "stability": "preview",
       "store": "lake"
@@ -9598,7 +9870,7 @@
       "meaning": "each characteristic the source's codes said the trade had",
       "not_meaning": "a vendor's or a SIP's code; whether the trade may set a bar's statistics, which its Eligibility says",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v19",
       "stability": "preview",
       "store": "lake"
@@ -9625,7 +9897,7 @@
       "meaning": "whether the trade may set the high and the low",
       "not_meaning": "whether it did",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v19",
       "stability": "preview",
       "store": "lake"
@@ -9652,7 +9924,7 @@
       "meaning": "whether the trade may set the open",
       "not_meaning": "whether it did",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v19",
       "stability": "preview",
       "store": "lake"
@@ -9679,7 +9951,7 @@
       "meaning": "whether the trade may set the close",
       "not_meaning": "whether it did; the official close, which is a price of kind close",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v19",
       "stability": "preview",
       "store": "lake"
@@ -9706,7 +9978,7 @@
       "meaning": "whether the trade's quantity may count toward the volume",
       "not_meaning": "whether it did",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v19",
       "stability": "preview",
       "store": "lake"
@@ -9719,7 +9991,7 @@
       "meaning": "its key, subject, source and venue, time, version and sequence; no business date",
       "not_meaning": "the quote's prices",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "required": [
         {
           "row": "RecordQuotes",
@@ -9739,7 +10011,7 @@
       "meaning": "the best price a buyer offered, in the quote's asset, its cash instrument named; one asset with the ask",
       "not_meaning": "a price of kind bid, which a dataset records as a price; book depth",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v19",
       "stability": "preview",
       "store": "lake"
@@ -9753,7 +10025,7 @@
       "meaning": "the best price a seller asked, in the quote's asset, its cash instrument named; one asset with the bid",
       "not_meaning": "a price of kind ask, which a dataset records as a price; book depth",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v19",
       "stability": "preview",
       "store": "lake"
@@ -9774,7 +10046,7 @@
       "meaning": "the quantity at the best bid, more than zero",
       "not_meaning": "the quantity across the book",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v19",
       "stability": "preview",
       "store": "lake"
@@ -9795,7 +10067,7 @@
       "meaning": "the quantity at the best ask, more than zero",
       "not_meaning": "the quantity across the book",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v19",
       "stability": "preview",
       "store": "lake"
@@ -9828,7 +10100,7 @@
       "meaning": "each state the source said the quote was in",
       "not_meaning": "a vendor's code",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v19",
       "stability": "preview",
       "store": "lake"
@@ -9847,7 +10119,7 @@
       "meaning": "1 to 500 prices, recorded whole or refused naming the item and field",
       "not_meaning": "a transaction across datasets: each row is recorded in its own dataset's partition",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v18",
       "stability": "preview",
       "store": "lake"
@@ -9860,7 +10132,7 @@
       "meaning": "the want's identifier as it was delivered",
       "not_meaning": "a key the plugin made",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v18",
       "stability": "preview",
       "store": "lake"
@@ -9879,7 +10151,7 @@
       "meaning": "1 to 500 bars, recorded whole or refused naming the item and field",
       "not_meaning": "a transaction across datasets",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v18",
       "stability": "preview",
       "store": "lake"
@@ -9892,7 +10164,7 @@
       "meaning": "the want's identifier as it was delivered",
       "not_meaning": "a key the plugin made",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v18",
       "stability": "preview",
       "store": "lake"
@@ -9911,7 +10183,7 @@
       "meaning": "1 to 500 trades, recorded whole or refused naming the item and field",
       "not_meaning": "a transaction across datasets: each row is recorded in its own dataset's partition",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v19",
       "stability": "preview",
       "store": "lake"
@@ -9924,7 +10196,7 @@
       "meaning": "the want's identifier as it was delivered",
       "not_meaning": "a key the plugin made",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v19",
       "stability": "preview",
       "store": "lake"
@@ -9943,7 +10215,7 @@
       "meaning": "1 to 500 quotes, recorded whole or refused naming the item and field",
       "not_meaning": "a transaction across datasets",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v19",
       "stability": "preview",
       "store": "lake"
@@ -9956,7 +10228,7 @@
       "meaning": "the want's identifier as it was delivered",
       "not_meaning": "a key the plugin made",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v19",
       "stability": "preview",
       "store": "lake"
@@ -11104,7 +11376,7 @@
       },
       "empty": "never empty",
       "intent": "names the entities wanted",
-      "meaning": "the deployment's entities, which the dgm resolves to its vendor's codes at the edge",
+      "meaning": "the deployment's entities, which the data plugin resolves to its vendor's codes at the edge",
       "not_meaning": "vendor identifiers",
       "filled": "decided",
       "filled_by": "lake",
@@ -11218,7 +11490,7 @@
       "name": "meridian.v1.ObservationsWantedEvent.standing",
       "type": "boolean",
       "empty": "false: fetch once",
-      "intent": "asks the dgm to keep subjects current",
+      "intent": "asks the data plugin to keep subjects current",
       "meaning": "keep the subjects current until the want is withdrawn: from the vendor's stream where the dataset is streamed, by its schedule otherwise",
       "not_meaning": "a subscription a plugin holds: the lake withdraws it when no reader asks",
       "filled": "decided",
@@ -11268,7 +11540,7 @@
       "meaning": "the want's identifier as it was delivered",
       "not_meaning": "a key the plugin made",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v18",
       "stability": "preview",
       "store": "lake"
@@ -11284,10 +11556,10 @@
       },
       "empty": "never empty",
       "intent": "names the subjects declined",
-      "meaning": "subjects of the want the dgm cannot serve",
+      "meaning": "subjects of the want the data plugin cannot serve",
       "not_meaning": "subjects it served, which it recorded",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v18",
       "stability": "preview",
       "store": "lake"
@@ -11330,11 +11602,11 @@
         }
       ],
       "empty": "unspecified is refused",
-      "intent": "says why the dgm cannot serve subjects of a want",
+      "intent": "says why the data plugin cannot serve subjects of a want",
       "meaning": "not covered, source silent or beyond history, for the date or range the want asked, or the latest where it asked the latest, and no other; the readers' next answers for that date carry it",
       "not_meaning": "an error in the plugin",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v18",
       "changes": [
         {
@@ -11784,6 +12056,45 @@
       "filled": "decided",
       "filled_by": "lake",
       "since": "v18",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.DatasetEntitlement.prepared_call_id",
+      "type": "text",
+      "empty": "empty where the change was not made from a prepared change, and on every change before v20",
+      "intent": "names the prepared change the change was made from (W6.27)",
+      "meaning": "the `PC-` ID the person's request carried, stamped beside the delegation, so the record says what prepared the change as well as who made it",
+      "not_meaning": "who made it, who stays the person; or that an agent made it: a person did, from what was prepared",
+      "filled": "stamped",
+      "filled_by": "dashboard",
+      "since": "v20",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.SourcePriority.prepared_call_id",
+      "type": "text",
+      "empty": "empty where the change was not made from a prepared change, and on every change before v20",
+      "intent": "names the prepared change the change was made from (W6.27)",
+      "meaning": "the `PC-` ID the person's request carried, stamped beside the delegation, so the record says what prepared the change as well as who made it",
+      "not_meaning": "who made it, who stays the person; or that an agent made it: a person did, from what was prepared",
+      "filled": "stamped",
+      "filled_by": "dashboard",
+      "since": "v20",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.ListTradesRequest.latest_recorded",
+      "type": "boolean",
+      "empty": "false: a range, a watermark or a page, as before",
+      "intent": "asks, for a data plugin, the last trade its own instance recorded of each subject (W10.6)",
+      "meaning": "one trade per subject, dataset and venue, its own instance's rows only, with the watermark read at, so it backfills a restart's gap from the venue's history",
+      "not_meaning": "the latest in force from every source, or a read any other reader may make: refused from any but a data plugin",
+      "filled": "as-reported",
+      "filled_by": "data",
+      "since": "v20",
       "stability": "preview",
       "store": "lake"
     },
@@ -12774,8 +13085,8 @@
       "name": "meridian.v1.PluginDeclaration.catalogue",
       "type": "message Catalogue",
       "empty": "unset serves the lake no dataset",
-      "intent": "declares the datasets a dgm serves the lake (W8.1, W10.4)",
-      "meaning": "its catalogue, approved at launch with its roles; only on a version holding dgm, refused otherwise",
+      "intent": "declares the datasets a data plugin serves the lake (W8.1, W10.4)",
+      "meaning": "its catalogue, approved at launch with its roles; only on a version holding data, refused otherwise",
       "not_meaning": "a declaration of support: the canonical role is the requirement",
       "filled": "as-reported",
       "filled_by": "plugin",
@@ -12793,11 +13104,11 @@
         ]
       },
       "empty": "none: the catalogue serves nothing",
-      "intent": "lists the datasets a dgm serves",
+      "intent": "lists the datasets a data plugin serves",
       "meaning": "each dataset, its key once",
       "not_meaning": "a licence: the deployment licenses each",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v18",
       "stability": "preview",
       "store": "sidecar"
@@ -12816,7 +13127,7 @@
       "meaning": "1 to 40 characters, lowercase letters, digits and underscores, beginning with a letter; the dataset's ID in a deployment is the instance, a colon, and this",
       "not_meaning": "a vendor's product code",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v18",
       "stability": "preview",
       "store": "sidecar"
@@ -12835,7 +13146,7 @@
       "meaning": "the vendor, as the plugin names it: data, not vocabulary",
       "not_meaning": "who distributes it",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v18",
       "stability": "preview",
       "store": "sidecar"
@@ -12854,7 +13165,7 @@
       "meaning": "the aggregator, as the plugin names it",
       "not_meaning": "the vendor",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v18",
       "stability": "preview",
       "store": "sidecar"
@@ -12873,7 +13184,7 @@
       "meaning": "the lake's data types it serves and the optional fields it fills, each by its dictionary entry: a type by its message (meridian.v1.Price), a field by its entry (meridian.v1.Bar.vwap)",
       "not_meaning": "a capability: what a dataset fills is its content",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v18",
       "stability": "preview",
       "store": "sidecar"
@@ -12910,7 +13221,7 @@
       "meaning": "pull, push or stream, each once, among which the deployment chooses",
       "not_meaning": "how the plugin reaches its vendor",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v18",
       "stability": "preview",
       "store": "sidecar"
@@ -12924,7 +13235,7 @@
       "meaning": "seconds between the source's updates; a dataset that recorded nothing for a subject within it is silent, and a default read falls through",
       "not_meaning": "a schedule the plugin keeps",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v18",
       "stability": "preview",
       "store": "sidecar"
@@ -12938,7 +13249,7 @@
       "meaning": "days of history the source serves",
       "not_meaning": "what the lake keeps, which its licence says",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v18",
       "stability": "preview",
       "store": "sidecar"
@@ -12951,7 +13262,7 @@
       "meaning": "keep or not, derived use, display, the default fields and whether the terms are one person's; the deployment's licence confirms or replaces it (W10.1)",
       "not_meaning": "the deployment's licence, which is enforced; a claim that a deployment meets the vendor's terms",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v18",
       "stability": "preview",
       "store": "sidecar"
@@ -12970,7 +13281,7 @@
       "meaning": "an IANA zone: Etc/UTC for a crypto venue's daily candle, America/New_York for a US close and FX's 17:00 roll; an invalid zone refuses the registration",
       "not_meaning": "a holiday calendar",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v18",
       "stability": "preview",
       "store": "sidecar"
@@ -12990,7 +13301,7 @@
       "meaning": "minutes after local midnight the day ends, which says which candle or session counts as a business date and when it is final",
       "not_meaning": "a market's trading hours",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v18",
       "stability": "preview",
       "store": "sidecar"
@@ -13003,7 +13314,7 @@
       "meaning": "the venue master's ID; a row naming no venue is the dataset's view",
       "not_meaning": "a MIC, or the dataset's distributor",
       "filled": "as-reported",
-      "filled_by": "dgm",
+      "filled_by": "data",
       "since": "v18",
       "stability": "preview",
       "store": "sidecar"
@@ -14709,7 +15020,7 @@
       },
       "empty": "empty for a plugin holding no role, and from a dashboard before v15: a sidecar then reads the level and account sets as the one role's on a plugin holding one, and refuses a command sent for the person on a plugin holding several",
       "intent": "carries the person's level and accounts on each of the plugin's roles within the session's button",
-      "meaning": "one entry per role of the plugin the person holds something on within the button: under Manage each role they administer at admin with no account, under Open each role they hold a data level on at that level, under View each at read; the sidecar admits a command sent for them by their write on a role whose generated grants include it",
+      "meaning": "one entry per role of the plugin the person holds something on within the button: under Manage each role they administer at admin with no account, under Open each role they hold account access on at that level, under View each at read; the sidecar admits a command sent for them by their write on a role whose generated grants include it",
       "not_meaning": "the roles the plugin holds, which its registration reply says; or a role the person holds nothing on, for which nothing is carried",
       "filled": "decided",
       "filled_by": "dashboard",
@@ -14752,8 +15063,8 @@
         }
       ],
       "empty": "never unspecified",
-      "intent": "says the person's level on this role within the button, or a group's or a person's data level on it in the access table",
-      "meaning": "in the claims, the level within the session's button; in the access table, the data level held, read or write",
+      "intent": "says the person's level on this role within the button, or a group's or a person's account access on it in the access table",
+      "meaning": "in the claims, the level within the session's button; in the access table, the account access held, read or write",
       "not_meaning": "the session's button, which the claims' level says",
       "filled": "decided",
       "filled_by": "dashboard",
@@ -14890,7 +15201,7 @@
       },
       "empty": "empty for a plugin holding no role, and before v15",
       "intent": "breaks the group's access to the plugin down by role",
-      "meaning": "one entry per role of this plugin the group holds a data level on, at that level, its accounts as positions in the group's read accounts; only this plugin's roles",
+      "meaning": "one entry per role of this plugin the group holds account access on, at that level, its accounts as positions in the group's read accounts; only this plugin's roles",
       "not_meaning": "admin, which the table does not list; or an access decision: the sidecar checks each command itself",
       "filled": "decided",
       "filled_by": "conductor",
@@ -14988,7 +15299,7 @@
       },
       "empty": "empty for a plugin holding no role, and before v15",
       "intent": "breaks the person's access to the plugin down by role",
-      "meaning": "one entry per role of this plugin the person holds a data level on through their groups' grants, at that level, its accounts as positions in the person's read accounts; only this plugin's roles",
+      "meaning": "one entry per role of this plugin the person holds account access on through their groups' grants, at that level, its accounts as positions in the person's read accounts; only this plugin's roles",
       "not_meaning": "admin, which the table does not list; or what a session of theirs reaches, which its button cuts",
       "filled": "decided",
       "filled_by": "conductor",
@@ -15897,6 +16208,11 @@
           "value": "REFUSAL_REASON_WITHIN_HOLD",
           "meaning": "beside FAILED_PRECONDITION: a deletion of a unit whose last record was received inside the hold over the instance; nothing recorded, and the unit is kept",
           "since": "v16"
+        },
+        {
+          "value": "REFUSAL_REASON_ACCOUNT_NOT_LINKABLE",
+          "meaning": "beside FAILED_PRECONDITION: a link naming an existing account the deployment admin has not granted the plugin's instance; nothing linked",
+          "since": "v20"
         }
       ],
       "empty": "unspecified where the status says all there is",
@@ -16353,7 +16669,7 @@
       "type": "message CallerAssertion",
       "empty": "unset, the plugin acts as itself",
       "intent": "names the person RecordPrices is sent for",
-      "meaning": "the assertion the plugin was handed for them, the same bytes, never altered; a dgm records as itself",
+      "meaning": "the assertion the plugin was handed for them, the same bytes, never altered; a data plugin records as itself",
       "not_meaning": "the plugin's own identity, which the sidecar knows",
       "filled": "as-reported",
       "filled_by": "plugin",
@@ -16366,7 +16682,7 @@
       "type": "message CallerAssertion",
       "empty": "unset, the plugin acts as itself",
       "intent": "names the person RecordBars is sent for",
-      "meaning": "the assertion the plugin was handed for them, the same bytes, never altered; a dgm records as itself",
+      "meaning": "the assertion the plugin was handed for them, the same bytes, never altered; a data plugin records as itself",
       "not_meaning": "the plugin's own identity, which the sidecar knows",
       "filled": "as-reported",
       "filled_by": "plugin",
@@ -16379,7 +16695,7 @@
       "type": "message CallerAssertion",
       "empty": "unset, the plugin acts as itself",
       "intent": "names the person RecordTrades is sent for",
-      "meaning": "the assertion the plugin was handed for them, the same bytes, never altered; a dgm records as itself",
+      "meaning": "the assertion the plugin was handed for them, the same bytes, never altered; a data plugin records as itself",
       "not_meaning": "the plugin's own identity, which the sidecar knows",
       "filled": "as-reported",
       "filled_by": "plugin",
@@ -16392,7 +16708,7 @@
       "type": "message CallerAssertion",
       "empty": "unset, the plugin acts as itself",
       "intent": "names the person RecordQuotes is sent for",
-      "meaning": "the assertion the plugin was handed for them, the same bytes, never altered; a dgm records as itself",
+      "meaning": "the assertion the plugin was handed for them, the same bytes, never altered; a data plugin records as itself",
       "not_meaning": "the plugin's own identity, which the sidecar knows",
       "filled": "as-reported",
       "filled_by": "plugin",
@@ -16405,7 +16721,7 @@
       "type": "message CallerAssertion",
       "empty": "unset, the plugin acts as itself",
       "intent": "names the person DeclineWant is sent for",
-      "meaning": "the assertion the plugin was handed for them, the same bytes, never altered; a dgm records as itself",
+      "meaning": "the assertion the plugin was handed for them, the same bytes, never altered; a data plugin records as itself",
       "not_meaning": "the plugin's own identity, which the sidecar knows",
       "filled": "as-reported",
       "filled_by": "plugin",
@@ -17146,6 +17462,367 @@
       "filled_by": "dashboard",
       "since": "v17",
       "stability": "stable",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.ToolDeclaration.checked_by",
+      "type": "text",
+      "bounds": {
+        "length": [
+          0,
+          61
+        ]
+      },
+      "empty": "empty: the act cannot be prepared, and the admins may set agents only to may make or may not reach it",
+      "intent": "names the read tool that checks an act without changing anything (W6.26)",
+      "meaning": "one of the plugin's own read tools taking the same typed record of inputs, which the dashboard calls with the preparer's claims to check a prepared change as the plugin would",
+      "not_meaning": "a promise that the act will succeed when made: the stores' own refusals arrive only then; or anything on a read, where it is refused",
+      "filled": "derived",
+      "filled_by": "plugin",
+      "since": "v20",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.ToolDeclaration.accounts",
+      "type": "repeated text",
+      "bounds": {
+        "count": [
+          0,
+          8
+        ]
+      },
+      "empty": "empty when the act touches no account, or none its input names",
+      "intent": "names where in an act's input the accounts it touches are",
+      "meaning": "paths in the input schema by the dictionary's grammar (`account_id`, `positions[].account_id`) whose values are the deployment's accounts, so a prepared change is shown to everyone who may make it on them",
+      "not_meaning": "a grant or a scope: the sidecar still admits what the act sends by the person's write accounts",
+      "filled": "derived",
+      "filled_by": "plugin",
+      "since": "v20",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.ToolDeclaration.made_on",
+      "type": "text",
+      "bounds": {
+        "length": [
+          0,
+          512
+        ]
+      },
+      "empty": "empty: the change is made in the dashboard's Inbox",
+      "intent": "names the page where a person makes an act's change (W6.27)",
+      "meaning": "the path of one of the plugin's declared pages, opened with the prepared change in the claims so the page starts its form from it",
+      "not_meaning": "a route the act is sent to: that stays the tool's method and path",
+      "filled": "derived",
+      "filled_by": "plugin",
+      "since": "v20",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.SettingDeclaration.per_person",
+      "type": "boolean",
+      "empty": "false: an admin's setting, the same for everyone",
+      "intent": "says the setting is each person's own (W6.31)",
+      "meaning": "each person with write on a role it serves sets their own value on the plugin's pages; the dashboard keeps it under them and hands it back in their claims (own_settings), never on the Settings form or by WatchSettings",
+      "not_meaning": "a secret, which is never per person; or anything another person can read",
+      "filled": "derived",
+      "filled_by": "plugin",
+      "since": "v20",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.CallerClaims.prepared_call_id",
+      "type": "text",
+      "empty": "empty for every request not made from, or opened from, a prepared change",
+      "intent": "names the prepared change a request was made or a page opened from (W6.27)",
+      "meaning": "the `PC-` ID, set only by the dashboard; the plugin reads the change with ReadPreparedCall and the sidecar stamps the ID on what the request sends",
+      "not_meaning": "that the person may make it: they may, or the dashboard would not have opened it, but the sidecar still admits each command by their grants",
+      "filled": "decided",
+      "filled_by": "dashboard",
+      "since": "v20",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.CallerClaims.own_settings",
+      "type": "repeated message SettingValue",
+      "bounds": {
+        "count": [
+          0,
+          64
+        ]
+      },
+      "empty": "empty where the person set none, the plugin declares none, and under Manage",
+      "intent": "hands the plugin the person's own values of its per-person settings (W6.31)",
+      "meaning": "the values the dashboard keeps under the person for this instance, as a setting's are delivered, a table's as JSON rows",
+      "not_meaning": "anybody else's values, or a default: a setting the person never set is absent",
+      "filled": "decided",
+      "filled_by": "dashboard",
+      "since": "v20",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.DatasetLicence.prepared_call_id",
+      "type": "text",
+      "empty": "empty where the change was not made from a prepared change, and on every change before v20",
+      "intent": "names the prepared change the change was made from (W6.27)",
+      "meaning": "the `PC-` ID the person's request carried, stamped beside the delegation, so the record says what prepared the change as well as who made it",
+      "not_meaning": "who made it, who stays the person; or that an agent made it: a person did, from what was prepared",
+      "filled": "stamped",
+      "filled_by": "dashboard",
+      "since": "v20",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.ReadPreparedCallRequest.prepared_call_id",
+      "type": "text",
+      "empty": "never empty: the ID the claims named",
+      "intent": "names the prepared change a page was opened from",
+      "meaning": "`PC-` and a ULID, as the claims carried it",
+      "not_meaning": "a change the plugin may look up freely: one not shown to the person is answered as not found",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v20",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.ReadPreparedCallReply.prepared_call",
+      "type": "message PreparedCall",
+      "empty": "unset when not found: no such change, another instance's, not shown to the person, or one they may not make now, never which",
+      "intent": "answers the prepared change",
+      "meaning": "the change as the dashboard keeps it, for the person whose page it is",
+      "not_meaning": "a record the plugin keeps: it keeps nothing",
+      "filled": "decided",
+      "filled_by": "dashboard",
+      "since": "v20",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.PreparedCall.prepared_call_id",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "identifies a prepared change",
+      "meaning": "`PC-` and a ULID, minted by the dashboard when the change passed its check",
+      "not_meaning": "a change made: nothing changed when it was prepared",
+      "filled": "minted",
+      "filled_by": "dashboard",
+      "since": "v20",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.PreparedCall.tool_name",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the act prepared",
+      "meaning": "the plugin's own name for the act's tool",
+      "not_meaning": "a tool the plugin may call: the person makes it",
+      "filled": "decided",
+      "filled_by": "dashboard",
+      "since": "v20",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.PreparedCall.arguments_json",
+      "type": "text",
+      "bounds": {
+        "length": [
+          2,
+          1048576
+        ]
+      },
+      "empty": "never empty: at least {}",
+      "intent": "carries the act's arguments as prepared",
+      "meaning": "a JSON object, the tool's typed record of inputs, which the page starts its form from",
+      "not_meaning": "what will be made: the person may change it first",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v20",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.PreparedCall.prepared_by_subject",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names who prepared it",
+      "meaning": "the deployment-local subject of the person who prepared it, themselves or through a client",
+      "not_meaning": "who will make it, who is never the preparer's agent",
+      "filled": "stamped",
+      "filled_by": "dashboard",
+      "since": "v20",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.PreparedCall.prepared_by_display_name",
+      "type": "text",
+      "empty": "empty where the directory gave none",
+      "intent": "names who prepared it, for a person to read",
+      "meaning": "their display name at their last sign-in",
+      "not_meaning": "an identity to act on",
+      "filled": "stamped",
+      "filled_by": "dashboard",
+      "since": "v20",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.PreparedCall.prepared_through_client",
+      "type": "text",
+      "empty": "empty for a person who prepared it at a page",
+      "intent": "names the client it was prepared through",
+      "meaning": "the client's registered name, its own choice, shown as \"prepared by\"",
+      "not_meaning": "a person or a plugin instance",
+      "filled": "stamped",
+      "filled_by": "dashboard",
+      "since": "v20",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.PreparedCall.reason",
+      "type": "text",
+      "bounds": {
+        "length": [
+          0,
+          4000
+        ]
+      },
+      "empty": "empty where none was given at a page; never through /mcp",
+      "intent": "says why it was prepared",
+      "meaning": "the preparer's words, plain text, at most 4,000 characters",
+      "not_meaning": "an instruction to anyone who reads it: another's words, shown as text",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v20",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.PreparedCall.state",
+      "type": "enum PreparedCallState",
+      "allowed": [
+        {
+          "value": "PREPARED_CALL_STATE_UNSPECIFIED",
+          "meaning": "never sent"
+        },
+        {
+          "value": "PREPARED_CALL_STATE_PREPARED",
+          "meaning": "waiting"
+        },
+        {
+          "value": "PREPARED_CALL_STATE_SHARED",
+          "meaning": "waiting, shared with everyone who may make it"
+        },
+        {
+          "value": "PREPARED_CALL_STATE_MADE",
+          "meaning": "made as prepared"
+        },
+        {
+          "value": "PREPARED_CALL_STATE_CHANGED",
+          "meaning": "made after the person changed it"
+        },
+        {
+          "value": "PREPARED_CALL_STATE_DISCARDED",
+          "meaning": "discarded"
+        },
+        {
+          "value": "PREPARED_CALL_STATE_WITHDRAWN",
+          "meaning": "withdrawn by whoever prepared it"
+        },
+        {
+          "value": "PREPARED_CALL_STATE_LAPSED",
+          "meaning": "lapsed, never made"
+        }
+      ],
+      "empty": "never unspecified",
+      "intent": "says what became of it",
+      "meaning": "its state now (W6.27, W6.28)",
+      "not_meaning": "a promise it will stay so: a pending one may be settled by anyone it is shown to",
+      "filled": "decided",
+      "filled_by": "dashboard",
+      "since": "v20",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.PreparedCall.prepared_at_ns",
+      "type": "moment",
+      "empty": "never 0",
+      "intent": "says when it was prepared",
+      "meaning": "when it passed its check and was kept",
+      "not_meaning": "when it was made",
+      "filled": "stamped",
+      "filled_by": "dashboard",
+      "since": "v20",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.SetOwnSettingsRequest.values",
+      "type": "repeated message SettingValue",
+      "bounds": {
+        "count": [
+          1,
+          64
+        ]
+      },
+      "empty": "never empty: at least one setting",
+      "intent": "carries the person's own values to save (W6.31)",
+      "meaning": "each a setting the plugin declares per_person, its value as a setting's is written; an empty value clears it; those not named keep theirs",
+      "not_meaning": "values for anybody but the person the assertion names",
+      "filled": "entered",
+      "filled_by": "plugin",
+      "since": "v20",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.SetOwnSettingsReply.values",
+      "type": "repeated message SettingValue",
+      "bounds": {
+        "count": [
+          0,
+          64
+        ]
+      },
+      "empty": "empty where the person now holds none",
+      "intent": "answers the person's own values as they stand",
+      "meaning": "every per-person value the dashboard keeps under them for this instance, which their next request's claims carry",
+      "not_meaning": "anyone else's",
+      "filled": "decided",
+      "filled_by": "dashboard",
+      "since": "v20",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.CallerClaims.second_pair_of_eyes",
+      "type": "repeated text",
+      "bounds": {
+        "count": [
+          0,
+          200
+        ]
+      },
+      "empty": "empty where no act of the plugin has its second pair of eyes on for the person",
+      "intent": "tells a plugin which of its acts need a second person, so its pages show it (W6.29)",
+      "meaning": "the plugin's acts, by their tool names, whose second pair of eyes is on for this person now: a page draws Prepare in place of Save, and says a second person makes a change this person prepared",
+      "not_meaning": "the enforcement, which is the dashboard's whatever a page draws; or who may make the change",
+      "filled": "decided",
+      "filled_by": "dashboard",
+      "since": "v20",
+      "stability": "preview",
       "store": "sidecar"
     },
     {

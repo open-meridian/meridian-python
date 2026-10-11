@@ -79,6 +79,16 @@ class SidecarServiceStub(object):
                 request_serializer=meridian_dot_v1_dot_sidecar__pb2.RecordMoveRequest.SerializeToString,
                 response_deserializer=meridian_dot_v1_dot_sidecar__pb2.RecordMoveReply.FromString,
                 _registered_method=True)
+        self.ReadPreparedCall = channel.unary_unary(
+                '/meridian.v1.SidecarService/ReadPreparedCall',
+                request_serializer=meridian_dot_v1_dot_sidecar__pb2.ReadPreparedCallRequest.SerializeToString,
+                response_deserializer=meridian_dot_v1_dot_sidecar__pb2.ReadPreparedCallReply.FromString,
+                _registered_method=True)
+        self.SetOwnSettings = channel.unary_unary(
+                '/meridian.v1.SidecarService/SetOwnSettings',
+                request_serializer=meridian_dot_v1_dot_sidecar__pb2.SetOwnSettingsRequest.SerializeToString,
+                response_deserializer=meridian_dot_v1_dot_sidecar__pb2.SetOwnSettingsReply.FromString,
+                _registered_method=True)
 
 
 class SidecarServiceServicer(object):
@@ -156,6 +166,26 @@ class SidecarServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def ReadPreparedCall(self, request, context):
+        """W4.14, contract v20. The prepared change a page was opened from, for the
+        person whose page it is, if they may make it: the call carries their
+        assertion as its `meridian-caller` metadata, and the sidecar asks the
+        dashboard on the bus, as itself, for the instance it serves.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def SetOwnSettings(self, request, context):
+        """W6.31, contract v20. Save the person's own values of the settings the
+        plugin declares `per_person`, acting for them at write, never as the
+        plugin itself; the sidecar sends them to the dashboard on the bus, which
+        keeps them under the person the assertion names.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_SidecarServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -203,6 +233,16 @@ def add_SidecarServiceServicer_to_server(servicer, server):
                     servicer.RecordMove,
                     request_deserializer=meridian_dot_v1_dot_sidecar__pb2.RecordMoveRequest.FromString,
                     response_serializer=meridian_dot_v1_dot_sidecar__pb2.RecordMoveReply.SerializeToString,
+            ),
+            'ReadPreparedCall': grpc.unary_unary_rpc_method_handler(
+                    servicer.ReadPreparedCall,
+                    request_deserializer=meridian_dot_v1_dot_sidecar__pb2.ReadPreparedCallRequest.FromString,
+                    response_serializer=meridian_dot_v1_dot_sidecar__pb2.ReadPreparedCallReply.SerializeToString,
+            ),
+            'SetOwnSettings': grpc.unary_unary_rpc_method_handler(
+                    servicer.SetOwnSettings,
+                    request_deserializer=meridian_dot_v1_dot_sidecar__pb2.SetOwnSettingsRequest.FromString,
+                    response_serializer=meridian_dot_v1_dot_sidecar__pb2.SetOwnSettingsReply.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -448,6 +488,60 @@ class SidecarService(object):
             '/meridian.v1.SidecarService/RecordMove',
             meridian_dot_v1_dot_sidecar__pb2.RecordMoveRequest.SerializeToString,
             meridian_dot_v1_dot_sidecar__pb2.RecordMoveReply.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ReadPreparedCall(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.v1.SidecarService/ReadPreparedCall',
+            meridian_dot_v1_dot_sidecar__pb2.ReadPreparedCallRequest.SerializeToString,
+            meridian_dot_v1_dot_sidecar__pb2.ReadPreparedCallReply.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SetOwnSettings(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.v1.SidecarService/SetOwnSettings',
+            meridian_dot_v1_dot_sidecar__pb2.SetOwnSettingsRequest.SerializeToString,
+            meridian_dot_v1_dot_sidecar__pb2.SetOwnSettingsReply.FromString,
             options,
             channel_credentials,
             insecure,

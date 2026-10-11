@@ -935,9 +935,9 @@
       ]
     },
     {
-      "role": "dgm",
+      "role": "data",
       "since": "v18",
-      "says": "A dgm plugin passing every case records each source's prices and bars exactly, under its dataset, its business date, its source's times and its raw record; restates a forming day under the same row key and sends an identical repeat unchanged; resolves every subject and venue before it records, reporting what does not resolve, and reads the record of a subject another source resolved to name it in its own; names a price in a token by the token's own cash instrument, never a fiat code; and records what a want asks, or declines it per subject. From v19 it records each trade it publishes with the platform's trade attributes, converted at the edge, and the side that took liquidity where its source says it, a withdrawal as a new version; and each quote it publishes with the sides its source states; and keeps a standing want of a streamed dataset current. A case about a kind of data the plugin declares it never publishes is not presented, with why.\n",
+      "says": "A data plugin passing every case records each source's prices and bars exactly, under its dataset, its business date, its source's times and its raw record; restates a forming day under the same row key and sends an identical repeat unchanged; resolves every subject and venue before it records, reporting what does not resolve, and reads the record of a subject another source resolved to name it in its own; names a price in a token by the token's own cash instrument, never a fiat code; and records what a want asks, or declines it per subject. From v19 it records each trade it publishes with the platform's trade attributes, converted at the edge, and the side that took liquidity where its source says it, a withdrawal as a new version; and each quote it publishes with the sides its source states; and keeps a standing want of a streamed dataset current. A case about a kind of data the plugin declares it never publishes is not presented, with why.\n",
       "cases": [
         {
           "name": "a-daily-close",
@@ -1193,7 +1193,7 @@
           "name": "a-trade-recorded",
           "about": "trades",
           "since": "v19",
-          "given": "the source's stream states a trade with no condition codes, its event time and the side that took liquidity",
+          "given": "the source's stream states a trade with no condition codes and its event time",
           "expect": [
             {
               "row": "RecordTrades",
@@ -1202,7 +1202,6 @@
                   {
                     "price": "<set>",
                     "quantity": "<set>",
-                    "aggressor": "AGGRESSOR_BUY",
                     "attributes": {
                       "consolidated": {
                         "high_low": "ELIGIBLE_ELIGIBLE",
@@ -1232,8 +1231,28 @@
           ]
         },
         {
+          "name": "the-takers-side-stated",
+          "about": "trades",
+          "about_field": "meridian.v1.Trade.aggressor",
+          "since": "v20",
+          "given": "the source states a trade naming the side that took liquidity, a buy",
+          "expect": [
+            {
+              "row": "RecordTrades",
+              "fields": {
+                "trades": [
+                  {
+                    "aggressor": "AGGRESSOR_BUY"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "the-makers-side-inverted",
           "about": "trades",
+          "about_field": "meridian.v1.Trade.aggressor",
           "since": "v19",
           "given": "the source states a trade naming the side of the resting order, a sell, rather than the side that took liquidity",
           "expect": [
@@ -1252,6 +1271,7 @@
         {
           "name": "a-condition-converted",
           "about": "trades",
+          "about_field": "meridian.v1.TradeAttributes.characteristics",
           "since": "v19",
           "given": "the source states a trade whose condition says it was smaller than a round lot, not to set the high and low or the close, its volume counted",
           "expect": [
@@ -1279,6 +1299,7 @@
         {
           "name": "a-condition-not-converted",
           "about": "trades",
+          "about_field": "meridian.v1.TradeAttributes.characteristics",
           "since": "v19",
           "given": "the source states a trade with a condition the plugin has no conversion for",
           "expect": [
@@ -1381,6 +1402,47 @@
                   }
                 ]
               }
+            }
+          ]
+        },
+        {
+          "name": "a-restarts-gap-backfilled",
+          "about": "trades",
+          "since": "v20",
+          "given": "the plugin starts, the lake holds a trade it recorded of a streamed subject before it stopped, and the venue's history states two trades since",
+          "expect": [
+            {
+              "row": "ListTrades",
+              "fields": {
+                "latest_recorded": true
+              }
+            },
+            {
+              "row": "RecordTrades",
+              "fields": {
+                "trades": [
+                  {
+                    "meta": {
+                      "row_key": "<set>"
+                    }
+                  },
+                  {
+                    "meta": {
+                      "row_key": "<set>"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "reads-its-datasets-licences",
+          "since": "v20",
+          "given": "the plugin starts in a deployment where a deployment admin has licensed one of its declared datasets and not another",
+          "expect": [
+            {
+              "row": "ListDatasets"
             }
           ]
         }

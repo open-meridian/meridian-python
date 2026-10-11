@@ -1453,7 +1453,7 @@ class ListBarsResult(_message.Message):
     def __init__(self, bars: _Optional[_Iterable[_Union[Bar, _Mapping]]] = ..., unanswered: _Optional[_Iterable[_Union[Unanswered, _Mapping]]] = ..., datasets: _Optional[_Iterable[_Union[DatasetRef, _Mapping]]] = ..., watermark: _Optional[_Union[Watermark, _Mapping]] = ..., next_cursor: _Optional[str] = ...) -> None: ...
 
 class ListTradesParams(_message.Message):
-    __slots__ = ("subjects", "sources", "valid_from_ns", "valid_until_ns", "after_watermark", "as_of_ns", "page_size", "cursor")
+    __slots__ = ("subjects", "sources", "valid_from_ns", "valid_until_ns", "after_watermark", "as_of_ns", "page_size", "cursor", "latest_recorded")
     SUBJECTS_FIELD_NUMBER: _ClassVar[int]
     SOURCES_FIELD_NUMBER: _ClassVar[int]
     VALID_FROM_NS_FIELD_NUMBER: _ClassVar[int]
@@ -1462,6 +1462,7 @@ class ListTradesParams(_message.Message):
     AS_OF_NS_FIELD_NUMBER: _ClassVar[int]
     PAGE_SIZE_FIELD_NUMBER: _ClassVar[int]
     CURSOR_FIELD_NUMBER: _ClassVar[int]
+    LATEST_RECORDED_FIELD_NUMBER: _ClassVar[int]
     subjects: _containers.RepeatedCompositeFieldContainer[SubjectRef]
     sources: SourceChoice
     valid_from_ns: int
@@ -1470,7 +1471,8 @@ class ListTradesParams(_message.Message):
     as_of_ns: int
     page_size: int
     cursor: str
-    def __init__(self, subjects: _Optional[_Iterable[_Union[SubjectRef, _Mapping]]] = ..., sources: _Optional[_Union[SourceChoice, _Mapping]] = ..., valid_from_ns: _Optional[int] = ..., valid_until_ns: _Optional[int] = ..., after_watermark: _Optional[_Union[Watermark, _Mapping]] = ..., as_of_ns: _Optional[int] = ..., page_size: _Optional[int] = ..., cursor: _Optional[str] = ...) -> None: ...
+    latest_recorded: bool
+    def __init__(self, subjects: _Optional[_Iterable[_Union[SubjectRef, _Mapping]]] = ..., sources: _Optional[_Union[SourceChoice, _Mapping]] = ..., valid_from_ns: _Optional[int] = ..., valid_until_ns: _Optional[int] = ..., after_watermark: _Optional[_Union[Watermark, _Mapping]] = ..., as_of_ns: _Optional[int] = ..., page_size: _Optional[int] = ..., cursor: _Optional[str] = ..., latest_recorded: bool = ...) -> None: ...
 
 class ListTradesResult(_message.Message):
     __slots__ = ("trades", "unanswered", "datasets", "watermark", "next_cursor")
@@ -2085,7 +2087,7 @@ class InstrumentRecord(_message.Message):
     def __init__(self, instrument_id: _Optional[str] = ..., identifiers: _Optional[_Iterable[_Union[Identifier, _Mapping]]] = ..., asset_class: _Optional[_Union[AssetClass, str]] = ..., currency: _Optional[str] = ..., exchange_mic: _Optional[str] = ..., description: _Optional[str] = ..., lifecycle_state: _Optional[_Union[InstrumentLifecycleState, str]] = ..., version: _Optional[int] = ..., valid_from_ns: _Optional[int] = ..., record_time_ns: _Optional[int] = ..., sources: _Optional[_Iterable[_Union[InstrumentValueSource, _Mapping]]] = ..., offers: _Optional[_Iterable[_Union[OfferedValue, _Mapping]]] = ..., instrument_type: _Optional[_Union[InstrumentType, str]] = ..., money_market_fund: _Optional[_Union[MoneyMarketFund, _Mapping]] = ..., listing_venue_id: _Optional[str] = ..., binary_event_contract: _Optional[_Union[BinaryEventContract, _Mapping]] = ...) -> None: ...
 
 class InstrumentValueSource(_message.Message):
-    __slots__ = ("field", "identifier", "source", "person", "instance_id", "recorded_at_ns", "note", "acting_through_delegation", "client_name")
+    __slots__ = ("field", "identifier", "source", "person", "instance_id", "recorded_at_ns", "note", "acting_through_delegation", "client_name", "prepared_call_id")
     FIELD_FIELD_NUMBER: _ClassVar[int]
     IDENTIFIER_FIELD_NUMBER: _ClassVar[int]
     SOURCE_FIELD_NUMBER: _ClassVar[int]
@@ -2095,6 +2097,7 @@ class InstrumentValueSource(_message.Message):
     NOTE_FIELD_NUMBER: _ClassVar[int]
     ACTING_THROUGH_DELEGATION_FIELD_NUMBER: _ClassVar[int]
     CLIENT_NAME_FIELD_NUMBER: _ClassVar[int]
+    PREPARED_CALL_ID_FIELD_NUMBER: _ClassVar[int]
     field: InstrumentField
     identifier: Identifier
     source: str
@@ -2104,7 +2107,8 @@ class InstrumentValueSource(_message.Message):
     note: str
     acting_through_delegation: str
     client_name: str
-    def __init__(self, field: _Optional[_Union[InstrumentField, str]] = ..., identifier: _Optional[_Union[Identifier, _Mapping]] = ..., source: _Optional[str] = ..., person: _Optional[str] = ..., instance_id: _Optional[str] = ..., recorded_at_ns: _Optional[int] = ..., note: _Optional[str] = ..., acting_through_delegation: _Optional[str] = ..., client_name: _Optional[str] = ...) -> None: ...
+    prepared_call_id: str
+    def __init__(self, field: _Optional[_Union[InstrumentField, str]] = ..., identifier: _Optional[_Union[Identifier, _Mapping]] = ..., source: _Optional[str] = ..., person: _Optional[str] = ..., instance_id: _Optional[str] = ..., recorded_at_ns: _Optional[int] = ..., note: _Optional[str] = ..., acting_through_delegation: _Optional[str] = ..., client_name: _Optional[str] = ..., prepared_call_id: _Optional[str] = ...) -> None: ...
 
 class OfferedValue(_message.Message):
     __slots__ = ("value", "instance_id", "offered_at_ns")
@@ -2295,14 +2299,16 @@ class Actor(_message.Message):
     def __init__(self, person: _Optional[_Union[PersonActor, _Mapping]] = ..., system: _Optional[_Union[SystemActor, _Mapping]] = ...) -> None: ...
 
 class PersonActor(_message.Message):
-    __slots__ = ("subject", "delegation_id", "client_name")
+    __slots__ = ("subject", "delegation_id", "client_name", "prepared_call_id")
     SUBJECT_FIELD_NUMBER: _ClassVar[int]
     DELEGATION_ID_FIELD_NUMBER: _ClassVar[int]
     CLIENT_NAME_FIELD_NUMBER: _ClassVar[int]
+    PREPARED_CALL_ID_FIELD_NUMBER: _ClassVar[int]
     subject: str
     delegation_id: str
     client_name: str
-    def __init__(self, subject: _Optional[str] = ..., delegation_id: _Optional[str] = ..., client_name: _Optional[str] = ...) -> None: ...
+    prepared_call_id: str
+    def __init__(self, subject: _Optional[str] = ..., delegation_id: _Optional[str] = ..., client_name: _Optional[str] = ..., prepared_call_id: _Optional[str] = ...) -> None: ...
 
 class SystemActor(_message.Message):
     __slots__ = ("instance_id",)
@@ -2925,7 +2931,7 @@ class DatasetDeclaration(_message.Message):
     def __init__(self, key: _Optional[str] = ..., vendor: _Optional[str] = ..., aggregator: _Optional[str] = ..., data_types: _Optional[_Iterable[str]] = ..., modes: _Optional[_Iterable[_Union[ObservationMode, str]]] = ..., cadence: _Optional[int] = ..., history: _Optional[int] = ..., licence_default: _Optional[_Union[DatasetLicence, _Mapping]] = ..., day_time_zone: _Optional[str] = ..., day_end_minute: _Optional[int] = ..., venue_id: _Optional[str] = ...) -> None: ...
 
 class DatasetLicence(_message.Message):
-    __slots__ = ("dataset", "kept", "retention_days", "derived_use", "display", "default_fields", "personal_use", "updated_by", "updated_at_ns", "acting_through_delegation", "client_name", "note")
+    __slots__ = ("dataset", "kept", "retention_days", "derived_use", "display", "default_fields", "personal_use", "updated_by", "updated_at_ns", "acting_through_delegation", "client_name", "note", "prepared_call_id")
     DATASET_FIELD_NUMBER: _ClassVar[int]
     KEPT_FIELD_NUMBER: _ClassVar[int]
     RETENTION_DAYS_FIELD_NUMBER: _ClassVar[int]
@@ -2938,6 +2944,7 @@ class DatasetLicence(_message.Message):
     ACTING_THROUGH_DELEGATION_FIELD_NUMBER: _ClassVar[int]
     CLIENT_NAME_FIELD_NUMBER: _ClassVar[int]
     NOTE_FIELD_NUMBER: _ClassVar[int]
+    PREPARED_CALL_ID_FIELD_NUMBER: _ClassVar[int]
     dataset: str
     kept: bool
     retention_days: int
@@ -2950,10 +2957,11 @@ class DatasetLicence(_message.Message):
     acting_through_delegation: str
     client_name: str
     note: str
-    def __init__(self, dataset: _Optional[str] = ..., kept: bool = ..., retention_days: _Optional[int] = ..., derived_use: bool = ..., display: bool = ..., default_fields: _Optional[_Iterable[str]] = ..., personal_use: bool = ..., updated_by: _Optional[str] = ..., updated_at_ns: _Optional[int] = ..., acting_through_delegation: _Optional[str] = ..., client_name: _Optional[str] = ..., note: _Optional[str] = ...) -> None: ...
+    prepared_call_id: str
+    def __init__(self, dataset: _Optional[str] = ..., kept: bool = ..., retention_days: _Optional[int] = ..., derived_use: bool = ..., display: bool = ..., default_fields: _Optional[_Iterable[str]] = ..., personal_use: bool = ..., updated_by: _Optional[str] = ..., updated_at_ns: _Optional[int] = ..., acting_through_delegation: _Optional[str] = ..., client_name: _Optional[str] = ..., note: _Optional[str] = ..., prepared_call_id: _Optional[str] = ...) -> None: ...
 
 class DatasetEntitlement(_message.Message):
-    __slots__ = ("dataset", "instance", "allowed", "fields", "updated_by", "updated_at_ns", "acting_through_delegation", "client_name", "note")
+    __slots__ = ("dataset", "instance", "allowed", "fields", "updated_by", "updated_at_ns", "acting_through_delegation", "client_name", "note", "prepared_call_id")
     DATASET_FIELD_NUMBER: _ClassVar[int]
     INSTANCE_FIELD_NUMBER: _ClassVar[int]
     ALLOWED_FIELD_NUMBER: _ClassVar[int]
@@ -2963,6 +2971,7 @@ class DatasetEntitlement(_message.Message):
     ACTING_THROUGH_DELEGATION_FIELD_NUMBER: _ClassVar[int]
     CLIENT_NAME_FIELD_NUMBER: _ClassVar[int]
     NOTE_FIELD_NUMBER: _ClassVar[int]
+    PREPARED_CALL_ID_FIELD_NUMBER: _ClassVar[int]
     dataset: str
     instance: str
     allowed: bool
@@ -2972,7 +2981,8 @@ class DatasetEntitlement(_message.Message):
     acting_through_delegation: str
     client_name: str
     note: str
-    def __init__(self, dataset: _Optional[str] = ..., instance: _Optional[str] = ..., allowed: bool = ..., fields: _Optional[_Iterable[str]] = ..., updated_by: _Optional[str] = ..., updated_at_ns: _Optional[int] = ..., acting_through_delegation: _Optional[str] = ..., client_name: _Optional[str] = ..., note: _Optional[str] = ...) -> None: ...
+    prepared_call_id: str
+    def __init__(self, dataset: _Optional[str] = ..., instance: _Optional[str] = ..., allowed: bool = ..., fields: _Optional[_Iterable[str]] = ..., updated_by: _Optional[str] = ..., updated_at_ns: _Optional[int] = ..., acting_through_delegation: _Optional[str] = ..., client_name: _Optional[str] = ..., note: _Optional[str] = ..., prepared_call_id: _Optional[str] = ...) -> None: ...
 
 class CustodialPositionUpdatedEvent(_message.Message):
     __slots__ = ("position", "statement_id", "previous_quantity", "journal", "cause")
