@@ -1,7 +1,9 @@
 """A Meridian data plugin, as `meridian plugin new --role data` writes one.
 
-It connects to the sidecar it is launched beside, declaring its catalogue and
-its pages, resolves the symbols its vendor serves it, then hears what the
+It connects to the sidecar it is launched beside, declaring its settings,
+its catalogue and its pages, reads which of its datasets a deployment admin
+has licensed, reports the data role's figures, resolves the symbols its
+vendor serves it, then hears what the
 lake wants of its datasets and records against each want from its vendor, or
 declines what the vendor does not serve. It reports itself healthy and runs
 until it is stopped. Heartbeats are sent for it.
@@ -20,9 +22,10 @@ import signal
 import time
 
 import meridian
+from meridian.roles import data
 
 from .convert import Converter
-from .declaration import DECLARATION
+from .declaration import DECLARATION, Config
 from .page import TITLE, pages, use
 
 log = logging.getLogger("reference_plugin")
@@ -49,6 +52,20 @@ async def run() -> None:
         )
         converter = Converter(plugin)
         use(converter)
+
+        def configure(config: Config) -> None:
+            converter.sample_data = config.sample_data
+
+        configuring = asyncio.create_task(plugin.on_settings(Config, configure))
+        await converter.read_licences()
+        plugin.figures = data.figures(
+            connection="Sample data" if converter.sample_data else "Answering",
+            entitled_at_vendor=f"{len(DECLARATION.catalogue)} of "
+            f"{len(DECLARATION.catalogue)} datasets",
+            stream="Does not stream",
+            rate_use=f"{converter.vendor.calls} of "
+            f"{converter.vendor.limit_per_minute} a minute",
+        )
         await converter.map_products(time.time_ns())
         log.info("resolved %d of the vendor's symbols", len(converter.products))
         # The lake's wants, heard for as long as the plugin runs: each
@@ -64,6 +81,7 @@ async def run() -> None:
         await stopped.wait()
         log.info("stopping")
         hearing.cancel()
+        configuring.cancel()
         served.shutdown()
 
 

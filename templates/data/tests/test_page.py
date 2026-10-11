@@ -7,7 +7,7 @@ a request, for a session opened by Manage (`admin`), Open (`write`) or View
 would.
 
 Replace these as you replace the pages: at least each page rendered at each
-level, and each tool's answer.
+level, its common sections in the role's order, and each tool's answer.
 """
 
 from __future__ import annotations
@@ -37,6 +37,11 @@ def running(vendor: Vendor | None = None) -> Converter:
     return converter
 
 
+def in_order(page: str, *said: str) -> None:
+    at = [page.find(each) for each in said]
+    assert -1 not in at and at == sorted(at), dict(zip(said, at, strict=True))
+
+
 def test_each_page_is_served_to_an_admin_of_the_plugin_alone() -> None:
     running()
     served = {(r.page.path, r.level): r.response.status for r in client().every_page()}
@@ -50,11 +55,20 @@ def test_each_page_is_served_to_an_admin_of_the_plugin_alone() -> None:
     }
 
 
-def test_the_connection_page_says_whether_the_vendor_answers() -> None:
+def test_the_connection_page_draws_the_roles_sections_in_order() -> None:
     vendor = Vendor(calls=3)
     running(vendor)
     page = client().get("/", "admin").text
-    assert "Reference vendor" in page and "<dd>3</dd>" in page and "60 a minute" in page
+    in_order(
+        page,
+        "<h2>Key</h2>",
+        "No key needed",
+        "<h2>Limits and use</h2>",
+        "60 a minute",
+        "<h2>Stream</h2>",
+        "Does not stream",
+        "Reference vendor",
+    )
     vendor.failed = "the vendor answered 503"
     assert "the vendor answered 503" in client().get("/", "admin").text
 
@@ -63,28 +77,36 @@ def test_an_agent_reads_the_connection_through_its_tool() -> None:
     running(Vendor(calls=3))
     answered = client().call_tool("read_connection")
     assert answered.outcome == "unchanged"
-    assert answered.data == {
-        "vendor": "Reference vendor",
-        "healthy": True,
-        "detail": "Answering.",
-        "calls": 3,
-        "limit_per_minute": 60,
-    }
+    assert answered.data["mode"] == "Live"
+    assert answered.data["calls"] == 3
+    assert answered.data["limit"] == "60 a minute"
+    assert answered.data["sessions"] is None
 
 
-def test_the_datasets_page_shows_the_catalogue_and_the_standing_wants() -> None:
+def test_the_datasets_page_says_whether_each_dataset_is_licensed() -> None:
     converter = running()
-    converter.standing["WNT-1"] = ("LCL-1",)
     page = client().get("/datasets", "admin").text
-    assert "<code>reference-1:daily</code>" in page and "meridian.v1.Price" in page
+    in_order(
+        page,
+        "No wants yet",
+        "<h2>Served</h2>",
+        "<code>reference-1:daily</code>",
+        "Not licensed yet",
+        "<h2>Wants</h2>",
+        "<h2>Subjects</h2>",
+    )
+    converter.licensed = frozenset({"reference-1:daily"})
+    converter.standing["WNT-1"] = ("LCL-1",)
     answered = client().call_tool("read_datasets")
-    assert answered.data["datasets"] == [
+    assert answered.data["served"][0]["licensed"] is True
+    assert answered.data["served"][0]["data"] == "meridian.v1.Price, meridian.v1.Bar"
+    assert answered.data["wants"] == [
         {
             "dataset": "reference-1:daily",
-            "vendor": "Reference vendor",
-            "data_types": ["meridian.v1.Price", "meridian.v1.Bar"],
-            "modes": ["pull"],
-            "standing_wants": 1,
+            "asked": "WNT-1",
+            "subjects": 1,
+            "recorded": 0,
+            "declined": 0,
+            "state": "Kept current",
         }
     ]
-    assert "BTC-USD" in answered.data["entitled"]

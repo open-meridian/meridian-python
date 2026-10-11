@@ -71,7 +71,6 @@ from .statements import checked
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from ._settings import Typed as _Typed
     from .declaration import Declaration, Storage
     from .pages import Pages
 
@@ -1050,7 +1049,7 @@ class Plugin(Operations):
         self._figures_sent = wire(given)
         self._figures = given
 
-    def settings(self, typed: type[_Typed] | None = None) -> AsyncIterator[Any]:
+    def settings(self, typed: type[Any] | None = None) -> AsyncIterator[Any]:
         """The settings it declared, now and again on every change (W4.7).
 
         Each is typed by its declaration; a value that does not parse is
@@ -1065,9 +1064,9 @@ class Plugin(Operations):
             return self._settings()
         return self._typed_settings(typed)
 
-    async def _typed_settings(self, typed: type[_Typed]) -> AsyncGenerator[_Typed, None]:
+    async def _typed_settings(self, typed: type[Any]) -> AsyncGenerator[Any, None]:
         async for now in self._settings():
-            yield typed._of(now.values, now.missing_required)
+            yield cast(Any, typed)._of(now.values, now.missing_required)
 
     async def _settings(self) -> AsyncIterator[Settings]:
         self._check_open()
@@ -1584,7 +1583,7 @@ async def connect(
     heartbeat: bool = True,
     wait: float = SIDECAR_WAIT_SECONDS,
     interface: Interface | None = None,
-    settings: Sequence[Setting] | type[_Typed] = (),
+    settings: Sequence[Setting] | type = (),
     reads_external_accounts: bool = False,
     declaration: Declaration | None = None,
 ) -> Plugin:
@@ -1621,8 +1620,8 @@ async def connect(
     if declaration is None:
         declaration = _Declaration(settings=tuple(settings))
     elif not settings:
-        settings = tuple(declaration.settings)
-    elif declaration.settings and tuple(declaration.settings) != tuple(settings):
+        settings = declared_by(declaration.settings)
+    elif declaration.settings and declared_by(declaration.settings) != tuple(settings):
         raise ValueError("connect's settings and its declaration's settings differ")
     else:
         declaration = _Declaration(

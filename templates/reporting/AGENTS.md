@@ -204,8 +204,42 @@ and subscribe to comes from the roles `pyproject.toml` declares under
   (`cancelled=True`); a quote's empty side is left unset. Keep a standing
   want of a streamed dataset current from the stream. A case of the suite
   about a kind of data the plugin declares it never publishes (its `about`:
-  trades, quotes, bars) is named in `not_presented`, with why; every other
-  case is mapped.
+  trades, quotes, bars) is named in `not_presented`, with why; so is one
+  about a field its source never states (its `about_field`, such as a
+  trade's aggressor); every other case is mapped. On start, before resuming
+  its stream, it backfills a restart's gap
+  (`meridian.roles.data.backfill_restart`: the last trade it recorded of each
+  subject, `list_trades(..., latest_recorded=True)`, then the venue's history
+  after it), and reads which of its datasets are licensed
+  (`plugin.list_datasets()`, its `licences`).
+- **Follow the role's common part.** A person who knows a role knows any
+  plugin of it: `meridian.roles.<role>` (`data`, `custody`, `operations`,
+  `reporting`) gives each common page's record (`<Page>Read`, the page's
+  `answers=`, under the role's tool name), the role's figures in its order
+  (`figures(...)`, then the plugin's own), its common settings in their order
+  (`meridian.environment()` first where the vendor has more than one, then
+  the credentials, the role's, the vendor's, `meridian.sample_data()` last),
+  and its page templates, `meridian/roles/<role>/<page>.html`. Extend a
+  template and add the vendor's nuance only at its blocks -- `vendor_notices`,
+  `vendor_rows` (the section's title in `section`), `vendor_columns` (the row
+  in `row`, None in the head), `vendor_sections` -- never renaming,
+  reordering or dropping a common page, section, label, setting or figure.
+  Settings may be one class, `@meridian.settings`, its fields
+  `meridian.setting(...)`; the kit's patterns are macros in
+  `meridian/kit.html` (`{% import "meridian/kit.html" as kit %}`).
+- **Make every act preparable.** An agent may prepare a change for a person
+  to make rather than make it, where the deployment's admins say so: a route
+  that changes something names its check tool, a read tool taking the same
+  record and changing nothing (`checked_by="check_..."`), and the paths in
+  its record naming the accounts it touches (`accounts=["account_id"]`); the
+  SDK fills the page it is made on. A page opened from a prepared change
+  reads it (`await request.prepared()`), starts its form from its
+  `arguments_json` and says "prepared by" its preparer, with its reason as
+  text, never followed. Name no field of a record `prepare`.
+- **Keep a person's own views per person.** A setting each person sets for
+  themselves -- a watchlist -- is declared `per_person=True`; save it for
+  them (`plugin.set_own_settings({...}, for_caller=request.caller)`) and read
+  it from their request (`request.own_settings`), never from storage.
 
 This file is for any coding agent working on the plugin, and is committed with
 it for whoever works on it next. It is the canonical one: `CLAUDE.md` and the

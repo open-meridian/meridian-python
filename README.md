@@ -2,7 +2,7 @@
 
 The Python SDK for building [Open Meridian](https://open-meridian.com) plugins:
 the tools a trader has an AI agent build, and the bots and analytics a
-developer writes. Python 3.11 or newer. This is release 0.23.0; its reference
+developer writes. Python 3.11 or newer. This is release 0.24.0; its reference
 is at [open-meridian.dev](https://open-meridian.dev/api/python-sdk/).
 
 ## Start here
@@ -21,14 +21,17 @@ with the kit, hold the plugin to `meridian plugin check`, and the live loop
 template at a pinned commit, so a CLI release carries it. See
 [meridian-cli](https://github.com/open-meridian/meridian-cli).
 
-`plugin new --role data` and `--role reporting` write `templates/data/` and
-`templates/reporting/` instead: a data plugin putting a stand-in vendor's prices
-into the lake, its catalogue declared, its Connection and Datasets pages
-with their read tools, and its tests running the data suite; and a
-`reporting` plugin valuing the book's positions at the close from the lake,
-its Closes page with its read tool, `read_report`, and its tests running the
-`reporting` suite. Each is a whole plugin, its agents'
-files, CI and `Dockerfile` the reference plugin's own.
+`plugin new --role data`, `--role custody`, `--role operations` and `--role
+reporting` write `templates/<role>/` instead, each built on its role's common
+part (`meridian.roles`, below), so a person who knows the role knows the
+plugin: a data plugin putting a stand-in vendor's prices into the lake, its
+Connection and Datasets pages with their read tools, and its tests running
+the data suite; a custody plugin's Connections, Account links and
+Statements; an operations plugin's Breaks, Reconciliations and Opening
+balances, its confirmation preparable by an agent; and a `reporting` plugin
+valuing the book's positions at the close from the lake, its Closes and
+Datasets pages, and its tests running the `reporting` suite. Each is a whole
+plugin, its agents' files, CI and `Dockerfile` the reference plugin's own.
 
 ## The SDK
 
@@ -1160,6 +1163,115 @@ watermark; `ems` has its first suite, the same and the datasets it may read;
 and `reporting`'s, its reporting currency resolved by its ISO 4217 code
 (`resolve_identifier`, read-only for `reporting` from v19).
 
+### Prepared changes, own settings and each role's common part (contract v20)
+
+The roles `dgm`, `ccm` and `match` are `data` ("data plugin"),
+`connectivity` and `confirmation`: a plugin's metadata, its `roles=` and the
+suites it runs name the new ones, and `meridian plugin migrate` rewrites
+them.
+
+**An act can be prepared.** An agent working for a person may prepare a
+change for the person to make rather than make it, where the deployment's
+admins set an act to "prepare only" or turn on its second pair of eyes. The
+plugin's part is to make each act preparable: a route that changes something
+names its check tool, a read tool taking the same record and changing
+nothing, the paths in its record naming the accounts it touches, and the
+page it is made on, which the SDK fills with the page the route is the form
+of:
+
+```python
+@pages.route("/opening/check", levels="write", methods=["POST"], params=Confirmation,
+             answers=Draft, reads=True, name="check_opening_draft")
+async def check_opening_draft(request): ...
+
+@pages.route("/opening/confirm", levels="write", methods=["POST"], params=Confirmation,
+             name="confirm_opening_balance", checked_by="check_opening_draft",
+             accounts=["account_id"])
+async def confirm_opening_balance(request): ...
+```
+
+A page opened from a prepared change reads it for the person whose page it
+is, and starts its form from its arguments, marked "prepared by" its
+preparer, its reason shown as text: `prepared = await request.prepared()`
+(its `tool_name`, `arguments_json`, `prepared_by_display_name`,
+`prepared_through_client`, `reason`, `state`), None for a page reached from
+none. The person makes it with the page's own Save or Confirm. The form
+field `prepare` is the kit's Prepare button's, so no record names a field
+so.
+
+**A person's own settings.** A setting each person sets for themselves -- a
+watchlist, a chart's choices -- is declared `per_person=True` (never secret,
+never required). It is not on the Settings form and never in
+`Settings.values`: the plugin saves a person's values for them and reads
+them from each of their requests, typed:
+
+```python
+await plugin.set_own_settings({"watchlist": rows}, for_caller=request.caller)
+request.own_settings["watchlist"]
+```
+
+**The accounts a plugin may link to.** A plugin linking external accounts
+reads only those the deployment admin granted its instance
+(`read_accounts_for_linking`); a link naming another is refused, a
+`CommandRefused` with `REFUSAL_REASON_ACCOUNT_NOT_LINKABLE`.
+
+**A data plugin's licences and its restart.** A data plugin reads its own
+declared datasets' licences (`plugin.list_datasets()`, its `licences`), so
+its Datasets page says "Licensed" or "Not licensed yet". On start, before
+resuming its stream, it backfills a restart's gap:
+
+```python
+from meridian.roles import data
+
+async def history(last):        # the last trade the lake holds of a subject
+    return my_venue.trades_since(last.meta.subjects[0].entity_id, last.meta.valid_from_ns)
+
+await data.backfill_restart(plugin, streamed_subjects, history)
+```
+
+The data suite gains `the-takers-side-stated` (a case about a field,
+`about_field`, which a source never stating it names in `not_presented`
+with why), `a-restarts-gap-backfilled` and `reads-its-datasets-licences`.
+
+**Each role's common part** (spec/plugin-pages-follow-their-role) is
+`meridian.roles`: for `data`, `custody`, `operations` and `reporting`, each
+common page's record (`data.ConnectionRead`, `data.DatasetsRead`,
+`custody.ConnectionsRead`, `custody.AccountLinksRead`,
+`custody.StatementsRead`, `operations.BreaksRead`,
+`operations.ReconciliationsRead`, `operations.OpeningBalancesRead`,
+`reporting.DatasetsRead`), the role's figures in its order (`figures(...)`),
+its common settings (`custody.poll_seconds()`, `operations.reconcile()`,
+`reporting.reporting_currency()` and the rest), and its page templates,
+`meridian/roles/<role>/<page>.html`, each drawing the common sections, their
+labels and "not set up yet" states in the role's order, with the vendor's
+blocks: `vendor_notices`, `vendor_rows`, `vendor_columns`, `vendor_sections`.
+
+```jinja
+{% extends "meridian/roles/data/connection.html" %}
+{% block vendor_rows %}{% if section == "Key" %}<tr><th>Feeds</th>…</tr>{% endif %}{% endblock %}
+```
+
+Settings may be one typed class, declared and read alike, in the role's
+order -- the environment first where the vendor has more than one, sample
+data last:
+
+```python
+@meridian.settings
+class Config:
+    environment: str = meridian.environment()        # live or sandbox
+    api_key: str = meridian.setting("API key", required=True, secret=True)
+    sandbox_key: str = meridian.setting("Sandbox key", secret=True,
+                                        applies_when=("environment", "sandbox"))
+    sample_data: bool = meridian.sample_data()
+
+plugin = await meridian.connect(settings=Config, interface=...)
+config = await plugin.first_settings(Config)
+```
+
+Every page's loader holds the kit's patterns as macros, `meridian/kit.html`:
+`status`, `action`, `notice`, `badge`, `tiles`, `when`, `grid`,
+`nothing_here`, `empty` and `facts`.
+
 ## Moving a plugin to a new release
 
     meridian plugin migrate            # to the latest release
@@ -1220,6 +1332,7 @@ carries libcst.
 | 0.19.0 to 0.20.0: the SDK declares contract v15, a person's access granted per role: `roles=` on `@pages.page`, `@pages.route`, `@pages.tool`, `meridian.Setting` and `meridian.Page`; `Caller.roles`, `Caller.level_for`, `Caller.read_for`, `Caller.write_for`; `PageClient(..., roles=)` and `roles=` on its sessions; an activity re-resolved (`plugin.re_resolve_activity`, `re_resolutions`, `receive(activity_re_resolved=)`); a plugin holding one role or none names no role, and one coming to hold a second names `roles=` on every page, route, tool and setting, which `meridian plugin check` reports | only the pins move | |
 | 0.20.0 to 0.21.0: the SDK declares contract v16, an edge plugin's older records move to the archive: the kinds of raw record (`Storage(kinds=[RecordKind(...)])`) and the two settings the SDK declares per kind (`<kind>_window_days`, `<kind>_past_window`), reserved; the archive (`edge.archive_dir()`, `MERIDIAN_ARCHIVE_BUCKET`); the moves with their index (`plugin.archive_unit`, `plugin.restore_unit`, `plugin.delete_unit`, `plugin.find_record`), a deletion inside the hold a `CommandRefused` with `REFUSAL_REASON_WITHIN_HOLD`; what each kind holds in storage on the heartbeat (`plugin.stored`, `StoredSpan`), with the bytes each uses of the archive (`StoredSpan.bytes`), which the SDK fills in; the archive's bound (`MERIDIAN_ARCHIVE_MOST_BYTES`), past which `archive_unit` refuses; `POST /archive/restore` on every edge plugin's host, derived as the `restore_unit` tool. A plugin declaring no kinds keeps `retention_days` as before, so `meridian plugin migrate` needs no change in the command line | only the pins move | a setting of the plugin's own that held a window, dropped, its release notes naming the kind's window it maps to for the admin to set once at upgrade (SnapTrade's two); a setting it declared as `<kind>_window_days` or `<kind>_past_window`, renamed |
 | 0.21.0 to 0.22.0: the SDK declares contract v18, the lake's 1a: a data plugin's catalogue (`Declaration(catalogue=[DatasetDeclaration(...)])`, `DatasetLicence`, `ObservationMode`), prices and bars recorded in batches of 1 to 500 (`plugin.record_prices`, `plugin.record_bars`, `Price`, `Bar`, `ObservationMeta`, `SourceTime`, `Source`, `SubjectRef`), wants heard and declined (`receive(observations_wanted=, want_withdrawn=)`, `want_id=`, `plugin.decline_want`), the lake's reads by business date, as of and side by side (`list_prices`, `list_bars`, `list_datasets`, `SourceChoice`), prices and bars heard latest value first for the subjects named with their dataset (`receive(prices_recorded=, bars_recorded=, subjects=)`, `Heard.dataset`), venues resolved (`resolve_venue`, `report_missing_venue`), the data suite and the reading roles' (a heard row delivered by `answer`); a Money names its cash instrument (`Money.instrument_id`; `Money(amount, "USD")` resolved by core, dated); every date field takes a `datetime.date`, and refuses text that is no date. `Money(amount, code)` keeps its shape, so `meridian plugin migrate` needs no change in the command line | only the pins move | a test comparing a Money read back (`as_money`) with one it made, which now carries `instrument_id`: compare `amount` and `currency_code`; a date sent as text that is no date, refused |
+| 0.23.0 to 0.24.0: the SDK declares contract v20. Breaking: the roles `dgm`, `ccm` and `match` are `data`, `connectivity` and `confirmation`. An act names its check tool, its accounts and its page (`checked_by=`, `accounts=`, `made_on=`), a page reads the prepared change it was opened from (`request.prepared()`), a route's record names no field `prepare`; a person's own settings (`Setting(per_person=True)`, `plugin.set_own_settings`, `request.own_settings`); a link to an account not granted refused (`REFUSAL_REASON_ACCOUNT_NOT_LINKABLE`); a data plugin's licences (`list_datasets`) and its restart backfilled (`list_trades(latest_recorded=True)`, `meridian.roles.data.backfill_restart`); the data suite's v20 cases and `about_field`; each role's common part (`meridian.roles`), `meridian.environment()`, `@meridian.settings`, `meridian.sample_data()` and `meridian/kit.html` | a role named `dgm`, `ccm` or `match` in `pyproject.toml`'s `[tool.meridian]` roles, a `roles=` argument, or the role a suite is run or an access read for, into `data`, `connectivity` or `confirmation` | a role's old name anywhere else, in words or a variable; a developer setting named `synthetic`, which `meridian.sample_data()` replaces at the plugin's next push; an act to be preparable: name its check tool |
 | 0.22.0 to 0.23.0: the SDK declares contract v19, the lake's 1b: trades and quotes recorded in batches of 1 to 500 (`plugin.record_trades`, `plugin.record_quotes`, `Trade`, `TradeAttributes`, `Eligibility`, `Quote`), read (`list_trades` over a range or `after_watermark=`, `list_quotes`) and heard (`receive(trades_recorded=, quotes_recorded=, subjects=)`: every trade, caught up after the watermark last seen; the latest quote per asset); a price heard is conflated per its asset too; `reporting` resolves an identifier; the data suite's eight 1b cases, a case about a kind of data the plugin never publishes not presented with why (`Case.about`), `signal`'s 1b cases, the `ems` suite, `reporting`'s `resolves-its-reporting-currency` | only the pins move | a data plugin's suite test meeting the eight new cases: map each, or name those about trades or quotes in `not_presented` with why where it publishes neither |
 
 `tests/migrations/` holds the plugins the migrations are recorded for, as

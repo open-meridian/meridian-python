@@ -482,15 +482,19 @@ class DatasetDeclaration:
 @dataclass(frozen=True)
 class Declaration:
     """A version's declaration. `settings` are the ones it declares at
-    registration (`meridian.Setting`), whose secret ones' names it carries.
+    registration (`meridian.Setting`), whose secret ones' names it carries,
+    or a class decorated `@meridian.settings` declaring them.
     From contract v18 a data plugin's `catalogue`: the datasets it serves the lake."""
 
-    settings: Sequence[Any] = ()
+    settings: Sequence[Any] | type[Any] = ()
     not_carried: Sequence[NotCarried] = field(default=())
     storage: Storage | None = None
     catalogue: Sequence[DatasetDeclaration] = ()
 
     def __post_init__(self) -> None:
+        from ._settings import declared_by
+
+        object.__setattr__(self, "settings", declared_by(self.settings))
         if len(self.not_carried) > PLUGIN_DECLARATION_NOT_CARRIED_COUNT.most:
             raise ValueError(
                 f"at most {PLUGIN_DECLARATION_NOT_CARRIED_COUNT.most} names not carried"

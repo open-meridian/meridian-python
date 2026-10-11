@@ -36,6 +36,8 @@ from .client import AppliesWhen, Choice, Column, Setting
 
 log = logging.getLogger("meridian.settings")
 
+_C = typing.TypeVar("_C")
+
 #: The values a bound was held to and logged, so each is logged once.
 _HELD: set[tuple[str, str, int]] = set()
 
@@ -242,7 +244,7 @@ def _kind(hint: Any, where: str) -> type:
     raise TypeError(f"{where} is annotated {hint!r}; a setting is a str, int, bool or list")
 
 
-def settings(cls: type) -> type:
+def settings(cls: type[_C]) -> type[_C]:
     """Make `cls` a plugin's typed settings: each annotated field declared
     with `meridian.setting(...)`, `meridian.environment()` or
     `meridian.sample_data()` is a setting named as the field. The class
@@ -298,10 +300,10 @@ def settings(cls: type) -> type:
         },
     )
     made_class.__str__ = made_class.__repr__  # type: ignore[method-assign]
-    return made_class
+    return cast(type[_C], made_class)
 
 
-def declared_by(settings: Sequence[Setting] | type[Typed]) -> tuple[Setting, ...]:
+def declared_by(settings: Sequence[Setting] | type) -> tuple[Setting, ...]:
     """A declaration's settings, from a list of `Setting`s or a class
     decorated `@meridian.settings`."""
     if isinstance(settings, type):

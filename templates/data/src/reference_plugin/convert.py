@@ -74,11 +74,26 @@ class Converter:
     products: dict[str, str] = field(default_factory=dict)
     #: The standing wants it keeps current, by want: their subjects.
     standing: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    #: Its datasets a deployment admin has licensed (contract v20), as read
+    #: on start; and what it recorded and declined since it started.
+    licensed: frozenset[str] = frozenset()
+    recorded: int = 0
+    declined: int = 0
+    last_recorded: str = ""
+    #: Whether sample data is on: the stand-in vendor is sample data itself.
+    sample_data: bool = False
 
     @property
     def dataset(self) -> str:
         """The dataset its rows name: the instance, a colon and the key."""
         return f"{self.plugin.identity.instance_id}:{DAILY.key}"
+
+    async def read_licences(self) -> None:
+        """Its own declared datasets' licences (contract v20, W10.9): a
+        dataset with none is served by its catalogue's default terms until a
+        deployment admin licenses it, which the Datasets page says."""
+        answered = await self.plugin.list_datasets()
+        self.licensed = frozenset(licence.dataset for licence in answered.licences)
 
     # ── Resolving ───────────────────────────────────────────────────────
 
@@ -218,6 +233,9 @@ class Converter:
             await self.plugin.record_prices(prices=prices[at : at + BATCH], want_id=want_id)
         for at in range(0, len(bars), BATCH):
             await self.plugin.record_bars(bars=bars[at : at + BATCH], want_id=want_id)
+        if prices or bars:
+            self.recorded += len(prices) + len(bars)
+            self.last_recorded = datetime.now(UTC).isoformat(timespec="seconds")
 
     async def record_daily(self, symbol: str, text: str) -> None:
         """A candle the vendor sent, recorded: the push path."""
@@ -246,6 +264,7 @@ class Converter:
         if prices or bars:
             await self.record(prices, bars, want_id=want.want_id)
         if declined:
+            self.declined += len(declined)
             await self.plugin.decline_want(
                 want_id=want.want_id, subjects=declined, reason="not_covered"
             )

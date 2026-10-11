@@ -137,6 +137,11 @@ async def withdrawn(recorder: Recorder) -> None:
     await recorder.receive(want_withdrawn=plugin.on_withdrawn)
 
 
+async def licences(recorder: Recorder) -> None:
+    # On start (contract v20): its own declared datasets' licences.
+    await converter(recorder).read_licences()
+
+
 PRODUCERS: dict[str, Producer] = {
     "a-daily-close": daily("BTC-USD"),
     "the-forming-day-restated": forming,
@@ -151,6 +156,7 @@ PRODUCERS: dict[str, Producer] = {
     "a-subject-another-source-resolved": elsewhere,
     "a-subject-declined": wanted(None),
     "a-standing-want-withdrawn": withdrawn,
+    "reads-its-datasets-licences": licences,
 }
 
 

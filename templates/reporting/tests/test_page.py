@@ -164,6 +164,13 @@ def test_manage_shows_what_it_may_read_and_no_accounts_data() -> None:
     sidecar = Sidecar()
     page = client(sidecar).get("/datasets", "admin").text
     assert "data-1:daily" in page
+    # The reporting role's common page: not entitled until a deployment
+    # admin entitles it on Data sources, and a read tool under its name.
+    assert "Not entitled yet" in page
+    answered = client(sidecar).call_tool("read_datasets")
+    assert answered.data == {
+        "datasets": [{"dataset": "data-1:daily", "entitled": False, "fields": [], "misses": 0}]
+    }
     client(sidecar).assert_no_account_data("ACC-1", "62431.27")
 
 
