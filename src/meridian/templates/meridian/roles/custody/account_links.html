@@ -11,7 +11,9 @@
     whether its handler takes several links in one form (false);
     `no_new_account`, whether no new account is offered (true unless the
     person is a deployment admin). The map pages as many rows as fit the
-    screen (`page-size="auto"`). The plain table the map holds for a
+    screen (`page-size="auto"`), and where `link_account` is in
+    `caller.second_pair_of_eyes` it takes `prepare`, so its Link is Prepare.
+    The plain table the map holds for a
     browser without the kit is `vendor_rows`'s, which a plugin may replace
     with its own forms. -#}
 {% extends "meridian/base.html" %}
@@ -31,7 +33,8 @@
 <om-account-map action="{{ action|default('') }}" token-name="csrf" token="{{ csrf_token }}" empty="No accounts reported yet." page-size="auto"
 {%- if group_by is defined and group_by %} group-by="{{ group_by }}"{% endif %}
 {%- if link_several is defined and link_several %} link-several{% endif %}
-{%- if no_new %} no-new-account{% endif %}>
+{%- if no_new %} no-new-account{% endif %}
+{%- if "link_account" in caller.second_pair_of_eyes %} prepare{% endif %}>
 <script type="application/json">{{ handed|tojson }}</script>
 {% block vendor_rows scoped %}
 <table class="one-line"><thead><tr><th>External account</th><th>Linked to</th></tr></thead><tbody>

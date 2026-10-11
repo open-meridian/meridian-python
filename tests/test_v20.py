@@ -837,7 +837,11 @@ def _map_head(page: str) -> str:
 
 
 def account_links(
-    tmp_path: Path, child: str = "", admin: bool = False, **context: object
+    tmp_path: Path,
+    child: str = "",
+    admin: bool = False,
+    gated: tuple[str, ...] = (),
+    **context: object,
 ) -> str:
     (tmp_path / "l.html").write_text(
         '{% extends "meridian/roles/custody/account_links.html" %}' + child
@@ -852,7 +856,8 @@ def account_links(
     async def view(request: meridian.Request) -> str:
         return pages.render("l.html", data=record, **context)
 
-    return PageClient(pages, deployment_admin=admin).get("/", "admin").text
+    client = PageClient(pages, deployment_admin=admin, second_pair_of_eyes=gated)
+    return client.get("/", "admin").text
 
 
 def test_account_links_defaults_offer_no_new_account_to_a_plugin_admin(tmp_path: Path) -> None:
@@ -960,3 +965,8 @@ def test_a_gated_act_is_drawn_as_prepare_never_as_a_plain_make(tmp_path: Path) -
     refresh = head[head.index('action="/read"') :]
     assert '<input type="hidden" name="prepare" value="1">' in refresh
     assert 'aria-label="Prepare: Refresh everything from SnapTrade">Prepare</button>' in refresh
+
+
+def test_the_account_map_prepares_its_links_under_a_second_pair_of_eyes(tmp_path: Path) -> None:
+    assert " prepare" not in _map_head(account_links(tmp_path))
+    assert _map_head(account_links(tmp_path, gated=("link_account",))).endswith(" prepare")
