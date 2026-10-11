@@ -4,7 +4,12 @@
     record extending it. "Refresh" and "Reconnect" on a row, as the vendor
     allows, go in `vendor_columns`. "Connect" is drawn in the Connections
     section's head, never the page's (no header action), where the vendor
-    connects through a portal of its own: `action`, where its form posts. -#}
+    connects through a portal of its own: `action`, where its form posts --
+    or a list of the section head's actions, each a mapping in
+    meridian/kit.html's `action` terms (`path`, `said`, and `label` and
+    `kind` where given) naming its act by `tool_name` (SnapTrade's Connect
+    and Refresh). An act in `caller.second_pair_of_eyes` is drawn as
+    "Prepare", posting `prepare`, never as a plain make. -#}
 {% extends "meridian/base.html" %}
 {% import "meridian/kit.html" as kit %}
 {% import "meridian/roles/_rows.html" as om %}
@@ -14,7 +19,14 @@
 {% endif %}
 {% block vendor_notices %}{% endblock %}
 <section class="panel">
-<div class="section-head"><h2>Connections</h2>{% if action is defined and action %}{{ kit.action(action, "Connect") }}{% endif %}</div>
+{% set actions = [] if action is not defined or not action else ([{"path": action, "said": "Connect"}] if action is string else action) %}
+<div class="section-head"><h2>Connections</h2>
+{%- if actions %}<div class="actions">
+{%- for each in actions %}
+{%- if each.tool_name and each.tool_name in caller.second_pair_of_eyes %}{{ kit.action(each.path, "Prepare", fields={"prepare": "1"}, label="Prepare: " ~ (each.label or each.said)) }}
+{%- else %}{{ kit.action(each.path, each.said, kind=each.kind or "", label=each.label or "") }}
+{%- endif %}
+{%- endfor %}</div>{% endif %}</div>
 {% if data.connections %}
 <table class="one-line">
 {% for row in [none] + data.connections %}

@@ -919,3 +919,44 @@ def test_connect_is_in_the_connections_section_head_never_the_pages(tmp_path: Pa
 
 def test_the_account_map_pages_what_fits_the_screen(tmp_path: Path) -> None:
     assert 'page-size="auto"' in _map_head(account_links(tmp_path))
+
+
+def connections_page(tmp_path: Path, action: object, gated: tuple[str, ...] = ()) -> str:
+    (tmp_path / "c.html").write_text('{% extends "meridian/roles/custody/connections.html" %}')
+    pages = meridian.Pages("Plugin", templates=tmp_path)
+
+    @pages.page("/", "Connections", levels="admin")
+    async def view(request: meridian.Request) -> str:
+        return pages.render("c.html", data=custody.ConnectionsRead(), action=action)
+
+    client = PageClient(pages, second_pair_of_eyes=gated)
+    page = client.get("/", "admin").text
+    return page[page.index('<div class="section-head">') : page.index("</section>")]
+
+
+SECTION_ACTIONS = [
+    {"tool_name": "open_connection_portal", "path": "/connect", "said": "Connect"},
+    {
+        "tool_name": "read_snaptrade_now",
+        "path": "/read",
+        "said": "Refresh",
+        "label": "Refresh everything from SnapTrade",
+    },
+]
+
+
+def test_the_section_head_draws_each_action_in_order(tmp_path: Path) -> None:
+    head = connections_page(tmp_path, SECTION_ACTIONS)
+    assert head.index(">Connect</button>") < head.index(">Refresh</button>")
+    assert 'aria-label="Refresh everything from SnapTrade"' in head
+    assert 'name="prepare"' not in head
+    # One target alone is Connect, as before.
+    assert ">Connect</button>" in connections_page(tmp_path, "/connect")
+
+
+def test_a_gated_act_is_drawn_as_prepare_never_as_a_plain_make(tmp_path: Path) -> None:
+    head = connections_page(tmp_path, SECTION_ACTIONS, gated=("read_snaptrade_now",))
+    assert ">Connect</button>" in head and ">Refresh</button>" not in head
+    refresh = head[head.index('action="/read"') :]
+    assert '<input type="hidden" name="prepare" value="1">' in refresh
+    assert 'aria-label="Prepare: Refresh everything from SnapTrade">Prepare</button>' in refresh
