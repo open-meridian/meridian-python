@@ -614,12 +614,22 @@ async def test_a_snaptrade_shaped_account_records_holdings_with_no_value_and_cas
 
 
 async def test_cash_is_named_by_its_currency_under_iso4217(plugin) -> None:
-    """The scheme reaches the instrument store like any global one; with no
-    record of it here, it answers one the deployment mints (contract v10)."""
-    reply = await plugin.resolve_identifier(
-        identifiers=[meridian.Identifier(scheme="iso4217", value="USD")], as_of_ns=NOW
-    )
-    assert reply.found
+    """The scheme reaches the instrument store like any global one. A
+    currency the deployment does not hold is pulled from the platform's
+    master and kept as the deployment's record, never minted (contract v20,
+    the 2026-10-11 ruling): until the pull lands a resolve is a miss, so it
+    is asked again, and the record found is the master's, not minted."""
+    reply = None
+    for _ in range(20):
+        reply = await plugin.resolve_identifier(
+            identifiers=[meridian.Identifier(scheme="iso4217", value="USD")], as_of_ns=NOW
+        )
+        if reply.found:
+            break
+        assert not reply.minted, "a currency is never minted while the master is asked"
+        await asyncio.sleep(0.5)
+    assert reply is not None and reply.found
+    assert not reply.minted
     assert reply.instrument_id.startswith(("INS-", "LCL-"))
 
 
