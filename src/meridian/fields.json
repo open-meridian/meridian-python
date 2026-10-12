@@ -88,6 +88,14 @@
           "intent": "one change of a person's own setting for a plugin, kept under them and shown to them alone (contract v20, W6.31)"
         },
         {
+          "message": "meridian.v1.ServiceAccount",
+          "intent": "a user of the deployment that is not a person: its name, purpose, owner, setting and state (contract v21, W6.32)"
+        },
+        {
+          "message": "meridian.v1.ServiceAccountChange",
+          "intent": "one change to a service account or to a role's \"runs as\" choice: who, when, the scope, from, to and why (contract v21, decisions/031)"
+        },
+        {
           "message": "meridian.v1.SettingShown",
           "intent": "one declared setting as the Settings form and core's settings tool show it to the person reading it: the declaration, and whether they may set it and why not (contract v17)"
         }
@@ -263,6 +271,7 @@
     "ResolveIdentifier": "meridian.v1.ResolveIdentifierRequest",
     "ResolveInstrument": "meridian.v1.ResolveInstrumentRequest",
     "ResolveVenue": "meridian.v1.ResolveVenueRequest",
+    "SidecarCallAsServiceAccount": "meridian.v1.CallAsServiceAccountRequest",
     "SidecarFileTicket": "meridian.v1.FileTicketRequest",
     "SidecarHeartbeat": "meridian.v1.HeartbeatRequest",
     "SidecarLeave": "meridian.v1.LeaveRequest",
@@ -437,11 +446,18 @@
       "type": "message Actor",
       "empty": "never empty",
       "intent": "records who answered for the entry",
-      "meaning": "a person, a plugin instance for a finding, or the book itself",
+      "meaning": "a person, from v21 a service account, a plugin instance for a finding, or the book itself",
       "not_meaning": "the cause's instance alone",
       "filled": "stamped",
       "filled_by": "bor",
       "since": "v8",
+      "changes": [
+        {
+          "version": "v21",
+          "kind": "clarified",
+          "what": "a service account, the Actor's service_account arm (W9.8)"
+        }
+      ],
       "stability": "stable",
       "store": "bor"
     },
@@ -2281,11 +2297,18 @@
       "type": "message Actor",
       "empty": "never unset",
       "intent": "says who answered for it",
-      "meaning": "the person",
+      "meaning": "the person, or from v21 the service account",
       "not_meaning": "the plugin",
       "filled": "stamped",
       "filled_by": "bor",
       "since": "v8",
+      "changes": [
+        {
+          "version": "v21",
+          "kind": "clarified",
+          "what": "a service account may answer for it (W9.1)"
+        }
+      ],
       "stability": "stable",
       "store": "bor"
     },
@@ -2786,11 +2809,18 @@
       "type": "message Actor",
       "empty": "never unset",
       "intent": "records who resolved or closed it",
-      "meaning": "the person; a service account once they exist",
+      "meaning": "the person, or from v21 the service account",
       "not_meaning": "the instance alone",
       "filled": "stamped",
       "filled_by": "bor",
       "since": "v8",
+      "changes": [
+        {
+          "version": "v21",
+          "kind": "clarified",
+          "what": "a service account may resolve or close it (W9.7)"
+        }
+      ],
       "stability": "stable",
       "store": "bor"
     },
@@ -3072,7 +3102,7 @@
       "type": "message Actor",
       "empty": "never unset",
       "intent": "records who recorded the break",
-      "meaning": "the plugin instance as itself, or a person",
+      "meaning": "the plugin instance as itself, a person, or from v21 a service account",
       "not_meaning": "who resolved it",
       "filled": "stamped",
       "filled_by": "bor",
@@ -4945,6 +4975,45 @@
       "filled": "stamped",
       "filled_by": "sidecar",
       "since": "v20",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.Actor.service_account",
+      "type": "message ServiceAccountActor",
+      "empty": "unset unless a service account",
+      "intent": "records that a service account answered for the act",
+      "meaning": "the service account a plugin's autonomous work acted as, whose call the dashboard admitted (W4.15)",
+      "not_meaning": "a person, or the plugin's own finding",
+      "filled": "stamped",
+      "filled_by": "bor",
+      "since": "v21",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.ServiceAccountActor.subject",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the service account",
+      "meaning": "its `SA-` subject, as the sidecar stamped it (W4.9)",
+      "not_meaning": "a person or a plugin instance",
+      "filled": "stamped",
+      "filled_by": "bor",
+      "since": "v21",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.ServiceAccountActor.owner_subject",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the person answerable for the service account when it acted",
+      "meaning": "the owner's deployment-local subject, as the sidecar stamped it; a later change of owner leaves it as it was",
+      "not_meaning": "the actor, which is the service account",
+      "filled": "stamped",
+      "filled_by": "bor",
+      "since": "v21",
       "stability": "preview",
       "store": "bor"
     },
@@ -6887,6 +6956,188 @@
       "store": "dashboard"
     },
     {
+      "name": "meridian.v1.ServiceAccount.service_account_id",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "identifies a service account, and is its subject",
+      "meaning": "`SA-` and a ULID, minted when a deployment admin creates it; a user group lists it in its logins by this, and every record of what it did names it",
+      "not_meaning": "a credential: nothing presents it to be let in",
+      "filled": "minted",
+      "filled_by": "dashboard",
+      "since": "v21",
+      "stability": "preview",
+      "kept_by": "dashboard",
+      "store": "dashboard"
+    },
+    {
+      "name": "meridian.v1.ServiceAccount.name",
+      "type": "text",
+      "bounds": {
+        "length": [
+          1,
+          200
+        ]
+      },
+      "empty": "never empty",
+      "intent": "names the service account for people to read",
+      "meaning": "the deployment admin's words, shown on its row and wherever it is named as an actor",
+      "not_meaning": "an identifier: the SA- ID is",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v21",
+      "stability": "preview",
+      "kept_by": "dashboard",
+      "store": "dashboard"
+    },
+    {
+      "name": "meridian.v1.ServiceAccount.purpose",
+      "type": "text",
+      "bounds": {
+        "length": [
+          0,
+          2000
+        ]
+      },
+      "empty": "empty where none was written",
+      "intent": "says what the service account is for",
+      "meaning": "the deployment admin's words",
+      "not_meaning": "a grant or a limit: what it may do is its grants, the levels and its setting",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v21",
+      "stability": "preview",
+      "kept_by": "dashboard",
+      "store": "dashboard"
+    },
+    {
+      "name": "meridian.v1.ServiceAccount.owner_subject",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the person answerable for the service account",
+      "meaning": "a person the deployment knows, by their deployment-local subject: sees what it does within their own read access, is told when it is disabled and its prepared changes lapse, and may disable it (W6.34)",
+      "not_meaning": "who acts: the service account does; or anyone whose access it widens",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v21",
+      "stability": "preview",
+      "kept_by": "dashboard",
+      "store": "dashboard"
+    },
+    {
+      "name": "meridian.v1.ServiceAccount.setting",
+      "type": "text",
+      "allowed": [
+        {
+          "value": "prepare_only",
+          "meaning": "every act it would make becomes a prepared change for a person to make"
+        },
+        {
+          "value": "act",
+          "meaning": "it makes an act where every level that applies lets agents make it and the act's second pair of eyes is off; otherwise it prepares"
+        }
+      ],
+      "empty": "never unset: prepare_only when created",
+      "intent": "says whether the service account prepares only or may act",
+      "meaning": "one of the levels that apply to its call, the strictest winning (W6.29): it can hold an act back, never lift one",
+      "not_meaning": "a level of access, or what agents may do with an act, which agents_may says",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v21",
+      "stability": "preview",
+      "kept_by": "dashboard",
+      "store": "dashboard"
+    },
+    {
+      "name": "meridian.v1.ServiceAccount.state",
+      "type": "text",
+      "allowed": [
+        {
+          "value": "active",
+          "meaning": "its calls are admitted, within its grants, the levels and its setting"
+        },
+        {
+          "value": "disabled",
+          "meaning": "its next call is refused and its pending prepared changes lapsed; a deployment admin may re-enable it"
+        },
+        {
+          "value": "removed",
+          "meaning": "gone from use; every record it left is kept"
+        }
+      ],
+      "empty": "never unset: active when created",
+      "intent": "says whether the service account may act",
+      "meaning": "its state now, each change its own ServiceAccountChange",
+      "not_meaning": "a lifetime: none is fixed",
+      "filled": "decided",
+      "filled_by": "dashboard",
+      "since": "v21",
+      "stability": "preview",
+      "kept_by": "dashboard",
+      "store": "dashboard"
+    },
+    {
+      "name": "meridian.v1.ServiceAccountChange.scope",
+      "type": "text",
+      "empty": "empty for a change to the account itself",
+      "intent": "says whether the change was to the account or to a role's \"runs as\" choice",
+      "meaning": "empty for the account's name, purpose, owner, setting or state; a plugin instance and one of its roles for that role's choice and its level (W6.33)",
+      "not_meaning": "a grant, which the conductor records as every grant",
+      "filled": "decided",
+      "filled_by": "dashboard",
+      "since": "v21",
+      "stability": "preview",
+      "kept_by": "dashboard",
+      "store": "dashboard"
+    },
+    {
+      "name": "meridian.v1.ServiceAccountChange.from",
+      "type": "text",
+      "empty": "empty for a creation, and for a role's first choice",
+      "intent": "says what the changed part was before",
+      "meaning": "the part's value before the change, as written",
+      "not_meaning": "anything inferred: a part never set is empty",
+      "filled": "decided",
+      "filled_by": "dashboard",
+      "since": "v21",
+      "stability": "preview",
+      "kept_by": "dashboard",
+      "store": "dashboard"
+    },
+    {
+      "name": "meridian.v1.ServiceAccountChange.to",
+      "type": "text",
+      "empty": "empty for a role's choice cleared",
+      "intent": "says what the changed part became",
+      "meaning": "the part's value from the change",
+      "not_meaning": "a change to its grants",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v21",
+      "stability": "preview",
+      "kept_by": "dashboard",
+      "store": "dashboard"
+    },
+    {
+      "name": "meridian.v1.ServiceAccountChange.note",
+      "type": "text",
+      "bounds": {
+        "length": [
+          0,
+          2000
+        ]
+      },
+      "empty": "empty where none was given at the page",
+      "intent": "says why the change was made",
+      "meaning": "the person's words, kept with the change, at most 2,000 characters",
+      "not_meaning": "an instruction to anyone who reads it",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v21",
+      "stability": "preview",
+      "kept_by": "dashboard",
+      "store": "dashboard"
+    },
+    {
       "name": "meridian.v1.Envelope.meta",
       "type": "message MessageMeta",
       "empty": "never unset",
@@ -7021,12 +7272,19 @@
       "name": "meridian.v1.MessageMeta.acting_for_subject",
       "type": "text",
       "empty": "empty when the plugin acted as itself",
-      "intent": "names the person a command was sent for",
-      "meaning": "the deployment-local subject the sidecar verified (W4.9), so the store records who made the change",
+      "intent": "names the person, or from v21 the service account, a command was sent for",
+      "meaning": "the deployment-local subject the sidecar verified (W4.9), so the store records who made the change; acting_for_kind says which kind of user",
       "not_meaning": "anything a plugin supplies: stamped by the sidecar alone (decisions/014)",
       "filled": "stamped",
       "filled_by": "sidecar",
       "since": "v2",
+      "changes": [
+        {
+          "version": "v21",
+          "kind": "clarified",
+          "what": "a service account's SA- subject where acting_for_kind says so"
+        }
+      ],
       "stability": "stable",
       "store": "envelope"
     },
@@ -7092,6 +7350,42 @@
       "filled": "stamped",
       "filled_by": "sidecar",
       "since": "v20",
+      "stability": "preview",
+      "store": "envelope"
+    },
+    {
+      "name": "meridian.v1.MessageMeta.acting_for_kind",
+      "type": "enum SubjectKind",
+      "allowed": [
+        {
+          "value": "SUBJECT_KIND_UNSPECIFIED",
+          "meaning": "a person, or nobody where acting_for_subject is empty"
+        },
+        {
+          "value": "SUBJECT_KIND_SERVICE_ACCOUNT",
+          "meaning": "a service account: acting_for_subject is its SA- subject"
+        }
+      ],
+      "empty": "unspecified: a person acted, or the plugin acted as itself",
+      "intent": "says the kind of user a command was sent for",
+      "meaning": "the claims' subject_kind, stamped beside acting_for_subject (W4.9), so a store records a service account, never a person",
+      "not_meaning": "anything a plugin supplies: stamped by the sidecar alone",
+      "filled": "stamped",
+      "filled_by": "sidecar",
+      "since": "v21",
+      "stability": "preview",
+      "store": "envelope"
+    },
+    {
+      "name": "meridian.v1.MessageMeta.owner_subject",
+      "type": "text",
+      "empty": "empty unless acting_for_kind is a service account",
+      "intent": "names the person answerable for the service account a command was sent for",
+      "meaning": "the claims' owner_subject, stamped beside acting_for_subject, which the store keeps on the actor",
+      "not_meaning": "who acted, which is the service account",
+      "filled": "stamped",
+      "filled_by": "sidecar",
+      "since": "v21",
       "stability": "preview",
       "store": "envelope"
     },
@@ -14803,12 +15097,19 @@
       "name": "meridian.v1.CallerClaims.subject",
       "type": "text",
       "empty": "never empty",
-      "intent": "names the person",
-      "meaning": "deployment-local: the directory's issuer and subject",
+      "intent": "names the person, or from v21 the service account",
+      "meaning": "deployment-local: the directory's issuer and subject; for a service account its SA- ID, subject_kind saying so",
       "not_meaning": "an email address",
       "filled": "decided",
       "filled_by": "dashboard",
       "since": "v2",
+      "changes": [
+        {
+          "version": "v21",
+          "kind": "clarified",
+          "what": "a service account's SA- ID where subject_kind says SUBJECT_KIND_SERVICE_ACCOUNT"
+        }
+      ],
       "stability": "stable",
       "store": "sidecar"
     },
@@ -16141,7 +16442,7 @@
         },
         {
           "value": "REFUSAL_REASON_ACTOR_REQUIRED",
-          "meaning": "a command other than a finding sent with no person: an opening balance, handling, a resolution or an attribute is a person's act",
+          "meaning": "a command other than a finding sent with no user -- a person, or from v21 a service account: an opening balance, handling, a resolution or an attribute is a user's act",
           "since": "v8"
         },
         {
@@ -16222,6 +16523,13 @@
       "filled": "decided",
       "filled_by": "sidecar",
       "since": "v2",
+      "changes": [
+        {
+          "version": "v21",
+          "kind": "clarified",
+          "what": "REFUSAL_REASON_ACTOR_REQUIRED: a service account answers for a justified act as a person does (W9.1, W9.7)"
+        }
+      ],
       "stability": "stable",
       "store": "sidecar"
     },
@@ -16828,7 +17136,7 @@
           "since": "v8"
         }
       ],
-      "empty": "never unset: the act is a person's, and the book refuses it sent for no one (REFUSAL_REASON_ACTOR_REQUIRED)",
+      "empty": "never unset: the act is a user's, a person's or from v21 a service account's, and the book refuses it sent for no one (REFUSAL_REASON_ACTOR_REQUIRED)",
       "intent": "names the person RecordOpeningBalance is sent for",
       "meaning": "the assertion the plugin was handed for them, the same bytes, never altered; the sidecar admits it only in a session at write, when the person may write the account it names, and stamps them on it (W4.9)",
       "not_meaning": "the plugin's own identity, which the sidecar knows",
@@ -16886,7 +17194,7 @@
           "since": "v8"
         }
       ],
-      "empty": "never unset: the act is a person's, and the book refuses it sent for no one (REFUSAL_REASON_ACTOR_REQUIRED)",
+      "empty": "never unset: the act is a user's, a person's or from v21 a service account's, and the book refuses it sent for no one (REFUSAL_REASON_ACTOR_REQUIRED)",
       "intent": "names the person HandleBreak is sent for",
       "meaning": "the assertion the plugin was handed for them, the same bytes, never altered; the sidecar admits it only in a session at write, when the person may write the account it names, and stamps them on it (W4.9)",
       "not_meaning": "the plugin's own identity, which the sidecar knows",
@@ -16905,7 +17213,7 @@
           "since": "v8"
         }
       ],
-      "empty": "never unset: the act is a person's, and the book refuses it sent for no one (REFUSAL_REASON_ACTOR_REQUIRED)",
+      "empty": "never unset: the act is a user's, a person's or from v21 a service account's, and the book refuses it sent for no one (REFUSAL_REASON_ACTOR_REQUIRED)",
       "intent": "names the person ResolveBreak is sent for",
       "meaning": "the assertion the plugin was handed for them, the same bytes, never altered; the sidecar admits it only in a session at write, when the person may write the account it names, and stamps them on it (W4.9)",
       "not_meaning": "the plugin's own identity, which the sidecar knows",
@@ -16924,7 +17232,7 @@
           "since": "v8"
         }
       ],
-      "empty": "never unset: the act is a person's, and the book refuses it sent for no one (REFUSAL_REASON_ACTOR_REQUIRED)",
+      "empty": "never unset: the act is a user's, a person's or from v21 a service account's, and the book refuses it sent for no one (REFUSAL_REASON_ACTOR_REQUIRED)",
       "intent": "names the person CloseBreaksAsCleared is sent for",
       "meaning": "the assertion the plugin was handed for them, the same bytes, never altered; the sidecar admits it only in a session at write, when the person may write the account it names, and stamps them on it (W4.9)",
       "not_meaning": "the plugin's own identity, which the sidecar knows",
@@ -17822,6 +18130,167 @@
       "filled": "decided",
       "filled_by": "dashboard",
       "since": "v20",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.CallerClaims.subject_kind",
+      "type": "enum SubjectKind",
+      "allowed": [
+        {
+          "value": "SUBJECT_KIND_UNSPECIFIED",
+          "meaning": "a person, as every assertion before v21"
+        },
+        {
+          "value": "SUBJECT_KIND_SERVICE_ACCOUNT",
+          "meaning": "a service account, for a call the dashboard admitted through the act's door (W4.15): never a page, a delegation or a client"
+        }
+      ],
+      "empty": "unspecified: the subject is a person",
+      "intent": "says whether the subject is a person or a service account",
+      "meaning": "set only by the dashboard; the sidecar stamps it on what is sent with the claims (acting_for_kind), so every store records which kind of user acted",
+      "not_meaning": "an agent: an agent acting for a person names a delegation, and the person stays the actor",
+      "filled": "decided",
+      "filled_by": "dashboard",
+      "since": "v21",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.CallerClaims.owner_subject",
+      "type": "text",
+      "empty": "empty for a person",
+      "intent": "names the person answerable for the service account the claims are for",
+      "meaning": "the deployment-local subject of the account's owner when the call was admitted (W6.32), stamped on the envelope and kept on the actor",
+      "not_meaning": "who acted, which is the service account; or anyone the plugin may act for",
+      "filled": "decided",
+      "filled_by": "dashboard",
+      "since": "v21",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.CallAsServiceAccountRequest.role",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the role whose service account the call is made as",
+      "meaning": "a role the instance was launched with; the dashboard admits the call as the service account that role's admin chose (W6.33)",
+      "not_meaning": "a role the plugin grants itself: the generated grants and the account's grant decide what it reaches",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v21",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.CallAsServiceAccountRequest.tool_name",
+      "type": "text",
+      "bounds": {
+        "length": [
+          1,
+          61
+        ]
+      },
+      "empty": "never empty",
+      "intent": "names the act called",
+      "meaning": "the plugin's own name for one of its declared acts on the role, as its tool is named; never a read or a core tool",
+      "not_meaning": "a route the plugin may call with any arguments: the dashboard admits it, and the sidecar admits what the route sends",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v21",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.CallAsServiceAccountRequest.arguments_json",
+      "type": "text",
+      "bounds": {
+        "length": [
+          2,
+          1048576
+        ]
+      },
+      "empty": "never empty: at least {}",
+      "intent": "carries the act's arguments",
+      "meaning": "a JSON object, the tool's typed record of inputs, sent to the act's route when made and kept as the prepared change's when prepared",
+      "not_meaning": "a record of anything done: nothing is done until the answer says made",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v21",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.CallAsServiceAccountRequest.reason",
+      "type": "text",
+      "bounds": {
+        "length": [
+          1,
+          4000
+        ]
+      },
+      "empty": "never empty",
+      "intent": "says why the autonomous work calls the act",
+      "meaning": "the plugin's words, plain text, kept as the prepared change's reason when prepared",
+      "not_meaning": "the act's own reason field, which the act's arguments carry where the act takes one; or an instruction to anyone who reads it",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v21",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.CallAsServiceAccountReply.outcome",
+      "type": "text",
+      "allowed": [
+        {
+          "value": "made",
+          "meaning": "the act was made as the service account; the act's own answer is beside it"
+        },
+        {
+          "value": "prepared",
+          "meaning": "the act was prepared for the people who may make it; prepared_call_id names it"
+        }
+      ],
+      "empty": "never empty: a refusal is the call's status, naming the field",
+      "intent": "says what became of the call",
+      "meaning": "made or prepared, by the levels, the gate and the account's setting that applied (W6.29)",
+      "not_meaning": "that the act succeeded in its store, which the act's own answer says",
+      "filled": "decided",
+      "filled_by": "dashboard",
+      "since": "v21",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.CallAsServiceAccountReply.prepared_call_id",
+      "type": "text",
+      "empty": "empty unless the outcome is prepared",
+      "intent": "names the prepared change the call became",
+      "meaning": "`PC-` and a ULID; its preparer is the service account, and a person makes it",
+      "not_meaning": "a change the plugin or the service account may make: neither does",
+      "filled": "decided",
+      "filled_by": "dashboard",
+      "since": "v21",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.CallAsServiceAccountReply.answer_json",
+      "type": "text",
+      "bounds": {
+        "length": [
+          0,
+          1048576
+        ]
+      },
+      "empty": "empty unless the outcome is made",
+      "intent": "carries the act's own answer",
+      "meaning": "the route's typed JSON answer, as a tool's call is answered (W6.20)",
+      "not_meaning": "a record kept by the dashboard: the act's store keeps the record",
+      "filled": "decided",
+      "filled_by": "dashboard",
+      "since": "v21",
       "stability": "preview",
       "store": "sidecar"
     },

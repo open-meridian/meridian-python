@@ -1,3 +1,4 @@
+from meridian.v1 import envelope_pb2 as _envelope_pb2
 from google.protobuf.internal import containers as _containers
 from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
 from google.protobuf import descriptor as _descriptor
@@ -633,7 +634,7 @@ class CallerAssertion(_message.Message):
     def __init__(self, claims: _Optional[bytes] = ..., signature: _Optional[bytes] = ..., key_id: _Optional[str] = ...) -> None: ...
 
 class CallerClaims(_message.Message):
-    __slots__ = ("subject", "display_name", "audience_instance_id", "level", "read_account_ids", "write_account_ids", "issued_at_ns", "expires_at_ns", "assertion_id", "deployment_admin", "delegation_id", "client_name", "tool_name", "roles", "prepared_call_id", "own_settings", "second_pair_of_eyes")
+    __slots__ = ("subject", "display_name", "audience_instance_id", "level", "read_account_ids", "write_account_ids", "issued_at_ns", "expires_at_ns", "assertion_id", "deployment_admin", "delegation_id", "client_name", "tool_name", "roles", "prepared_call_id", "own_settings", "second_pair_of_eyes", "subject_kind", "owner_subject")
     SUBJECT_FIELD_NUMBER: _ClassVar[int]
     DISPLAY_NAME_FIELD_NUMBER: _ClassVar[int]
     AUDIENCE_INSTANCE_ID_FIELD_NUMBER: _ClassVar[int]
@@ -651,6 +652,8 @@ class CallerClaims(_message.Message):
     PREPARED_CALL_ID_FIELD_NUMBER: _ClassVar[int]
     OWN_SETTINGS_FIELD_NUMBER: _ClassVar[int]
     SECOND_PAIR_OF_EYES_FIELD_NUMBER: _ClassVar[int]
+    SUBJECT_KIND_FIELD_NUMBER: _ClassVar[int]
+    OWNER_SUBJECT_FIELD_NUMBER: _ClassVar[int]
     subject: str
     display_name: str
     audience_instance_id: str
@@ -668,7 +671,9 @@ class CallerClaims(_message.Message):
     prepared_call_id: str
     own_settings: _containers.RepeatedCompositeFieldContainer[SettingValue]
     second_pair_of_eyes: _containers.RepeatedScalarFieldContainer[str]
-    def __init__(self, subject: _Optional[str] = ..., display_name: _Optional[str] = ..., audience_instance_id: _Optional[str] = ..., level: _Optional[_Union[AccessLevel, str]] = ..., read_account_ids: _Optional[_Iterable[str]] = ..., write_account_ids: _Optional[_Iterable[str]] = ..., issued_at_ns: _Optional[int] = ..., expires_at_ns: _Optional[int] = ..., assertion_id: _Optional[str] = ..., deployment_admin: bool = ..., delegation_id: _Optional[str] = ..., client_name: _Optional[str] = ..., tool_name: _Optional[str] = ..., roles: _Optional[_Iterable[_Union[RoleAccess, _Mapping]]] = ..., prepared_call_id: _Optional[str] = ..., own_settings: _Optional[_Iterable[_Union[SettingValue, _Mapping]]] = ..., second_pair_of_eyes: _Optional[_Iterable[str]] = ...) -> None: ...
+    subject_kind: _envelope_pb2.SubjectKind
+    owner_subject: str
+    def __init__(self, subject: _Optional[str] = ..., display_name: _Optional[str] = ..., audience_instance_id: _Optional[str] = ..., level: _Optional[_Union[AccessLevel, str]] = ..., read_account_ids: _Optional[_Iterable[str]] = ..., write_account_ids: _Optional[_Iterable[str]] = ..., issued_at_ns: _Optional[int] = ..., expires_at_ns: _Optional[int] = ..., assertion_id: _Optional[str] = ..., deployment_admin: bool = ..., delegation_id: _Optional[str] = ..., client_name: _Optional[str] = ..., tool_name: _Optional[str] = ..., roles: _Optional[_Iterable[_Union[RoleAccess, _Mapping]]] = ..., prepared_call_id: _Optional[str] = ..., own_settings: _Optional[_Iterable[_Union[SettingValue, _Mapping]]] = ..., second_pair_of_eyes: _Optional[_Iterable[str]] = ..., subject_kind: _Optional[_Union[_envelope_pb2.SubjectKind, str]] = ..., owner_subject: _Optional[str] = ...) -> None: ...
 
 class RoleAccess(_message.Message):
     __slots__ = ("role", "level", "read_positions", "write_positions")
@@ -917,3 +922,25 @@ class SetOwnSettingsReply(_message.Message):
     VALUES_FIELD_NUMBER: _ClassVar[int]
     values: _containers.RepeatedCompositeFieldContainer[SettingValue]
     def __init__(self, values: _Optional[_Iterable[_Union[SettingValue, _Mapping]]] = ...) -> None: ...
+
+class CallAsServiceAccountRequest(_message.Message):
+    __slots__ = ("role", "tool_name", "arguments_json", "reason")
+    ROLE_FIELD_NUMBER: _ClassVar[int]
+    TOOL_NAME_FIELD_NUMBER: _ClassVar[int]
+    ARGUMENTS_JSON_FIELD_NUMBER: _ClassVar[int]
+    REASON_FIELD_NUMBER: _ClassVar[int]
+    role: str
+    tool_name: str
+    arguments_json: str
+    reason: str
+    def __init__(self, role: _Optional[str] = ..., tool_name: _Optional[str] = ..., arguments_json: _Optional[str] = ..., reason: _Optional[str] = ...) -> None: ...
+
+class CallAsServiceAccountReply(_message.Message):
+    __slots__ = ("outcome", "prepared_call_id", "answer_json")
+    OUTCOME_FIELD_NUMBER: _ClassVar[int]
+    PREPARED_CALL_ID_FIELD_NUMBER: _ClassVar[int]
+    ANSWER_JSON_FIELD_NUMBER: _ClassVar[int]
+    outcome: str
+    prepared_call_id: str
+    answer_json: str
+    def __init__(self, outcome: _Optional[str] = ..., prepared_call_id: _Optional[str] = ..., answer_json: _Optional[str] = ...) -> None: ...

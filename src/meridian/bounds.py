@@ -113,6 +113,16 @@ TICKET_NOTE_NOTE_LENGTH = Length(least=1, most=4000)
 AGENTS_MAY_CHANGE_NOTE_LENGTH = Length(least=0, most=2000)
 """meridian.v1.AgentsMayChange.note: says why the level or gate was changed"""
 
+SERVICE_ACCOUNT_NAME_LENGTH = Length(least=1, most=200)
+"""meridian.v1.ServiceAccount.name: names the service account for people to
+read"""
+
+SERVICE_ACCOUNT_PURPOSE_LENGTH = Length(least=0, most=2000)
+"""meridian.v1.ServiceAccount.purpose: says what the service account is for"""
+
+SERVICE_ACCOUNT_CHANGE_NOTE_LENGTH = Length(least=0, most=2000)
+"""meridian.v1.ServiceAccountChange.note: says why the change was made"""
+
 VENUE_RECORD_COUNTRY_CODE_LENGTH = Length(least=2, most=2)
 """meridian.v1.VenueRecord.country_code: says where the venue operates"""
 
@@ -473,6 +483,21 @@ they stand"""
 CALLER_CLAIMS_SECOND_PAIR_OF_EYES_COUNT = Count(least=0, most=200)
 """meridian.v1.CallerClaims.second_pair_of_eyes: tells a plugin which of its
 acts need a second person, so its pages show it (W6.29)"""
+
+CALL_AS_SERVICE_ACCOUNT_REQUEST_TOOL_NAME_LENGTH = Length(least=1, most=61)
+"""meridian.v1.CallAsServiceAccountRequest.tool_name: names the act called"""
+
+CALL_AS_SERVICE_ACCOUNT_REQUEST_ARGUMENTS_JSON_LENGTH = Length(least=2, most=1048576)
+"""meridian.v1.CallAsServiceAccountRequest.arguments_json: carries the act's
+arguments"""
+
+CALL_AS_SERVICE_ACCOUNT_REQUEST_REASON_LENGTH = Length(least=1, most=4000)
+"""meridian.v1.CallAsServiceAccountRequest.reason: says why the autonomous work
+calls the act"""
+
+CALL_AS_SERVICE_ACCOUNT_REPLY_ANSWER_JSON_LENGTH = Length(least=0, most=1048576)
+"""meridian.v1.CallAsServiceAccountReply.answer_json: carries the act's own
+answer"""
 
 RECORD_HOLDINGS_STATEMENT_REQUEST_PROVENANCE_COUNT = Count(least=0, most=32)
 """meridian.v1.RecordHoldingsStatementRequest.provenance: says where each value

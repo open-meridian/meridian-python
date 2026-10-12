@@ -2291,12 +2291,14 @@ class EntryMeta(_message.Message):
     def __init__(self, entry_id: _Optional[str] = ..., kind: _Optional[str] = ..., actor: _Optional[_Union[Actor, _Mapping]] = ..., event_time_ns: _Optional[int] = ..., received_at_ns: _Optional[int] = ..., effective_date: _Optional[str] = ..., control_sequence: _Optional[int] = ..., reference_versions: _Optional[_Iterable[_Union[ReferenceVersion, _Mapping]]] = ..., reason: _Optional[str] = ..., break_ids: _Optional[_Iterable[str]] = ..., idempotency_key: _Optional[str] = ...) -> None: ...
 
 class Actor(_message.Message):
-    __slots__ = ("person", "system")
+    __slots__ = ("person", "system", "service_account")
     PERSON_FIELD_NUMBER: _ClassVar[int]
     SYSTEM_FIELD_NUMBER: _ClassVar[int]
+    SERVICE_ACCOUNT_FIELD_NUMBER: _ClassVar[int]
     person: PersonActor
     system: SystemActor
-    def __init__(self, person: _Optional[_Union[PersonActor, _Mapping]] = ..., system: _Optional[_Union[SystemActor, _Mapping]] = ...) -> None: ...
+    service_account: ServiceAccountActor
+    def __init__(self, person: _Optional[_Union[PersonActor, _Mapping]] = ..., system: _Optional[_Union[SystemActor, _Mapping]] = ..., service_account: _Optional[_Union[ServiceAccountActor, _Mapping]] = ...) -> None: ...
 
 class PersonActor(_message.Message):
     __slots__ = ("subject", "delegation_id", "client_name", "prepared_call_id")
@@ -2315,6 +2317,14 @@ class SystemActor(_message.Message):
     INSTANCE_ID_FIELD_NUMBER: _ClassVar[int]
     instance_id: str
     def __init__(self, instance_id: _Optional[str] = ...) -> None: ...
+
+class ServiceAccountActor(_message.Message):
+    __slots__ = ("subject", "owner_subject")
+    SUBJECT_FIELD_NUMBER: _ClassVar[int]
+    OWNER_SUBJECT_FIELD_NUMBER: _ClassVar[int]
+    subject: str
+    owner_subject: str
+    def __init__(self, subject: _Optional[str] = ..., owner_subject: _Optional[str] = ...) -> None: ...
 
 class ReferenceVersion(_message.Message):
     __slots__ = ("instrument_id", "version")

@@ -89,6 +89,11 @@ class SidecarServiceStub(object):
                 request_serializer=meridian_dot_v1_dot_sidecar__pb2.SetOwnSettingsRequest.SerializeToString,
                 response_deserializer=meridian_dot_v1_dot_sidecar__pb2.SetOwnSettingsReply.FromString,
                 _registered_method=True)
+        self.CallAsServiceAccount = channel.unary_unary(
+                '/meridian.v1.SidecarService/CallAsServiceAccount',
+                request_serializer=meridian_dot_v1_dot_sidecar__pb2.CallAsServiceAccountRequest.SerializeToString,
+                response_deserializer=meridian_dot_v1_dot_sidecar__pb2.CallAsServiceAccountReply.FromString,
+                _registered_method=True)
 
 
 class SidecarServiceServicer(object):
@@ -138,9 +143,10 @@ class SidecarServiceServicer(object):
 
     def FileTicket(self, request, context):
         """W4.12, contract v13. File a ticket for the person whose request the
-        plugin is serving, never as itself: the call carries the caller's
-        assertion as its `meridian-caller` metadata, and the sidecar asks the
-        dashboard on the bus, as itself, for the instance it serves.
+        plugin is serving, or from contract v21 its role's service account,
+        never as itself: the call carries the caller's assertion as its
+        `meridian-caller` metadata, and the sidecar asks the dashboard on the
+        bus, as itself, for the instance it serves.
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -181,6 +187,18 @@ class SidecarServiceServicer(object):
         plugin declares `per_person`, acting for them at write, never as the
         plugin itself; the sidecar sends them to the dashboard on the bus, which
         keeps them under the person the assertion names.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def CallAsServiceAccount(self, request, context):
+        """W4.15, contract v21. Call one of the plugin's own acts as the service
+        account its role runs as, from its autonomous work, with no person
+        behind it: the call carries no `meridian-caller` metadata, and the
+        sidecar asks the dashboard on the bus, as itself, for the instance it
+        serves. The dashboard makes the act, prepares it, or refuses naming the
+        field.
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -243,6 +261,11 @@ def add_SidecarServiceServicer_to_server(servicer, server):
                     servicer.SetOwnSettings,
                     request_deserializer=meridian_dot_v1_dot_sidecar__pb2.SetOwnSettingsRequest.FromString,
                     response_serializer=meridian_dot_v1_dot_sidecar__pb2.SetOwnSettingsReply.SerializeToString,
+            ),
+            'CallAsServiceAccount': grpc.unary_unary_rpc_method_handler(
+                    servicer.CallAsServiceAccount,
+                    request_deserializer=meridian_dot_v1_dot_sidecar__pb2.CallAsServiceAccountRequest.FromString,
+                    response_serializer=meridian_dot_v1_dot_sidecar__pb2.CallAsServiceAccountReply.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -542,6 +565,33 @@ class SidecarService(object):
             '/meridian.v1.SidecarService/SetOwnSettings',
             meridian_dot_v1_dot_sidecar__pb2.SetOwnSettingsRequest.SerializeToString,
             meridian_dot_v1_dot_sidecar__pb2.SetOwnSettingsReply.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def CallAsServiceAccount(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.v1.SidecarService/CallAsServiceAccount',
+            meridian_dot_v1_dot_sidecar__pb2.CallAsServiceAccountRequest.SerializeToString,
+            meridian_dot_v1_dot_sidecar__pb2.CallAsServiceAccountReply.FromString,
             options,
             channel_credentials,
             insecure,

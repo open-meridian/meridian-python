@@ -1,12 +1,20 @@
 from google.protobuf.internal import containers as _containers
+from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
-from typing import ClassVar as _ClassVar, Iterable as _Iterable, Optional as _Optional
+from typing import ClassVar as _ClassVar, Iterable as _Iterable, Optional as _Optional, Union as _Union
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
+class SubjectKind(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    SUBJECT_KIND_UNSPECIFIED: _ClassVar[SubjectKind]
+    SUBJECT_KIND_SERVICE_ACCOUNT: _ClassVar[SubjectKind]
+SUBJECT_KIND_UNSPECIFIED: SubjectKind
+SUBJECT_KIND_SERVICE_ACCOUNT: SubjectKind
+
 class MessageMeta(_message.Message):
-    __slots__ = ("message_id", "correlation_id", "causation_id", "publisher_instance_id", "topic", "schema_version", "published_at_ns", "acting_for_subject", "acting_through_delegation", "acting_through_client", "prepared_call_id", "account_scope", "account_scope_applies")
+    __slots__ = ("message_id", "correlation_id", "causation_id", "publisher_instance_id", "topic", "schema_version", "published_at_ns", "acting_for_subject", "acting_for_kind", "owner_subject", "acting_through_delegation", "acting_through_client", "prepared_call_id", "account_scope", "account_scope_applies")
     MESSAGE_ID_FIELD_NUMBER: _ClassVar[int]
     CORRELATION_ID_FIELD_NUMBER: _ClassVar[int]
     CAUSATION_ID_FIELD_NUMBER: _ClassVar[int]
@@ -15,6 +23,8 @@ class MessageMeta(_message.Message):
     SCHEMA_VERSION_FIELD_NUMBER: _ClassVar[int]
     PUBLISHED_AT_NS_FIELD_NUMBER: _ClassVar[int]
     ACTING_FOR_SUBJECT_FIELD_NUMBER: _ClassVar[int]
+    ACTING_FOR_KIND_FIELD_NUMBER: _ClassVar[int]
+    OWNER_SUBJECT_FIELD_NUMBER: _ClassVar[int]
     ACTING_THROUGH_DELEGATION_FIELD_NUMBER: _ClassVar[int]
     ACTING_THROUGH_CLIENT_FIELD_NUMBER: _ClassVar[int]
     PREPARED_CALL_ID_FIELD_NUMBER: _ClassVar[int]
@@ -28,9 +38,11 @@ class MessageMeta(_message.Message):
     schema_version: str
     published_at_ns: int
     acting_for_subject: str
+    acting_for_kind: SubjectKind
+    owner_subject: str
     acting_through_delegation: str
     acting_through_client: str
     prepared_call_id: str
     account_scope: _containers.RepeatedScalarFieldContainer[str]
     account_scope_applies: bool
-    def __init__(self, message_id: _Optional[str] = ..., correlation_id: _Optional[str] = ..., causation_id: _Optional[str] = ..., publisher_instance_id: _Optional[str] = ..., topic: _Optional[str] = ..., schema_version: _Optional[str] = ..., published_at_ns: _Optional[int] = ..., acting_for_subject: _Optional[str] = ..., acting_through_delegation: _Optional[str] = ..., acting_through_client: _Optional[str] = ..., prepared_call_id: _Optional[str] = ..., account_scope: _Optional[_Iterable[str]] = ..., account_scope_applies: bool = ...) -> None: ...
+    def __init__(self, message_id: _Optional[str] = ..., correlation_id: _Optional[str] = ..., causation_id: _Optional[str] = ..., publisher_instance_id: _Optional[str] = ..., topic: _Optional[str] = ..., schema_version: _Optional[str] = ..., published_at_ns: _Optional[int] = ..., acting_for_subject: _Optional[str] = ..., acting_for_kind: _Optional[_Union[SubjectKind, str]] = ..., owner_subject: _Optional[str] = ..., acting_through_delegation: _Optional[str] = ..., acting_through_client: _Optional[str] = ..., prepared_call_id: _Optional[str] = ..., account_scope: _Optional[_Iterable[str]] = ..., account_scope_applies: bool = ...) -> None: ...
