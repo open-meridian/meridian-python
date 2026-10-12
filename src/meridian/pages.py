@@ -214,6 +214,13 @@ class Request:
     `headers` its headers, by lower-case name; `body` is the body as sent.
     `csrf_token` is the token a request that changes something must carry
     back, set before the view runs.
+
+    From contract v21 the caller of an act's route may be a service account
+    (`caller.subject_kind`, its owner in `caller.owner_subject`): a call the
+    dashboard admitted for the role's service account, sent by the plugin's
+    own autonomous work through `meridian.runs_as` (W4.15). The view acts as
+    it would for a person, with `acting_for=request.caller.header`, and the
+    sidecar records the service account.
     """
 
     method: str

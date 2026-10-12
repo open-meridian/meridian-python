@@ -830,3 +830,56 @@ async def test_the_lakes_trades_and_quotes_made_with_the_sdk_are_the_pinned_byte
     ):
         _, reply_pin = pinned(name, section)
         assert message.FromString(reply_pin).SerializeToString(deterministic=True) == reply_pin
+
+
+@pytest.mark.parametrize(
+    "name", ["call-as-service-account.yaml", "plugin-calls-as-service-account.yaml"]
+)
+async def test_an_act_called_as_the_service_account_is_the_pinned_bytes(
+    sidecar, name: str
+) -> None:
+    """An act called as its role's service account through
+    `meridian.runs_as` reaches the sidecar as the bytes the fixture pins
+    (W4.15, contract v21), with no `meridian-caller` metadata -- the
+    sidecar's row and the bus row it forwards unchanged carry one message --
+    and the pinned answers, made and prepared, come back as the dashboard
+    gave them."""
+    import json
+
+    import meridian
+    from meridian.v1 import sidecar_pb2
+
+    fixture = yaml.safe_load((fixtures_root() / _find(name)).read_text(encoding="utf-8"))
+    asked = fixture["request"]["fields"]
+    request_pin = base64.b64decode(fixture["expected_proto_bytes_b64"]["request"])
+    reply_pin = base64.b64decode(fixture["expected_proto_bytes_b64"]["reply"])
+    (prepared,) = (case["reply_fields"] for case in fixture["cases"] if "reply_fields" in case)
+
+    service, address = sidecar
+    service.roles = (asked["role"],)
+    plugin = await meridian.connect(address, heartbeat=False)
+    try:
+        async with meridian.runs_as(asked["role"]) as act:
+            service.service_account_answer = sidecar_pb2.CallAsServiceAccountReply.FromString(
+                reply_pin
+            )
+            made = await act(
+                asked["tool_name"], json.loads(asked["arguments_json"]), reason=asked["reason"]
+            )
+            service.service_account_answer = sidecar_pb2.CallAsServiceAccountReply(**prepared)
+            held = await act(
+                asked["tool_name"], asked["arguments_json"], reason=asked["reason"]
+            )
+    finally:
+        await plugin.leave()
+
+    for sent, carried in service.service_account_calls:
+        assert sent.SerializeToString(deterministic=True) == request_pin
+        assert carried == "", "sent as the plugin itself, for no person"
+    assert made.SerializeToString(deterministic=True) == reply_pin
+    assert made.outcome == fixture["reply"]["fields"]["outcome"] == "made"
+    assert json.loads(made.answer_json) == json.loads(fixture["reply"]["fields"]["answer_json"])
+    assert (held.outcome, held.prepared_call_id) == (
+        "prepared",
+        prepared["prepared_call_id"],
+    )

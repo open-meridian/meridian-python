@@ -1,0 +1,34 @@
+# open-meridian 0.24.0 to 0.25.0: the SDK declares contract v21, a service
+# account runs a plugin's autonomous work
+# (sdk-contract/a-service-account-runs-a-plugins-autonomous-work;
+# plans/a-service-account-runs-a-plugins-autonomous-work, "Refreshed
+# 2026-10-10", ruled 2026-10-11). Additions only: nothing a plugin calls
+# changed shape, so only the pins move.
+from = "0.24.0"
+to = "0.25.0"
+summary = """
+The SDK declares contract v21 (meridian.SCHEMA_VERSION). A plugin's
+autonomous work -- a scheduled sweep, a strategy, an agent inside the plugin
+-- calls its own declared acts as the service account its role runs as
+(async with meridian.runs_as(role) as act: await act(tool_name, arguments,
+reason=...)), sent as the plugin itself; the dashboard applies the account's
+grants, the act's level and second pair of eyes and the account's own
+setting, and answers a CallAsServiceAccountReply: made, with the act's own
+answer (answer_json), or prepared, with the prepared change's ID
+(prepared_call_id). A refusal names its field, as NotGranted.fields and
+CallFailed.fields now carry for every refusal naming one; a sidecar older
+than v21 is said to be, CallFailed with kind "unimplemented". Nothing is
+declared for it: an act called so names its check tool (checked_by=) so it
+can be prepared.
+
+A route reached for such a call reads a Caller whose subject_kind is
+meridian.SubjectKind.SUBJECT_KIND_SERVICE_ACCOUNT, its subject the account's
+SA- ID and its owner_subject the person answerable for it, with no
+delegation and no client, and acts as for a person, handing the header back
+as acting_for. meridian.testing's caller_header and PageClient.call_tool take
+subject_kind= and owner_subject= for a plugin's own tests.
+
+Nothing to rewrite, so `meridian plugin migrate` moves the pins and changes no
+code.
+"""
+breaking = false

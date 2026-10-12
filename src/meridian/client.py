@@ -43,9 +43,12 @@ from typing import TYPE_CHECKING, Any, NoReturn, TypeVar, cast
 import grpc
 
 from meridian.plugin.v1 import operations_pb2_grpc
-from meridian.v1 import sidecar_pb2, sidecar_pb2_grpc
+from meridian.v1 import envelope_pb2, sidecar_pb2, sidecar_pb2_grpc
 
 from .bounds import (
+    CALL_AS_SERVICE_ACCOUNT_REQUEST_ARGUMENTS_JSON_LENGTH,
+    CALL_AS_SERVICE_ACCOUNT_REQUEST_REASON_LENGTH,
+    CALL_AS_SERVICE_ACCOUNT_REQUEST_TOOL_NAME_LENGTH,
     CALLER_CLAIMS_OWN_SETTINGS_COUNT,
     FILE_TICKET_REQUEST_REFERENCES_COUNT,
     FILE_TICKET_REQUEST_SEEN_LENGTH,
@@ -98,10 +101,12 @@ if TYPE_CHECKING:
 #: quotes recorded, read and heard, trades in full and caught up after a
 #: watermark, and from v20 an act's check tool, its accounts and the page it
 #: is made on, the prepared change a page was opened from, a person's own
-#: settings, and a data plugin's datasets' licences and its own last trades
-#: -- and a newer sidecar still admits it. Raised with every
-#: contract revision that adds something a plugin can depend on.
-SCHEMA_VERSION = "v20"
+#: settings, and a data plugin's datasets' licences and its own last trades,
+#: and from v21 an act called as the role's service account and the kind and
+#: owner of whom the claims vouch for -- and a newer sidecar still admits it.
+#: Raised with every contract revision that adds something a plugin can
+#: depend on.
+SCHEMA_VERSION = "v21"
 
 #: Where a sidecar listens. Loopback, always: a sidecar reachable from another
 #: host is a way around the boundary it exists to enforce.
@@ -158,6 +163,11 @@ REFUSAL_METADATA = "meridian-refusal-bin"
 #: Where a call made for a person carries the assertion the plugin was handed
 #: for them, as the `Meridian-Caller` header it read (W4.12, contract v13).
 CALLER_METADATA = "meridian-caller"
+
+#: The kind of user the claims' subject is (contract v21): unspecified, a
+#: person, as every subject before v21; `SUBJECT_KIND_SERVICE_ACCOUNT`, a
+#: service account, a user of the deployment that is not a person (W6.32).
+SubjectKind = envelope_pb2.SubjectKind
 
 _SETTING_TYPES = {
     str: sidecar_pb2.SETTING_TYPE_STRING,
@@ -692,6 +702,19 @@ class Caller:
     no entry -- a plugin holding no role, or a dashboard before v15 -- read
     every role as the session's level and accounts, as the sidecar reads them
     on a plugin holding one.
+
+    From contract v21 the subject may be a service account rather than a
+    person (`subject_kind`, `SubjectKind.SUBJECT_KIND_SERVICE_ACCOUNT`; its
+    `SA-` ID in `subject`, the person answerable for it in
+    `owner_subject`): an act's route reached for a call the dashboard
+    admitted for the role's service account (W4.15), at the role's "runs
+    as" level, naming the tool, with no delegation and no client. The route
+    acts as it would for a person, handing `header` back as `acting_for`;
+    the sidecar admits what it sends as a person's command under Open and
+    stamps the account, its kind and its owner, so the book records the
+    service account. It opens no page, and is refused every
+    `platform.config.` command but filing a ticket and reading back what was
+    filed. Unspecified, a person, as every caller before v21.
     """
 
     subject: str
@@ -739,6 +762,13 @@ class Caller:
     # and says a second person makes a change this person prepared. For
     # showing only: the dashboard refuses a direct make whatever is drawn.
     second_pair_of_eyes: frozenset[str] = frozenset()
+    # Whether the subject is a person or a service account (contract v21,
+    # W4.9): a `SubjectKind`, set to SUBJECT_KIND_SERVICE_ACCOUNT by the
+    # dashboard only for an act it admitted through the act's door; and the
+    # person answerable for a service account when the call was admitted,
+    # its owner, empty for a person.
+    subject_kind: int = envelope_pb2.SUBJECT_KIND_UNSPECIFIED
+    owner_subject: str = ""
 
     @classmethod
     def from_header(cls, header: str) -> Caller:
@@ -781,6 +811,8 @@ class Caller:
             prepared_call_id=claims.prepared_call_id,
             own_settings={held.name: held.value for held in claims.own_settings},
             second_pair_of_eyes=frozenset(claims.second_pair_of_eyes),
+            subject_kind=claims.subject_kind,
+            owner_subject=claims.owner_subject,
         )
 
     def level_for(self, role: str) -> int:
@@ -1181,6 +1213,29 @@ class Plugin(Operations):
         )
         return reply.prepared_call if reply.HasField("prepared_call") else None
 
+    async def _call_as_service_account(
+        self, asked: sidecar_pb2.CallAsServiceAccountRequest
+    ) -> sidecar_pb2.CallAsServiceAccountReply:
+        """One of this plugin's acts called as its role's service account
+        (W4.15, contract v21), as the plugin itself: no `meridian-caller`,
+        since no person is behind it. `runs_as` builds the request."""
+        self._check_open()
+        try:
+            reply: sidecar_pb2.CallAsServiceAccountReply = (
+                await self._stub.CallAsServiceAccount(asked)
+            )
+        except grpc.aio.AioRpcError as failed:
+            if failed.code() is grpc.StatusCode.UNIMPLEMENTED:
+                raise CallFailed(
+                    "CallAsServiceAccount",
+                    "unimplemented",
+                    "this plugin's sidecar is older than contract v21 and offers no "
+                    "CallAsServiceAccount: a plugin's autonomous work calls its acts as a "
+                    "service account only beside a sidecar of core v21 or later",
+                ) from failed
+            _translated("CallAsServiceAccount", failed)
+        return reply
+
     async def account_scope(self) -> AsyncIterator[AccountScope]:
         """Its account scope and its links, now and again on every change
         (W4.11): the first at once, so a plugin just started has its links."""
@@ -1457,6 +1512,9 @@ class Plugin(Operations):
         if self._left:
             return
         self._left = True
+        global _registered
+        if _registered is self:
+            _registered = None
         if self._heartbeat is not None:
             self._heartbeat.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -1552,11 +1610,13 @@ class Plugin(Operations):
 
 
 def _translated(operation: str, failed: grpc.aio.AioRpcError) -> NoReturn:
-    """A sidecar's refusal of `operation` in this package's terms, raised."""
+    """A sidecar's refusal of `operation` in this package's terms, raised,
+    with the fields it named beside it."""
     detail = failed.details() or ""
-    if failed.code() is grpc.StatusCode.PERMISSION_DENIED:
-        raise NotGranted(operation, detail) from failed
     refusal = _refusal(failed)
+    fields = tuple(refusal.fields)
+    if failed.code() is grpc.StatusCode.PERMISSION_DENIED:
+        raise NotGranted(operation, detail, fields=fields) from failed
     reason = refusal.reason
     if reason == sidecar_pb2.REFUSAL_REASON_EXTERNAL_ACCOUNT_NOT_LINKED:
         raise NotLinked(operation, detail) from failed
@@ -1565,13 +1625,11 @@ def _translated(operation: str, failed: grpc.aio.AioRpcError) -> NoReturn:
     # command the component could not check, nothing recorded, to be tried
     # again (contract v10).
     if coded and failed.code() in _CODED:
-        raise CommandRefused(
-            operation, detail, reason, fields=tuple(refusal.fields)
-        ) from failed
+        raise CommandRefused(operation, detail, reason, fields=fields) from failed
     kind = _OPERATION_FAILURES.get(failed.code())
     if kind is None:
         raise failed
-    raise CallFailed(operation, kind, detail) from failed
+    raise CallFailed(operation, kind, detail, fields=fields) from failed
 
 
 def _refusal(failed: grpc.aio.AioRpcError) -> sidecar_pb2.Refusal:
@@ -1703,12 +1761,166 @@ async def connect(
     )
     if heartbeat:
         plugin._heartbeat = asyncio.create_task(plugin._beat())
+    # What `runs_as` calls through, until it leaves (contract v21).
+    global _registered
+    _registered = plugin
     # Under `meridian-dev run`, on a development deployment: this revision
     # is running, which is what `ready` means (spec/live-plugin-development).
     from .dev import report_ready
 
     report_ready()
     return plugin
+
+
+#: The plugin `connect` registered last and which has not left: the one a
+#: plugin's process runs, which `runs_as` calls its acts through.
+_registered: Plugin | None = None
+
+
+def runs_as(role: str, *, plugin: Plugin | None = None) -> _RunsAs:
+    """The context a plugin's autonomous work runs in -- a scheduled sweep, a
+    strategy, an agent inside the plugin -- calling the plugin's own acts as
+    the service account its role runs as (W4.15, contract v21):
+
+        async with meridian.runs_as("operations") as act:
+            reply = await act(
+                "close_cleared_breaks",
+                {"account_id": "ACC-1", "break_ids": ["BRK-..."], ...},
+                reason="The settlement landed: the difference was gone",
+            )
+        if reply.outcome == "prepared":
+            log.info("waiting for a person: %s", reply.prepared_call_id)
+
+    A role's admin chooses which of the service accounts a deployment admin
+    granted on the role its autonomous work runs as, at which level; nothing
+    here names one, holds a credential or chooses whether the work makes or
+    prepares. Each call names one of the plugin's declared acts on `role` by
+    its tool's name, its arguments (the act's typed record of inputs, as a
+    dataclass, a mapping or its JSON) and why, and the dashboard applies what
+    it applies to a person's agent: the account's grants and accounts, the
+    act's level -- the strictest of the ceiling, the plugin admin's, any
+    access group's reaching the account and the account's own setting --
+    and the act's second pair of eyes. Nothing is declared for it: the work
+    calls acts the plugin already declares, each naming its check tool
+    (`checked_by=`) so it can be prepared.
+
+    The call answers a `CallAsServiceAccountReply`: `outcome` "made", the act
+    made as the service account, its route's typed JSON answer in
+    `answer_json` (the route reached with the account's claims, acting as
+    for a person); or "prepared", kept for the people who may make it, its
+    `PC-` ID in `prepared_call_id`, nothing in the deployment changed. A
+    refusal is raised naming the field, as the dashboard named it
+    (`.fields`): `NotGranted` (permission denied) for an account disabled,
+    removed or not granted write on the role (`role`) or an act at may not
+    (`tool_name`); `CallFailed` "refused" (failed precondition) for a role
+    running as no service account (`role`), an act with no check tool for an
+    account set to prepare only (`tool_name`), or the check's own refusal;
+    "invalid" (invalid argument) for a tool that is not one of the role's
+    acts, a role the instance was not launched with, or a reason past its
+    bound; "unimplemented" from a sidecar older than contract v21.
+
+    Run beside the plugin `connect` registered, or the one `plugin` names.
+    Refused here, before anything is sent, for a role the plugin does not
+    hold, a tool's name or reason past its bound, a core tool
+    (`dashboard__...`) or arguments that are not a JSON object.
+    """
+    if not isinstance(role, str) or not role:
+        raise ValueError("role is empty; name the role whose service account the work runs as")
+    return _RunsAs(role, plugin)
+
+
+class _RunsAs:
+    """`runs_as(role)`, entered: calling it calls an act as the role's
+    service account."""
+
+    def __init__(self, role: str, plugin: Plugin | None) -> None:
+        self.role = role
+        self._named = plugin
+        self._plugin: Plugin | None = None
+
+    async def __aenter__(self) -> _RunsAs:
+        plugin = self._named if self._named is not None else _registered
+        if plugin is None:
+            raise NotRegistered(
+                "runs_as calls the plugin's acts through its sidecar: connect first, "
+                "or name the plugin (runs_as(role, plugin=...))"
+            )
+        plugin._check_open()
+        if self.role not in plugin.identity.roles:
+            held = ", ".join(plugin.identity.roles) or "no role"
+            raise ValueError(
+                f"role is {self.role!r}, which {plugin.identity.instance_id} was not launched "
+                f"with; it holds {held}"
+            )
+        self._plugin = plugin
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
+        self._plugin = None
+
+    async def __call__(
+        self, tool_name: str, arguments: Any, *, reason: str
+    ) -> sidecar_pb2.CallAsServiceAccountReply:
+        """Call the act named `tool_name` with `arguments` as the role's
+        service account, saying why (`reason`, 1 to 4,000 characters, plain
+        text, kept as a prepared change's reason): made, prepared, or
+        refused naming the field."""
+        if self._plugin is None:
+            raise NotRegistered(
+                "runs_as(role) calls an act only inside its block: async with "
+                "meridian.runs_as(role) as act"
+            )
+        _bounded("tool_name", tool_name, CALL_AS_SERVICE_ACCOUNT_REQUEST_TOOL_NAME_LENGTH)
+        if tool_name.startswith("dashboard__"):
+            raise ValueError(
+                f"tool_name is {tool_name!r}, a core tool: a service account reaches its "
+                "plugin's own acts on the role it runs for, and no core act"
+            )
+        _bounded("reason", reason, CALL_AS_SERVICE_ACCOUNT_REQUEST_REASON_LENGTH)
+        return await self._plugin._call_as_service_account(
+            sidecar_pb2.CallAsServiceAccountRequest(
+                role=self.role,
+                tool_name=tool_name,
+                arguments_json=_arguments_json(arguments),
+                reason=reason,
+            )
+        )
+
+
+def _arguments_json(arguments: Any) -> str:
+    """An act's arguments as the call carries them: its typed record of
+    inputs, a mapping or that record already as JSON, written as a JSON
+    object -- a Decimal as its string, a date in ISO 8601, as a tool's call
+    sends them -- and held to the field's bound, in bytes."""
+    if isinstance(arguments, str):
+        try:
+            read = json.loads(arguments)
+        except ValueError:
+            read = None
+        if not isinstance(read, dict):
+            raise ValueError("arguments is not a JSON object: the act's typed record of inputs")
+        text = arguments
+    else:
+        from .params import to_json
+
+        written = to_json(arguments)
+        if not isinstance(written, dict):
+            raise TypeError(
+                f"arguments is a {type(arguments).__name__}; it is the act's typed record of "
+                "inputs, a mapping or its JSON object"
+            )
+        text = json.dumps(written, separators=(",", ":"), ensure_ascii=False)
+    most = CALL_AS_SERVICE_ACCOUNT_REQUEST_ARGUMENTS_JSON_LENGTH.most
+    if len(text.encode("utf-8")) > most:
+        raise ValueError(
+            f"arguments is {len(text.encode('utf-8'))} bytes as JSON; at most {most}"
+        )
+    return text
 
 
 def _own(

@@ -33,6 +33,12 @@ it reports on its Summary (W4.5), checked as the SDK checks them before
 sending: a test of the figures a plugin computes asserts on it, or on the
 refusal it raises.
 
+From contract v21 a tool's call may be a service account's, as the dashboard
+sends an act it admitted for a role's service account (W4.15):
+`call_tool(name, arguments, subject="SA-...", owner_subject="local|ada",
+subject_kind=meridian.SubjectKind.SUBJECT_KIND_SERVICE_ACCOUNT)` carries no
+delegation and no client, and the route acts as it would for a person.
+
 `post` carries the person's CSRF token back, as the page's form would;
 `request` sends only what it is given, for a test that a request without
 one, or with somebody else's, is refused. A view raising fails the test with
@@ -55,7 +61,7 @@ from markupsafe import escape
 from .client import Caller, Page, _levels, _roles
 from .figures import Figure, wire
 from .pages import CSRF_FIELD, SPELLING, Pages, Request, Response, Tool
-from .v1 import sidecar_pb2
+from .v1 import envelope_pb2, sidecar_pb2
 
 #: The three levels, as the home's Manage, Open and View open a session.
 LEVELS = ("admin", "write", "read")
@@ -111,6 +117,8 @@ def caller_header(
     prepared_call_id: str = "",
     own_settings: Mapping[str, str] | None = None,
     second_pair_of_eyes: Iterable[str] = (),
+    subject_kind: int = envelope_pb2.SUBJECT_KIND_UNSPECIFIED,
+    owner_subject: str = "",
 ) -> str:
     """The `Meridian-Caller` header a sidecar forwards for a session at
     `level`, with the accounts cut to it: `read` and `write` are those the
@@ -131,7 +139,12 @@ def caller_header(
     opened from, and `own_settings` the person's own values of the plugin's
     per-person settings, each as text, which the dashboard hands over under
     Open and View, never under Manage; `second_pair_of_eyes` the plugin's
-    acts, by tool name, whose second pair of eyes is on for this person."""
+    acts, by tool name, whose second pair of eyes is on for this person.
+
+    From contract v21 `subject_kind` says whom the claims vouch for, a
+    `SubjectKind`: unspecified, a person; SUBJECT_KIND_SERVICE_ACCOUNT, a
+    service account, `subject` its `SA-` ID and `owner_subject` the person
+    answerable for it."""
     at = _levels(level, "the session")[0] if level else sidecar_pb2.ACCESS_LEVEL_UNSPECIFIED
     writes = sorted(set(write))
     reads = sorted(set(read) | set(writes))
@@ -168,6 +181,8 @@ def caller_header(
         roles=entries,
         prepared_call_id=prepared_call_id,
         second_pair_of_eyes=sorted(set(second_pair_of_eyes)),
+        subject_kind=subject_kind,  # type: ignore[arg-type]
+        owner_subject=owner_subject,
         own_settings=(
             []
             if at == sidecar_pb2.ACCESS_LEVEL_ADMIN
@@ -371,6 +386,9 @@ class PageClient:
         client_name: str = "a test's client",
         body: bytes | None = None,
         roles: _Roles | None = None,
+        subject: str | None = None,
+        subject_kind: int = envelope_pb2.SUBJECT_KIND_UNSPECIFIED,
+        owner_subject: str = "",
     ) -> ToolAnswer:
         """Call a tool as the deployment's MCP surface would (contract v12):
         at `level`, or the highest of the tool's this client's person holds
@@ -379,8 +397,16 @@ class PageClient:
         and path; no form token. `body` sends bytes as they are, for a test
         that arguments which are not JSON are refused. The claims carry an
         entry for each of the client's roles, or those `roles` names, as a
-        page's request does (contract v15)."""
+        page's request does (contract v15).
+
+        From contract v21 `subject_kind` SUBJECT_KIND_SERVICE_ACCOUNT makes
+        it a service account's call, as the dashboard sends an act it
+        admitted for a role's service account (W4.15): `subject` its `SA-`
+        ID (the client's person's otherwise), `owner_subject` the person
+        answerable for it, and no delegation and no client."""
         tool = self.tool(name)
+        if subject_kind == envelope_pb2.SUBJECT_KIND_SERVICE_ACCOUNT:
+            delegation_id = client_name = ""
         served = {SPELLING[each] for each in tool.levels}
         if level is None:
             level = next(each for each in PICKED if each in served)
@@ -388,13 +414,15 @@ class PageClient:
             level,
             read=self.read,
             write=self.write,
-            subject=self.subject,
             display_name=self.display_name,
             deployment_admin=self.deployment_admin,
             delegation_id=delegation_id,
             client_name=client_name,
             tool_name=tool.name,
             roles=self._held(roles),
+            subject=self.subject if subject is None else subject,
+            subject_kind=subject_kind,
+            owner_subject=owner_subject,
         )
         sent = body if body is not None else json.dumps(dict(arguments or {})).encode()
         request = Request(

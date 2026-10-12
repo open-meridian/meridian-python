@@ -141,6 +141,16 @@ templates. Settings may be one typed class (`@meridian.settings`, its fields
 `meridian.setting(...)`, `meridian.environment()` and
 `meridian.sample_data()`), and every page's loader holds the kit's macros,
 `meridian/kit.html`.
+
+From contract v21 a plugin's autonomous work -- a scheduled sweep, a
+strategy, an agent inside the plugin -- calls the plugin's own acts as the
+service account its role runs as (`async with meridian.runs_as(role) as act:
+await act(tool_name, arguments, reason=...)`), answered made, with the act's
+own answer, or prepared, with the prepared change's ID, by every level the
+admins set and the account's own setting; a refusal names the field
+(`.fields`). A route reached for such a call is a `Caller` whose
+`subject_kind` is `SubjectKind.SUBJECT_KIND_SERVICE_ACCOUNT`, naming its
+`owner_subject`, and acts as for a person (`acting_for=request.caller.header`).
 """
 
 # Each role's common part (contract v20, spec/plugin-pages-follow-their-role).
@@ -165,12 +175,14 @@ from .client import (
     Plugin,
     Setting,
     Settings,
+    SubjectKind,
     TicketKind,
     TicketReference,
     TicketResolution,
     TicketState,
     TicketSubject,
     connect,
+    runs_as,
 )
 from .declaration import (
     DatasetDeclaration,
@@ -382,6 +394,7 @@ __all__ = [
     "Storage",
     "StoredSpan",
     "StreetRecordRef",
+    "SubjectKind",
     "SyncState",
     "TicketKind",
     "TicketReference",
@@ -419,6 +432,7 @@ __all__ = [
     "TradeCharacteristic",
     "environment",
     "roles",
+    "runs_as",
     "sample_data",
     "setting",
     "settings",

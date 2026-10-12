@@ -89,6 +89,16 @@ data plugin reads the record of an instrument another source resolved (contract
 v18, ruled 2026-10-10) -- a custodian's QQQ, by its symbol and CUSIP --
 and a record the store does not hold is not found. Who may ask is the
 sidecar's to enforce, tested in meridian-core.
+
+From contract v21 it answers an act called as a role's service account
+(W4.15) as core's sidecar does what it checks itself: a call carrying a
+person's assertion refused, since nobody is behind it, and a role the
+instance was not launched with refused naming `role`; then the dashboard's
+answer as a test scripts it (`service_account_answer`): made with the act's
+answer, prepared with its ID, or a refusal by its status and fields, carried
+beside it as the sidecar carries them. `older_than_v21` answers
+unimplemented, as a sidecar before v21 does. Whether the account may make
+the act is the dashboard's, tested in meridian-core.
 """
 
 from __future__ import annotations
@@ -1172,6 +1182,22 @@ class FakeSidecar(sidecar_pb2_grpc.SidecarServiceServicer):
     prepared: dict[str, sidecar_pb2.PreparedCall] = field(default_factory=dict)
     prepared_reads: list[tuple[str, str]] = field(default_factory=list)
     own: dict[str, dict[str, str]] = field(default_factory=dict)
+    # The acts called as a role's service account (contract v21, W4.15),
+    # each with the person its call carried (nobody, as the SDK sends it);
+    # the dashboard's answer a test scripts, a reply or a refusal by its
+    # status, words and fields; and a sidecar older than v21, which answers
+    # unimplemented.
+    service_account_calls: list[tuple[sidecar_pb2.CallAsServiceAccountRequest, str]] = field(
+        default_factory=list
+    )
+    service_account_answer: (
+        sidecar_pb2.CallAsServiceAccountReply | tuple[grpc.StatusCode, str, tuple[str, ...]]
+    ) = field(
+        default_factory=lambda: sidecar_pb2.CallAsServiceAccountReply(
+            outcome="made", answer_json='{"outcome":"made","data":{}}'
+        )
+    )
+    older_than_v21: bool = False
     # Told of each heartbeat as it is heard, so a test waits for the beats it
     # asserts on instead of sleeping and counting what happened to arrive.
     beat: asyncio.Condition = field(default_factory=asyncio.Condition, repr=False)
@@ -1511,6 +1537,44 @@ class FakeSidecar(sidecar_pb2_grpc.SidecarServiceServicer):
         return sidecar_pb2.SetOwnSettingsReply(
             values=[sidecar_pb2.SettingValue(name=n, value=v) for n, v in held.items()]
         )
+
+    async def CallAsServiceAccount(  # noqa: N802
+        self,
+        request: sidecar_pb2.CallAsServiceAccountRequest,
+        context: grpc.aio.ServicerContext,
+    ) -> sidecar_pb2.CallAsServiceAccountReply:
+        """An act called as the role's service account (W4.15), answered as
+        the sidecar answers it: refused with a person's assertion, since
+        nobody is behind the call, and for a role the instance was not
+        launched with, naming `role`; then the dashboard's answer as
+        scripted -- made, prepared, or its refusal by the same fields."""
+        kept = sidecar_pb2.CallAsServiceAccountRequest()
+        kept.CopyFrom(request)
+        self.service_account_calls.append((kept, _caller(context)))
+        if self.older_than_v21:
+            await context.abort(grpc.StatusCode.UNIMPLEMENTED, "Method not implemented!")
+        if _caller(context):
+            await context.abort(
+                grpc.StatusCode.INVALID_ARGUMENT,
+                "a plugin calls its act as its role's service account with no person behind it",
+            )
+        answer = self.service_account_answer
+        if request.role not in self.roles:
+            answer = (
+                grpc.StatusCode.INVALID_ARGUMENT,
+                f"role: {request.role!r} is not a role {self.instance_id} was launched with",
+                ("role",),
+            )
+        if isinstance(answer, tuple):
+            status, words, fields = answer
+            refusal = sidecar_pb2.Refusal(fields=list(fields))
+            await context.abort(
+                status,
+                words,
+                trailing_metadata=(("meridian-refusal-bin", refusal.SerializeToString()),),
+            )
+        assert isinstance(answer, sidecar_pb2.CallAsServiceAccountReply)
+        return answer
 
     def read_moves(self, request: object) -> object:
         """Core's ReadMoves (W6.9) over what was recorded here: the moves

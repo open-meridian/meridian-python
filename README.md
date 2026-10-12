@@ -2,7 +2,7 @@
 
 The Python SDK for building [Open Meridian](https://open-meridian.com) plugins:
 the tools a trader has an AI agent build, and the bots and analytics a
-developer writes. Python 3.11 or newer. This is release 0.24.0; its reference
+developer writes. Python 3.11 or newer. This is release 0.25.0; its reference
 is at [open-meridian.dev](https://open-meridian.dev/api/python-sdk/).
 
 ## Start here
@@ -1272,6 +1272,64 @@ Every page's loader holds the kit's patterns as macros, `meridian/kit.html`:
 `status`, `action`, `notice`, `badge`, `tiles`, `when`, `grid`,
 `nothing_here`, `empty` and `facts`.
 
+### A service account runs a plugin's autonomous work (contract v21)
+
+A plugin's autonomous work -- a scheduled sweep, a strategy, an agent inside
+the plugin -- acts with an identity of its own: a **service account**, a user
+of the deployment that is not a person. A deployment admin creates it, names
+the person answerable for it (its owner), grants it per role and sets it to
+**prepare only** (the default) or **act**; a role's admin chooses which of
+the accounts granted on that role the role's work **runs as**. The plugin
+holds no credential and chooses none of it. Its work calls one of its own
+declared acts as that account:
+
+```python
+async with meridian.runs_as("operations") as act:
+    reply = await act(
+        "close_cleared_breaks",                     # one of the role's acts, by its tool's name
+        {"account_id": "ACC-1", "break_ids": ["BRK-..."], "as_of_date": "2026-09-10"},
+        reason="The settlement landed: the difference was gone at the statement",
+    )
+if reply.outcome == "made":
+    answer = json.loads(reply.answer_json)          # the act's own typed answer
+else:                                               # "prepared": a person makes it
+    log.info("prepared %s for the people who may make it", reply.prepared_call_id)
+```
+
+The dashboard applies what it applies to a person's agent -- the account's
+grants and accounts, the act's level (the strictest of the ceiling, the
+plugin admin's, any access group's reaching the account, and the account's
+own setting) and the act's second pair of eyes -- and makes the act or
+prepares it. Nothing is declared for it: the work calls acts the plugin
+already declares, each naming its check tool (`checked_by=`) so it can be
+prepared; an act with none is refused to an account set to prepare only.
+The arguments are the act's typed record of inputs, a mapping or its JSON;
+the call is sent as the plugin itself, never for a person.
+
+A refusal names the field (`.fields`), as the dashboard named it:
+`NotGranted` for an account disabled, removed or not granted write on the
+role (`role`) or an act at "may not" (`tool_name`); `CallFailed` with `kind`
+"refused" for a role running as no service account (`role`), an act with no
+check tool for an account set to prepare only (`tool_name`), or the check
+tool's own refusal; "invalid" for a tool that is not one of the role's acts
+(a read, another role's act, a core `dashboard__` tool), a role the instance
+was not launched with, or a reason past 4,000 characters; and
+"unimplemented" from a sidecar older than contract v21.
+
+**The act's route acts as for a person.** Made, the dashboard sends the
+arguments to the act's route with claims minted for that call alone: the
+caller's `subject_kind` is `SubjectKind.SUBJECT_KIND_SERVICE_ACCOUNT`, its
+`subject` the account's `SA-` ID and its `owner_subject` the person
+answerable for it, with no delegation and no client. The route does what it
+does for a person, handing `request.caller.header` back as `acting_for`; the
+sidecar stamps the account, its kind and its owner, so the book records the
+service account. Such claims open no page and are refused every
+`platform.config.` command but filing a ticket and reading back what was
+filed. A plugin's own test calls a tool so with
+`PageClient.call_tool(name, arguments, subject="SA-...",
+subject_kind=meridian.SubjectKind.SUBJECT_KIND_SERVICE_ACCOUNT,
+owner_subject="local|ada")`.
+
 ## Moving a plugin to a new release
 
     meridian plugin migrate            # to the latest release
@@ -1334,6 +1392,7 @@ carries libcst.
 | 0.21.0 to 0.22.0: the SDK declares contract v18, the lake's 1a: a data plugin's catalogue (`Declaration(catalogue=[DatasetDeclaration(...)])`, `DatasetLicence`, `ObservationMode`), prices and bars recorded in batches of 1 to 500 (`plugin.record_prices`, `plugin.record_bars`, `Price`, `Bar`, `ObservationMeta`, `SourceTime`, `Source`, `SubjectRef`), wants heard and declined (`receive(observations_wanted=, want_withdrawn=)`, `want_id=`, `plugin.decline_want`), the lake's reads by business date, as of and side by side (`list_prices`, `list_bars`, `list_datasets`, `SourceChoice`), prices and bars heard latest value first for the subjects named with their dataset (`receive(prices_recorded=, bars_recorded=, subjects=)`, `Heard.dataset`), venues resolved (`resolve_venue`, `report_missing_venue`), the data suite and the reading roles' (a heard row delivered by `answer`); a Money names its cash instrument (`Money.instrument_id`; `Money(amount, "USD")` resolved by core, dated); every date field takes a `datetime.date`, and refuses text that is no date. `Money(amount, code)` keeps its shape, so `meridian plugin migrate` needs no change in the command line | only the pins move | a test comparing a Money read back (`as_money`) with one it made, which now carries `instrument_id`: compare `amount` and `currency_code`; a date sent as text that is no date, refused |
 | 0.23.0 to 0.24.0: the SDK declares contract v20. Breaking: the roles `dgm`, `ccm` and `match` are `data`, `connectivity` and `confirmation`. An act names its check tool, its accounts and its page (`checked_by=`, `accounts=`, `made_on=`), a page reads the prepared change it was opened from (`request.prepared()`), a route's record names no field `prepare`; a person's own settings (`Setting(per_person=True)`, `plugin.set_own_settings`, `request.own_settings`); a link to an account not granted refused (`REFUSAL_REASON_ACCOUNT_NOT_LINKABLE`); a data plugin's licences (`list_datasets`) and its restart backfilled (`list_trades(latest_recorded=True)`, `meridian.roles.data.backfill_restart`); the data suite's v20 cases and `about_field`; each role's common part (`meridian.roles`), `meridian.environment()`, `@meridian.settings`, `meridian.sample_data()` and `meridian/kit.html` | a role named `dgm`, `ccm` or `match` in `pyproject.toml`'s `[tool.meridian]` roles, a `roles=` argument, or the role a suite is run or an access read for, into `data`, `connectivity` or `confirmation` | a role's old name anywhere else, in words or a variable; a developer setting named `synthetic`, which `meridian.sample_data()` replaces at the plugin's next push; an act to be preparable: name its check tool |
 | 0.22.0 to 0.23.0: the SDK declares contract v19, the lake's 1b: trades and quotes recorded in batches of 1 to 500 (`plugin.record_trades`, `plugin.record_quotes`, `Trade`, `TradeAttributes`, `Eligibility`, `Quote`), read (`list_trades` over a range or `after_watermark=`, `list_quotes`) and heard (`receive(trades_recorded=, quotes_recorded=, subjects=)`: every trade, caught up after the watermark last seen; the latest quote per asset); a price heard is conflated per its asset too; `reporting` resolves an identifier; the data suite's eight 1b cases, a case about a kind of data the plugin never publishes not presented with why (`Case.about`), `signal`'s 1b cases, the `ems` suite, `reporting`'s `resolves-its-reporting-currency` | only the pins move | a data plugin's suite test meeting the eight new cases: map each, or name those about trades or quotes in `not_presented` with why where it publishes neither |
+| 0.24.0 to 0.25.0: the SDK declares contract v21, a service account runs a plugin's autonomous work: an act called as the role's service account (`meridian.runs_as(role)`), answered made or prepared, a refusal naming its field (`NotGranted.fields`, `CallFailed.fields`); a caller who is a service account (`Caller.subject_kind`, `Caller.owner_subject`, `meridian.SubjectKind`), and a tool's call as one in a plugin's own test (`PageClient.call_tool(subject_kind=, owner_subject=)`) | only the pins move | |
 
 `tests/migrations/` holds the plugins the migrations are recorded for, as
 written and as their migration leaves them, and `make check-migrations` holds

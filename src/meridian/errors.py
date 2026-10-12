@@ -54,12 +54,19 @@ class NotGranted(MeridianError):
     Carries the topic as well as the sidecar's reason, because the reason names
     the missing grant and the topic names what wanted it, and a plugin author
     debugging this needs both.
+
+    `fields` names the fields the refusal is about, by their paths, where the
+    sidecar named any beside it: from contract v21 the dashboard's refusal of
+    an act called as a service account (`meridian.runs_as`), `role` for an
+    account disabled or not granted, `tool_name` for an act at may not.
+    Empty for every other refusal.
     """
 
-    def __init__(self, topic: str, reason: str) -> None:
+    def __init__(self, topic: str, reason: str, *, fields: tuple[str, ...] = ()) -> None:
         super().__init__(f"{topic}: {reason}")
         self.topic = topic
         self.reason = reason
+        self.fields = fields
 
 
 class CallFailed(MeridianError):
@@ -69,13 +76,23 @@ class CallFailed(MeridianError):
     with an error, because the caller's next move differs for each: retry, stop,
     or report. Collapsing them into one exception is how a plugin ends up
     retrying something that will never succeed.
+
+    `fields` names the fields a refusal is about, by their paths, where the
+    sidecar named any beside it (its `Refusal.fields`): from contract v21 the
+    dashboard's refusal of an act called as a service account
+    (`meridian.runs_as`) -- "refused" for `role` when the role runs as no
+    service account, "invalid" for a `tool_name` that is not one of the
+    role's acts or a `reason` past its bound. Empty where it named none.
     """
 
-    def __init__(self, topic: str, kind: str, detail: str) -> None:
+    def __init__(
+        self, topic: str, kind: str, detail: str, *, fields: tuple[str, ...] = ()
+    ) -> None:
         super().__init__(f"{topic}: {kind}{f': {detail}' if detail else ''}")
         self.topic = topic
         self.kind = kind
         self.detail = detail
+        self.fields = fields
 
 
 class CommandRefused(CallFailed):
@@ -114,9 +131,8 @@ class CommandRefused(CallFailed):
     def __init__(
         self, topic: str, detail: str, reason: int, *, fields: tuple[str, ...] = ()
     ) -> None:
-        super().__init__(topic, "refused", detail)
+        super().__init__(topic, "refused", detail, fields=fields)
         self.reason = reason
-        self.fields = fields
         from .v1 import sidecar_pb2
 
         self.retryable = reason == sidecar_pb2.REFUSAL_REASON_REFERENCE_UNAVAILABLE
