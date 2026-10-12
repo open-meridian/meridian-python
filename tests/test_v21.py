@@ -88,13 +88,16 @@ async def test_an_act_called_as_the_service_account_is_sent_as_the_plugin_and_ma
     service, plugin = operations_plugin
     service.service_account_answer = sidecar_pb2.CallAsServiceAccountReply(
         outcome="made",
-        answer_json='{"outcome":"made","data":{"entry_id":"ENT-7","closed":1}}',
+        answer_json=(
+            '{"data":{"account":"ACC-1","break_id":"",'
+            '"said":"Closed 1 cleared break of ACC-1."},"outcome":"made"}'
+        ),
     )
     async with meridian.runs_as("operations") as act:
         reply = await act("close_cleared_breaks", CLOSE, reason=WHY)
 
     assert reply.outcome == "made"
-    assert json.loads(reply.answer_json)["data"]["closed"] == 1
+    assert json.loads(reply.answer_json)["data"]["said"] == "Closed 1 cleared break of ACC-1."
     assert reply.prepared_call_id == ""
     ((sent, carried),) = service.service_account_calls
     assert carried == "", "no person is behind the call: it carries no meridian-caller"
