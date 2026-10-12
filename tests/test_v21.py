@@ -30,11 +30,11 @@ from meridian.v1 import sidecar_pb2
 
 SERVICE_ACCOUNT = SubjectKind.SUBJECT_KIND_SERVICE_ACCOUNT
 
+# What sample operations' act takes, as the fixtures pin it: the account,
+# and the act's own reason.
 CLOSE = {
-    "account_id": "ACC-1",
-    "break_ids": ["BRK-01J8XQ7B000000000000000002"],
-    "statement_id": "STMT-01J8XQ5N2P0000000000003",
-    "as_of_date": "2026-09-10",
+    "account": "ACC-1",
+    "reason": "The difference was gone at the statement as of 2026-09-10; nothing to correct.",
 }
 WHY = "The settlement landed: the difference was gone at the statement of 2026-09-10"
 
