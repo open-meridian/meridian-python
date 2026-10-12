@@ -260,6 +260,51 @@ async def test_a_ticket_reaches_the_v13_sidecar_only_for_a_person_it_vouches_for
     assert reading.value.code() is grpc.StatusCode.PERMISSION_DENIED
 
 
+async def test_an_act_called_as_the_service_account_reaches_the_v21_sidecar(plugin) -> None:
+    """W4.15, contract v21: the sidecar answers CallAsServiceAccount, which a
+    v20 one answers unimplemented, and checks what it checks itself before
+    asking the dashboard, each refusal naming its field in the refusal beside
+    it (`meridian-refusal-bin`), as `meridian.runs_as` reads it.
+
+    This runtime has no dashboard, so no answer here is the dashboard's: a
+    well-formed call is asked on the bus as the plugin itself, and nothing
+    serves it; core's `make e2e-service-account` makes and prepares one
+    through the whole harness. A reason the SDK sends as given, holding a
+    character the sidecar refuses in text, is refused naming `reason`; and,
+    which the SDK never sends, a core tool and a person's assertion are
+    refused by the sidecar.
+    """
+    close = {"account_id": "ACC-1", "break_ids": ["BRK-1"]}
+    async with meridian.runs_as("custody") as act:
+        with pytest.raises(CallFailed) as unserved:
+            await act("close_cleared_breaks", close, reason="The difference has gone")
+        assert unserved.value.kind == "no handler", unserved.value
+        assert "call-as-service-account" in unserved.value.detail
+
+        with pytest.raises(CallFailed) as hidden:
+            await act("close_cleared_breaks", close, reason="Cleared‮ by the statement")
+        assert (hidden.value.kind, hidden.value.fields) == ("invalid", ("reason",))
+
+    stub = sidecar_pb2_grpc.SidecarServiceStub(plugin._channel)
+    asked = sidecar_pb2.CallAsServiceAccountRequest(
+        role="custody",
+        tool_name="dashboard__make_prepared",
+        arguments_json="{}",
+        reason="A core act, which no service account reaches",
+    )
+    with pytest.raises(grpc.aio.AioRpcError) as core_tool:
+        await stub.CallAsServiceAccount(asked)
+    assert core_tool.value.code() is grpc.StatusCode.INVALID_ARGUMENT
+    assert core_tool.value.details().startswith("tool_name:")
+
+    person = meridian.testing.caller_header("write", read={"ACC-1"}, write={"ACC-1"})
+    asked.tool_name = "close_cleared_breaks"
+    with pytest.raises(grpc.aio.AioRpcError) as for_a_person:
+        await stub.CallAsServiceAccount(asked, metadata=(("meridian-caller", person),))
+    assert for_a_person.value.code() is grpc.StatusCode.INVALID_ARGUMENT
+    assert "no person behind it" in (for_a_person.value.details() or "")
+
+
 async def test_the_scaffold_registers_with_a_real_sidecar() -> None:
     """What `meridian plugin new` writes, run the way its author runs it.
 
