@@ -1287,8 +1287,8 @@ declared acts as that account:
 async with meridian.runs_as("operations") as act:
     reply = await act(
         "close_cleared_breaks",                     # one of the role's acts, by its tool's name
-        {"account_id": "ACC-1", "break_ids": ["BRK-..."], "as_of_date": "2026-09-10"},
-        reason="The settlement landed: the difference was gone at the statement",
+        {"account": "ACC-1", "reason": "The difference was gone at the statement."},
+        reason="2 cleared breaks of ACC-1: the statement found no difference for them.",
     )
 if reply.outcome == "made":
     answer = json.loads(reply.answer_json)          # the act's own typed answer
@@ -1313,8 +1313,12 @@ role (`role`) or an act at "may not" (`tool_name`); `CallFailed` with `kind`
 check tool for an account set to prepare only (`tool_name`), or the check
 tool's own refusal; "invalid" for a tool that is not one of the role's acts
 (a read, another role's act, a core `dashboard__` tool), a role the instance
-was not launched with, or a reason past 4,000 characters; and
-"unimplemented" from a sidecar older than contract v21.
+was not launched with, or a reason that is not plain text (a control,
+zero-width or bidirectional override character); and "unimplemented" from a
+sidecar older than contract v21. Nothing is sent, and `ValueError` is raised
+here (`TypeError` for the wrong type), for an empty reason or one past 4,000
+characters, a tool's name past its bound, a core tool, or arguments that are
+not a JSON object or past their bound.
 
 **The act's route acts as for a person.** Made, the dashboard sends the
 arguments to the act's route with claims minted for that call alone: the

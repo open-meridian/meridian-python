@@ -1785,8 +1785,8 @@ def runs_as(role: str, *, plugin: Plugin | None = None) -> _RunsAs:
         async with meridian.runs_as("operations") as act:
             reply = await act(
                 "close_cleared_breaks",
-                {"account_id": "ACC-1", "break_ids": ["BRK-..."], ...},
-                reason="The settlement landed: the difference was gone",
+                {"account": "ACC-1", "reason": "The difference was gone at the statement."},
+                reason="2 cleared breaks of ACC-1: the statement found no difference.",
             )
         if reply.outcome == "prepared":
             log.info("waiting for a person: %s", reply.prepared_call_id)
@@ -1816,13 +1816,14 @@ def runs_as(role: str, *, plugin: Plugin | None = None) -> _RunsAs:
     running as no service account (`role`), an act with no check tool for an
     account set to prepare only (`tool_name`), or the check's own refusal;
     "invalid" (invalid argument) for a tool that is not one of the role's
-    acts, a role the instance was not launched with, or a reason past its
-    bound; "unimplemented" from a sidecar older than contract v21.
+    acts, a role the instance was not launched with, or a reason that is not
+    plain text; "unimplemented" from a sidecar older than contract v21.
 
     Run beside the plugin `connect` registered, or the one `plugin` names.
-    Refused here, before anything is sent, for a role the plugin does not
-    hold, a tool's name or reason past its bound, a core tool
-    (`dashboard__...`) or arguments that are not a JSON object.
+    Refused here with `ValueError` (`TypeError` for the wrong type), before
+    anything is sent, for a role the plugin does not hold, a tool's name or
+    reason past its bound (a reason over 4,000 characters among them), a
+    core tool (`dashboard__...`) or arguments that are not a JSON object.
     """
     if not isinstance(role, str) or not role:
         raise ValueError("role is empty; name the role whose service account the work runs as")

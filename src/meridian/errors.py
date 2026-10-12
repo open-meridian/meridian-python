@@ -82,7 +82,8 @@ class CallFailed(MeridianError):
     dashboard's refusal of an act called as a service account
     (`meridian.runs_as`) -- "refused" for `role` when the role runs as no
     service account, "invalid" for a `tool_name` that is not one of the
-    role's acts or a `reason` past its bound. Empty where it named none.
+    role's acts or a `reason` that is not plain text (one past its bound is
+    a `ValueError` before anything is sent). Empty where it named none.
     """
 
     def __init__(
