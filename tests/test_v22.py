@@ -528,3 +528,36 @@ def test_no_case_of_any_suite_expects_nothing() -> None:
         if not case.expect
     ]
     assert empty == []
+
+
+def test_a_calendar_case_may_be_not_presented_and_an_unmarked_case_may_not() -> None:
+    """Ruled 2026-10-13: the calendar cases and connectivity's
+    records-a-locate carry `about`, so a plugin whose work never uses one
+    marks it not presented, with why; a case with no marker stays required."""
+    from meridian.suites import run, suites
+
+    held = suites()
+    for role, each in held.items():
+        for case in each.cases:
+            if case.name == "reads-a-calendar":
+                assert case.about == "calendars", role
+            if case.name == "asks-for-a-settlement-date":
+                assert case.about == "settlement dates", role
+    assert held["connectivity"].case("records-a-locate").about == "locates"
+
+    why = "this plugin reports what its venue states; it reads no calendar"
+    report = run(
+        "custody",
+        {},
+        not_presented={
+            "reads-a-calendar": why,
+            "asks-for-a-settlement-date": why,
+            "a-security-holding": "never presented",
+        },
+    )
+    assert report.not_presented == {
+        "reads-a-calendar": why,
+        "asks-for-a-settlement-date": why,
+    }
+    assert "required" in report.failures["a-security-holding"]
+    assert "reads-a-calendar" not in report.failures

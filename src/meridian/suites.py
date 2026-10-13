@@ -52,6 +52,17 @@ row for the case, at least two sent: a connectivity plugin given the same
 fill twice derives the same execution ID. A case's expect is never empty: a
 case about what the plugin must not do says so on each row (`sends` false).
 
+From contract v22 `about` names a kind of work as well as a kind of data:
+every role's `reads-a-calendar` is about `calendars`, its
+`asks-for-a-settlement-date` about `settlement dates`, and connectivity's
+`records-a-locate` about `locates`. A plugin whose work never uses one names
+the case in `not_presented`, with why, as a data plugin does a kind of data
+it never publishes:
+
+    report = run("custody", producers, not_presented={
+        "reads-a-calendar": "this plugin reports what its venue states; it reads no calendar",
+    })
+
 A case may name a row the plugin hears rather than sends (a want delivered to
 a data plugin, contract v18; an activity recorded, to an operations plugin): the
 plugin hears it through its own `receive`, called on the recorder, which
@@ -486,8 +497,9 @@ async def run_async(
     case, against the `Recorder` it is given. `not_presented` names the
     cases its source never presents, each with why: a closed-list case, or
     from contract v19 a case about a kind of data (`about`) the plugin
-    declares it never publishes, or from v20 one about a field
-    (`about_field`) its source never states."""
+    declares it never publishes, or from v22 a kind of work its work never
+    uses (calendars, settlement dates, locates), or from v20 one about a
+    field (`about_field`) its source never states."""
     held = suite(role)
     report = Report(role)
     skipped = dict(not_presented or {})
@@ -499,8 +511,8 @@ async def run_async(
             if not case.closed_list and not case.about and not case.about_field:
                 report.failures[case.name] = (
                     "only a closed-list case, or one about a kind of data the plugin "
-                    "never publishes or a field its source never states, may be not "
-                    "presented; this one is required"
+                    "never publishes, a kind of work it never does or a field its "
+                    "source never states, may be not presented; this one is required"
                 )
             elif not skipped[case.name].strip():
                 report.failures[case.name] = "a case not presented says why"
