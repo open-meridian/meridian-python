@@ -158,8 +158,9 @@ are typed as every other's, one per row a role may send: `portfolio` and the
 `cash_quantity`, never both), the `oms` releases (`release_order`),
 `compliance` checks and decides (`record_check`, `decide_approval`), the
 `ems` claims (`set_working_condition`), places at a connectivity plugin
-linked to it, setting the venue's account code it mapped
-(`create_placement`, `map_venue_account`), and proposes child orders under a
+linked to it, setting the venue's account code its admin mapped on its page
+at admin, acting for that admin (`create_placement`; `map_venue_account`
+with `acting_for=request.caller.header`), and proposes child orders under a
 released parent (`propose_order(link=OrderLink(...))`); a connectivity
 plugin reports what the venue said (`report_placement`, `report_execution`,
 `report_charge`, `record_order`, `record_locate`) and publishes its venue's

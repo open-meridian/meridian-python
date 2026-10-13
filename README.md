@@ -1353,11 +1353,8 @@ await plugin.propose_order(
 await plugin.release_order(order_id=order_id, idempotency_key=f"release:{order_id}")
 
 # the ems: claim it, and place at a connectivity plugin linked to it, with the
-# venue account code it mapped for the account.
+# venue account code its admin mapped for the account (below).
 await plugin.set_working_condition(order_id=order_id, condition="claimed", set=True)
-await plugin.map_venue_account(
-    connectivity_instance_id="snaptrade-1", venue_account_code="X12345", account_id="ACC-1"
-)
 await plugin.create_placement(
     order_id=order_id, connectivity_instance_id="snaptrade-1", venue_account_code="X12345",
     quantity=Decimal("10"), idempotency_key=f"place:{order_id}:1",
@@ -1368,6 +1365,31 @@ await plugin.report_placement(
     placement_id=placement_id, event="acknowledged", venue_order_id="V-881",
     raw_record=plugin.raw_record(key),
 )
+```
+
+The `ems`'s map of book accounts to venue account codes is its admin's: it
+is sent from the `ems`'s page at `admin`, acting for the admin viewing it
+(W11.22), never from the `ems`'s own work. An account the deployment admin
+has not granted the `ems` is refused `REFUSAL_REASON_ACCOUNT_NOT_LINKABLE`:
+
+```python
+@dataclass(frozen=True)
+class Mapping:
+    connectivity_instance_id: str
+    venue_account_code: str
+    account_id: str
+
+@pages.route("/venue-accounts", levels="admin", methods=["POST"], params=Mapping)
+async def map_account(request: meridian.Request) -> meridian.Response:
+    """Map a book account to the code it trades under at a linked connectivity plugin."""
+    mapping = request.params
+    await request.plugin.map_venue_account(
+        connectivity_instance_id=mapping.connectivity_instance_id,
+        venue_account_code=mapping.venue_account_code,
+        account_id=mapping.account_id,
+        acting_for=request.caller.header,  # the admin viewing the page
+    )
+    return pages.answer("venue_accounts.html", mapping)
 ```
 
 `compliance` checks and decides (`record_check`, `decide_approval`); an `ems`

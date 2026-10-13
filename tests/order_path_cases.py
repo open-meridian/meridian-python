@@ -19,6 +19,7 @@ from decimal import Decimal
 import meridian
 from meridian.plugin.v1 import operations_pb2 as ops
 from meridian.suites import Recorder
+from meridian.testing import caller_header
 
 Producer = Callable[[Recorder], Awaitable[None]]
 
@@ -291,8 +292,12 @@ async def checks_after_a_fill(recorder: Recorder) -> None:
 
 
 async def maps_an_account(recorder: Recorder) -> None:
+    # From the ems's page at admin, acting for the admin viewing it (W11.22).
     await recorder.map_venue_account(
-        connectivity_instance_id=VENUE, venue_account_code=CODE, account_id=ACCOUNT
+        connectivity_instance_id=VENUE,
+        venue_account_code=CODE,
+        account_id=ACCOUNT,
+        acting_for=caller_header("admin"),
     )
 
 
