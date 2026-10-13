@@ -35,6 +35,7 @@ from .bounds import (
     DECIMAL_DIGITS,
     DECIMAL_SCALE,
     RECORD_BARS_REQUEST_BARS_COUNT,
+    RECORD_OUTCOMES_REQUEST_OUTCOMES_COUNT,
     RECORD_PRICES_REQUEST_PRICES_COUNT,
     RECORD_QUOTES_REQUEST_QUOTES_COUNT,
     RECORD_TRADES_REQUEST_TRADES_COUNT,
@@ -1352,6 +1353,7 @@ class VenueCatalogue:
     order_types: Sequence[VenueOrderType] = ()
     strategies: Sequence[VenueStrategy] = ()
     eligibility: Sequence[VenueEligibility] = ()
+    execution_acknowledgement: ops.ExecutionAcknowledgement | str | None = None
 
 
 def _venue_catalogue(value: VenueCatalogue, name: str) -> ops.VenueCatalogue:
@@ -1364,6 +1366,7 @@ def _venue_catalogue(value: VenueCatalogue, name: str) -> ops.VenueCatalogue:
         order_types=[_venue_order_type(each, f"{name}.order_types[{i}]") for i, each in enumerate(value.order_types)],
         strategies=[_venue_strategy(each, f"{name}.strategies[{i}]") for i, each in enumerate(value.strategies)],
         eligibility=[_venue_eligibility(each, f"{name}.eligibility[{i}]") for i, each in enumerate(value.eligibility)],
+        execution_acknowledgement=_enum(ops.ExecutionAcknowledgement, value.execution_acknowledgement, f"{name}.execution_acknowledgement"),
     )
 
 
@@ -1603,6 +1606,7 @@ class ObservationMeta:
     previous_sequence: int = 0
     raw: ops.RawRecordRef | None = None
     unconverted: Sequence[ops.AsReported] = ()
+    closed_day: DateCheck | None = None
 
 
 def _observation_meta(value: ObservationMeta, name: str) -> ops.ObservationMeta:
@@ -1623,6 +1627,7 @@ def _observation_meta(value: ObservationMeta, name: str) -> ops.ObservationMeta:
         previous_sequence=value.previous_sequence,
         raw=value.raw,
         unconverted=list(value.unconverted),
+        closed_day=None if value.closed_day is None else _date_check(value.closed_day, f"{name}.closed_day"),
     )
 
 
@@ -1795,6 +1800,37 @@ def _quote(value: Quote, name: str) -> ops.Quote:
         bid_quantity=None if value.bid_quantity is None else _decimal(value.bid_quantity, f"{name}.bid_quantity"),
         ask_quantity=None if value.ask_quantity is None else _decimal(value.ask_quantity, f"{name}.ask_quantity"),
         characteristics=[_enum(ops.QuoteCharacteristic, each, f"{name}.characteristics[{i}]") for i, each in enumerate(value.characteristics)],
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class Outcome:
+    """An event contract's outcome, as its venue determined it, at one stage
+    (W10.4; the lake plan's "vL1c").
+
+    The SDK's form of the wire's Outcome: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    meta: ObservationMeta | None = None
+    determination: ops.OutcomeDetermination | str | None = None
+    stage: ops.OutcomeStage | str | None = None
+    settlement_value: Money
+    settled_at_ns: int = 0
+    determination_as_reported: ops.AsReported | None = None
+
+
+def _outcome(value: Outcome, name: str) -> ops.Outcome:
+    """A Outcome as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, Outcome):
+        raise TypeError(f"{name} is a meridian.Outcome, not {type(value).__name__}")
+    return ops.Outcome(
+        meta=None if value.meta is None else _observation_meta(value.meta, f"{name}.meta"),
+        determination=_enum(ops.OutcomeDetermination, value.determination, f"{name}.determination"),
+        stage=_enum(ops.OutcomeStage, value.stage, f"{name}.stage"),
+        settlement_value=_money(value.settlement_value, f"{name}.settlement_value"),
+        settled_at_ns=value.settled_at_ns,
+        determination_as_reported=value.determination_as_reported,
     )
 
 
@@ -2765,6 +2801,10 @@ class Operations:
         counterparty: Party | None = None,
         liquidity_indicator: ops.LiquidityIndicator | str | None = None,
         uti_generated_by: str = "",
+        instrument_id: str = "",
+        side: ops.Side | str | None = None,
+        venue_order_id: str = "",
+        venue_client_order_id: str = "",
         acting_for: str | None = None,
     ) -> ops.ReportExecutionResult:
         """W11.11: W11.11. A fact by a connectivity plugin; or, for a person, a manual or (preview)."""
@@ -2799,6 +2839,10 @@ class Operations:
             counterparty=None if counterparty is None else _party(counterparty, "counterparty"),
             liquidity_indicator=_enum(ops.LiquidityIndicator, liquidity_indicator, "liquidity_indicator"),
             uti_generated_by=uti_generated_by,
+            instrument_id=instrument_id,
+            side=_enum(ops.Side, side, "side"),
+            venue_order_id=venue_order_id,
+            venue_client_order_id=venue_client_order_id,
             acting_for=_assertion(acting_for),
         )
         return await self._operate(self._operations().ReportExecution, params)
@@ -2865,6 +2909,7 @@ class Operations:
         since: ops.Watermark | None = None,
         page_size: int = 0,
         cursor: str = "",
+        execution_state: ops.ExecutionState | str | None = None,
     ) -> ops.ListOrdersResult:
         """W11.17: The orders in the reader's scope, as of now or changed since a watermark; (preview)."""
         params = ops.ListOrdersParams(
@@ -2872,6 +2917,7 @@ class Operations:
             since=since,
             page_size=page_size,
             cursor=cursor,
+            execution_state=_enum(ops.ExecutionState, execution_state, "execution_state"),
         )
         return await self._operate(self._operations().ListOrders, params)
 
@@ -2993,6 +3039,41 @@ class Operations:
             acting_for=_assertion(acting_for),
         )
         return await self._operate(self._operations().MapVenueAccount, params)
+
+    async def accept_execution(
+        self,
+        *,
+        execution_ids: Sequence[str] = (),
+        order_id: str | None = None,
+        new_order: ops.NewOrderFromExecutions | None = None,
+        note: str = "",
+        acting_for: str | None = None,
+    ) -> ops.AcceptExecutionResult:
+        """W11.23: W11.23 (contract v23). By the `ems`, for a person or its service account: (preview)."""
+        params = ops.AcceptExecutionParams(
+            execution_ids=list(execution_ids),
+            **_arm("order", order_id=order_id, new_order=new_order),
+            note=note,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().AcceptExecution, params)
+
+    async def dont_know_execution(
+        self,
+        *,
+        execution_ids: Sequence[str] = (),
+        reason: ops.DkReason | str | None = None,
+        text: str = "",
+        acting_for: str | None = None,
+    ) -> ops.DontKnowExecutionResult:
+        """W11.24: W11.24 (contract v23). By the `ems`, for a person or its service account: (preview)."""
+        params = ops.DontKnowExecutionParams(
+            execution_ids=list(execution_ids),
+            reason=_enum(ops.DkReason, reason, "reason"),
+            text=text,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().DontKnowExecution, params)
 
     async def resolve_venue(
         self,
@@ -3124,6 +3205,20 @@ class Operations:
         )
         return await self._operate(self._operations().RecordQuotes, params)
 
+    async def record_outcomes(
+        self,
+        *,
+        outcomes: Sequence[Outcome] = (),
+        acting_for: str | None = None,
+    ) -> ops.RecordOutcomesResult:
+        """W10.4: A batch of outcomes, recorded whole or refused naming the item and field: (preview)."""
+        _batch(outcomes, RECORD_OUTCOMES_REQUEST_OUTCOMES_COUNT, "outcomes")
+        params = ops.RecordOutcomesParams(
+            outcomes=[_outcome(each, f"outcomes[{i}]") for i, each in enumerate(outcomes)],
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().RecordOutcomes, params)
+
     async def list_prices(
         self,
         *,
@@ -3234,6 +3329,21 @@ class Operations:
         )
         return await self._operate(self._operations().ListQuotes, params)
 
+    async def list_outcomes(
+        self,
+        *,
+        subjects: Sequence[ops.SubjectRef] = (),
+        after_watermark: ops.Watermark | None = None,
+        as_of_ns: int = 0,
+    ) -> ops.ListOutcomesResult:
+        """W10.6: Outcomes for event contracts' instruments (contract v23): the version in (preview)."""
+        params = ops.ListOutcomesParams(
+            subjects=list(subjects),
+            after_watermark=after_watermark,
+            as_of_ns=as_of_ns,
+        )
+        return await self._operate(self._operations().ListOutcomes, params)
+
     async def decline_want(
         self,
         *,
@@ -3284,6 +3394,7 @@ class Operations:
         trades_recorded: Callable[[Heard[ops.TradesRecordedEvent]], Awaitable[None]] | None = None,
         quotes_recorded: Callable[[Heard[ops.QuotesRecordedEvent]], Awaitable[None]] | None = None,
         report_venue_catalogue: Callable[[Heard[ops.VenueCatalogueEvent]], Awaitable[None]] | None = None,
+        outcomes_recorded: Callable[[Heard[ops.OutcomesRecordedEvent]], Awaitable[None]] | None = None,
         seed: bool = True,
         subjects: Sequence[str] = (),
     ) -> None:
@@ -3323,6 +3434,7 @@ class Operations:
             "TradesRecorded": trades_recorded,
             "QuotesRecorded": quotes_recorded,
             "ReportVenueCatalogue": report_venue_catalogue,
+            "OutcomesRecorded": outcomes_recorded,
         }
         await self._receive(
             {row: handler for row, handler in handlers.items() if handler is not None},
@@ -3642,5 +3754,14 @@ UNCONFLATED: tuple[ConflatedRow, ...] = (
         caught_up_by="list_trades",
         records="trades",
         within="trade",
+    ),
+    ConflatedRow(
+        name="OutcomesRecorded",
+        step="W10.5",
+        arm="outcomes_recorded",
+        message=ops.OutcomesRecordedEvent,
+        caught_up_by="list_outcomes",
+        records="outcomes",
+        within="outcome",
     ),
 )

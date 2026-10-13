@@ -137,6 +137,9 @@ class RefusalReason(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     REFUSAL_REASON_IDENTIFIER_IN_USE: _ClassVar[RefusalReason]
     REFUSAL_REASON_CONNECTIVITY_NOT_ALLOWED: _ClassVar[RefusalReason]
     REFUSAL_REASON_CONNECTIVITY_LINKED: _ClassVar[RefusalReason]
+    REFUSAL_REASON_QUANTITY_EXCEEDS_ORDER: _ClassVar[RefusalReason]
+    REFUSAL_REASON_EXECUTION_STATE: _ClassVar[RefusalReason]
+    REFUSAL_REASON_EXECUTIONS_DIFFER: _ClassVar[RefusalReason]
 
 class PreparedCallState(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
@@ -237,6 +240,9 @@ REFUSAL_REASON_ORDER_STATE: RefusalReason
 REFUSAL_REASON_IDENTIFIER_IN_USE: RefusalReason
 REFUSAL_REASON_CONNECTIVITY_NOT_ALLOWED: RefusalReason
 REFUSAL_REASON_CONNECTIVITY_LINKED: RefusalReason
+REFUSAL_REASON_QUANTITY_EXCEEDS_ORDER: RefusalReason
+REFUSAL_REASON_EXECUTION_STATE: RefusalReason
+REFUSAL_REASON_EXECUTIONS_DIFFER: RefusalReason
 PREPARED_CALL_STATE_UNSPECIFIED: PreparedCallState
 PREPARED_CALL_STATE_PREPARED: PreparedCallState
 PREPARED_CALL_STATE_SHARED: PreparedCallState

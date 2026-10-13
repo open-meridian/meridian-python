@@ -64,6 +64,14 @@ LIST_ACCOUNT_FIGURES_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=T
 LIST_ACCOUNT_ATTRIBUTES_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=True)
 """meridian.v1.ListAccountAttributesRequest.page_size: bounds a page"""
 
+ACCEPT_EXECUTION_REQUEST_EXECUTION_IDS_COUNT = Count(least=1, most=500)
+"""meridian.v1.AcceptExecutionRequest.execution_ids: names the unmatched
+executions accepted (W11.23)"""
+
+DONT_KNOW_EXECUTION_REQUEST_EXECUTION_IDS_COUNT = Count(least=1, most=500)
+"""meridian.v1.DontKnowExecutionRequest.execution_ids: names the unmatched
+executions answered DK (W11.24)"""
+
 LIST_ORDERS_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=True)
 """meridian.v1.ListOrdersRequest.page_size: bounds a page"""
 
@@ -248,6 +256,14 @@ takes"""
 
 SET_SOURCE_PRIORITY_REQUEST_DATASETS_COUNT = Count(least=0, most=16)
 """meridian.v1.SetSourcePriorityRequest.datasets: replaces the order whole"""
+
+RECORD_OUTCOMES_REQUEST_OUTCOMES_COUNT = Count(least=1, most=500)
+"""meridian.v1.RecordOutcomesRequest.outcomes: carries a batch of outcomes
+(W10.4)"""
+
+LIST_OUTCOMES_REQUEST_SUBJECTS_COUNT = Count(least=1, most=500)
+"""meridian.v1.ListOutcomesRequest.subjects: names the event contracts'
+instruments a read is about (W10.6)"""
 
 AS_REPORTED_SCHEME_LENGTH = Length(least=1, most=64)
 """meridian.v1.AsReported.scheme: says whose vocabulary a value as reported is

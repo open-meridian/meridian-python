@@ -274,6 +274,16 @@ class PluginOperationsStub(object):
                 request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.MapVenueAccountParams.SerializeToString,
                 response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.MapVenueAccountResult.FromString,
                 _registered_method=True)
+        self.AcceptExecution = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/AcceptExecution',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.AcceptExecutionParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.AcceptExecutionResult.FromString,
+                _registered_method=True)
+        self.DontKnowExecution = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/DontKnowExecution',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.DontKnowExecutionParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.DontKnowExecutionResult.FromString,
+                _registered_method=True)
         self.ResolveVenue = channel.unary_unary(
                 '/meridian.plugin.v1.PluginOperations/ResolveVenue',
                 request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ResolveVenueParams.SerializeToString,
@@ -314,6 +324,11 @@ class PluginOperationsStub(object):
                 request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordQuotesParams.SerializeToString,
                 response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordQuotesResult.FromString,
                 _registered_method=True)
+        self.RecordOutcomes = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/RecordOutcomes',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordOutcomesParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordOutcomesResult.FromString,
+                _registered_method=True)
         self.ListPrices = channel.unary_unary(
                 '/meridian.plugin.v1.PluginOperations/ListPrices',
                 request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListPricesParams.SerializeToString,
@@ -333,6 +348,11 @@ class PluginOperationsStub(object):
                 '/meridian.plugin.v1.PluginOperations/ListQuotes',
                 request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListQuotesParams.SerializeToString,
                 response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListQuotesResult.FromString,
+                _registered_method=True)
+        self.ListOutcomes = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ListOutcomes',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListOutcomesParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListOutcomesResult.FromString,
                 _registered_method=True)
         self.DeclineWant = channel.unary_unary(
                 '/meridian.plugin.v1.PluginOperations/DeclineWant',
@@ -690,6 +710,20 @@ class PluginOperationsServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def AcceptExecution(self, request, context):
+        """W11.23: platform.book.command.accept-execution (command; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def DontKnowExecution(self, request, context):
+        """W11.24: platform.book.command.dont-know-execution (command; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def ResolveVenue(self, request, context):
         """W3.14: platform.reference.query.resolve-venue (query; preview).
         """
@@ -746,6 +780,13 @@ class PluginOperationsServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def RecordOutcomes(self, request, context):
+        """W10.4: platform.lake.command.record-outcomes (command; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def ListPrices(self, request, context):
         """W10.6: platform.lake.query.list-prices (query; preview).
         """
@@ -769,6 +810,13 @@ class PluginOperationsServicer(object):
 
     def ListQuotes(self, request, context):
         """W10.6: platform.lake.query.list-quotes (query; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListOutcomes(self, request, context):
+        """W10.6: platform.lake.query.list-outcomes (query; preview).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -1038,6 +1086,16 @@ def add_PluginOperationsServicer_to_server(servicer, server):
                     request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.MapVenueAccountParams.FromString,
                     response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.MapVenueAccountResult.SerializeToString,
             ),
+            'AcceptExecution': grpc.unary_unary_rpc_method_handler(
+                    servicer.AcceptExecution,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.AcceptExecutionParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.AcceptExecutionResult.SerializeToString,
+            ),
+            'DontKnowExecution': grpc.unary_unary_rpc_method_handler(
+                    servicer.DontKnowExecution,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.DontKnowExecutionParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.DontKnowExecutionResult.SerializeToString,
+            ),
             'ResolveVenue': grpc.unary_unary_rpc_method_handler(
                     servicer.ResolveVenue,
                     request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ResolveVenueParams.FromString,
@@ -1078,6 +1136,11 @@ def add_PluginOperationsServicer_to_server(servicer, server):
                     request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordQuotesParams.FromString,
                     response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordQuotesResult.SerializeToString,
             ),
+            'RecordOutcomes': grpc.unary_unary_rpc_method_handler(
+                    servicer.RecordOutcomes,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordOutcomesParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordOutcomesResult.SerializeToString,
+            ),
             'ListPrices': grpc.unary_unary_rpc_method_handler(
                     servicer.ListPrices,
                     request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListPricesParams.FromString,
@@ -1097,6 +1160,11 @@ def add_PluginOperationsServicer_to_server(servicer, server):
                     servicer.ListQuotes,
                     request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListQuotesParams.FromString,
                     response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListQuotesResult.SerializeToString,
+            ),
+            'ListOutcomes': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListOutcomes,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListOutcomesParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListOutcomesResult.SerializeToString,
             ),
             'DeclineWant': grpc.unary_unary_rpc_method_handler(
                     servicer.DeclineWant,
@@ -2421,6 +2489,60 @@ class PluginOperations(object):
             _registered_method=True)
 
     @staticmethod
+    def AcceptExecution(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/AcceptExecution',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.AcceptExecutionParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.AcceptExecutionResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def DontKnowExecution(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/DontKnowExecution',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.DontKnowExecutionParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.DontKnowExecutionResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
     def ResolveVenue(request,
             target,
             options=(),
@@ -2637,6 +2759,33 @@ class PluginOperations(object):
             _registered_method=True)
 
     @staticmethod
+    def RecordOutcomes(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/RecordOutcomes',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordOutcomesParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordOutcomesResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
     def ListPrices(request,
             target,
             options=(),
@@ -2734,6 +2883,33 @@ class PluginOperations(object):
             '/meridian.plugin.v1.PluginOperations/ListQuotes',
             meridian_dot_plugin_dot_v1_dot_operations__pb2.ListQuotesParams.SerializeToString,
             meridian_dot_plugin_dot_v1_dot_operations__pb2.ListQuotesResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListOutcomes(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ListOutcomes',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListOutcomesParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListOutcomesResult.FromString,
             options,
             channel_credentials,
             insecure,
