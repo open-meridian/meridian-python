@@ -305,6 +305,60 @@ async def test_an_act_called_as_the_service_account_reaches_the_v21_sidecar(plug
     assert "no person behind it" in (for_a_person.value.details() or "")
 
 
+async def test_a_calendar_and_a_date_are_answered_by_the_v22_instrument_store(plugin) -> None:
+    """W3.19 and W3.20, contract v22: a custody plugin reads a calendar's days
+    and asks for a date through the sidecar, answered by the deployment's
+    instrument store across the bus. This runtime holds no calendar, so the
+    honest answers are the ones asserted: a calendar not found, and a date
+    asked of a calendar not held answered so, never guessed."""
+    from datetime import date
+
+    read = await plugin.read_calendar(
+        calendar_id="CAL-01JAE0000000000000INTEROP",
+        from_date=date(2026, 10, 1),
+        to_date=date(2026, 10, 31),
+    )
+    assert not read.found
+    assert read.calendar_id == "CAL-01JAE0000000000000INTEROP"
+
+    asked = await plugin.compute_date(
+        business_day=meridian.BusinessDayInputs(
+            date="2026-10-12", calendars=["CAL-01JAE0000000000000INTEROP"]
+        )
+    )
+    assert asked.outcome == operations_pb2.DATE_OUTCOME_CALENDAR_NOT_HELD
+    assert asked.date == ""
+
+
+async def test_an_algorithm_is_held_to_the_versions_declaration_by_the_v22_sidecar() -> None:
+    """W4.9 and W4.15, contract v22: a version declaring an algorithm is
+    admitted with it, and a service account's call naming it is asked on the
+    bus (nothing serves it: this runtime has no dashboard); one naming an
+    algorithm the version does not declare is refused by the sidecar itself,
+    naming `algorithm_id` -- reached here past the SDK's own check, which
+    refuses it before sending."""
+    declared = meridian.Declaration(
+        algorithms=[meridian.AlgorithmDeclaration("twap-v1", "Time-weighted slices.")]
+    )
+    plugin = await meridian.connect(address(), heartbeat=False, declaration=declared)
+    try:
+        close = {"account_id": "ACC-1", "break_ids": ["BRK-1"]}
+        async with meridian.runs_as("custody", algorithm_id="twap-v1") as act:
+            with pytest.raises(CallFailed) as unserved:
+                await act("close_cleared_breaks", close, reason="Slice 3 of 12")
+        assert unserved.value.kind == "no handler", unserved.value
+
+        plugin._algorithms = ("twap-v1", "vwap-v1")  # as if this image declared both
+        async with meridian.runs_as("custody", algorithm_id="vwap-v1") as act:
+            with pytest.raises(CallFailed) as undeclared:
+                await act("close_cleared_breaks", close, reason="Slice 3 of 12")
+        refused = undeclared.value
+        assert (refused.kind, refused.fields) == ("invalid", ("algorithm_id",))
+        assert "twap-v1" in refused.detail
+    finally:
+        await plugin.leave("interop finished")
+
+
 async def test_the_scaffold_registers_with_a_real_sidecar() -> None:
     """What `meridian plugin new` writes, run the way its author runs it.
 
