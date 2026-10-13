@@ -192,6 +192,9 @@ def test_a_custodian_without_plan_codes_sweeps_or_splits_marks_them_not_presente
     report = run("custody", {}, not_presented={"fund-larger-than-cash": why})
     assert report.not_presented == {"fund-larger-than-cash": why}
     assert "fund-larger-than-cash" not in report.failures
+    # And connectivity's fee with no fill, which a commission-free broker
+    # never states (approved 2026-10-13).
+    assert suite("connectivity").case("reports-a-charge").about == "charges without a fill"
 
 
 async def test_a_net_cash_row_with_its_provenance_matches_the_sweep_case() -> None:

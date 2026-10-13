@@ -318,7 +318,7 @@
     {
       "role": "connectivity",
       "since": "v22",
-      "says": "A connectivity plugin passing every case sends the placements naming its instance and no other, with what its ems set in the venue's account field; reports every acknowledgement, rejection, restatement, fill, bust and charge in the contract's meanings, each with the raw record it was converted from and the venue's text only where no contract reason maps; marks an unconverted status outcome unknown and resolves it by asking, never by sending again; derives an execution ID the same way twice; states every fill's settlement date, the venue's or the date read's; sends nothing new on a pause and cancels at its venue on a stop, reporting each cancel as a fact; and publishes its venue's catalogue. A case about calendars, settlement dates, locates or compliance waits (`about`, contract v22) a plugin whose work never uses them marks not presented, with why, and a case about a fill's place of execution (`about_field`) one whose venue never states it.\n",
+      "says": "A connectivity plugin passing every case sends the placements naming its instance and no other, with what its ems set in the venue's account field; reports every acknowledgement, rejection, restatement, fill, bust and charge in the contract's meanings, each with the raw record it was converted from and the venue's text only where no contract reason maps; marks an unconverted status outcome unknown and resolves it by asking, never by sending again; derives an execution ID the same way twice; states every fill's settlement date, the venue's or the date read's; sends nothing new on a pause and cancels at its venue on a stop, reporting each cancel as a fact; and publishes its venue's catalogue. A case about calendars, settlement dates, locates or compliance waits (`about`, contract v22) a plugin whose work never uses them marks not presented, with why, and a case about a fill's place of execution (`about_field`) one whose venue never states it; and a case about venue-originated fills or charges without a fill (`about`, contract v23) one whose venue never originates a fill, or never charges a fee with no fill.\n",
       "cases": [
         {
           "name": "acknowledges-a-placement-naming-it",
@@ -490,6 +490,7 @@
         },
         {
           "name": "reports-a-charge",
+          "about": "charges without a fill",
           "given": "the venue charges a fee with no fill",
           "expect": [
             {
