@@ -64,6 +64,18 @@ LIST_ACCOUNT_FIGURES_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=T
 LIST_ACCOUNT_ATTRIBUTES_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=True)
 """meridian.v1.ListAccountAttributesRequest.page_size: bounds a page"""
 
+LIST_ORDERS_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=True)
+"""meridian.v1.ListOrdersRequest.page_size: bounds a page"""
+
+ORDER_HISTORY_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=True)
+"""meridian.v1.OrderHistoryRequest.page_size: bounds a page"""
+
+LIST_TRADING_INSTRUCTIONS_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=True)
+"""meridian.v1.ListTradingInstructionsRequest.page_size: bounds a page"""
+
+LIST_LOCATES_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=True)
+"""meridian.v1.ListLocatesRequest.page_size: bounds a page"""
+
 ACCOUNT_RECORD_CUSTODIAN_LENGTH = Length(least=0, most=200)
 """meridian.v1.AccountRecord.custodian: says where the account is held, for a
 person to find it by"""
@@ -107,6 +119,17 @@ some fields"""
 SETTING_LAST_CHANGE_HINT_LENGTH = Length(least=0, most=4)
 """meridian.v1.SettingLastChange.hint: helps a person tell which secret is set"""
 
+CONNECTIVITY_LINK_CHANGE_NOTE_LENGTH = Length(least=0, most=2000)
+"""meridian.v1.ConnectivityLinkChange.note: says why the change was made"""
+
+SET_CONNECTIVITY_AVAILABLE_REQUEST_NOTE_LENGTH = Length(least=0, most=2000)
+"""meridian.v1.SetConnectivityAvailableRequest.note: says why, kept with the
+change's record"""
+
+LINK_CONNECTIVITY_REQUEST_NOTE_LENGTH = Length(least=0, most=2000)
+"""meridian.v1.LinkConnectivityRequest.note: says why, kept with the change's
+record"""
+
 TICKET_NOTE_NOTE_LENGTH = Length(least=1, most=4000)
 """meridian.v1.TicketNote.note: carries the note's text"""
 
@@ -128,6 +151,16 @@ VENUE_RECORD_COUNTRY_CODE_LENGTH = Length(least=2, most=2)
 
 VENUE_RECORD_TIME_ZONE_LENGTH = Length(least=1, most=64)
 """meridian.v1.VenueRecord.time_zone: says the venue's local time"""
+
+SPOT_DATE_INPUTS_PAIR_COUNT = Count(least=2, most=2)
+"""meridian.v1.SpotDateInputs.pair: names the pair"""
+
+TENOR_DATE_INPUTS_PAIR_COUNT = Count(least=2, most=2)
+"""meridian.v1.TenorDateInputs.pair: names the pair"""
+
+SPOT_DATE_RULE_PAIR_COUNT = Count(least=2, most=2)
+"""meridian.v1.SpotDateRule.pair: names the currency pair a spot-date rule is
+for (W1.22)"""
 
 OBSERVATION_META_ROW_KEY_LENGTH = Length(least=1, most=128)
 """meridian.v1.ObservationMeta.row_key: names one observation, so recording it
@@ -498,6 +531,10 @@ calls the act"""
 CALL_AS_SERVICE_ACCOUNT_REPLY_ANSWER_JSON_LENGTH = Length(least=0, most=1048576)
 """meridian.v1.CallAsServiceAccountReply.answer_json: carries the act's own
 answer"""
+
+ALGORITHM_DECLARATION_DESCRIPTION_LENGTH = Length(least=1, most=1024)
+"""meridian.v1.AlgorithmDeclaration.description: says what the algorithm is,
+for a person reading the plugin's page"""
 
 RECORD_HOLDINGS_STATEMENT_REQUEST_PROVENANCE_COUNT = Count(least=0, most=32)
 """meridian.v1.RecordHoldingsStatementRequest.provenance: says where each value

@@ -65,6 +65,8 @@ meridian = ["py.typed", "v1/*.pyi", "plugin/v1/*.pyi", "migrations/*/migration.t
             "suites.json",
             # The data dictionary a refusal's paths resolve to (contract v12).
             "fields.json",
+            # An order's transitions, as meridian-schema publishes them (contract v22).
+            "transitions.json",
             # The kit's macros and the role templates (0.24.0).
             "templates/meridian/*.html", "templates/meridian/roles/*.html",
             "templates/meridian/roles/*/*.html"]

@@ -61,6 +61,13 @@ class ProvenanceKind(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     PROVENANCE_KIND_SECOND_SOURCE: _ClassVar[ProvenanceKind]
     PROVENANCE_KIND_SUPPLIED: _ClassVar[ProvenanceKind]
     PROVENANCE_KIND_DERIVED: _ClassVar[ProvenanceKind]
+    PROVENANCE_KIND_COMPUTED: _ClassVar[ProvenanceKind]
+
+class DateRuleKind(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    DATE_RULE_KIND_UNSPECIFIED: _ClassVar[DateRuleKind]
+    DATE_RULE_KIND_SETTLEMENT: _ClassVar[DateRuleKind]
+    DATE_RULE_KIND_SPOT: _ClassVar[DateRuleKind]
 
 class MoveOutcome(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
@@ -122,6 +129,14 @@ class RefusalReason(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     REFUSAL_REASON_REFERENCE_UNAVAILABLE: _ClassVar[RefusalReason]
     REFUSAL_REASON_WITHIN_HOLD: _ClassVar[RefusalReason]
     REFUSAL_REASON_ACCOUNT_NOT_LINKABLE: _ClassVar[RefusalReason]
+    REFUSAL_REASON_ALLOCATION_UNBALANCED: _ClassVar[RefusalReason]
+    REFUSAL_REASON_APPROVAL_REQUIRED: _ClassVar[RefusalReason]
+    REFUSAL_REASON_CHECK_BLOCKS: _ClassVar[RefusalReason]
+    REFUSAL_REASON_CLAIMED: _ClassVar[RefusalReason]
+    REFUSAL_REASON_ORDER_STATE: _ClassVar[RefusalReason]
+    REFUSAL_REASON_IDENTIFIER_IN_USE: _ClassVar[RefusalReason]
+    REFUSAL_REASON_CONNECTIVITY_NOT_ALLOWED: _ClassVar[RefusalReason]
+    REFUSAL_REASON_CONNECTIVITY_LINKED: _ClassVar[RefusalReason]
 
 class PreparedCallState(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
@@ -167,6 +182,10 @@ PROVENANCE_KIND_REPORTED: ProvenanceKind
 PROVENANCE_KIND_SECOND_SOURCE: ProvenanceKind
 PROVENANCE_KIND_SUPPLIED: ProvenanceKind
 PROVENANCE_KIND_DERIVED: ProvenanceKind
+PROVENANCE_KIND_COMPUTED: ProvenanceKind
+DATE_RULE_KIND_UNSPECIFIED: DateRuleKind
+DATE_RULE_KIND_SETTLEMENT: DateRuleKind
+DATE_RULE_KIND_SPOT: DateRuleKind
 MOVE_OUTCOME_UNSPECIFIED: MoveOutcome
 MOVE_OUTCOME_ARCHIVED: MoveOutcome
 MOVE_OUTCOME_RESTORED: MoveOutcome
@@ -210,6 +229,14 @@ REFUSAL_REASON_RECORD_CHANGED: RefusalReason
 REFUSAL_REASON_REFERENCE_UNAVAILABLE: RefusalReason
 REFUSAL_REASON_WITHIN_HOLD: RefusalReason
 REFUSAL_REASON_ACCOUNT_NOT_LINKABLE: RefusalReason
+REFUSAL_REASON_ALLOCATION_UNBALANCED: RefusalReason
+REFUSAL_REASON_APPROVAL_REQUIRED: RefusalReason
+REFUSAL_REASON_CHECK_BLOCKS: RefusalReason
+REFUSAL_REASON_CLAIMED: RefusalReason
+REFUSAL_REASON_ORDER_STATE: RefusalReason
+REFUSAL_REASON_IDENTIFIER_IN_USE: RefusalReason
+REFUSAL_REASON_CONNECTIVITY_NOT_ALLOWED: RefusalReason
+REFUSAL_REASON_CONNECTIVITY_LINKED: RefusalReason
 PREPARED_CALL_STATE_UNSPECIFIED: PreparedCallState
 PREPARED_CALL_STATE_PREPARED: PreparedCallState
 PREPARED_CALL_STATE_SHARED: PreparedCallState
@@ -266,16 +293,26 @@ class ToolDeclaration(_message.Message):
     def __init__(self, name: _Optional[str] = ..., title: _Optional[str] = ..., description: _Optional[str] = ..., method: _Optional[str] = ..., path: _Optional[str] = ..., levels: _Optional[_Iterable[_Union[AccessLevel, str]]] = ..., reads: bool = ..., input_schema: _Optional[str] = ..., output_schema: _Optional[str] = ..., roles: _Optional[_Iterable[str]] = ..., checked_by: _Optional[str] = ..., accounts: _Optional[_Iterable[str]] = ..., made_on: _Optional[str] = ...) -> None: ...
 
 class PluginDeclaration(_message.Message):
-    __slots__ = ("secret_settings", "not_carried", "storage", "catalogue")
+    __slots__ = ("secret_settings", "not_carried", "storage", "catalogue", "algorithms")
     SECRET_SETTINGS_FIELD_NUMBER: _ClassVar[int]
     NOT_CARRIED_FIELD_NUMBER: _ClassVar[int]
     STORAGE_FIELD_NUMBER: _ClassVar[int]
     CATALOGUE_FIELD_NUMBER: _ClassVar[int]
+    ALGORITHMS_FIELD_NUMBER: _ClassVar[int]
     secret_settings: _containers.RepeatedScalarFieldContainer[str]
     not_carried: _containers.RepeatedCompositeFieldContainer[NotCarried]
     storage: StorageDeclaration
     catalogue: Catalogue
-    def __init__(self, secret_settings: _Optional[_Iterable[str]] = ..., not_carried: _Optional[_Iterable[_Union[NotCarried, _Mapping]]] = ..., storage: _Optional[_Union[StorageDeclaration, _Mapping]] = ..., catalogue: _Optional[_Union[Catalogue, _Mapping]] = ...) -> None: ...
+    algorithms: _containers.RepeatedCompositeFieldContainer[AlgorithmDeclaration]
+    def __init__(self, secret_settings: _Optional[_Iterable[str]] = ..., not_carried: _Optional[_Iterable[_Union[NotCarried, _Mapping]]] = ..., storage: _Optional[_Union[StorageDeclaration, _Mapping]] = ..., catalogue: _Optional[_Union[Catalogue, _Mapping]] = ..., algorithms: _Optional[_Iterable[_Union[AlgorithmDeclaration, _Mapping]]] = ...) -> None: ...
+
+class AlgorithmDeclaration(_message.Message):
+    __slots__ = ("algorithm_id", "description")
+    ALGORITHM_ID_FIELD_NUMBER: _ClassVar[int]
+    DESCRIPTION_FIELD_NUMBER: _ClassVar[int]
+    algorithm_id: str
+    description: str
+    def __init__(self, algorithm_id: _Optional[str] = ..., description: _Optional[str] = ...) -> None: ...
 
 class Catalogue(_message.Message):
     __slots__ = ("datasets",)
@@ -284,7 +321,7 @@ class Catalogue(_message.Message):
     def __init__(self, datasets: _Optional[_Iterable[_Union[DatasetDeclaration, _Mapping]]] = ...) -> None: ...
 
 class DatasetDeclaration(_message.Message):
-    __slots__ = ("key", "vendor", "aggregator", "data_types", "modes", "cadence", "history", "licence_default", "day_time_zone", "day_end_minute", "venue_id")
+    __slots__ = ("key", "vendor", "aggregator", "data_types", "modes", "cadence", "history", "licence_default", "day_time_zone", "day_end_minute", "venue_id", "calendar_id")
     KEY_FIELD_NUMBER: _ClassVar[int]
     VENDOR_FIELD_NUMBER: _ClassVar[int]
     AGGREGATOR_FIELD_NUMBER: _ClassVar[int]
@@ -296,6 +333,7 @@ class DatasetDeclaration(_message.Message):
     DAY_TIME_ZONE_FIELD_NUMBER: _ClassVar[int]
     DAY_END_MINUTE_FIELD_NUMBER: _ClassVar[int]
     VENUE_ID_FIELD_NUMBER: _ClassVar[int]
+    CALENDAR_ID_FIELD_NUMBER: _ClassVar[int]
     key: str
     vendor: str
     aggregator: str
@@ -307,7 +345,8 @@ class DatasetDeclaration(_message.Message):
     day_time_zone: str
     day_end_minute: int
     venue_id: str
-    def __init__(self, key: _Optional[str] = ..., vendor: _Optional[str] = ..., aggregator: _Optional[str] = ..., data_types: _Optional[_Iterable[str]] = ..., modes: _Optional[_Iterable[_Union[ObservationMode, str]]] = ..., cadence: _Optional[int] = ..., history: _Optional[int] = ..., licence_default: _Optional[_Union[DatasetLicence, _Mapping]] = ..., day_time_zone: _Optional[str] = ..., day_end_minute: _Optional[int] = ..., venue_id: _Optional[str] = ...) -> None: ...
+    calendar_id: str
+    def __init__(self, key: _Optional[str] = ..., vendor: _Optional[str] = ..., aggregator: _Optional[str] = ..., data_types: _Optional[_Iterable[str]] = ..., modes: _Optional[_Iterable[_Union[ObservationMode, str]]] = ..., cadence: _Optional[int] = ..., history: _Optional[int] = ..., licence_default: _Optional[_Union[DatasetLicence, _Mapping]] = ..., day_time_zone: _Optional[str] = ..., day_end_minute: _Optional[int] = ..., venue_id: _Optional[str] = ..., calendar_id: _Optional[str] = ...) -> None: ...
 
 class DatasetLicence(_message.Message):
     __slots__ = ("dataset", "kept", "retention_days", "derived_use", "display", "default_fields", "personal_use", "updated_by", "updated_at_ns", "acting_through_delegation", "client_name", "note", "prepared_call_id")
@@ -566,20 +605,48 @@ class RawRecordRef(_message.Message):
     def __init__(self, instance_id: _Optional[str] = ..., key: _Optional[str] = ...) -> None: ...
 
 class Provenance(_message.Message):
-    __slots__ = ("field", "kind", "raw_record", "source", "person", "rule")
+    __slots__ = ("field", "kind", "raw_record", "source", "person", "rule", "date_basis")
     FIELD_FIELD_NUMBER: _ClassVar[int]
     KIND_FIELD_NUMBER: _ClassVar[int]
     RAW_RECORD_FIELD_NUMBER: _ClassVar[int]
     SOURCE_FIELD_NUMBER: _ClassVar[int]
     PERSON_FIELD_NUMBER: _ClassVar[int]
     RULE_FIELD_NUMBER: _ClassVar[int]
+    DATE_BASIS_FIELD_NUMBER: _ClassVar[int]
     field: str
     kind: ProvenanceKind
     raw_record: RawRecordRef
     source: str
     person: str
     rule: str
-    def __init__(self, field: _Optional[str] = ..., kind: _Optional[_Union[ProvenanceKind, str]] = ..., raw_record: _Optional[_Union[RawRecordRef, _Mapping]] = ..., source: _Optional[str] = ..., person: _Optional[str] = ..., rule: _Optional[str] = ...) -> None: ...
+    date_basis: DateBasis
+    def __init__(self, field: _Optional[str] = ..., kind: _Optional[_Union[ProvenanceKind, str]] = ..., raw_record: _Optional[_Union[RawRecordRef, _Mapping]] = ..., source: _Optional[str] = ..., person: _Optional[str] = ..., rule: _Optional[str] = ..., date_basis: _Optional[_Union[DateBasis, _Mapping]] = ...) -> None: ...
+
+class DateBasis(_message.Message):
+    __slots__ = ("rule", "calendars")
+    RULE_FIELD_NUMBER: _ClassVar[int]
+    CALENDARS_FIELD_NUMBER: _ClassVar[int]
+    rule: DateRuleRef
+    calendars: _containers.RepeatedCompositeFieldContainer[CalendarRef]
+    def __init__(self, rule: _Optional[_Union[DateRuleRef, _Mapping]] = ..., calendars: _Optional[_Iterable[_Union[CalendarRef, _Mapping]]] = ...) -> None: ...
+
+class DateRuleRef(_message.Message):
+    __slots__ = ("kind", "subject", "version")
+    KIND_FIELD_NUMBER: _ClassVar[int]
+    SUBJECT_FIELD_NUMBER: _ClassVar[int]
+    VERSION_FIELD_NUMBER: _ClassVar[int]
+    kind: DateRuleKind
+    subject: str
+    version: int
+    def __init__(self, kind: _Optional[_Union[DateRuleKind, str]] = ..., subject: _Optional[str] = ..., version: _Optional[int] = ...) -> None: ...
+
+class CalendarRef(_message.Message):
+    __slots__ = ("calendar_id", "version")
+    CALENDAR_ID_FIELD_NUMBER: _ClassVar[int]
+    VERSION_FIELD_NUMBER: _ClassVar[int]
+    calendar_id: str
+    version: int
+    def __init__(self, calendar_id: _Optional[str] = ..., version: _Optional[int] = ...) -> None: ...
 
 class Backfill(_message.Message):
     __slots__ = ("contract_version", "field")
@@ -634,7 +701,7 @@ class CallerAssertion(_message.Message):
     def __init__(self, claims: _Optional[bytes] = ..., signature: _Optional[bytes] = ..., key_id: _Optional[str] = ...) -> None: ...
 
 class CallerClaims(_message.Message):
-    __slots__ = ("subject", "display_name", "audience_instance_id", "level", "read_account_ids", "write_account_ids", "issued_at_ns", "expires_at_ns", "assertion_id", "deployment_admin", "delegation_id", "client_name", "tool_name", "roles", "prepared_call_id", "own_settings", "second_pair_of_eyes", "subject_kind", "owner_subject")
+    __slots__ = ("subject", "display_name", "audience_instance_id", "level", "read_account_ids", "write_account_ids", "issued_at_ns", "expires_at_ns", "assertion_id", "deployment_admin", "delegation_id", "client_name", "tool_name", "roles", "prepared_call_id", "own_settings", "second_pair_of_eyes", "subject_kind", "owner_subject", "algorithm_id", "connectivity_instance_ids")
     SUBJECT_FIELD_NUMBER: _ClassVar[int]
     DISPLAY_NAME_FIELD_NUMBER: _ClassVar[int]
     AUDIENCE_INSTANCE_ID_FIELD_NUMBER: _ClassVar[int]
@@ -654,6 +721,8 @@ class CallerClaims(_message.Message):
     SECOND_PAIR_OF_EYES_FIELD_NUMBER: _ClassVar[int]
     SUBJECT_KIND_FIELD_NUMBER: _ClassVar[int]
     OWNER_SUBJECT_FIELD_NUMBER: _ClassVar[int]
+    ALGORITHM_ID_FIELD_NUMBER: _ClassVar[int]
+    CONNECTIVITY_INSTANCE_IDS_FIELD_NUMBER: _ClassVar[int]
     subject: str
     display_name: str
     audience_instance_id: str
@@ -673,7 +742,9 @@ class CallerClaims(_message.Message):
     second_pair_of_eyes: _containers.RepeatedScalarFieldContainer[str]
     subject_kind: _envelope_pb2.SubjectKind
     owner_subject: str
-    def __init__(self, subject: _Optional[str] = ..., display_name: _Optional[str] = ..., audience_instance_id: _Optional[str] = ..., level: _Optional[_Union[AccessLevel, str]] = ..., read_account_ids: _Optional[_Iterable[str]] = ..., write_account_ids: _Optional[_Iterable[str]] = ..., issued_at_ns: _Optional[int] = ..., expires_at_ns: _Optional[int] = ..., assertion_id: _Optional[str] = ..., deployment_admin: bool = ..., delegation_id: _Optional[str] = ..., client_name: _Optional[str] = ..., tool_name: _Optional[str] = ..., roles: _Optional[_Iterable[_Union[RoleAccess, _Mapping]]] = ..., prepared_call_id: _Optional[str] = ..., own_settings: _Optional[_Iterable[_Union[SettingValue, _Mapping]]] = ..., second_pair_of_eyes: _Optional[_Iterable[str]] = ..., subject_kind: _Optional[_Union[_envelope_pb2.SubjectKind, str]] = ..., owner_subject: _Optional[str] = ...) -> None: ...
+    algorithm_id: str
+    connectivity_instance_ids: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, subject: _Optional[str] = ..., display_name: _Optional[str] = ..., audience_instance_id: _Optional[str] = ..., level: _Optional[_Union[AccessLevel, str]] = ..., read_account_ids: _Optional[_Iterable[str]] = ..., write_account_ids: _Optional[_Iterable[str]] = ..., issued_at_ns: _Optional[int] = ..., expires_at_ns: _Optional[int] = ..., assertion_id: _Optional[str] = ..., deployment_admin: bool = ..., delegation_id: _Optional[str] = ..., client_name: _Optional[str] = ..., tool_name: _Optional[str] = ..., roles: _Optional[_Iterable[_Union[RoleAccess, _Mapping]]] = ..., prepared_call_id: _Optional[str] = ..., own_settings: _Optional[_Iterable[_Union[SettingValue, _Mapping]]] = ..., second_pair_of_eyes: _Optional[_Iterable[str]] = ..., subject_kind: _Optional[_Union[_envelope_pb2.SubjectKind, str]] = ..., owner_subject: _Optional[str] = ..., algorithm_id: _Optional[str] = ..., connectivity_instance_ids: _Optional[_Iterable[str]] = ...) -> None: ...
 
 class RoleAccess(_message.Message):
     __slots__ = ("role", "level", "read_positions", "write_positions")
@@ -736,14 +807,60 @@ class WatchAccountScopeRequest(_message.Message):
     def __init__(self) -> None: ...
 
 class AccountScopeDelivery(_message.Message):
-    __slots__ = ("read_account_ids", "write_account_ids", "links")
+    __slots__ = ("read_account_ids", "write_account_ids", "links", "connectivity_link", "connectivity_links", "venue_account_map")
     READ_ACCOUNT_IDS_FIELD_NUMBER: _ClassVar[int]
     WRITE_ACCOUNT_IDS_FIELD_NUMBER: _ClassVar[int]
     LINKS_FIELD_NUMBER: _ClassVar[int]
+    CONNECTIVITY_LINK_FIELD_NUMBER: _ClassVar[int]
+    CONNECTIVITY_LINKS_FIELD_NUMBER: _ClassVar[int]
+    VENUE_ACCOUNT_MAP_FIELD_NUMBER: _ClassVar[int]
     read_account_ids: _containers.RepeatedScalarFieldContainer[str]
     write_account_ids: _containers.RepeatedScalarFieldContainer[str]
     links: _containers.RepeatedCompositeFieldContainer[LinkedExternalAccount]
-    def __init__(self, read_account_ids: _Optional[_Iterable[str]] = ..., write_account_ids: _Optional[_Iterable[str]] = ..., links: _Optional[_Iterable[_Union[LinkedExternalAccount, _Mapping]]] = ...) -> None: ...
+    connectivity_link: ConnectivityLink
+    connectivity_links: _containers.RepeatedCompositeFieldContainer[ConnectivityLink]
+    venue_account_map: VenueAccountMap
+    def __init__(self, read_account_ids: _Optional[_Iterable[str]] = ..., write_account_ids: _Optional[_Iterable[str]] = ..., links: _Optional[_Iterable[_Union[LinkedExternalAccount, _Mapping]]] = ..., connectivity_link: _Optional[_Union[ConnectivityLink, _Mapping]] = ..., connectivity_links: _Optional[_Iterable[_Union[ConnectivityLink, _Mapping]]] = ..., venue_account_map: _Optional[_Union[VenueAccountMap, _Mapping]] = ...) -> None: ...
+
+class ConnectivityLink(_message.Message):
+    __slots__ = ("connectivity_instance_id", "available", "ems_instance_id", "users")
+    CONNECTIVITY_INSTANCE_ID_FIELD_NUMBER: _ClassVar[int]
+    AVAILABLE_FIELD_NUMBER: _ClassVar[int]
+    EMS_INSTANCE_ID_FIELD_NUMBER: _ClassVar[int]
+    USERS_FIELD_NUMBER: _ClassVar[int]
+    connectivity_instance_id: str
+    available: bool
+    ems_instance_id: str
+    users: _containers.RepeatedCompositeFieldContainer[ConnectivityUser]
+    def __init__(self, connectivity_instance_id: _Optional[str] = ..., available: bool = ..., ems_instance_id: _Optional[str] = ..., users: _Optional[_Iterable[_Union[ConnectivityUser, _Mapping]]] = ...) -> None: ...
+
+class ConnectivityUser(_message.Message):
+    __slots__ = ("subject", "service_account_id", "user_group_id")
+    SUBJECT_FIELD_NUMBER: _ClassVar[int]
+    SERVICE_ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
+    USER_GROUP_ID_FIELD_NUMBER: _ClassVar[int]
+    subject: str
+    service_account_id: str
+    user_group_id: str
+    def __init__(self, subject: _Optional[str] = ..., service_account_id: _Optional[str] = ..., user_group_id: _Optional[str] = ...) -> None: ...
+
+class VenueAccountMap(_message.Message):
+    __slots__ = ("ems_instance_id", "mappings")
+    EMS_INSTANCE_ID_FIELD_NUMBER: _ClassVar[int]
+    MAPPINGS_FIELD_NUMBER: _ClassVar[int]
+    ems_instance_id: str
+    mappings: _containers.RepeatedCompositeFieldContainer[VenueAccountMapping]
+    def __init__(self, ems_instance_id: _Optional[str] = ..., mappings: _Optional[_Iterable[_Union[VenueAccountMapping, _Mapping]]] = ...) -> None: ...
+
+class VenueAccountMapping(_message.Message):
+    __slots__ = ("connectivity_instance_id", "venue_account_code", "account_id")
+    CONNECTIVITY_INSTANCE_ID_FIELD_NUMBER: _ClassVar[int]
+    VENUE_ACCOUNT_CODE_FIELD_NUMBER: _ClassVar[int]
+    ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
+    connectivity_instance_id: str
+    venue_account_code: str
+    account_id: str
+    def __init__(self, connectivity_instance_id: _Optional[str] = ..., venue_account_code: _Optional[str] = ..., account_id: _Optional[str] = ...) -> None: ...
 
 class LinkedExternalAccount(_message.Message):
     __slots__ = ("external_account_id", "account_id", "account_name")
@@ -924,16 +1041,18 @@ class SetOwnSettingsReply(_message.Message):
     def __init__(self, values: _Optional[_Iterable[_Union[SettingValue, _Mapping]]] = ...) -> None: ...
 
 class CallAsServiceAccountRequest(_message.Message):
-    __slots__ = ("role", "tool_name", "arguments_json", "reason")
+    __slots__ = ("role", "tool_name", "arguments_json", "reason", "algorithm_id")
     ROLE_FIELD_NUMBER: _ClassVar[int]
     TOOL_NAME_FIELD_NUMBER: _ClassVar[int]
     ARGUMENTS_JSON_FIELD_NUMBER: _ClassVar[int]
     REASON_FIELD_NUMBER: _ClassVar[int]
+    ALGORITHM_ID_FIELD_NUMBER: _ClassVar[int]
     role: str
     tool_name: str
     arguments_json: str
     reason: str
-    def __init__(self, role: _Optional[str] = ..., tool_name: _Optional[str] = ..., arguments_json: _Optional[str] = ..., reason: _Optional[str] = ...) -> None: ...
+    algorithm_id: str
+    def __init__(self, role: _Optional[str] = ..., tool_name: _Optional[str] = ..., arguments_json: _Optional[str] = ..., reason: _Optional[str] = ..., algorithm_id: _Optional[str] = ...) -> None: ...
 
 class CallAsServiceAccountReply(_message.Message):
     __slots__ = ("outcome", "prepared_call_id", "answer_json")
