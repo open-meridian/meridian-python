@@ -107,10 +107,12 @@ if TYPE_CHECKING:
 #: operations and deliveries, a row naming no account caught up whole, the
 #: settlement calendars' reads, the algorithms a version declares and the one
 #: its autonomous work names, and the connectivity plugins a caller may
-#: route through -- and a newer sidecar still admits it.
+#: route through, and from v23 a fill on no placement, its accept and DK, the
+#: executions a connectivity plugin reported, and an event contract's
+#: outcomes recorded, heard and read -- and a newer sidecar still admits it.
 #: Raised with every contract revision that adds something a plugin can
 #: depend on.
-SCHEMA_VERSION = "v22"
+SCHEMA_VERSION = "v23"
 
 #: Where a sidecar listens. Loopback, always: a sidecar reachable from another
 #: host is a way around the boundary it exists to enforce.

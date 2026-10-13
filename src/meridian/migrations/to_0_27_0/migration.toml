@@ -1,0 +1,36 @@
+# open-meridian 0.26.0 to 0.27.0: the SDK declares contract v23,
+# venue-originated fills and the lake's outcomes
+# (sdk-contract/venue-originated-fills-and-the-lakes-outcomes-contract;
+# plans/an-order-reaches-a-venue-through-the-book, "v23: venue-originated
+# fills", and plans/the-lake-prices-the-book, "vL1c", their names approved
+# 2026-10-13). Additions only: nothing a plugin calls changed shape, so only
+# the pins move.
+from = "0.26.0"
+to = "0.27.0"
+summary = """
+The SDK declares contract v23 (meridian.SCHEMA_VERSION). A connectivity
+plugin may report a fill on no order and no placement
+(report_execution's instrument_id, side, venue_order_id and
+venue_client_order_id), which waits in the book as an unmatched execution
+(Execution.state, ExecutionState); the ems accepts it to an order
+(accept_execution, with an order_id or a NewOrderFromExecutions) or answers
+it DK (dont_know_execution, with a DkReason and text), and a connectivity
+plugin hears the executions it reported (receive(execution_recorded=...)).
+A venue's catalogue says which execution acknowledgement it takes
+(VenueCatalogue.execution_acknowledgement). list_orders takes
+execution_state. The refusals REFUSAL_REASON_QUANTITY_EXCEEDS_ORDER,
+_EXECUTION_STATE and _EXECUTIONS_DIFFER are CommandRefused codes, and the
+transition table carries an execution's rows.
+
+A data plugin records an event contract's outcomes (record_outcomes,
+Outcome, OutcomeDetermination, OutcomeStage); reporting, portfolio,
+compliance, signal and operations hear them
+(receive(outcomes_recorded=...)) and read them (list_outcomes, as of a
+recorded time or after a watermark). A daily value dated on a closed day of
+its dataset's calendar carries ObservationMeta.closed_day, and a listed
+dataset its closed_day_count and outside_coverage_count.
+
+Nothing to rewrite, so `meridian plugin migrate` moves the pins and changes no
+code.
+"""
+breaking = false

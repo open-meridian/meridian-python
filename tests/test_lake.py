@@ -1003,6 +1003,38 @@ def producers(**mutations: bool) -> dict[str, object]:
         recorder.answer("ObservationsWanted", lambda _: want)
         await recorder.receive(observations_wanted=toy.on_trades_wanted)
 
+    def outcome(determination: str, *stages: str):  # type: ignore[no-untyped-def]
+        # Contract v23: the source's determination of an event contract,
+        # each stage a new version under the contract's one row key.
+        async def produce(recorder: Recorder) -> None:
+            for stage in stages or ("determined",):
+                await recorder.record_outcomes(
+                    outcomes=[
+                        meridian.Outcome(
+                            meta=meridian.ObservationMeta(
+                                row_key="KXFEDDECISION-26OCT-H0:outcome",
+                                subjects=[ops.SubjectRef(entity_id="INS-KXFED-H0")],
+                                source=ops.Source(dataset=DAILY),
+                                valid_from_ns=DAY,
+                                raw=ops.RawRecordRef(instance_id=INSTANCE, key="market:1"),
+                            ),
+                            determination=determination,
+                            stage=stage,
+                            settlement_value=meridian.Money(
+                                Decimal("1.00" if determination == "pays" else "0.50"), "USD"
+                            ),
+                            determination_as_reported=ops.AsReported(
+                                scheme="venue",
+                                code="yes" if determination == "pays" else "scalar",
+                            ),
+                        )
+                    ]
+                )
+
+        return produce
+
+    disputed = outcome("pays", "determined", "disputed")
+
     async def restarted(recorder: Recorder) -> None:
         last = ops.Trade(
             meta=ops.ObservationMeta(
@@ -1040,16 +1072,20 @@ def producers(**mutations: bool) -> dict[str, object]:
         "the-takers-side-stated": made("a_trade"),
         "a-restarts-gap-backfilled": restarted,
         "reads-its-datasets-licences": made("licences"),
+        # An event contract's outcome (contract v23, the lake's 1c).
+        "records-an-outcome": outcome("pays"),
+        "restates-a-disputed-outcome": disputed,
+        "records-a-partial-payout": outcome("pays_part"),
         # The calendars' reads every role holds (contract v22).
         "reads-a-calendar": PRODUCERS["reads-a-calendar"],
         "asks-for-a-settlement-date": PRODUCERS["asks-for-a-settlement-date"],
     }
 
 
-def test_the_data_suite_is_carried_with_its_twenty_six_cases() -> None:
+def test_the_data_suite_is_carried_with_its_twenty_nine_cases() -> None:
     held = suite("data")
     assert held.since == "v18"
-    assert len(held.cases) == 26
+    assert len(held.cases) == 29
     assert "a-want-recorded-against" in names("data")
     assert "a-subject-another-source-resolved" in names("data")
     # The 1b's eight (contract v19), each about trades or quotes.
@@ -1064,6 +1100,16 @@ def test_the_data_suite_is_carried_with_its_twenty_six_cases() -> None:
     assert "reads-its-datasets-licences" in names("data")
     # Contract v22: the settlement calendars' reads.
     assert {"reads-a-calendar", "asks-for-a-settlement-date"} <= set(names("data"))
+    # Contract v23: an event contract's outcome, each about outcomes.
+    outcomes = [case for case in held.cases if case.name in V23_DATA_CASES]
+    assert {case.about for case in outcomes} == {"outcomes"} and len(outcomes) == 3
+
+
+V23_DATA_CASES = {
+    "records-an-outcome",
+    "restates-a-disputed-outcome",
+    "records-a-partial-payout",
+}
 
 
 V19_DATA_CASES = {
@@ -1081,7 +1127,7 @@ V19_DATA_CASES = {
 def test_a_data_plugin_converting_exactly_passes_every_case_of_its_suite() -> None:
     report = run("data", producers(), instance_id="toy-1")
     assert report.passed, report.failures
-    assert len(report.passed_cases) == 26
+    assert len(report.passed_cases) == 29
 
 
 def test_a_data_plugin_sending_the_makers_side_as_the_aggressor_fails_the_suite() -> None:
@@ -1103,7 +1149,7 @@ def test_a_case_about_a_kind_the_plugin_never_publishes_may_be_not_presented() -
     report = run("data", mapped, not_presented=never)
     assert report.passed, report.failures
     assert report.not_presented == never
-    assert len(report.passed_cases) == 26 - 9
+    assert len(report.passed_cases) == 29 - 9
 
 
 def test_a_case_about_a_field_the_source_never_states_may_be_not_presented() -> None:
@@ -1237,6 +1283,8 @@ def test_a_reading_role_hears_and_reads_as_its_suite_asks() -> None:
                     "reads-an-orders-history-for-the-person-roles",
                     "reads-a-calendar",
                     "asks-for-a-settlement-date",
+                    # An event contract's outcome (contract v23).
+                    "hears-and-reads-an-outcome",
                 )
             },
         },

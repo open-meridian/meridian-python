@@ -260,7 +260,9 @@ async def test_the_latest_quotes_are_one_per_venue_and_asset(sidecar) -> None:
 
 def test_trades_are_heard_in_full_and_quotes_latest_value_first() -> None:
     assert [(row.name, row.caught_up_by) for row in UNCONFLATED] == [
-        ("TradesRecorded", "list_trades")
+        ("TradesRecorded", "list_trades"),
+        # An event contract's outcomes (contract v23), every version heard.
+        ("OutcomesRecorded", "list_outcomes"),
     ]
     assert {"TradesRecorded", "QuotesRecorded"} <= HEARD
 
@@ -473,8 +475,9 @@ def test_the_ems_suite_is_carried_with_its_six_cases_and_v22s() -> None:
         "reads-the-latest-quotes",
         "hears-a-quote-recorded",
     ]
-    # The order path's and the calendars' (contract v22).
-    assert len(held.cases) == 20
+    # The order path's and the calendars' (contract v22), and from contract
+    # v23 a venue-originated fill's accept and DK.
+    assert len(held.cases) == 24
     assert "places-at-a-linked-connectivity-plugin" in [case.name for case in held.cases]
 
 

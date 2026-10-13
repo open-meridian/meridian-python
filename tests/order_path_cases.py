@@ -1,7 +1,10 @@
 """A plugin's side of every case contract v22 adds to the role suites:
 the order path's (`connectivity`, `oms`, and its cases of `portfolio`,
 `ems`, `compliance`, `operations` and `reporting`) and the settlement
-calendars' reads every role holds.
+calendars' reads every role holds; and contract v23's: venue-originated
+fills (`connectivity`, `ems`, `operations`, `compliance`) and an event
+contract's outcomes heard and read (`reporting`, `portfolio`, `compliance`,
+`signal`, `operations`).
 
 Each producer is what a plugin holding the role does, through the SDK's
 typed operations, for what the case's source presents: it runs against the
@@ -484,6 +487,200 @@ async def reports_a_venue_not_held(recorder: Recorder) -> None:
 
 
 #: Each case contract v22 adds, by name, as a plugin holding the role does it.
+# ── Contract v23: venue-originated fills ────────────────────────────────────
+
+EXECUTION = "EXE-01JAF0R5N8M00000000000011"
+VENUE_ORDER = "SIM-ORD-9"
+UNMATCHED_HEARD = (
+    "ExecutionRecorded",
+    "execution_recorded",
+    ops.ExecutionRecordedEvent(
+        execution=ops.Execution(
+            execution_id=EXECUTION,
+            account_id=ACCOUNT,
+            instrument_id=AAPL,
+            side=ops.SIDE_SELL,
+            venue_order_id=VENUE_ORDER,
+            state=ops.EXECUTION_STATE_UNMATCHED,
+        )
+    ),
+)
+ACCEPTED_PLACEMENT = (
+    "PlacementUpdated",
+    "placement_updated",
+    ops.PlacementUpdatedEvent(
+        placement=ops.Placement(
+            placement_id=PLACEMENT,
+            order_id=ORDER,
+            connectivity_instance_id=VENUE,
+            venue_account_code=CODE,
+            venue_order_id=VENUE_ORDER,
+        )
+    ),
+)
+ACCEPTED_EXECUTION = (
+    "ExecutionRecorded",
+    "execution_recorded",
+    ops.ExecutionRecordedEvent(
+        execution=ops.Execution(
+            execution_id=EXECUTION,
+            placement_id=PLACEMENT,
+            venue_order_id=VENUE_ORDER,
+            state=ops.EXECUTION_STATE_MATCHED,
+        )
+    ),
+)
+ACCEPTED_ORDER = (
+    "OrderUpdated",
+    "order_updated",
+    ops.OrderUpdatedEvent(
+        order=ops.Order(order_id=ORDER, origin=ops.ORDER_ORIGIN_ACCEPTED_EXECUTION)
+    ),
+)
+
+
+async def reports_a_fill_on_no_placement(recorder: Recorder) -> None:
+    # The venue's fill of an order the platform never placed: no placement,
+    # its instrument, side and venue order ID named, the account stamped
+    # from the ems's map by the venue account code.
+    await recorder.report_execution(
+        venue_account_code=CODE,
+        instrument_id=AAPL,
+        side="sell",
+        venue_order_id=VENUE_ORDER,
+        venue_execution_id="SIM-EXE-9",
+        quantity=Decimal("30"),
+        price=usd("227.41"),
+        trade_date=date(2026, 10, 9),
+        settlement_date=date(2026, 10, 13),
+        raw_record=RAW,
+    )
+
+
+async def reports_a_later_fill_on_the_accepted_placement(recorder: Recorder) -> None:
+    await hearing(ACCEPTED_PLACEMENT, ACCEPTED_EXECUTION)(recorder)
+    (heard,) = recorder.on("PlacementUpdated")
+    await recorder.report_execution(
+        placement_id=heard.placement.placement_id,
+        venue_order_id=heard.placement.venue_order_id,
+        venue_execution_id="SIM-EXE-10",
+        quantity=Decimal("5"),
+        price=usd("227.40"),
+        settlement_date=date(2026, 10, 13),
+        raw_record=RAW,
+    )
+
+
+async def re_reports_a_charge_on_the_accepted_placement(recorder: Recorder) -> None:
+    await hearing(ACCEPTED_PLACEMENT)(recorder)
+    (heard,) = recorder.on("PlacementUpdated")
+    await recorder.report_charge(
+        placement_id=heard.placement.placement_id,
+        fee=meridian.Fee(kind="exchange", amount=usd("0.02")),
+        raw_record=RAW,
+    )
+
+
+async def accepts_a_fill_to_an_order(recorder: Recorder) -> None:
+    await hearing(UNMATCHED_HEARD)(recorder)
+    (heard,) = recorder.on("ExecutionRecorded")
+    await recorder.accept_execution(
+        execution_ids=[heard.execution.execution_id],
+        order_id=ORDER,
+        note="Ours: the client's working order",
+        acting_for=caller_header("write"),
+    )
+
+
+async def accepts_a_fill_to_a_new_order(recorder: Recorder) -> None:
+    await hearing(UNMATCHED_HEARD)(recorder)
+    (heard,) = recorder.on("ExecutionRecorded")
+    await recorder.accept_execution(
+        execution_ids=[heard.execution.execution_id],
+        new_order=ops.NewOrderFromExecutions(
+            sleeve="core", note="Sold in the broker's app on Monday"
+        ),
+        note="Confirmed with the client by phone",
+        acting_for=caller_header("write"),
+    )
+
+
+async def answers_a_fill_dk(recorder: Recorder) -> None:
+    await hearing(UNMATCHED_HEARD)(recorder)
+    (heard,) = recorder.on("ExecutionRecorded")
+    await recorder.dont_know_execution(
+        execution_ids=[heard.execution.execution_id],
+        reason="unknown_instrument",
+        acting_for=caller_header("write"),
+    )
+
+
+async def accepts_past_ordered_to_a_new_order(recorder: Recorder) -> None:
+    # The accept to the working order was refused for its quantity; the
+    # trader accepts the fill to a new order instead.
+    await recorder.accept_execution(
+        execution_ids=[EXECUTION],
+        new_order=ops.NewOrderFromExecutions(note="Past the working order's quantity"),
+        acting_for=caller_header("write"),
+    )
+
+
+async def names_an_unmatched_fill_as_a_breaks_cause(recorder: Recorder) -> None:
+    await recorder.list_orders(account_id=ACCOUNT, execution_state="unmatched")
+    await recorder.record_break(
+        account_id=ACCOUNT,
+        position=meridian.PositionKey(instrument_id=AAPL, side="long"),
+        category="trade_date_quantity",
+        differences=[
+            meridian.BreakDifference(
+                field="trade_date_quantity",
+                book=meridian.BreakValue(quantity=Decimal("100")),
+                street=meridian.BreakValue(quantity=Decimal("70")),
+            )
+        ],
+        business_date="2026-10-09",
+        candidate_causes=[
+            meridian.BreakCause(
+                category="unbooked_trade",
+                book_entry=ops.JournalRef(partition="P0", sequence=60),
+            )
+        ],
+        idempotency_key="break:ACC-1:STMT-9:AAPL",
+    )
+
+
+async def hears_an_order_created_at_accept(recorder: Recorder) -> None:
+    await hearing(ACCEPTED_ORDER, ACCEPTED_EXECUTION)(recorder)
+    (heard,) = recorder.on("OrderUpdated")
+    await recorder.record_check(
+        order_id=heard.order.order_id, rule="restricted-list", verdict="warn"
+    )
+
+
+# ── Contract v23: an event contract's outcome, heard and read ───────────────
+
+EVENT_CONTRACT = "INS-01JB00000000000000KXFED1"
+OUTCOME_HEARD = (
+    "OutcomesRecorded",
+    "outcomes_recorded",
+    ops.OutcomesRecordedEvent(
+        outcome=ops.Outcome(
+            meta=ops.ObservationMeta(
+                row_key="KXFEDDECISION-26OCT-H0:outcome",
+                subjects=[ops.SubjectRef(entity_id=EVENT_CONTRACT)],
+            ),
+            determination=ops.OUTCOME_DETERMINATION_PAYS,
+            stage=ops.OUTCOME_STAGE_DETERMINED,
+        )
+    ),
+)
+
+
+async def hears_and_reads_an_outcome(recorder: Recorder) -> None:
+    await hearing(OUTCOME_HEARD)(recorder)
+    await recorder.list_outcomes(subjects=[ops.SubjectRef(entity_id=EVENT_CONTRACT)])
+
+
 PRODUCERS: dict[str, Producer] = {
     # Every role's settlement calendar reads.
     "reads-a-calendar": reads_a_calendar,
@@ -591,4 +788,20 @@ PRODUCERS: dict[str, Producer] = {
     "reports-a-symbol-it-cannot-resolve": reports_a_symbol_it_cannot_resolve,
     "resolves-an-executions-venue": resolves_an_executions_venue,
     "reports-a-venue-not-held": reports_a_venue_not_held,
+    # Contract v23: venue-originated fills.
+    "reports-a-fill-on-no-placement": reports_a_fill_on_no_placement,
+    "reports-a-later-fill-on-the-accepted-placement": (
+        reports_a_later_fill_on_the_accepted_placement
+    ),
+    "re-reports-a-charge-on-the-accepted-placement": (
+        re_reports_a_charge_on_the_accepted_placement
+    ),
+    "accepts-a-fill-to-an-order": accepts_a_fill_to_an_order,
+    "accepts-a-fill-to-a-new-order": accepts_a_fill_to_a_new_order,
+    "answers-a-fill-dk-with-a-reason": answers_a_fill_dk,
+    "accept-past-ordered-refused": accepts_past_ordered_to_a_new_order,
+    "names-an-unmatched-fill-as-a-breaks-cause": names_an_unmatched_fill_as_a_breaks_cause,
+    "hears-an-order-created-at-accept": hears_an_order_created_at_accept,
+    # Contract v23: an event contract's outcome, for every reader of it.
+    "hears-and-reads-an-outcome": hears_and_reads_an_outcome,
 }

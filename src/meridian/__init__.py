@@ -194,6 +194,19 @@ connectivity plugin is told its link to its one `ems` and the codes that
 `ems` mapped on it, and an `ems` the connectivity plugins linked to it and
 its map (`AccountScope.connectivity_link`, `connectivity_links`,
 `venue_account_map`).
+
+From contract v23 a connectivity plugin may report a fill on no order and no
+placement (`report_execution` naming its `instrument_id`, `side` and
+`venue_order_id`), which waits in the book unmatched; the `ems` accepts it to
+an order (`accept_execution`, to an `order_id` or a new order) or answers it
+DK (`dont_know_execution`, with a reason), and the connectivity plugin hears
+what became of the fills it reported (`receive(execution_recorded=...)`). A
+data plugin records an event contract's outcomes in batches of 1 to 500
+(`record_outcomes`, each an `Outcome`: its `OutcomeDetermination`, its
+`OutcomeStage`, its settlement value as a `Money` and the venue's word as
+reported), and prices' readers and `operations` hear every version
+(`receive(outcomes_recorded=...)`) and read them (`list_outcomes`, as of a
+recorded time or after the watermark last seen).
 """
 
 # Each role's common part (contract v20, spec/plugin-pages-follow-their-role).
@@ -286,6 +299,7 @@ from .operations import (
     OpeningSource,
     OrderChange,
     OrderLink,
+    Outcome,
     Party,
     PendingSettlement,
     PendingSettlementRef,
@@ -346,6 +360,8 @@ from .plugin.v1.operations_pb2 import (
     MarginAgreementRef,
     MissReason,
     OpeningSourceKind,
+    OutcomeDetermination,
+    OutcomeStage,
     PendingState,
     PositionBasis,
     PriceBasis,
@@ -510,6 +526,9 @@ __all__ = [
     "Trade",
     "TradeAttributes",
     "TradeCharacteristic",
+    "Outcome",
+    "OutcomeDetermination",
+    "OutcomeStage",
     "AlgorithmDeclaration",
     "AllocationInstruction",
     "AllocationLine",

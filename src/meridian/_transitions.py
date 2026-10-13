@@ -1,4 +1,5 @@
-"""An order's transitions, as data (contract v22, decisions/035).
+"""An order's transitions, and from contract v23 an execution's, as data
+(decisions/035).
 
 The order lifecycle's states and transitions are one table, kept in
 meridian-design's matrix/transitions.tsv and published by meridian-schema as
@@ -17,8 +18,15 @@ leads to (`to`; `unchanged` for one leaving the state as it was), and the
 RefusalReason names a command meeting it may be refused with (`refusal`;
 none for a venue's fact, which is never refused for its state).
 
-Internal: `table()` reads the rows and `caused_from(state, role)` picks
-those a role may cause from a state. Neither is a public name of the SDK;
+From contract v23 the table holds an execution's rows too, keyed `e1`
+onward, their states ExecutionState names (`execution_states`): a fill on a
+placement or on no placement, its accept, its DK, its correction and its
+bust. They are read apart from the order's, so an order's state never meets
+an execution's row.
+
+Internal: `table()` reads the order's rows, `execution_table()` the
+execution's, and `caused_from(state, role)` picks the order's rows a role may
+cause from a state. Neither is a public name of the SDK;
 the file itself is the published data, read with
 `importlib.resources.files("meridian").joinpath("transitions.json")`.
 """
@@ -26,12 +34,16 @@ the file itself is the published data, read with
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from functools import cache
 from importlib import resources
 
 #: The words the table uses beside OrderState names.
 NONE, ANY, UNCHANGED = "none", "any", "unchanged"
+
+#: An execution's rows are keyed e1 onward (contract v23).
+_EXECUTION_ROW = re.compile(r"^e\d+$")
 
 
 @dataclass(frozen=True)
@@ -58,8 +70,13 @@ def states() -> tuple[str, ...]:
     return tuple(str(state) for state in _published()["states"])  # type: ignore[attr-defined]
 
 
-def table() -> tuple[Transition, ...]:
-    """Every row of the table, in its order."""
+def execution_states() -> tuple[str, ...]:
+    """Every ExecutionState the table names, in its order (contract v23)."""
+    held = _published().get("execution_states", [])
+    return tuple(str(state) for state in held)  # type: ignore[attr-defined]
+
+
+def _rows(executions: bool) -> tuple[Transition, ...]:
     rows = _published()["transitions"]
     return tuple(
         Transition(
@@ -71,7 +88,18 @@ def table() -> tuple[Transition, ...]:
             refusal=tuple(held["refusal"]),
         )
         for held in rows  # type: ignore[attr-defined]
+        if bool(_EXECUTION_ROW.match(str(held["row"]))) == executions
     )
+
+
+def table() -> tuple[Transition, ...]:
+    """Every row of the order's table, in its order."""
+    return _rows(executions=False)
+
+
+def execution_table() -> tuple[Transition, ...]:
+    """Every row of an execution's table, in its order (contract v23)."""
+    return _rows(executions=True)
 
 
 def caused_from(state: str, role: str) -> tuple[Transition, ...]:
