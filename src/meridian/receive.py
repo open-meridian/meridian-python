@@ -170,7 +170,11 @@ class _Point:
 
 
 def _at(message: Any, path: tuple[str, ...]) -> str:
-    """The string at a dotted path in a message, empty where it is unset."""
+    """The string at a dotted path in a message, empty where it is unset,
+    and empty for no path: a row naming no account (contract v22) keeps its
+    changes under no account, each following the row's last."""
+    if not path:
+        return ""
     held = message
     for part in path:
         held = getattr(held, part)
@@ -221,8 +225,11 @@ class _Follower:
     ) -> tuple[list[Any], dict[str, int]]:
         """Every record the row's query answers since `since` for `account`
         (every account in the scope when empty), and where its first page was
-        answered: the point everything it returned is had to at least."""
+        answered: the point everything it returned is had to at least. A row
+        naming no account (contract v22: the trading instructions, its
+        `account_param` empty) is read whole, its query given no account."""
         method = getattr(self.plugin, row.caught_up_by)
+        scoped = {row.account_param: account} if row.account_param else {}
         watermark = (
             None
             if not since
@@ -238,9 +245,7 @@ class _Follower:
         cursor = ""
         size = catch_up_page(row)
         while True:
-            page = await method(
-                **{row.account_param: account}, since=watermark, page_size=size, cursor=cursor
-            )
+            page = await method(**scoped, since=watermark, page_size=size, cursor=cursor)
             if answered is None:
                 answered = {held.partition: held.sequence for held in page.as_of.partitions}
             records.extend(getattr(page, row.records))
@@ -771,6 +776,9 @@ async def _watch_scope(plugin: Plugin, follower: _Follower) -> None:
                 async with follower.lock:
                     follower.forget(set(left))
                     for account in sorted(entered):
+                        # A row naming no account is not cut by the scope:
+                        # an account entering it changes nothing to read.
                         for row in follower.rows:
-                            await follower.catch_up(row, account)
+                            if row.account_param:
+                                await follower.catch_up(row, account)
             held = scope.read

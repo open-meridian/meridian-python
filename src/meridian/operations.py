@@ -313,6 +313,7 @@ class Provenance:
     source: str = ""
     person: str = ""
     rule: str = ""
+    date_basis: DateBasis | None = None
 
 
 def _provenance(value: Provenance, name: str) -> ops.Provenance:
@@ -326,6 +327,58 @@ def _provenance(value: Provenance, name: str) -> ops.Provenance:
         source=value.source,
         person=value.person,
         rule=value.rule,
+        date_basis=None if value.date_basis is None else _date_basis(value.date_basis, f"{name}.date_basis"),
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class DateBasis:
+    """What a date was computed on (W3.20; spec/settlement-calendars-are-
+    core- reference-data, requirement 8; contract v22): the rule and its
+    version, and each calendar and its version, so anything recording the
+    date can record its basis with it, and the same inputs and versions
+    always give the same date.
+
+    The SDK's form of the wire's DateBasis: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    rule: DateRuleRef | None = None
+    calendars: Sequence[ops.CalendarRef] = ()
+
+
+def _date_basis(value: DateBasis, name: str) -> ops.DateBasis:
+    """A DateBasis as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, DateBasis):
+        raise TypeError(f"{name} is a meridian.DateBasis, not {type(value).__name__}")
+    return ops.DateBasis(
+        rule=None if value.rule is None else _date_rule_ref(value.rule, f"{name}.rule"),
+        calendars=list(value.calendars),
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class DateRuleRef:
+    """A date rule by its kind, subject and version: a rule has no ID of its
+    own (the calendars spec's Q11).
+
+    The SDK's form of the wire's DateRuleRef: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    kind: ops.DateRuleKind | str | None = None
+    subject: str = ""
+    version: int = 0
+
+
+def _date_rule_ref(value: DateRuleRef, name: str) -> ops.DateRuleRef:
+    """A DateRuleRef as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, DateRuleRef):
+        raise TypeError(f"{name} is a meridian.DateRuleRef, not {type(value).__name__}")
+    return ops.DateRuleRef(
+        kind=_enum(ops.DateRuleKind, value.kind, f"{name}.kind"),
+        subject=value.subject,
+        version=value.version,
     )
 
 
@@ -674,6 +727,7 @@ class BreakCause:
     event_reference: str | None = None
     none_found: bool | None = None
     activity: ops.ActivityRef | None = None
+    date_check: DateCheck | None = None
     note: str = ""
 
 
@@ -683,7 +737,7 @@ def _break_cause(value: BreakCause, name: str) -> ops.BreakCause:
         raise TypeError(f"{name} is a meridian.BreakCause, not {type(value).__name__}")
     return ops.BreakCause(
         category=_enum(ops.BreakCauseCategory, value.category, f"{name}.category"),
-        **_arm(f"{name}.item", street_record=value.street_record, book_entry=value.book_entry, pending_settlement=None if value.pending_settlement is None else _pending_settlement_ref(value.pending_settlement, f"{name}.pending_settlement"), event_reference=value.event_reference, none_found=value.none_found, activity=value.activity),
+        **_arm(f"{name}.item", street_record=value.street_record, book_entry=value.book_entry, pending_settlement=None if value.pending_settlement is None else _pending_settlement_ref(value.pending_settlement, f"{name}.pending_settlement"), event_reference=value.event_reference, none_found=value.none_found, activity=value.activity, date_check=None if value.date_check is None else _date_check(value.date_check, f"{name}.date_check")),
         note=value.note,
     )
 
@@ -709,6 +763,34 @@ def _pending_settlement_ref(value: PendingSettlementRef, name: str) -> ops.Pendi
         instrument_id=value.instrument_id,
         side=_enum(ops.HoldingSide, value.side, f"{name}.side"),
         value_date=_date(value.value_date, f"{name}.value_date"),
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class DateCheck:
+    """What the date read found of one date (W3.20, W9.4; the calendars
+    spec's requirement 14; contract v22): the date, the calendars and their
+    versions it was checked on, and why the day is closed.
+
+    The SDK's form of the wire's DateCheck: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    date: date | str = ""
+    calendars: Sequence[ops.CalendarRef] = ()
+    reason: ops.DateCheckReason | str | None = None
+    holiday_name: str = ""
+
+
+def _date_check(value: DateCheck, name: str) -> ops.DateCheck:
+    """A DateCheck as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, DateCheck):
+        raise TypeError(f"{name} is a meridian.DateCheck, not {type(value).__name__}")
+    return ops.DateCheck(
+        date=_date(value.date, f"{name}.date"),
+        calendars=list(value.calendars),
+        reason=_enum(ops.DateCheckReason, value.reason, f"{name}.reason"),
+        holiday_name=value.holiday_name,
     )
 
 
@@ -868,6 +950,7 @@ class MovementLine:
     lot_id: str = ""
     opens_lot: LotTerms | None = None
     pending_state: ops.PendingState | None = None
+    sleeve: str = ""
 
 
 def _movement_line(value: MovementLine, name: str) -> ops.MovementLine:
@@ -883,6 +966,7 @@ def _movement_line(value: MovementLine, name: str) -> ops.MovementLine:
         lot_id=value.lot_id,
         opens_lot=None if value.opens_lot is None else _lot_terms(value.opens_lot, f"{name}.opens_lot"),
         pending_state=value.pending_state,
+        sleeve=value.sleeve,
     )
 
 
@@ -908,6 +992,566 @@ def _basis_adjustment(value: BasisAdjustment, name: str) -> ops.BasisAdjustment:
         lot_id=value.lot_id,
         **_arm(f"{name}.cost", cost_change=None if value.cost_change is None else _money(value.cost_change, f"{name}.cost_change"), stated_cost=None if value.stated_cost is None else _money(value.stated_cost, f"{name}.stated_cost")),
         holding_period_start=_date(value.holding_period_start, f"{name}.holding_period_start"),
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class Leg:
+    """One leg of an order (step 5's Q26).
+
+    The SDK's form of the wire's Leg: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    instrument_id: str = ""
+    side: ops.Side | str | None = None
+    ratio: Decimal | int
+
+
+def _leg(value: Leg, name: str) -> ops.Leg:
+    """A Leg as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, Leg):
+        raise TypeError(f"{name} is a meridian.Leg, not {type(value).__name__}")
+    return ops.Leg(
+        instrument_id=value.instrument_id,
+        side=_enum(ops.Side, value.side, f"{name}.side"),
+        ratio=_decimal(value.ratio, f"{name}.ratio"),
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class AllocationInstruction:
+    """`portfolio`'s allocation instruction (principle 1; FIX's
+    AllocationInstruction).
+
+    The SDK's form of the wire's AllocationInstruction: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    lines: Sequence[AllocationLine] = ()
+
+
+def _allocation_instruction(value: AllocationInstruction, name: str) -> ops.AllocationInstruction:
+    """A AllocationInstruction as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, AllocationInstruction):
+        raise TypeError(f"{name} is a meridian.AllocationInstruction, not {type(value).__name__}")
+    return ops.AllocationInstruction(
+        lines=[_allocation_line(each, f"{name}.lines[{i}]") for i, each in enumerate(value.lines)],
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class AllocationLine:
+    """One account's part of an allocation instruction.
+
+    The SDK's form of the wire's AllocationLine: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    account_id: str = ""
+    quantity: Decimal | int | None = None
+    weight: Decimal | int | None = None
+    sleeve: str = ""
+
+
+def _allocation_line(value: AllocationLine, name: str) -> ops.AllocationLine:
+    """A AllocationLine as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, AllocationLine):
+        raise TypeError(f"{name} is a meridian.AllocationLine, not {type(value).__name__}")
+    return ops.AllocationLine(
+        account_id=value.account_id,
+        quantity=None if value.quantity is None else _decimal(value.quantity, f"{name}.quantity"),
+        weight=None if value.weight is None else _decimal(value.weight, f"{name}.weight"),
+        sleeve=value.sleeve,
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class Party:
+    """A party to an order or an execution, as delivered (requirements 30,
+    55).
+
+    The SDK's form of the wire's Party: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    identifiers: Sequence[ops.Identifier] = ()
+    lei: str = ""
+    party_role: ops.PartyRole | str | None = None
+    contact: str = ""
+
+
+def _party(value: Party, name: str) -> ops.Party:
+    """A Party as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, Party):
+        raise TypeError(f"{name} is a meridian.Party, not {type(value).__name__}")
+    return ops.Party(
+        identifiers=list(value.identifiers),
+        lei=value.lei,
+        party_role=_enum(ops.PartyRole, value.party_role, f"{name}.party_role"),
+        contact=value.contact,
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class ReceiptQuote:
+    """The quote at time of receipt, held as stated (requirement 56; the
+    refresh's Q35).
+
+    The SDK's form of the wire's ReceiptQuote: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    bid: Money | None = None
+    ask: Money | None = None
+    source_kind: ops.ReceiptQuoteSourceKind | str | None = None
+    venue_id: str = ""
+    quoted_at_ns: int = 0
+    bid_size: Decimal | int | None = None
+    ask_size: Decimal | int | None = None
+    dataset: str = ""
+    row_key: str = ""
+
+
+def _receipt_quote(value: ReceiptQuote, name: str) -> ops.ReceiptQuote:
+    """A ReceiptQuote as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, ReceiptQuote):
+        raise TypeError(f"{name} is a meridian.ReceiptQuote, not {type(value).__name__}")
+    return ops.ReceiptQuote(
+        bid=None if value.bid is None else _money(value.bid, f"{name}.bid"),
+        ask=None if value.ask is None else _money(value.ask, f"{name}.ask"),
+        source_kind=_enum(ops.ReceiptQuoteSourceKind, value.source_kind, f"{name}.source_kind"),
+        venue_id=value.venue_id,
+        quoted_at_ns=value.quoted_at_ns,
+        bid_size=None if value.bid_size is None else _decimal(value.bid_size, f"{name}.bid_size"),
+        ask_size=None if value.ask_size is None else _decimal(value.ask_size, f"{name}.ask_size"),
+        dataset=value.dataset,
+        row_key=value.row_key,
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class OrderLink:
+    """The split link on a child order (W11.1; Q41).
+
+    The SDK's form of the wire's OrderLink: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    kind: ops.OrderLinkKind | str | None = None
+    parent_order_id: str = ""
+
+
+def _order_link(value: OrderLink, name: str) -> ops.OrderLink:
+    """A OrderLink as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, OrderLink):
+        raise TypeError(f"{name} is a meridian.OrderLink, not {type(value).__name__}")
+    return ops.OrderLink(
+        kind=_enum(ops.OrderLinkKind, value.kind, f"{name}.kind"),
+        parent_order_id=value.parent_order_id,
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class OrderChange:
+    """What an order's change asks (W11.3).
+
+    The SDK's form of the wire's OrderChange: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    kind: ops.OrderChangeKind | str | None = None
+    quantity: Decimal | int | None = None
+    limit_price: Money | None = None
+    time_in_force: ops.TimeInForce | str | None = None
+    allocation_instruction: AllocationInstruction | None = None
+    execution_instructions: Sequence[ops.ExecutionInstruction | str] = ()
+
+
+def _order_change(value: OrderChange, name: str) -> ops.OrderChange:
+    """A OrderChange as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, OrderChange):
+        raise TypeError(f"{name} is a meridian.OrderChange, not {type(value).__name__}")
+    return ops.OrderChange(
+        kind=_enum(ops.OrderChangeKind, value.kind, f"{name}.kind"),
+        quantity=None if value.quantity is None else _decimal(value.quantity, f"{name}.quantity"),
+        limit_price=None if value.limit_price is None else _money(value.limit_price, f"{name}.limit_price"),
+        time_in_force=_enum(ops.TimeInForce, value.time_in_force, f"{name}.time_in_force"),
+        allocation_instruction=None if value.allocation_instruction is None else _allocation_instruction(value.allocation_instruction, f"{name}.allocation_instruction"),
+        execution_instructions=[_enum(ops.ExecutionInstruction, each, f"{name}.execution_instructions[{i}]") for i, each in enumerate(value.execution_instructions)],
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class StrategyInstruction:
+    """A strategy for the venue to work (step 6's Q11): the kinds name which
+    of a broker's strategies, described in its catalogue on FIXatdl's model
+    (W11.20), is its VWAP, TWAP, POV or IS.
+
+    The SDK's form of the wire's StrategyInstruction: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    kind: ops.StrategyKind | str | None = None
+    start_ns: int = 0
+    end_ns: int = 0
+    participation: Decimal | int | None = None
+    urgency: ops.Urgency | str | None = None
+    max_participation: Decimal | int | None = None
+    price_limit: Money | None = None
+
+
+def _strategy_instruction(value: StrategyInstruction, name: str) -> ops.StrategyInstruction:
+    """A StrategyInstruction as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, StrategyInstruction):
+        raise TypeError(f"{name} is a meridian.StrategyInstruction, not {type(value).__name__}")
+    return ops.StrategyInstruction(
+        kind=_enum(ops.StrategyKind, value.kind, f"{name}.kind"),
+        start_ns=value.start_ns,
+        end_ns=value.end_ns,
+        participation=None if value.participation is None else _decimal(value.participation, f"{name}.participation"),
+        urgency=_enum(ops.Urgency, value.urgency, f"{name}.urgency"),
+        max_participation=None if value.max_participation is None else _decimal(value.max_participation, f"{name}.max_participation"),
+        price_limit=None if value.price_limit is None else _money(value.price_limit, f"{name}.price_limit"),
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class PlacementChange:
+    """What a placement's change asks (W11.9).
+
+    The SDK's form of the wire's PlacementChange: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    kind: ops.PlacementChangeKind | str | None = None
+    quantity: Decimal | int | None = None
+    limit_price: Money | None = None
+    time_in_force: ops.TimeInForce | str | None = None
+
+
+def _placement_change(value: PlacementChange, name: str) -> ops.PlacementChange:
+    """A PlacementChange as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, PlacementChange):
+        raise TypeError(f"{name} is a meridian.PlacementChange, not {type(value).__name__}")
+    return ops.PlacementChange(
+        kind=_enum(ops.PlacementChangeKind, value.kind, f"{name}.kind"),
+        quantity=None if value.quantity is None else _decimal(value.quantity, f"{name}.quantity"),
+        limit_price=None if value.limit_price is None else _money(value.limit_price, f"{name}.limit_price"),
+        time_in_force=_enum(ops.TimeInForce, value.time_in_force, f"{name}.time_in_force"),
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class Finality:
+    """An execution's finality: a level, and when it reached it.
+
+    The SDK's form of the wire's Finality: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    level: ops.FinalityLevel | str | None = None
+    at_ns: int = 0
+
+
+def _finality(value: Finality, name: str) -> ops.Finality:
+    """A Finality as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, Finality):
+        raise TypeError(f"{name} is a meridian.Finality, not {type(value).__name__}")
+    return ops.Finality(
+        level=_enum(ops.FinalityLevel, value.level, f"{name}.level"),
+        at_ns=value.at_ns,
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class Fee:
+    """A fee (requirement 26), in any asset with a cash instrument (v18).
+
+    The SDK's form of the wire's Fee: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    kind: ops.FeeKind | str | None = None
+    amount: Money
+
+
+def _fee(value: Fee, name: str) -> ops.Fee:
+    """A Fee as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, Fee):
+        raise TypeError(f"{name} is a meridian.Fee, not {type(value).__name__}")
+    return ops.Fee(
+        kind=_enum(ops.FeeKind, value.kind, f"{name}.kind"),
+        amount=_money(value.amount, f"{name}.amount"),
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class LocateAnswer:
+    """The prime's answer.
+
+    The SDK's form of the wire's LocateAnswer: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    quantity_approved: Decimal | int
+    rate: Decimal | int | None = None
+    expires_at_ns: int = 0
+    locate_id: str = ""
+
+
+def _locate_answer(value: LocateAnswer, name: str) -> ops.LocateAnswer:
+    """A LocateAnswer as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, LocateAnswer):
+        raise TypeError(f"{name} is a meridian.LocateAnswer, not {type(value).__name__}")
+    return ops.LocateAnswer(
+        quantity_approved=_decimal(value.quantity_approved, f"{name}.quantity_approved"),
+        rate=None if value.rate is None else _decimal(value.rate, f"{name}.rate"),
+        expires_at_ns=value.expires_at_ns,
+        locate_id=value.locate_id,
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class LocateUse:
+    """One use of a locate, its own entry (W11.19): when a locate is used up
+    is `compliance`'s or the `oms`'s logic (principle 3).
+
+    The SDK's form of the wire's LocateUse: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    kind: ops.LocateUseKind | str | None = None
+    quantity: Decimal | int
+    order_id: str = ""
+
+
+def _locate_use(value: LocateUse, name: str) -> ops.LocateUse:
+    """A LocateUse as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, LocateUse):
+        raise TypeError(f"{name} is a meridian.LocateUse, not {type(value).__name__}")
+    return ops.LocateUse(
+        kind=_enum(ops.LocateUseKind, value.kind, f"{name}.kind"),
+        quantity=_decimal(value.quantity, f"{name}.quantity"),
+        order_id=value.order_id,
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class VenueCatalogue:
+    """A venue's offering per venue account code (W11.20), converted at the
+    edge from the venue's own definitions: not a capability, and nothing
+    declared about the role.
+
+    The SDK's form of the wire's VenueCatalogue: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    connectivity_instance_id: str = ""
+    venue_account_code: str = ""
+    order_types: Sequence[VenueOrderType] = ()
+    strategies: Sequence[VenueStrategy] = ()
+    eligibility: Sequence[VenueEligibility] = ()
+
+
+def _venue_catalogue(value: VenueCatalogue, name: str) -> ops.VenueCatalogue:
+    """A VenueCatalogue as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, VenueCatalogue):
+        raise TypeError(f"{name} is a meridian.VenueCatalogue, not {type(value).__name__}")
+    return ops.VenueCatalogue(
+        connectivity_instance_id=value.connectivity_instance_id,
+        venue_account_code=value.venue_account_code,
+        order_types=[_venue_order_type(each, f"{name}.order_types[{i}]") for i, each in enumerate(value.order_types)],
+        strategies=[_venue_strategy(each, f"{name}.strategies[{i}]") for i, each in enumerate(value.strategies)],
+        eligibility=[_venue_eligibility(each, f"{name}.eligibility[{i}]") for i, each in enumerate(value.eligibility)],
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class VenueOrderType:
+    """An order type the venue offers, with the times in force it takes.
+
+    The SDK's form of the wire's VenueOrderType: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    order_type: ops.OrderType | str | None = None
+    times_in_force: Sequence[ops.TimeInForce | str] = ()
+    stated_at_ns: int = 0
+
+
+def _venue_order_type(value: VenueOrderType, name: str) -> ops.VenueOrderType:
+    """A VenueOrderType as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, VenueOrderType):
+        raise TypeError(f"{name} is a meridian.VenueOrderType, not {type(value).__name__}")
+    return ops.VenueOrderType(
+        order_type=_enum(ops.OrderType, value.order_type, f"{name}.order_type"),
+        times_in_force=[_enum(ops.TimeInForce, each, f"{name}.times_in_force[{i}]") for i, each in enumerate(value.times_in_force)],
+        stated_at_ns=value.stated_at_ns,
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class VenueStrategy:
+    """A broker's strategy (the order-path plan's refresh, Q31, as refined
+    and ruled 2026-10-12): the strategy and its parameters on the model of
+    FIXatdl, the FIX Trading Community's standard for describing algorithmic
+    strategies, or mapping one to one onto it, so a broker's published
+    definitions are imported at the edge rather than keyed again.
+
+    The SDK's form of the wire's VenueStrategy: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    kind: ops.StrategyKind | str | None = None
+    name: str = ""
+    stated_at_ns: int = 0
+    parameters: Sequence[StrategyParameter] = ()
+
+
+def _venue_strategy(value: VenueStrategy, name: str) -> ops.VenueStrategy:
+    """A VenueStrategy as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, VenueStrategy):
+        raise TypeError(f"{name} is a meridian.VenueStrategy, not {type(value).__name__}")
+    return ops.VenueStrategy(
+        kind=_enum(ops.StrategyKind, value.kind, f"{name}.kind"),
+        name=value.name,
+        stated_at_ns=value.stated_at_ns,
+        parameters=[_strategy_parameter(each, f"{name}.parameters[{i}]") for i, each in enumerate(value.parameters)],
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class StrategyParameter:
+    """One parameter of a broker's strategy, on FIXatdl's Parameter: its
+    name, type, whether required (use="required"), its range (minValue,
+    maxValue), its allowed values (EnumPair) and its default (initValue).
+
+    The SDK's form of the wire's StrategyParameter: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    name: str = ""
+    type: ops.StrategyParameterType | str | None = None
+    required: bool = False
+    min_value: str = ""
+    max_value: str = ""
+    allowed_values: Sequence[str] = ()
+    default_value: str = ""
+
+
+def _strategy_parameter(value: StrategyParameter, name: str) -> ops.StrategyParameter:
+    """A StrategyParameter as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, StrategyParameter):
+        raise TypeError(f"{name} is a meridian.StrategyParameter, not {type(value).__name__}")
+    return ops.StrategyParameter(
+        name=value.name,
+        type=_enum(ops.StrategyParameterType, value.type, f"{name}.type"),
+        required=value.required,
+        min_value=value.min_value,
+        max_value=value.max_value,
+        allowed_values=list(value.allowed_values),
+        default_value=value.default_value,
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class VenueEligibility:
+    """The venue's eligibility for one instrument.
+
+    The SDK's form of the wire's VenueEligibility: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    instrument_id: str = ""
+    fractionable: bool = False
+    shortable: bool = False
+    stated_at_ns: int = 0
+    borrow_status: ops.BorrowStatus | str | None = None
+    options_level: int = 0
+
+
+def _venue_eligibility(value: VenueEligibility, name: str) -> ops.VenueEligibility:
+    """A VenueEligibility as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, VenueEligibility):
+        raise TypeError(f"{name} is a meridian.VenueEligibility, not {type(value).__name__}")
+    return ops.VenueEligibility(
+        instrument_id=value.instrument_id,
+        fractionable=value.fractionable,
+        shortable=value.shortable,
+        stated_at_ns=value.stated_at_ns,
+        borrow_status=_enum(ops.BorrowStatus, value.borrow_status, f"{name}.borrow_status"),
+        options_level=value.options_level,
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class TenorDateInputs:
+    """W3.20: a tenor date from a trade date.
+
+    The SDK's form of the wire's TenorDateInputs: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    pair: Sequence[str] = ()
+    tenor: Tenor | None = None
+    trade_date: date | str = ""
+
+
+def _tenor_date_inputs(value: TenorDateInputs, name: str) -> ops.TenorDateInputs:
+    """A TenorDateInputs as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, TenorDateInputs):
+        raise TypeError(f"{name} is a meridian.TenorDateInputs, not {type(value).__name__}")
+    return ops.TenorDateInputs(
+        pair=list(value.pair),
+        tenor=None if value.tenor is None else _tenor(value.tenor, f"{name}.tenor"),
+        trade_date=_date(value.trade_date, f"{name}.trade_date"),
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class Tenor:
+    """Tenor.
+
+    The SDK's form of the wire's Tenor: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    count: int = 0
+    unit: ops.TenorUnit | str | None = None
+
+
+def _tenor(value: Tenor, name: str) -> ops.Tenor:
+    """A Tenor as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, Tenor):
+        raise TypeError(f"{name} is a meridian.Tenor, not {type(value).__name__}")
+    return ops.Tenor(
+        count=value.count,
+        unit=_enum(ops.TenorUnit, value.unit, f"{name}.unit"),
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class RollInputs:
+    """W3.20: a date rolled by a convention on a set of calendars.
+
+    The SDK's form of the wire's RollInputs: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    date: date | str = ""
+    convention: ops.BusinessDayConvention | str | None = None
+    calendars: Sequence[str] = ()
+
+
+def _roll_inputs(value: RollInputs, name: str) -> ops.RollInputs:
+    """A RollInputs as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, RollInputs):
+        raise TypeError(f"{name} is a meridian.RollInputs, not {type(value).__name__}")
+    return ops.RollInputs(
+        date=_date(value.date, f"{name}.date"),
+        convention=_enum(ops.BusinessDayConvention, value.convention, f"{name}.convention"),
+        calendars=list(value.calendars),
     )
 
 
@@ -1782,6 +2426,578 @@ class Operations:
         )
         return await self._operate(self._operations().ListAccountAttributes, params)
 
+    async def propose_order(
+        self,
+        *,
+        account_id: str = "",
+        instrument_id: str = "",
+        sleeve: str = "",
+        side: ops.Side | str | None = None,
+        locate_id: str = "",
+        quantity: Decimal | int | None = None,
+        cash_quantity: Money | None = None,
+        order_type: ops.OrderType | str | None = None,
+        limit_price: Money | None = None,
+        dealt_currency: str = "",
+        legs: Sequence[Leg] = (),
+        allocation_instruction: AllocationInstruction | None = None,
+        time_in_force: ops.TimeInForce | str | None = None,
+        lot_relief_method: ops.LotReliefMethod | str | None = None,
+        relieve_lot_ids: Sequence[str] = (),
+        capacity: ops.Capacity | str | None = None,
+        direction: ops.OrderDirection | str | None = None,
+        parties: Sequence[Party] = (),
+        decided_by: ops.Actor | None = None,
+        customer_id: str = "",
+        firm_designated_id: str = "",
+        handling_instructions: Sequence[str] = (),
+        received_at_ns: int = 0,
+        received_precision: ops.TimePrecision | str | None = None,
+        quote_at_receipt: ReceiptQuote | None = None,
+        represents_order_ids: Sequence[str] = (),
+        axe_source: str = "",
+        axe_counterparty_id: str = "",
+        link: OrderLink | None = None,
+        idempotency_key: str = "",
+        stop_price: Money | None = None,
+        expire_date: date | str = "",
+        expire_time_ns: int = 0,
+        execution_instructions: Sequence[ops.ExecutionInstruction | str] = (),
+        acting_for: str | None = None,
+    ) -> ops.ProposeOrderResult:
+        """W11.1: W11.1. For a person or a service account; by `portfolio`, the `oms`, or an (preview)."""
+        params = ops.ProposeOrderParams(
+            account_id=account_id,
+            instrument_id=instrument_id,
+            sleeve=sleeve,
+            side=_enum(ops.Side, side, "side"),
+            locate_id=locate_id,
+            quantity=None if quantity is None else _decimal(quantity, "quantity"),
+            cash_quantity=None if cash_quantity is None else _money(cash_quantity, "cash_quantity"),
+            order_type=_enum(ops.OrderType, order_type, "order_type"),
+            limit_price=None if limit_price is None else _money(limit_price, "limit_price"),
+            dealt_currency=dealt_currency,
+            legs=[_leg(each, f"legs[{i}]") for i, each in enumerate(legs)],
+            allocation_instruction=None if allocation_instruction is None else _allocation_instruction(allocation_instruction, "allocation_instruction"),
+            time_in_force=_enum(ops.TimeInForce, time_in_force, "time_in_force"),
+            lot_relief_method=_enum(ops.LotReliefMethod, lot_relief_method, "lot_relief_method"),
+            relieve_lot_ids=list(relieve_lot_ids),
+            capacity=_enum(ops.Capacity, capacity, "capacity"),
+            direction=_enum(ops.OrderDirection, direction, "direction"),
+            parties=[_party(each, f"parties[{i}]") for i, each in enumerate(parties)],
+            decided_by=decided_by,
+            customer_id=customer_id,
+            firm_designated_id=firm_designated_id,
+            handling_instructions=list(handling_instructions),
+            received_at_ns=received_at_ns,
+            received_precision=_enum(ops.TimePrecision, received_precision, "received_precision"),
+            quote_at_receipt=None if quote_at_receipt is None else _receipt_quote(quote_at_receipt, "quote_at_receipt"),
+            represents_order_ids=list(represents_order_ids),
+            axe_source=axe_source,
+            axe_counterparty_id=axe_counterparty_id,
+            link=None if link is None else _order_link(link, "link"),
+            idempotency_key=idempotency_key,
+            stop_price=None if stop_price is None else _money(stop_price, "stop_price"),
+            expire_date=_date(expire_date, "expire_date"),
+            expire_time_ns=expire_time_ns,
+            execution_instructions=[_enum(ops.ExecutionInstruction, value, "execution_instructions") for value in execution_instructions],
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().ProposeOrder, params)
+
+    async def record_order(
+        self,
+        *,
+        account_id: str = "",
+        venue_account_code: str = "",
+        instrument_id: str = "",
+        sleeve: str = "",
+        side: ops.Side | str | None = None,
+        quantity: Decimal | int,
+        order_type: ops.OrderType | str | None = None,
+        limit_price: Money | None = None,
+        time_in_force: ops.TimeInForce | str | None = None,
+        venue_order_id: str = "",
+        origin: ops.OrderOrigin | str | None = None,
+        raw_record: ops.RawRecordRef | None = None,
+        idempotency_key: str = "",
+        acting_for: str | None = None,
+    ) -> ops.RecordOrderResult:
+        """W11.2: W11.2. A fact: never through the gate. By a connectivity plugin, its (preview)."""
+        params = ops.RecordOrderParams(
+            account_id=account_id,
+            venue_account_code=venue_account_code,
+            instrument_id=instrument_id,
+            sleeve=sleeve,
+            side=_enum(ops.Side, side, "side"),
+            quantity=_decimal(quantity, "quantity"),
+            order_type=_enum(ops.OrderType, order_type, "order_type"),
+            limit_price=None if limit_price is None else _money(limit_price, "limit_price"),
+            time_in_force=_enum(ops.TimeInForce, time_in_force, "time_in_force"),
+            venue_order_id=venue_order_id,
+            origin=_enum(ops.OrderOrigin, origin, "origin"),
+            raw_record=raw_record,
+            idempotency_key=idempotency_key,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().RecordOrder, params)
+
+    async def request_order_change(
+        self,
+        *,
+        order_id: str = "",
+        change: OrderChange | None = None,
+        reason: str = "",
+        idempotency_key: str = "",
+        acting_for: str | None = None,
+    ) -> ops.RequestOrderChangeResult:
+        """W11.3: W11.3 (preview)."""
+        params = ops.RequestOrderChangeParams(
+            order_id=order_id,
+            change=None if change is None else _order_change(change, "change"),
+            reason=reason,
+            idempotency_key=idempotency_key,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().RequestOrderChange, params)
+
+    async def record_check(
+        self,
+        *,
+        order_id: str = "",
+        order_version: int = 0,
+        placement_id: str = "",
+        verdict: ops.CheckVerdict | str | None = None,
+        rule: str = "",
+        note: str = "",
+        idempotency_key: str = "",
+        acting_for: str | None = None,
+    ) -> ops.RecordCheckResult:
+        """W11.4: W11.4. By `compliance`; on an order version, or on a placement before it (preview)."""
+        params = ops.RecordCheckParams(
+            order_id=order_id,
+            order_version=order_version,
+            placement_id=placement_id,
+            verdict=_enum(ops.CheckVerdict, verdict, "verdict"),
+            rule=rule,
+            note=note,
+            idempotency_key=idempotency_key,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().RecordCheck, params)
+
+    async def decide_approval(
+        self,
+        *,
+        order_id: str = "",
+        decision: ops.ApprovalDecision | str | None = None,
+        reason: str = "",
+        idempotency_key: str = "",
+        acting_for: str | None = None,
+    ) -> ops.DecideApprovalResult:
+        """W11.5: W11.5 (preview)."""
+        params = ops.DecideApprovalParams(
+            order_id=order_id,
+            decision=_enum(ops.ApprovalDecision, decision, "decision"),
+            reason=reason,
+            idempotency_key=idempotency_key,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().DecideApproval, params)
+
+    async def release_order(
+        self,
+        *,
+        order_id: str = "",
+        idempotency_key: str = "",
+        acting_for: str | None = None,
+    ) -> ops.ReleaseOrderResult:
+        """W11.6: W11.6. Through the gate, in its order: allocation, block, approval, (preview)."""
+        params = ops.ReleaseOrderParams(
+            order_id=order_id,
+            idempotency_key=idempotency_key,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().ReleaseOrder, params)
+
+    async def set_working_condition(
+        self,
+        *,
+        order_id: str = "",
+        condition: ops.OrderCondition | str | None = None,
+        set: bool = False,
+        reason: str = "",
+        idempotency_key: str = "",
+        acting_for: str | None = None,
+    ) -> ops.SetWorkingConditionResult:
+        """W11.7: W11.7. Claimed, held or paused, set or cleared (preview)."""
+        params = ops.SetWorkingConditionParams(
+            order_id=order_id,
+            condition=_enum(ops.OrderCondition, condition, "condition"),
+            set=set,
+            reason=reason,
+            idempotency_key=idempotency_key,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().SetWorkingCondition, params)
+
+    async def create_placement(
+        self,
+        *,
+        order_id: str = "",
+        connectivity_instance_id: str = "",
+        venue_account_code: str = "",
+        quantity: Decimal | int,
+        limit_price: Money | None = None,
+        time_in_force: ops.TimeInForce | str | None = None,
+        strategy: StrategyInstruction | None = None,
+        destination: str = "",
+        route_type: ops.RouteType | str | None = None,
+        handling_instructions: Sequence[str] = (),
+        rfq_id: str = "",
+        axe_id: str = "",
+        idempotency_key: str = "",
+        acting_for: str | None = None,
+    ) -> ops.CreatePlacementResult:
+        """W11.8: W11.8. By the `ems`; or by a connectivity plugin, a direct order's (preview)."""
+        params = ops.CreatePlacementParams(
+            order_id=order_id,
+            connectivity_instance_id=connectivity_instance_id,
+            venue_account_code=venue_account_code,
+            quantity=_decimal(quantity, "quantity"),
+            limit_price=None if limit_price is None else _money(limit_price, "limit_price"),
+            time_in_force=_enum(ops.TimeInForce, time_in_force, "time_in_force"),
+            strategy=None if strategy is None else _strategy_instruction(strategy, "strategy"),
+            destination=destination,
+            route_type=_enum(ops.RouteType, route_type, "route_type"),
+            handling_instructions=list(handling_instructions),
+            rfq_id=rfq_id,
+            axe_id=axe_id,
+            idempotency_key=idempotency_key,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().CreatePlacement, params)
+
+    async def request_placement_change(
+        self,
+        *,
+        placement_id: str = "",
+        change: PlacementChange | None = None,
+        reason: str = "",
+        cause: ops.EntryMeta | None = None,
+        idempotency_key: str = "",
+        acting_for: str | None = None,
+    ) -> ops.RequestPlacementChangeResult:
+        """W11.9: W11.9. By the `ems` or the `oms`; by a connectivity plugin only to report (preview)."""
+        params = ops.RequestPlacementChangeParams(
+            placement_id=placement_id,
+            change=None if change is None else _placement_change(change, "change"),
+            reason=reason,
+            cause=cause,
+            idempotency_key=idempotency_key,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().RequestPlacementChange, params)
+
+    async def report_placement(
+        self,
+        *,
+        placement_id: str = "",
+        event: ops.PlacementEvent | str | None = None,
+        venue_order_id: str = "",
+        routed_at_ns: int = 0,
+        routed_precision: ops.TimePrecision | str | None = None,
+        rejection_reason: ops.RejectionReason | str | None = None,
+        rejection_as_reported: ops.AsReported | None = None,
+        unknown_reason: ops.UnknownReason | str | None = None,
+        status_as_reported: ops.AsReported | None = None,
+        restatement_reason: ops.RestatementReason | str | None = None,
+        quantity: Decimal | int | None = None,
+        limit_price: Money | None = None,
+        raw_record: ops.RawRecordRef | None = None,
+        acting_for: str | None = None,
+    ) -> ops.ReportPlacementResult:
+        """W11.10: W11.10. A fact, each with the raw record it was converted from (preview)."""
+        params = ops.ReportPlacementParams(
+            placement_id=placement_id,
+            event=_enum(ops.PlacementEvent, event, "event"),
+            venue_order_id=venue_order_id,
+            routed_at_ns=routed_at_ns,
+            routed_precision=_enum(ops.TimePrecision, routed_precision, "routed_precision"),
+            rejection_reason=_enum(ops.RejectionReason, rejection_reason, "rejection_reason"),
+            rejection_as_reported=rejection_as_reported,
+            unknown_reason=_enum(ops.UnknownReason, unknown_reason, "unknown_reason"),
+            status_as_reported=status_as_reported,
+            restatement_reason=_enum(ops.RestatementReason, restatement_reason, "restatement_reason"),
+            quantity=None if quantity is None else _decimal(quantity, "quantity"),
+            limit_price=None if limit_price is None else _money(limit_price, "limit_price"),
+            raw_record=raw_record,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().ReportPlacement, params)
+
+    async def report_execution(
+        self,
+        *,
+        placement_id: str = "",
+        order_id: str = "",
+        account_id: str = "",
+        venue_account_code: str = "",
+        venue_execution_id: str = "",
+        kind: ops.ExecutionKind | str | None = None,
+        source: ops.ExecutionSource | str | None = None,
+        quantity: Decimal | int,
+        price: Money,
+        trade_time_ns: int = 0,
+        trade_date: date | str = "",
+        finality: Finality | None = None,
+        settlement_date: date | str = "",
+        computed_settlement_date: date | str = "",
+        settlement_date_basis: DateBasis | None = None,
+        fees: Sequence[Fee] = (),
+        supersedes: str = "",
+        venue_id: str = "",
+        uti: str = "",
+        prior_uti: str = "",
+        upi: str = "",
+        given_up_to: str = "",
+        trade_chain_reference: str = "",
+        settlement_counterparty: str = "",
+        raw_record: ops.RawRecordRef | None = None,
+        idempotency_key: str = "",
+        effective_date: date | str = "",
+        counterparty: Party | None = None,
+        liquidity_indicator: ops.LiquidityIndicator | str | None = None,
+        uti_generated_by: str = "",
+        acting_for: str | None = None,
+    ) -> ops.ReportExecutionResult:
+        """W11.11: W11.11. A fact by a connectivity plugin; or, for a person, a manual or (preview)."""
+        params = ops.ReportExecutionParams(
+            placement_id=placement_id,
+            order_id=order_id,
+            account_id=account_id,
+            venue_account_code=venue_account_code,
+            venue_execution_id=venue_execution_id,
+            kind=_enum(ops.ExecutionKind, kind, "kind"),
+            source=_enum(ops.ExecutionSource, source, "source"),
+            quantity=_decimal(quantity, "quantity"),
+            price=_money(price, "price"),
+            trade_time_ns=trade_time_ns,
+            trade_date=_date(trade_date, "trade_date"),
+            finality=None if finality is None else _finality(finality, "finality"),
+            settlement_date=_date(settlement_date, "settlement_date"),
+            computed_settlement_date=_date(computed_settlement_date, "computed_settlement_date"),
+            settlement_date_basis=None if settlement_date_basis is None else _date_basis(settlement_date_basis, "settlement_date_basis"),
+            fees=[_fee(each, f"fees[{i}]") for i, each in enumerate(fees)],
+            supersedes=supersedes,
+            venue_id=venue_id,
+            uti=uti,
+            prior_uti=prior_uti,
+            upi=upi,
+            given_up_to=given_up_to,
+            trade_chain_reference=trade_chain_reference,
+            settlement_counterparty=settlement_counterparty,
+            raw_record=raw_record,
+            idempotency_key=idempotency_key,
+            effective_date=_date(effective_date, "effective_date"),
+            counterparty=None if counterparty is None else _party(counterparty, "counterparty"),
+            liquidity_indicator=_enum(ops.LiquidityIndicator, liquidity_indicator, "liquidity_indicator"),
+            uti_generated_by=uti_generated_by,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().ReportExecution, params)
+
+    async def report_charge(
+        self,
+        *,
+        placement_id: str = "",
+        fee: Fee | None = None,
+        trade_date: date | str = "",
+        settlement_date: date | str = "",
+        raw_record: ops.RawRecordRef | None = None,
+        acting_for: str | None = None,
+    ) -> ops.ReportChargeResult:
+        """W11.12: W11.12 (preview)."""
+        params = ops.ReportChargeParams(
+            placement_id=placement_id,
+            fee=None if fee is None else _fee(fee, "fee"),
+            trade_date=_date(trade_date, "trade_date"),
+            settlement_date=_date(settlement_date, "settlement_date"),
+            raw_record=raw_record,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().ReportCharge, params)
+
+    async def acknowledge_flag(
+        self,
+        *,
+        order_id: str = "",
+        condition: ops.OrderCondition | str | None = None,
+        reason: str = "",
+        idempotency_key: str = "",
+        acting_for: str | None = None,
+    ) -> ops.AcknowledgeFlagResult:
+        """W11.14: W11.14. Late fact only; does not tie out is never acknowledged (preview)."""
+        params = ops.AcknowledgeFlagParams(
+            order_id=order_id,
+            condition=_enum(ops.OrderCondition, condition, "condition"),
+            reason=reason,
+            idempotency_key=idempotency_key,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().AcknowledgeFlag, params)
+
+    async def list_trading_instructions(
+        self,
+        *,
+        since: ops.Watermark | None = None,
+        page_size: int = 0,
+        cursor: str = "",
+    ) -> ops.ListTradingInstructionsResult:
+        """W11.16: Those in force, never a history; read on start, whatever the scope (preview)."""
+        params = ops.ListTradingInstructionsParams(
+            since=since,
+            page_size=page_size,
+            cursor=cursor,
+        )
+        return await self._operate(self._operations().ListTradingInstructions, params)
+
+    async def list_orders(
+        self,
+        *,
+        account_id: str = "",
+        since: ops.Watermark | None = None,
+        page_size: int = 0,
+        cursor: str = "",
+    ) -> ops.ListOrdersResult:
+        """W11.17: The orders in the reader's scope, as of now or changed since a watermark; (preview)."""
+        params = ops.ListOrdersParams(
+            account_id=account_id,
+            since=since,
+            page_size=page_size,
+            cursor=cursor,
+        )
+        return await self._operate(self._operations().ListOrders, params)
+
+    async def read_order_history(
+        self,
+        *,
+        account_id: str = "",
+        order_id: str = "",
+        page_size: int = 0,
+        cursor: str = "",
+    ) -> ops.ReadOrderHistoryResult:
+        """W11.17: One order's journal from its first entry; the history never changes (preview)."""
+        params = ops.ReadOrderHistoryParams(
+            account_id=account_id,
+            order_id=order_id,
+            page_size=page_size,
+            cursor=cursor,
+        )
+        return await self._operate(self._operations().ReadOrderHistory, params)
+
+    async def record_locate(
+        self,
+        *,
+        venue_account_code: str = "",
+        instrument_id: str = "",
+        quantity_requested: Decimal | int | None = None,
+        answer: LocateAnswer | None = None,
+        locate_record_id: str = "",
+        raw_record: ops.RawRecordRef | None = None,
+        idempotency_key: str = "",
+        acting_for: str | None = None,
+    ) -> ops.RecordLocateResult:
+        """W11.18: W11.18. By the fund's connectivity plugin; the answer later on the same (preview)."""
+        params = ops.RecordLocateParams(
+            venue_account_code=venue_account_code,
+            instrument_id=instrument_id,
+            quantity_requested=None if quantity_requested is None else _decimal(quantity_requested, "quantity_requested"),
+            answer=None if answer is None else _locate_answer(answer, "answer"),
+            locate_record_id=locate_record_id,
+            raw_record=raw_record,
+            idempotency_key=idempotency_key,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().RecordLocate, params)
+
+    async def list_locates(
+        self,
+        *,
+        account_id: str = "",
+        since: ops.Watermark | None = None,
+        page_size: int = 0,
+        cursor: str = "",
+    ) -> ops.ListLocatesResult:
+        """W11.18: ListLocates (preview)."""
+        params = ops.ListLocatesParams(
+            account_id=account_id,
+            since=since,
+            page_size=page_size,
+            cursor=cursor,
+        )
+        return await self._operate(self._operations().ListLocates, params)
+
+    async def record_locate_use(
+        self,
+        *,
+        locate_record_id: str = "",
+        use: LocateUse | None = None,
+        idempotency_key: str = "",
+        acting_for: str | None = None,
+    ) -> ops.RecordLocateUseResult:
+        """W11.19: W11.19. By `compliance` or the `oms`; on an expired locate, (preview)."""
+        params = ops.RecordLocateUseParams(
+            locate_record_id=locate_record_id,
+            use=None if use is None else _locate_use(use, "use"),
+            idempotency_key=idempotency_key,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().RecordLocateUse, params)
+
+    async def report_venue_catalogue(
+        self,
+        *,
+        catalogue: VenueCatalogue | None = None,
+    ) -> ops.Published:
+        """W11.20: W11.20. Published by a connectivity plugin, per venue account code its (preview)."""
+        params = ops.ReportVenueCatalogueParams(
+            catalogue=None if catalogue is None else _venue_catalogue(catalogue, "catalogue"),
+        )
+        return await self._operate(self._operations().ReportVenueCatalogue, params)
+
+    async def read_venue_catalogue(
+        self,
+        *,
+        connectivity_instance_id: str = "",
+        venue_account_code: str = "",
+        acting_for: str | None = None,
+    ) -> ops.ReadVenueCatalogueResult:
+        """W11.20: W11.20. The latest per venue account code; a code the plugin has not (preview)."""
+        params = ops.ReadVenueCatalogueParams(
+            connectivity_instance_id=connectivity_instance_id,
+            venue_account_code=venue_account_code,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().ReadVenueCatalogue, params)
+
+    async def map_venue_account(
+        self,
+        *,
+        connectivity_instance_id: str = "",
+        venue_account_code: str = "",
+        account_id: str = "",
+        acting_for: str | None = None,
+    ) -> ops.MapVenueAccountResult:
+        """W11.22: W11.22. Sent by the `ems` acting for the admin viewing its page (W4.9): (preview)."""
+        params = ops.MapVenueAccountParams(
+            connectivity_instance_id=connectivity_instance_id,
+            venue_account_code=venue_account_code,
+            account_id=account_id,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().MapVenueAccount, params)
+
     async def resolve_venue(
         self,
         *,
@@ -1813,6 +3029,40 @@ class Operations:
             observed_at_ns=observed_at_ns,
         )
         return await self._operate(self._operations().ReportMissingVenue, params)
+
+    async def read_calendar(
+        self,
+        *,
+        calendar_id: str = "",
+        from_date: date | str = "",
+        to_date: date | str = "",
+        as_of_ns: int = 0,
+    ) -> ops.ReadCalendarResult:
+        """W3.19: W3.19: a calendar's days over a range, as of a recorded time or its latest (preview)."""
+        params = ops.ReadCalendarParams(
+            calendar_id=calendar_id,
+            from_date=_date(from_date, "from_date"),
+            to_date=_date(to_date, "to_date"),
+            as_of_ns=as_of_ns,
+        )
+        return await self._operate(self._operations().ReadCalendar, params)
+
+    async def compute_date(
+        self,
+        *,
+        settlement: ops.SettlementDateInputs | None = None,
+        spot: ops.SpotDateInputs | None = None,
+        tenor: TenorDateInputs | None = None,
+        roll: RollInputs | None = None,
+        business_day: ops.BusinessDayInputs | None = None,
+        as_of_ns: int = 0,
+    ) -> ops.ComputeDateResult:
+        """W3.20: W3.20: one way to work out a date, in core. The same inputs and versions (preview)."""
+        params = ops.ComputeDateParams(
+            **_arm("inputs", settlement=settlement, spot=spot, tenor=None if tenor is None else _tenor_date_inputs(tenor, "tenor"), roll=None if roll is None else _roll_inputs(roll, "roll"), business_day=business_day),
+            as_of_ns=as_of_ns,
+        )
+        return await self._operate(self._operations().ComputeDate, params)
 
     async def record_prices(
         self,
@@ -2025,12 +3275,19 @@ class Operations:
         activity_recorded: Callable[[Heard[ops.ActivityRecordedEvent]], Awaitable[None]] | None = None,
         sync_status_recorded: Callable[[Heard[ops.SyncStatusRecordedEvent]], Awaitable[None]] | None = None,
         activity_re_resolved: Callable[[Heard[ops.ActivityReResolvedEvent]], Awaitable[None]] | None = None,
+        order_updated: Callable[[Heard[ops.OrderUpdatedEvent]], Awaitable[None]] | None = None,
+        placement_updated: Callable[[Heard[ops.PlacementUpdatedEvent]], Awaitable[None]] | None = None,
+        execution_recorded: Callable[[Heard[ops.ExecutionRecordedEvent]], Awaitable[None]] | None = None,
+        unplaced_fact_recorded: Callable[[Heard[ops.UnplacedFactRecordedEvent]], Awaitable[None]] | None = None,
+        trading_instruction_changed: Callable[[Heard[ops.TradingInstructionChangedEvent]], Awaitable[None]] | None = None,
+        locate_updated: Callable[[Heard[ops.LocateUpdatedEvent]], Awaitable[None]] | None = None,
         prices_recorded: Callable[[Heard[ops.PricesRecordedEvent]], Awaitable[None]] | None = None,
         bars_recorded: Callable[[Heard[ops.BarsRecordedEvent]], Awaitable[None]] | None = None,
         observations_wanted: Callable[[Heard[ops.ObservationsWantedEvent]], Awaitable[None]] | None = None,
         want_withdrawn: Callable[[Heard[ops.WantWithdrawnEvent]], Awaitable[None]] | None = None,
         trades_recorded: Callable[[Heard[ops.TradesRecordedEvent]], Awaitable[None]] | None = None,
         quotes_recorded: Callable[[Heard[ops.QuotesRecordedEvent]], Awaitable[None]] | None = None,
+        report_venue_catalogue: Callable[[Heard[ops.VenueCatalogueEvent]], Awaitable[None]] | None = None,
         seed: bool = True,
         subjects: Sequence[str] = (),
     ) -> None:
@@ -2057,12 +3314,19 @@ class Operations:
             "ActivityRecorded": activity_recorded,
             "SyncStatusRecorded": sync_status_recorded,
             "ActivityReResolved": activity_re_resolved,
+            "OrderUpdated": order_updated,
+            "PlacementUpdated": placement_updated,
+            "ExecutionRecorded": execution_recorded,
+            "UnplacedFactRecorded": unplaced_fact_recorded,
+            "TradingInstructionChanged": trading_instruction_changed,
+            "LocateUpdated": locate_updated,
             "PricesRecorded": prices_recorded,
             "BarsRecorded": bars_recorded,
             "ObservationsWanted": observations_wanted,
             "WantWithdrawn": want_withdrawn,
             "TradesRecorded": trades_recorded,
             "QuotesRecorded": quotes_recorded,
+            "ReportVenueCatalogue": report_venue_catalogue,
         }
         await self._receive(
             {row: handler for row, handler in handlers.items() if handler is not None},
@@ -2076,7 +3340,8 @@ class DeliveredRow:
     """A row a plugin's roles may hear (W4.3), as matrix/scoped.tsv declares
     it: the Delivery's arm carrying it, the path to the account its message
     names (empty when it names none), and the query that reads its changes
-    since a watermark, given one account in `account_param`, whose reply
+    since a watermark, given one account in `account_param` (empty for a
+    row naming no account, read for every record), whose reply
     holds them in `records`, each a record whose last change is in
     `record_journal` and whose account is at `record_account`; a record goes
     into the row's message at `within`, or is the row's message where that
@@ -2214,6 +3479,84 @@ DELIVERED: tuple[DeliveredRow, ...] = (
         record_journal="journal",
         record_account=("account_id",),
     ),
+    DeliveredRow(
+        name="OrderUpdated",
+        step="W11.13",
+        arm="order_updated",
+        message=ops.OrderUpdatedEvent,
+        account=("order", "account_id"),
+        caught_up_by="list_orders",
+        account_param="account_id",
+        records="orders",
+        within="order",
+        record_journal="last_change",
+        record_account=("account_id",),
+    ),
+    DeliveredRow(
+        name="PlacementUpdated",
+        step="W11.13",
+        arm="placement_updated",
+        message=ops.PlacementUpdatedEvent,
+        account=("placement", "account_id"),
+        caught_up_by="list_orders",
+        account_param="account_id",
+        records="placements",
+        within="placement",
+        record_journal="last_change",
+        record_account=("account_id",),
+    ),
+    DeliveredRow(
+        name="ExecutionRecorded",
+        step="W11.13",
+        arm="execution_recorded",
+        message=ops.ExecutionRecordedEvent,
+        account=("execution", "account_id"),
+        caught_up_by="list_orders",
+        account_param="account_id",
+        records="executions",
+        within="execution",
+        record_journal="last_change",
+        record_account=("account_id",),
+    ),
+    DeliveredRow(
+        name="UnplacedFactRecorded",
+        step="W11.13",
+        arm="unplaced_fact_recorded",
+        message=ops.UnplacedFactRecordedEvent,
+        account=("unplaced", "account_id"),
+        caught_up_by="list_orders",
+        account_param="account_id",
+        records="unplaced_facts",
+        within="unplaced",
+        record_journal="last_change",
+        record_account=("account_id",),
+    ),
+    DeliveredRow(
+        name="TradingInstructionChanged",
+        step="W11.16",
+        arm="trading_instruction_changed",
+        message=ops.TradingInstructionChangedEvent,
+        account=(),
+        caught_up_by="list_trading_instructions",
+        account_param="",
+        records="instructions",
+        within="instruction",
+        record_journal="last_change",
+        record_account=(),
+    ),
+    DeliveredRow(
+        name="LocateUpdated",
+        step="W11.18",
+        arm="locate_updated",
+        message=ops.LocateUpdatedEvent,
+        account=("locate", "account_id"),
+        caught_up_by="list_locates",
+        account_param="account_id",
+        records="locates",
+        within="locate",
+        record_journal="last_change",
+        record_account=("account_id",),
+    ),
 )
 
 
@@ -2279,6 +3622,15 @@ CONFLATED: tuple[ConflatedRow, ...] = (
         caught_up_by="list_quotes",
         records="quotes",
         within="quote",
+    ),
+    ConflatedRow(
+        name="ReportVenueCatalogue",
+        step="W11.20",
+        arm="report_venue_catalogue",
+        message=ops.VenueCatalogueEvent,
+        caught_up_by="",
+        records="",
+        within="",
     ),
 )
 

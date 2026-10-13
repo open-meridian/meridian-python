@@ -343,3 +343,102 @@ async def test_receive_names_a_row(sidecar) -> None:
             await plugin.receive()
     finally:
         await plugin.leave()
+
+
+# ── A row naming no account (contract v22: the trading instructions) ──────
+
+
+class _Instructions:
+    """A plugin whose one read is ListTradingInstructions, recording each
+    call's keywords: a row naming no account is read with none."""
+
+    def __init__(self) -> None:
+        self.calls: list[dict] = []
+
+    async def list_trading_instructions(self, **keywords) -> ops.ListTradingInstructionsResult:
+        self.calls.append(keywords)
+        held = ops.TradingInstruction(
+            target=ops.TradingInstructionTarget(all_accounts=True),
+            value=ops.TRADING_INSTRUCTION_VALUE_PAUSE,
+            last_change=ops.JournalRef(partition="control", sequence=7, previous_sequence=6),
+        )
+        return ops.ListTradingInstructionsResult(
+            instructions=[held],
+            as_of=ops.Watermark(
+                partitions=[ops.PartitionSequence(partition="control", sequence=7)]
+            ),
+        )
+
+
+def _instructions_row():
+    from meridian.operations import DELIVERED
+
+    row = next(row for row in DELIVERED if row.name == "TradingInstructionChanged")
+    assert row.account_param == "" and row.account == (), "the row names no account"
+    return row
+
+
+@pytest.mark.parametrize("handing", [True, False])
+async def test_a_row_naming_no_account_is_read_with_no_account(handing: bool) -> None:
+    from meridian.receive import _Follower
+
+    handed: list = []
+
+    async def handler(heard) -> None:
+        handed.append(heard)
+
+    plugin = _Instructions()
+    row = _instructions_row()
+    follower = _Follower(plugin, [row], {row.name: handler})  # type: ignore[arg-type]
+    await follower.seed(handing=handing)
+    assert plugin.calls == [
+        {"since": None, "page_size": plugin.calls[0]["page_size"], "cursor": ""}
+    ]
+    assert len(handed) == (1 if handing else 0), "without a seed, read and not handed on"
+    await follower.catch_up_all()
+    assert all("" not in call and "account_id" not in call for call in plugin.calls)
+
+
+def _instruction_changed(sequence: int, previous: int) -> ops.Delivery:
+    """An instruction's change delivered as the sidecar delivers it: no
+    account, its journal the control partition's."""
+    last = ops.JournalRef(partition="control", sequence=sequence, previous_sequence=previous)
+    return ops.Delivery(
+        meta=ops.DeliveryMeta(
+            message_id=f"msg-{sequence}", row="TradingInstructionChanged", journal=last
+        ),
+        trading_instruction_changed=ops.TradingInstructionChangedEvent(
+            instruction=ops.TradingInstruction(
+                target=ops.TradingInstructionTarget(all_accounts=True),
+                value=ops.TRADING_INSTRUCTION_VALUE_ACTIVE,
+                last_change=last,
+            ),
+            journal=last,
+        ),
+    )
+
+
+async def test_a_row_naming_no_account_follows_on_under_no_account() -> None:
+    """A change following the row's last is handed on with no read; one past
+    a gap is caught up by the unscoped read first."""
+    from meridian.receive import _Follower
+
+    handed: list = []
+
+    async def handler(heard) -> None:
+        handed.append(heard)
+
+    plugin = _Instructions()
+    row = _instructions_row()
+    follower = _Follower(plugin, [row], {row.name: handler})  # type: ignore[arg-type]
+    await follower.seed(handing=False)
+    assert set(follower.points) == {(row.name, "")}, "kept under no account"
+    reads = len(plugin.calls)
+    await follower.delivered(_instruction_changed(8, 7))
+    assert len(plugin.calls) == reads, "a change following the last needs no read"
+    assert [heard.message.journal.sequence for heard in handed] == [0], (
+        "numbers are not handed on"
+    )
+    await follower.delivered(_instruction_changed(12, 11))
+    assert len(plugin.calls) > reads, "a gap is caught up"
+    assert all("account_id" not in call and "" not in call for call in plugin.calls)
