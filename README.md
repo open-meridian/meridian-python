@@ -354,6 +354,24 @@ async for scope in plugin.account_scope():
     scope.link_of("acct-3")  # None: not linked
 ```
 
+From contract v22 the order path's links come beside them. A connectivity
+plugin is told `scope.connectivity_link`, its link to its one `ems` (whether
+a deployment admin made it available, the `ems`, and who may route through
+it), and in `scope.venue_account_map` the venue account codes that `ems`
+mapped on it; it links no accounts of its own, and its scope is the accounts
+mapped on it while it is available and linked. An `ems` is told
+`scope.connectivity_links`, each connectivity plugin linked to it, and
+`scope.venue_account_map`, its whole map. Both are unset, or empty, for any
+other plugin, and delivered again on every change.
+
+```python
+async for scope in plugin.account_scope():
+    if scope.venue_account_map is not None:
+        for mapping in scope.venue_account_map.mappings:
+            print(mapping.account_id, "->", mapping.venue_account_code,
+                  "at", mapping.connectivity_instance_id)
+```
+
 A holding for an external account nothing links is refused, and raises
 `meridian.NotLinked`, chosen by the code the sidecar sends beside the
 refusal, never by its words. It is a `CallFailed` whose `kind` is

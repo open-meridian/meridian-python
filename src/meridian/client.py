@@ -648,6 +648,72 @@ class LinkedExternalAccount:
 
 
 @dataclass(frozen=True)
+class ConnectivityUser:
+    """A user a connectivity plugin is made available to (W11.21, contract
+    v22): exactly one of a person, by the deployment-local subject, a service
+    account or a user group."""
+
+    subject: str = ""
+    service_account_id: str = ""
+    user_group_id: str = ""
+
+
+@dataclass(frozen=True)
+class ConnectivityLink:
+    """A connectivity plugin instance's availability, the one `ems` instance
+    it is linked to and who may route through it (W11.21, contract v22).
+
+    `available` is a deployment admin's, and nothing is by default;
+    `ems_instance_id` is empty while it is linked to none; `users` are made
+    available by the `ems`'s admin, and a placement for anybody else is
+    refused REFUSAL_REASON_CONNECTIVITY_NOT_ALLOWED.
+    """
+
+    connectivity_instance_id: str
+    available: bool = False
+    ems_instance_id: str = ""
+    users: tuple[ConnectivityUser, ...] = ()
+
+
+def _connectivity_link(delivered: sidecar_pb2.ConnectivityLink) -> ConnectivityLink:
+    return ConnectivityLink(
+        connectivity_instance_id=delivered.connectivity_instance_id,
+        available=delivered.available,
+        ems_instance_id=delivered.ems_instance_id,
+        users=tuple(
+            ConnectivityUser(
+                subject=user.subject,
+                service_account_id=user.service_account_id,
+                user_group_id=user.user_group_id,
+            )
+            for user in delivered.users
+        ),
+    )
+
+
+@dataclass(frozen=True)
+class VenueAccountMapping:
+    """One book account's venue account code at one connectivity plugin
+    (W11.22, contract v22): a code once per plugin, for an account the
+    deployment admin granted the `ems`'s instance."""
+
+    connectivity_instance_id: str
+    venue_account_code: str
+    account_id: str
+
+
+@dataclass(frozen=True)
+class VenueAccountMap:
+    """An `ems`'s map of book accounts to the venue account codes they trade
+    under at its connectivity plugins (W11.22, contract v22): what the `ems`
+    sets in the venue's account field, and what the sidecar stamps a venue
+    fact's account by."""
+
+    ems_instance_id: str
+    mappings: tuple[VenueAccountMapping, ...] = ()
+
+
+@dataclass(frozen=True)
 class AccountScope:
     """Every account anybody may read, or write, through this plugin, and the
     plugin's own links beside them (W4.11).
@@ -662,11 +728,25 @@ class AccountScope:
     plugin reported and no link names is unlinked, and a row for it raises
     `NotLinked`. Delivered on every start and every change, so a plugin holds
     them from here and never keeps them itself.
+
+    From contract v22 (W11.21, W11.22) the conductor sends the order path's
+    links beside them, as it holds them for this instance. A connectivity
+    plugin gets `connectivity_link`, its link to its one `ems`, and in
+    `venue_account_map` the codes that `ems` mapped on it; it links no
+    accounts of its own, and its `read` and `write` are the accounts mapped
+    on it while it is available and linked, empty otherwise. An `ems` gets
+    `connectivity_links`, the connectivity plugins linked to it, each with
+    who may route through it, and `venue_account_map`, its whole map; a
+    plugin holding both roles gets its `ems`'s map. Unset, or empty, for
+    every other plugin.
     """
 
     read: frozenset[str] = frozenset()
     write: frozenset[str] = frozenset()
     links: tuple[LinkedExternalAccount, ...] = ()
+    connectivity_link: ConnectivityLink | None = None
+    connectivity_links: tuple[ConnectivityLink, ...] = ()
+    venue_account_map: VenueAccountMap | None = None
 
     def link_of(self, external_account_id: str) -> LinkedExternalAccount | None:
         """The link naming this external account, or None while it is unlinked."""
@@ -1282,6 +1362,29 @@ class Plugin(Operations):
                         account_name=link.account_name,
                     )
                     for link in delivered.links
+                ),
+                connectivity_link=(
+                    _connectivity_link(delivered.connectivity_link)
+                    if delivered.HasField("connectivity_link")
+                    else None
+                ),
+                connectivity_links=tuple(
+                    _connectivity_link(link) for link in delivered.connectivity_links
+                ),
+                venue_account_map=(
+                    VenueAccountMap(
+                        ems_instance_id=delivered.venue_account_map.ems_instance_id,
+                        mappings=tuple(
+                            VenueAccountMapping(
+                                connectivity_instance_id=mapping.connectivity_instance_id,
+                                venue_account_code=mapping.venue_account_code,
+                                account_id=mapping.account_id,
+                            )
+                            for mapping in delivered.venue_account_map.mappings
+                        ),
+                    )
+                    if delivered.HasField("venue_account_map")
+                    else None
                 ),
             )
 

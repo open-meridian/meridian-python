@@ -20,6 +20,8 @@ from meridian import (
     AppliesWhen,
     Caller,
     Choice,
+    ConnectivityLink,
+    ConnectivityUser,
     Interface,
     LinkedExternalAccount,
     NotRegistered,
@@ -27,6 +29,8 @@ from meridian import (
     Refused,
     Setting,
     Settings,
+    VenueAccountMap,
+    VenueAccountMapping,
 )
 from meridian.v1 import sidecar_pb2
 
@@ -513,6 +517,80 @@ async def test_the_plugins_links_arrive_beside_its_scope_named_and_on_every_chan
         "st-acct-9902", "ACC-3", "Roth IRA"
     )
     assert changed.write == frozenset({"ACC-1", "ACC-3"})
+
+
+async def test_the_order_paths_links_and_venue_account_map_arrive_beside_the_scope(
+    sidecar: tuple[FakeSidecar, str],
+) -> None:
+    # Contract v22 (W4.11, W11.21, W11.22): a connectivity plugin is told its
+    # link to its one ems and the codes that ems mapped on it; an ems the
+    # connectivity plugins linked to it and its whole map. Unset for a plugin
+    # holding neither role.
+    service, address = sidecar
+    link = sidecar_pb2.ConnectivityLink(
+        connectivity_instance_id="conn-1",
+        available=True,
+        ems_instance_id="ems-1",
+        users=[
+            sidecar_pb2.ConnectivityUser(subject="local|ada"),
+            sidecar_pb2.ConnectivityUser(service_account_id="SA-7"),
+            sidecar_pb2.ConnectivityUser(user_group_id="ug-traders"),
+        ],
+    )
+    unlinked = sidecar_pb2.ConnectivityLink(connectivity_instance_id="conn-2")
+    on_conn_1 = sidecar_pb2.VenueAccountMapping(
+        connectivity_instance_id="conn-1", venue_account_code="V-100", account_id="ACC-1"
+    )
+    on_conn_2 = sidecar_pb2.VenueAccountMapping(
+        connectivity_instance_id="conn-2", venue_account_code="V-200", account_id="ACC-2"
+    )
+    service.scopes = [
+        sidecar_pb2.AccountScopeDelivery(
+            read_account_ids=["ACC-1"],
+            write_account_ids=["ACC-1"],
+            connectivity_link=link,
+            venue_account_map=sidecar_pb2.VenueAccountMap(
+                ems_instance_id="ems-1", mappings=[on_conn_1]
+            ),
+        ),
+        sidecar_pb2.AccountScopeDelivery(
+            connectivity_links=[link, unlinked],
+            venue_account_map=sidecar_pb2.VenueAccountMap(
+                ems_instance_id="ems-1", mappings=[on_conn_1, on_conn_2]
+            ),
+        ),
+        sidecar_pb2.AccountScopeDelivery(read_account_ids=["ACC-1"]),
+    ]
+    plugin = await meridian.connect(address, heartbeat=False)
+    try:
+        connectivity, ems, neither = [scope async for scope in plugin.account_scope()]
+    finally:
+        await plugin.leave()
+    told = ConnectivityLink(
+        connectivity_instance_id="conn-1",
+        available=True,
+        ems_instance_id="ems-1",
+        users=(
+            ConnectivityUser(subject="local|ada"),
+            ConnectivityUser(service_account_id="SA-7"),
+            ConnectivityUser(user_group_id="ug-traders"),
+        ),
+    )
+    mapped = VenueAccountMapping("conn-1", "V-100", "ACC-1")
+    assert connectivity == AccountScope(
+        read=frozenset({"ACC-1"}),
+        write=frozenset({"ACC-1"}),
+        connectivity_link=told,
+        venue_account_map=VenueAccountMap("ems-1", (mapped,)),
+    )
+    assert ems.connectivity_link is None, "an ems is told the links to it, not one of its own"
+    assert ems.connectivity_links == (told, ConnectivityLink("conn-2"))
+    assert ems.venue_account_map == VenueAccountMap(
+        "ems-1", (mapped, VenueAccountMapping("conn-2", "V-200", "ACC-2"))
+    )
+    assert neither.connectivity_link is None
+    assert neither.connectivity_links == ()
+    assert neither.venue_account_map is None
 
 
 def test_a_caller_is_read_from_the_header_its_sidecar_forwarded() -> None:

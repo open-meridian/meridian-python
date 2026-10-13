@@ -182,7 +182,11 @@ autonomous work may name (`Declaration(algorithms=[AlgorithmDeclaration(...)])`)
 and `runs_as(role, algorithm_id=...)` names one; a `Caller` carries the
 algorithm a service account's call named (`algorithm_id`) and, for an `ems`
 or a connectivity plugin, the connectivity plugins the user may route
-through (`connectivity_instance_ids`).
+through (`connectivity_instance_ids`). Beside its account scope a
+connectivity plugin is told its link to its one `ems` and the codes that
+`ems` mapped on it, and an `ems` the connectivity plugins linked to it and
+its map (`AccountScope.connectivity_link`, `connectivity_links`,
+`venue_account_map`).
 """
 
 # Each role's common part (contract v20, spec/plugin-pages-follow-their-role).
@@ -199,6 +203,8 @@ from .client import (
     Caller,
     Choice,
     Column,
+    ConnectivityLink,
+    ConnectivityUser,
     Grants,
     Identity,
     Interface,
@@ -213,6 +219,8 @@ from .client import (
     TicketResolution,
     TicketState,
     TicketSubject,
+    VenueAccountMap,
+    VenueAccountMapping,
     connect,
     runs_as,
 )
@@ -392,6 +400,8 @@ __all__ = [
     "Column",
     "CollateralDirection",
     "CommandRefused",
+    "ConnectivityLink",
+    "ConnectivityUser",
     "CustodialActivity",
     "Encumbrance",
     "ExternalAccount",
@@ -481,6 +491,8 @@ __all__ = [
     "SubjectRef",
     "Unanswered",
     "UnansweredReason",
+    "VenueAccountMap",
+    "VenueAccountMapping",
     "VenueKind",
     "VenueRecord",
     "Aggressor",
