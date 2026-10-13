@@ -102,8 +102,7 @@
       ],
       "cause": "a placement or a child order commits quantity",
       "caused_by": [
-        "ems",
-        "connectivity"
+        "ems"
       ],
       "to": [
         "ORDER_STATE_WORKING"
@@ -136,8 +135,7 @@
       ],
       "cause": "placements created and ended, quantity between idle and committed; over-commitment shown, never refused",
       "caused_by": [
-        "ems",
-        "connectivity"
+        "ems"
       ],
       "to": [
         "unchanged"
@@ -376,9 +374,8 @@
       "from": [
         "none"
       ],
-      "cause": "an order the book did not create: telephoned, placed outside, venue-originated, a drop copy's (a record, never through the gate)",
+      "cause": "an order the book did not create: telephoned or placed outside, recorded by the oms for a user (a record, never through the gate; no venue-originated order, ruled 2026-10-13)",
       "caused_by": [
-        "connectivity",
         "oms"
       ],
       "to": [
@@ -386,7 +383,11 @@
         "ORDER_STATE_WORKING",
         "ORDER_STATE_FILLED"
       ],
-      "refusal": []
+      "refusal": [
+        "REFUSAL_REASON_INCOMPLETE",
+        "REFUSAL_REASON_IDENTIFIER_IN_USE",
+        "REFUSAL_REASON_ACTOR_REQUIRED"
+      ]
     },
     {
       "row": "23b",

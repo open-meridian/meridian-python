@@ -974,3 +974,30 @@ async def test_an_order_proposed_and_a_date_asked_for_with_the_sdk_are_the_pinne
         assert (
             message.FromString(reply_pin).SerializeToString(deterministic=True) == reply_pin
         ), name
+
+
+def test_a_placements_change_requests_read_back_whole_as_the_sdks() -> None:
+    """Approved 2026-10-13: the book's answer to a placement change carries
+    the placement's own change requests (`change_requests`, 26), each with
+    its PlacementChange. The pinned reply reads back whole as the SDK's, and
+    a connectivity plugin reads the kind and the replace's new limit from it,
+    never from the condition's reason."""
+    import meridian
+    from meridian.plugin.v1 import operations_pb2 as ops
+
+    fixture = yaml.safe_load(
+        (fixtures_root() / _find("request-placement-change.yaml")).read_text(encoding="utf-8")
+    )
+    pin = base64.b64decode(fixture["expected_proto_bytes_b64"]["reply"])
+    reply = ops.RequestPlacementChangeResult.FromString(pin)
+    assert reply.SerializeToString(deterministic=True) == pin
+    (request,) = reply.placement.change_requests
+    stated = fixture["reply"]["fields"]["placement"]["change_requests"][0]
+    assert request.change_request_id == stated["change_request_id"]
+    kind = ops.PlacementChangeKind.Name(request.placement_change.kind)
+    assert kind == stated["placement_change"]["kind"] == "PLACEMENT_CHANGE_KIND_REPLACE"
+    limit = stated["placement_change"]["limit_price"]
+    assert meridian.as_money(request.placement_change.limit_price) == meridian.Money(
+        Decimal(limit["amount"]), limit["currency_code"]
+    )
+    assert ops.ChangeRequestOutcome.Name(request.outcome) == stated["outcome"]

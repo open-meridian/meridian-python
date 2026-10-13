@@ -416,25 +416,6 @@ async def reports_a_charge(recorder: Recorder) -> None:
     )
 
 
-async def records_a_venue_originated_order(recorder: Recorder) -> None:
-    await recorder.record_order(
-        venue_account_code=CODE,
-        instrument_id=AAPL,
-        side="buy",
-        quantity=Decimal("1"),
-        origin="venue",
-        venue_order_id="SIM-ORD-9",
-        raw_record=RAW,
-    )
-
-
-async def places_a_direct_order(recorder: Recorder) -> None:
-    await records_a_venue_originated_order(recorder)
-    await recorder.create_placement(
-        order_id=ORDER, connectivity_instance_id=VENUE, quantity=Decimal("1")
-    )
-
-
 async def cancels_on_a_stop(recorder: Recorder) -> None:
     await hearing(INSTRUCTION_CHANGED)(recorder)
     await recorder.request_placement_change(
@@ -465,12 +446,11 @@ async def resolves_a_symbol_by_the_facts_date(recorder: Recorder) -> None:
     found = await recorder.resolve_identifier(
         identifiers=[meridian.Identifier(scheme="ticker", value="AAPL")], as_of_ns=1760360400
     )
-    await recorder.record_order(
+    await recorder.record_locate(
         venue_account_code=CODE,
         instrument_id=found.instrument_id,
-        side="buy",
-        quantity=Decimal("1"),
-        origin="venue",
+        quantity_requested=Decimal("100"),
+        raw_record=RAW,
     )
 
 
@@ -595,7 +575,6 @@ PRODUCERS: dict[str, Producer] = {
     "derives-the-same-execution-id-twice": derives_one_id_twice,
     "reports-a-bust": reports_a_bust,
     "reports-a-charge": reports_a_charge,
-    "records-a-venue-originated-order": records_a_venue_originated_order,
     "sends-nothing-new-on-a-pause": sends_nothing_on_a_pause,
     "cancels-at-the-venue-on-a-stop": cancels_on_a_stop,
     "publishes-its-catalogue": publishes_its_catalogue,
@@ -607,7 +586,6 @@ PRODUCERS: dict[str, Producer] = {
     "reads-the-instructions-in-force-on-start": reads_the_instructions,
     "reads-whether-releases-wait-for-compliance": reads_the_attributes,
     "hears-an-accounts-attributes-change": hearing(ATTRIBUTE_CHANGED),
-    "places-a-direct-order": places_a_direct_order,
     "records-a-locate": records_a_locate,
     "resolves-a-venue-symbol-by-the-facts-date": resolves_a_symbol_by_the_facts_date,
     "reports-a-symbol-it-cannot-resolve": reports_a_symbol_it_cannot_resolve,

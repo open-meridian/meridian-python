@@ -150,8 +150,7 @@ def caller_header(
 
     From contract v22 `algorithm_id` is the algorithm a service account's
     call named, and `connectivity_instance_ids` the connectivity plugin
-    instances the user may route through, for an `ems`'s or a connectivity
-    plugin's tests."""
+    instances the user may route through, for an `ems`'s tests."""
     at = _levels(level, "the session")[0] if level else sidecar_pb2.ACCESS_LEVEL_UNSPECIFIED
     writes = sorted(set(write))
     reads = sorted(set(read) | set(writes))

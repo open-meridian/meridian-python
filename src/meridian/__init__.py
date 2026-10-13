@@ -155,19 +155,26 @@ admins set and the account's own setting; a refusal names the field
 From contract v22 an order reaches a venue through the book. Its operations
 are typed as every other's, one per row a role may send: `portfolio` and the
 `oms` propose (`propose_order`, an order of a unit `quantity` or a
-`cash_quantity`, never both), the `oms` releases (`release_order`),
+`cash_quantity`, never both), the `oms` releases (`release_order`) and
+records a telephoned or outside order for a person (`record_order`),
 `compliance` checks and decides (`record_check`, `decide_approval`), the
 `ems` claims (`set_working_condition`), places at a connectivity plugin
 linked to it, setting the venue's account code its admin mapped on its page
 at admin, acting for that admin (`create_placement`; `map_venue_account`
 with `acting_for=request.caller.header`), and proposes child orders under a
 released parent (`propose_order(link=OrderLink(...))`); a connectivity
-plugin reports what the venue said (`report_placement`, `report_execution`,
-`report_charge`, `record_order`, `record_locate`) and publishes its venue's
-catalogue (`report_venue_catalogue`). They hear the order path's records
+plugin reports what the venue said of the `ems`'s placements
+(`report_placement`, `report_execution`, `report_charge`), records a locate
+(`record_locate`) and publishes its venue's catalogue
+(`report_venue_catalogue`). Portfolio and the `oms` own orders, the `ems`
+placements and a connectivity plugin fills: a connectivity plugin records no
+order and creates no placement, and a venue-originated fill is not supported
+in contract v22. They hear the order path's records
 (`receive(order_updated=..., placement_updated=..., execution_recorded=...,
 unplaced_fact_recorded=..., locate_updated=..., trading_instruction_changed=...)`),
-a placement reaching only the connectivity plugin it names, and the trading
+a placement reaching only the connectivity plugin it names, carrying its own
+change requests (`Placement.change_requests`, each with its
+`PlacementChange`: a cancel or a replace and its new terms), and the trading
 instructions in force reaching every subscriber with no account scope,
 caught up by a read naming no account (`list_trading_instructions`). A
 refusal by the order's state, a claim or a link is a `CommandRefused` with
@@ -180,9 +187,9 @@ spot, tenor or rolled date, or whether a date is a business day
 basis it was worked out on. A version declares the algorithms its
 autonomous work may name (`Declaration(algorithms=[AlgorithmDeclaration(...)])`)
 and `runs_as(role, algorithm_id=...)` names one; a `Caller` carries the
-algorithm a service account's call named (`algorithm_id`) and, for an `ems`
-or a connectivity plugin, the connectivity plugins the user may route
-through (`connectivity_instance_ids`). Beside its account scope a
+algorithm a service account's call named (`algorithm_id`) and, for an `ems`,
+the connectivity plugins the user may route through
+(`connectivity_instance_ids`). Beside its account scope a
 connectivity plugin is told its link to its one `ems` and the codes that
 `ems` mapped on it, and an `ems` the connectivity plugins linked to it and
 its map (`AccountScope.connectivity_link`, `connectivity_links`,

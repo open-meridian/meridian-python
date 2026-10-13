@@ -2509,7 +2509,6 @@ class Operations:
         self,
         *,
         account_id: str = "",
-        venue_account_code: str = "",
         instrument_id: str = "",
         sleeve: str = "",
         side: ops.Side | str | None = None,
@@ -2519,14 +2518,12 @@ class Operations:
         time_in_force: ops.TimeInForce | str | None = None,
         venue_order_id: str = "",
         origin: ops.OrderOrigin | str | None = None,
-        raw_record: ops.RawRecordRef | None = None,
         idempotency_key: str = "",
         acting_for: str | None = None,
     ) -> ops.RecordOrderResult:
-        """W11.2: W11.2. A fact: never through the gate. By a connectivity plugin, its (preview)."""
+        """W11.2: W11.2. A fact: never through the gate. By the `oms`, for a user, naming (preview)."""
         params = ops.RecordOrderParams(
             account_id=account_id,
-            venue_account_code=venue_account_code,
             instrument_id=instrument_id,
             sleeve=sleeve,
             side=_enum(ops.Side, side, "side"),
@@ -2536,7 +2533,6 @@ class Operations:
             time_in_force=_enum(ops.TimeInForce, time_in_force, "time_in_force"),
             venue_order_id=venue_order_id,
             origin=_enum(ops.OrderOrigin, origin, "origin"),
-            raw_record=raw_record,
             idempotency_key=idempotency_key,
             acting_for=_assertion(acting_for),
         )
@@ -2659,7 +2655,7 @@ class Operations:
         idempotency_key: str = "",
         acting_for: str | None = None,
     ) -> ops.CreatePlacementResult:
-        """W11.8: W11.8. By the `ems`; or by a connectivity plugin, a direct order's (preview)."""
+        """W11.8: W11.8. By the `ems` alone (ruled 2026-10-13) (preview)."""
         params = ops.CreatePlacementParams(
             order_id=order_id,
             connectivity_instance_id=connectivity_instance_id,

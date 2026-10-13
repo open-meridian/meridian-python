@@ -34,6 +34,7 @@ from meridian import (
 )
 from meridian import _transitions as transitions
 from meridian.plugin.v1 import operations_pb2 as ops
+from meridian.receive import Heard
 from meridian.suites import Recorder, check, suite
 from meridian.testing import caller_header
 from meridian.v1 import sidecar_pb2
@@ -380,6 +381,89 @@ def test_the_transition_table_is_carried_as_published() -> None:
     assert len(published["transitions"]) == len(transitions.table())
 
 
+# ── A placement's change requests, and no venue-originated path ─────────────
+
+
+async def test_a_placement_heard_carries_its_change_requests_told_apart_by_kind() -> None:
+    """Approved 2026-10-13: a placement carries its own change requests
+    (`change_requests`), each with its PlacementChange and outcome, so a
+    connectivity plugin hearing PlacementUpdated tells a cancel from a
+    replace by the kind, never by a condition's reason."""
+    replace = ops.PlacementChange(
+        kind=ops.PLACEMENT_CHANGE_KIND_REPLACE,
+        limit_price=ops.Money(amount=ops.Decimal(low=22780, scale=2), currency_code="USD"),
+    )
+    placement = ops.Placement(
+        placement_id="PLC-1",
+        order_id="ORD-1",
+        connectivity_instance_id="sim-venue-1",
+        status=ops.PlacementStatus(
+            conditions=[
+                ops.StandingPlacementCondition(
+                    condition=ops.PLACEMENT_CONDITION_CHANGE_REQUESTED, reason="any words"
+                )
+            ]
+        ),
+        change_requests=[
+            ops.ChangeRequest(
+                change_request_id="CRQ-1",
+                placement_id="PLC-1",
+                placement_change=replace,
+                outcome=ops.CHANGE_REQUEST_OUTCOME_PENDING,
+            ),
+            ops.ChangeRequest(
+                change_request_id="CRQ-2",
+                placement_id="PLC-1",
+                placement_change=ops.PlacementChange(kind=ops.PLACEMENT_CHANGE_KIND_CANCEL),
+                outcome=ops.CHANGE_REQUEST_OUTCOME_PENDING,
+            ),
+        ],
+    )
+    recorder = Recorder("sim-venue-1")
+    recorder.answer(
+        "PlacementUpdated", lambda _: ops.PlacementUpdatedEvent(placement=placement)
+    )
+    asked: list[ops.ChangeRequest] = []
+
+    async def on_placement(heard: Heard[ops.PlacementUpdatedEvent]) -> None:
+        asked.extend(heard.message.placement.change_requests)
+
+    await recorder.receive(placement_updated=on_placement)
+    assert [(each.change_request_id, each.placement_change.kind) for each in asked] == [
+        ("CRQ-1", ops.PLACEMENT_CHANGE_KIND_REPLACE),
+        ("CRQ-2", ops.PLACEMENT_CHANGE_KIND_CANCEL),
+    ]
+    assert meridian.as_money(asked[0].placement_change.limit_price) == meridian.Money(
+        Decimal("227.80"), "USD"
+    )
+    wire = ops.Placement.FromString(placement.SerializeToString())
+    assert ops.Placement.DESCRIPTOR.fields_by_name["change_requests"].number == 26
+    assert wire.change_requests[0].placement_change == replace
+
+
+def test_no_venue_originated_order_or_placement_is_offered() -> None:
+    """Ruled 2026-10-13: v22 has no venue-originated path. A recorded order
+    is the oms's telephoned or outside order, so the names that served a
+    connectivity plugin's are gone, and connectivity's suite holds neither
+    of its cases."""
+    import inspect
+
+    origins = ops.OrderOrigin.DESCRIPTOR.values_by_name
+    reasons = ops.UnplacedReason.DESCRIPTOR.values_by_name
+    assert "ORDER_ORIGIN_VENUE" not in origins and "ORDER_ORIGIN_TELEPHONED" in origins
+    assert "UNPLACED_REASON_INSTRUMENT_INCOMPLETE" not in reasons
+    assert "order" not in ops.UnplacedFact.DESCRIPTOR.fields_by_name
+    assert not hasattr(ops, "RecordOrderRequest")
+    recorded = inspect.signature(meridian.Plugin.record_order).parameters
+    assert "venue_account_code" not in recorded and "raw_record" not in recorded
+    names = {case.name for case in suite("connectivity").cases}
+    assert not names & {"records-a-venue-originated-order", "places-a-direct-order"}
+    resolves = suite("connectivity").case("resolves-a-venue-symbol-by-the-facts-date")
+    assert resolves.about == "locates"
+    assert [each.row for each in resolves.expect] == ["ResolveIdentifier", "RecordLocate"]
+    assert transitions.caused_from(transitions.NONE, "connectivity") == ()
+
+
 # ── A case naming one value twice ─────────────────────────────────────────────
 
 
@@ -471,7 +555,7 @@ def test_the_suites_carry_the_rows_v22_adds() -> None:
         "servicing",
         "settlement",
     }
-    assert len(held["connectivity"].cases) == 29
+    assert len(held["connectivity"].cases) == 27
     assert len(held["oms"].cases) == 18
     every = {case.name for each in held.values() for case in each.cases}
     assert set(_V22_NAMES) <= every, "each producer answers a published case"
@@ -544,7 +628,8 @@ def test_a_calendar_case_may_be_not_presented_and_an_unmarked_case_may_not() -> 
             if case.name == "asks-for-a-settlement-date":
                 assert case.about == "settlement dates", role
     connectivity = held["connectivity"]
-    assert connectivity.case("records-a-locate").about == "locates"
+    for name in ("records-a-locate", "resolves-a-venue-symbol-by-the-facts-date"):
+        assert connectivity.case(name).about == "locates", name
     for name in (
         "reads-whether-releases-wait-for-compliance",
         "hears-an-accounts-attributes-change",

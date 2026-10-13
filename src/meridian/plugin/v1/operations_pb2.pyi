@@ -322,7 +322,6 @@ class ExecutionInstruction(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
 class OrderOrigin(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
     ORDER_ORIGIN_UNSPECIFIED: _ClassVar[OrderOrigin]
-    ORDER_ORIGIN_VENUE: _ClassVar[OrderOrigin]
     ORDER_ORIGIN_TELEPHONED: _ClassVar[OrderOrigin]
 
 class OrderState(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
@@ -520,7 +519,6 @@ class UnplacedReason(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     UNPLACED_REASON_UNSPECIFIED: _ClassVar[UnplacedReason]
     UNPLACED_REASON_UNKNOWN_PLACEMENT: _ClassVar[UnplacedReason]
     UNPLACED_REASON_UNMAPPED_VENUE_ACCOUNT: _ClassVar[UnplacedReason]
-    UNPLACED_REASON_INSTRUMENT_INCOMPLETE: _ClassVar[UnplacedReason]
 
 class TradingInstructionValue(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
@@ -891,7 +889,6 @@ EXECUTION_INSTRUCTION_DO_NOT_INCREASE: ExecutionInstruction
 EXECUTION_INSTRUCTION_REDUCE_ONLY: ExecutionInstruction
 EXECUTION_INSTRUCTION_SELF_MATCH_PREVENTION: ExecutionInstruction
 ORDER_ORIGIN_UNSPECIFIED: OrderOrigin
-ORDER_ORIGIN_VENUE: OrderOrigin
 ORDER_ORIGIN_TELEPHONED: OrderOrigin
 ORDER_STATE_UNSPECIFIED: OrderState
 ORDER_STATE_PROPOSED: OrderState
@@ -1020,7 +1017,6 @@ RESTATEMENT_REASON_OTHER: RestatementReason
 UNPLACED_REASON_UNSPECIFIED: UnplacedReason
 UNPLACED_REASON_UNKNOWN_PLACEMENT: UnplacedReason
 UNPLACED_REASON_UNMAPPED_VENUE_ACCOUNT: UnplacedReason
-UNPLACED_REASON_INSTRUMENT_INCOMPLETE: UnplacedReason
 TRADING_INSTRUCTION_VALUE_UNSPECIFIED: TradingInstructionValue
 TRADING_INSTRUCTION_VALUE_ACTIVE: TradingInstructionValue
 TRADING_INSTRUCTION_VALUE_PAUSE: TradingInstructionValue
@@ -1967,9 +1963,8 @@ class ProposeOrderResult(_message.Message):
     def __init__(self, order: _Optional[_Union[Order, _Mapping]] = ..., entry: _Optional[_Union[EntryMeta, _Mapping]] = ..., journal: _Optional[_Union[JournalRef, _Mapping]] = ..., change_request_id: _Optional[str] = ...) -> None: ...
 
 class RecordOrderParams(_message.Message):
-    __slots__ = ("account_id", "venue_account_code", "instrument_id", "sleeve", "side", "quantity", "order_type", "limit_price", "time_in_force", "venue_order_id", "origin", "raw_record", "idempotency_key", "acting_for")
+    __slots__ = ("account_id", "instrument_id", "sleeve", "side", "quantity", "order_type", "limit_price", "time_in_force", "venue_order_id", "origin", "idempotency_key", "acting_for")
     ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
-    VENUE_ACCOUNT_CODE_FIELD_NUMBER: _ClassVar[int]
     INSTRUMENT_ID_FIELD_NUMBER: _ClassVar[int]
     SLEEVE_FIELD_NUMBER: _ClassVar[int]
     SIDE_FIELD_NUMBER: _ClassVar[int]
@@ -1979,11 +1974,9 @@ class RecordOrderParams(_message.Message):
     TIME_IN_FORCE_FIELD_NUMBER: _ClassVar[int]
     VENUE_ORDER_ID_FIELD_NUMBER: _ClassVar[int]
     ORIGIN_FIELD_NUMBER: _ClassVar[int]
-    RAW_RECORD_FIELD_NUMBER: _ClassVar[int]
     IDEMPOTENCY_KEY_FIELD_NUMBER: _ClassVar[int]
     ACTING_FOR_FIELD_NUMBER: _ClassVar[int]
     account_id: str
-    venue_account_code: str
     instrument_id: str
     sleeve: str
     side: Side
@@ -1993,10 +1986,9 @@ class RecordOrderParams(_message.Message):
     time_in_force: TimeInForce
     venue_order_id: str
     origin: OrderOrigin
-    raw_record: RawRecordRef
     idempotency_key: str
     acting_for: _sidecar_pb2.CallerAssertion
-    def __init__(self, account_id: _Optional[str] = ..., venue_account_code: _Optional[str] = ..., instrument_id: _Optional[str] = ..., sleeve: _Optional[str] = ..., side: _Optional[_Union[Side, str]] = ..., quantity: _Optional[_Union[Decimal, _Mapping]] = ..., order_type: _Optional[_Union[OrderType, str]] = ..., limit_price: _Optional[_Union[Money, _Mapping]] = ..., time_in_force: _Optional[_Union[TimeInForce, str]] = ..., venue_order_id: _Optional[str] = ..., origin: _Optional[_Union[OrderOrigin, str]] = ..., raw_record: _Optional[_Union[RawRecordRef, _Mapping]] = ..., idempotency_key: _Optional[str] = ..., acting_for: _Optional[_Union[_sidecar_pb2.CallerAssertion, _Mapping]] = ...) -> None: ...
+    def __init__(self, account_id: _Optional[str] = ..., instrument_id: _Optional[str] = ..., sleeve: _Optional[str] = ..., side: _Optional[_Union[Side, str]] = ..., quantity: _Optional[_Union[Decimal, _Mapping]] = ..., order_type: _Optional[_Union[OrderType, str]] = ..., limit_price: _Optional[_Union[Money, _Mapping]] = ..., time_in_force: _Optional[_Union[TimeInForce, str]] = ..., venue_order_id: _Optional[str] = ..., origin: _Optional[_Union[OrderOrigin, str]] = ..., idempotency_key: _Optional[str] = ..., acting_for: _Optional[_Union[_sidecar_pb2.CallerAssertion, _Mapping]] = ...) -> None: ...
 
 class RecordOrderResult(_message.Message):
     __slots__ = ("order", "entry", "journal", "change_request_id")
@@ -4465,7 +4457,7 @@ class PlacementChange(_message.Message):
     def __init__(self, kind: _Optional[_Union[PlacementChangeKind, str]] = ..., quantity: _Optional[_Union[Decimal, _Mapping]] = ..., limit_price: _Optional[_Union[Money, _Mapping]] = ..., time_in_force: _Optional[_Union[TimeInForce, str]] = ...) -> None: ...
 
 class Placement(_message.Message):
-    __slots__ = ("placement_id", "order_id", "account_id", "ems_instance_id", "connectivity_instance_id", "venue_account_code", "quantity", "limit_price", "time_in_force", "strategy", "destination", "route_type", "routed_at_ns", "routed_precision", "handling_instructions", "rfq_id", "axe_id", "venue_order_id", "status", "person_roles", "checks", "rejection_reason", "rejection_as_reported", "last_change", "venue_order_ids")
+    __slots__ = ("placement_id", "order_id", "account_id", "ems_instance_id", "connectivity_instance_id", "venue_account_code", "quantity", "limit_price", "time_in_force", "strategy", "destination", "route_type", "routed_at_ns", "routed_precision", "handling_instructions", "rfq_id", "axe_id", "venue_order_id", "status", "person_roles", "checks", "rejection_reason", "rejection_as_reported", "last_change", "venue_order_ids", "change_requests")
     PLACEMENT_ID_FIELD_NUMBER: _ClassVar[int]
     ORDER_ID_FIELD_NUMBER: _ClassVar[int]
     ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
@@ -4491,6 +4483,7 @@ class Placement(_message.Message):
     REJECTION_AS_REPORTED_FIELD_NUMBER: _ClassVar[int]
     LAST_CHANGE_FIELD_NUMBER: _ClassVar[int]
     VENUE_ORDER_IDS_FIELD_NUMBER: _ClassVar[int]
+    CHANGE_REQUESTS_FIELD_NUMBER: _ClassVar[int]
     placement_id: str
     order_id: str
     account_id: str
@@ -4516,7 +4509,8 @@ class Placement(_message.Message):
     rejection_as_reported: AsReported
     last_change: JournalRef
     venue_order_ids: _containers.RepeatedScalarFieldContainer[str]
-    def __init__(self, placement_id: _Optional[str] = ..., order_id: _Optional[str] = ..., account_id: _Optional[str] = ..., ems_instance_id: _Optional[str] = ..., connectivity_instance_id: _Optional[str] = ..., venue_account_code: _Optional[str] = ..., quantity: _Optional[_Union[Decimal, _Mapping]] = ..., limit_price: _Optional[_Union[Money, _Mapping]] = ..., time_in_force: _Optional[_Union[TimeInForce, str]] = ..., strategy: _Optional[_Union[StrategyInstruction, _Mapping]] = ..., destination: _Optional[str] = ..., route_type: _Optional[_Union[RouteType, str]] = ..., routed_at_ns: _Optional[int] = ..., routed_precision: _Optional[_Union[TimePrecision, str]] = ..., handling_instructions: _Optional[_Iterable[str]] = ..., rfq_id: _Optional[str] = ..., axe_id: _Optional[str] = ..., venue_order_id: _Optional[str] = ..., status: _Optional[_Union[PlacementStatus, _Mapping]] = ..., person_roles: _Optional[_Union[PersonRoles, _Mapping]] = ..., checks: _Optional[_Iterable[_Union[Check, _Mapping]]] = ..., rejection_reason: _Optional[_Union[RejectionReason, str]] = ..., rejection_as_reported: _Optional[_Union[AsReported, _Mapping]] = ..., last_change: _Optional[_Union[JournalRef, _Mapping]] = ..., venue_order_ids: _Optional[_Iterable[str]] = ...) -> None: ...
+    change_requests: _containers.RepeatedCompositeFieldContainer[ChangeRequest]
+    def __init__(self, placement_id: _Optional[str] = ..., order_id: _Optional[str] = ..., account_id: _Optional[str] = ..., ems_instance_id: _Optional[str] = ..., connectivity_instance_id: _Optional[str] = ..., venue_account_code: _Optional[str] = ..., quantity: _Optional[_Union[Decimal, _Mapping]] = ..., limit_price: _Optional[_Union[Money, _Mapping]] = ..., time_in_force: _Optional[_Union[TimeInForce, str]] = ..., strategy: _Optional[_Union[StrategyInstruction, _Mapping]] = ..., destination: _Optional[str] = ..., route_type: _Optional[_Union[RouteType, str]] = ..., routed_at_ns: _Optional[int] = ..., routed_precision: _Optional[_Union[TimePrecision, str]] = ..., handling_instructions: _Optional[_Iterable[str]] = ..., rfq_id: _Optional[str] = ..., axe_id: _Optional[str] = ..., venue_order_id: _Optional[str] = ..., status: _Optional[_Union[PlacementStatus, _Mapping]] = ..., person_roles: _Optional[_Union[PersonRoles, _Mapping]] = ..., checks: _Optional[_Iterable[_Union[Check, _Mapping]]] = ..., rejection_reason: _Optional[_Union[RejectionReason, str]] = ..., rejection_as_reported: _Optional[_Union[AsReported, _Mapping]] = ..., last_change: _Optional[_Union[JournalRef, _Mapping]] = ..., venue_order_ids: _Optional[_Iterable[str]] = ..., change_requests: _Optional[_Iterable[_Union[ChangeRequest, _Mapping]]] = ...) -> None: ...
 
 class StrategyInstruction(_message.Message):
     __slots__ = ("kind", "start_ns", "end_ns", "participation", "urgency", "max_participation", "price_limit")
@@ -4667,7 +4661,7 @@ class Charge(_message.Message):
     def __init__(self, charge_id: _Optional[str] = ..., placement_id: _Optional[str] = ..., order_id: _Optional[str] = ..., account_id: _Optional[str] = ..., fee: _Optional[_Union[Fee, _Mapping]] = ..., trade_date: _Optional[str] = ..., settlement_date: _Optional[str] = ..., raw_record: _Optional[_Union[RawRecordRef, _Mapping]] = ...) -> None: ...
 
 class UnplacedFact(_message.Message):
-    __slots__ = ("unplaced_id", "account_id", "fact_kind", "reason", "raw_record", "venue_account_code", "execution", "placement", "charge", "order", "locate", "placed_by", "last_change")
+    __slots__ = ("unplaced_id", "account_id", "fact_kind", "reason", "raw_record", "venue_account_code", "execution", "placement", "charge", "locate", "placed_by", "last_change")
     UNPLACED_ID_FIELD_NUMBER: _ClassVar[int]
     ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
     FACT_KIND_FIELD_NUMBER: _ClassVar[int]
@@ -4677,7 +4671,6 @@ class UnplacedFact(_message.Message):
     EXECUTION_FIELD_NUMBER: _ClassVar[int]
     PLACEMENT_FIELD_NUMBER: _ClassVar[int]
     CHARGE_FIELD_NUMBER: _ClassVar[int]
-    ORDER_FIELD_NUMBER: _ClassVar[int]
     LOCATE_FIELD_NUMBER: _ClassVar[int]
     PLACED_BY_FIELD_NUMBER: _ClassVar[int]
     LAST_CHANGE_FIELD_NUMBER: _ClassVar[int]
@@ -4690,11 +4683,10 @@ class UnplacedFact(_message.Message):
     execution: ReportExecutionRequest
     placement: ReportPlacementRequest
     charge: ReportChargeRequest
-    order: RecordOrderRequest
     locate: RecordLocateRequest
     placed_by: JournalRef
     last_change: JournalRef
-    def __init__(self, unplaced_id: _Optional[str] = ..., account_id: _Optional[str] = ..., fact_kind: _Optional[str] = ..., reason: _Optional[_Union[UnplacedReason, str]] = ..., raw_record: _Optional[_Union[RawRecordRef, _Mapping]] = ..., venue_account_code: _Optional[str] = ..., execution: _Optional[_Union[ReportExecutionRequest, _Mapping]] = ..., placement: _Optional[_Union[ReportPlacementRequest, _Mapping]] = ..., charge: _Optional[_Union[ReportChargeRequest, _Mapping]] = ..., order: _Optional[_Union[RecordOrderRequest, _Mapping]] = ..., locate: _Optional[_Union[RecordLocateRequest, _Mapping]] = ..., placed_by: _Optional[_Union[JournalRef, _Mapping]] = ..., last_change: _Optional[_Union[JournalRef, _Mapping]] = ...) -> None: ...
+    def __init__(self, unplaced_id: _Optional[str] = ..., account_id: _Optional[str] = ..., fact_kind: _Optional[str] = ..., reason: _Optional[_Union[UnplacedReason, str]] = ..., raw_record: _Optional[_Union[RawRecordRef, _Mapping]] = ..., venue_account_code: _Optional[str] = ..., execution: _Optional[_Union[ReportExecutionRequest, _Mapping]] = ..., placement: _Optional[_Union[ReportPlacementRequest, _Mapping]] = ..., charge: _Optional[_Union[ReportChargeRequest, _Mapping]] = ..., locate: _Optional[_Union[RecordLocateRequest, _Mapping]] = ..., placed_by: _Optional[_Union[JournalRef, _Mapping]] = ..., last_change: _Optional[_Union[JournalRef, _Mapping]] = ...) -> None: ...
 
 class ReportExecutionRequest(_message.Message):
     __slots__ = ("placement_id", "order_id", "account_id", "venue_account_code", "venue_execution_id", "kind", "source", "quantity", "price", "trade_time_ns", "trade_date", "finality", "settlement_date", "computed_settlement_date", "settlement_date_basis", "fees", "supersedes", "venue_id", "uti", "prior_uti", "upi", "given_up_to", "trade_chain_reference", "settlement_counterparty", "raw_record", "idempotency_key", "effective_date", "counterparty", "liquidity_indicator", "uti_generated_by")
@@ -4803,36 +4795,6 @@ class ReportChargeRequest(_message.Message):
     settlement_date: str
     raw_record: RawRecordRef
     def __init__(self, placement_id: _Optional[str] = ..., fee: _Optional[_Union[Fee, _Mapping]] = ..., trade_date: _Optional[str] = ..., settlement_date: _Optional[str] = ..., raw_record: _Optional[_Union[RawRecordRef, _Mapping]] = ...) -> None: ...
-
-class RecordOrderRequest(_message.Message):
-    __slots__ = ("account_id", "venue_account_code", "instrument_id", "sleeve", "side", "quantity", "order_type", "limit_price", "time_in_force", "venue_order_id", "origin", "raw_record", "idempotency_key")
-    ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
-    VENUE_ACCOUNT_CODE_FIELD_NUMBER: _ClassVar[int]
-    INSTRUMENT_ID_FIELD_NUMBER: _ClassVar[int]
-    SLEEVE_FIELD_NUMBER: _ClassVar[int]
-    SIDE_FIELD_NUMBER: _ClassVar[int]
-    QUANTITY_FIELD_NUMBER: _ClassVar[int]
-    ORDER_TYPE_FIELD_NUMBER: _ClassVar[int]
-    LIMIT_PRICE_FIELD_NUMBER: _ClassVar[int]
-    TIME_IN_FORCE_FIELD_NUMBER: _ClassVar[int]
-    VENUE_ORDER_ID_FIELD_NUMBER: _ClassVar[int]
-    ORIGIN_FIELD_NUMBER: _ClassVar[int]
-    RAW_RECORD_FIELD_NUMBER: _ClassVar[int]
-    IDEMPOTENCY_KEY_FIELD_NUMBER: _ClassVar[int]
-    account_id: str
-    venue_account_code: str
-    instrument_id: str
-    sleeve: str
-    side: Side
-    quantity: Decimal
-    order_type: OrderType
-    limit_price: Money
-    time_in_force: TimeInForce
-    venue_order_id: str
-    origin: OrderOrigin
-    raw_record: RawRecordRef
-    idempotency_key: str
-    def __init__(self, account_id: _Optional[str] = ..., venue_account_code: _Optional[str] = ..., instrument_id: _Optional[str] = ..., sleeve: _Optional[str] = ..., side: _Optional[_Union[Side, str]] = ..., quantity: _Optional[_Union[Decimal, _Mapping]] = ..., order_type: _Optional[_Union[OrderType, str]] = ..., limit_price: _Optional[_Union[Money, _Mapping]] = ..., time_in_force: _Optional[_Union[TimeInForce, str]] = ..., venue_order_id: _Optional[str] = ..., origin: _Optional[_Union[OrderOrigin, str]] = ..., raw_record: _Optional[_Union[RawRecordRef, _Mapping]] = ..., idempotency_key: _Optional[str] = ...) -> None: ...
 
 class RecordLocateRequest(_message.Message):
     __slots__ = ("account_id", "venue_account_code", "instrument_id", "quantity_requested", "answer", "locate_record_id", "raw_record", "idempotency_key")

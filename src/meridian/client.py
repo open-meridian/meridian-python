@@ -803,9 +803,9 @@ class Caller:
     From contract v22 a service account's call names the algorithm its work
     runs where the plugin's version declares algorithms (`algorithm_id`,
     one of `Declaration.algorithms`, checked by the sidecar and stamped on
-    every command the act sends), and an `ems`'s or a connectivity plugin's
-    caller carries the connectivity plugin instances they may route through
-    for it (`connectivity_instance_ids`), computed by the dashboard from the
+    every command the act sends), and an `ems`'s caller carries the
+    connectivity plugin instances they may route through for it
+    (`connectivity_instance_ids`), computed by the dashboard from the
     links the `ems`'s admin made: a CreatePlacement naming any other is
     refused REFUSAL_REASON_CONNECTIVITY_NOT_ALLOWED and recorded. It names
     which connectivity plugins, never the person's groups. Empty for every
@@ -869,9 +869,8 @@ class Caller:
     # empty for a person and where the call named none.
     algorithm_id: str = ""
     # The connectivity plugin instances this user may route through for the
-    # calling plugin, an `ems` or a connectivity plugin (contract v22, W11.8,
-    # W11.21): for showing which may be chosen; the sidecar checks a
-    # placement against them whatever is drawn.
+    # calling `ems` (contract v22, W11.8, W11.21): for showing which may be
+    # chosen; the sidecar checks a placement against them whatever is drawn.
     connectivity_instance_ids: frozenset[str] = frozenset()
 
     @classmethod

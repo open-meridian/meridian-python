@@ -1378,12 +1378,22 @@ await plugin.create_placement(
     quantity=Decimal("10"), idempotency_key=f"place:{order_id}:1",
 )
 
-# a connectivity plugin: say what the venue said, each with its raw record.
+# a connectivity plugin: say what the venue said of the ems's placement, each
+# with its raw record.
 await plugin.report_placement(
     placement_id=placement_id, event="acknowledged", venue_order_id="V-881",
     raw_record=plugin.raw_record(key),
 )
 ```
+
+`portfolio` and the `oms` own orders, the `ems` owns placements, and a
+connectivity plugin owns fills. A connectivity plugin records no order and
+creates no placement: its `record_order` or `create_placement` is refused
+by its sidecar, `NotGranted`. It reports what its venue says of the
+placements the `ems` made at it. A fill the venue originates, on no
+placement of the `ems`'s, is not supported in contract v22; its handling is
+planned for a later release. `record_order` is the `oms`'s, for a telephoned
+or outside order it records for a person (`origin="telephoned"`).
 
 The `ems`'s map of book accounts to venue account codes is its admin's: it
 is sent from the `ems`'s page at `admin`, acting for the admin viewing it
@@ -1413,9 +1423,9 @@ async def map_account(request: meridian.Request) -> meridian.Response:
 `compliance` checks and decides (`record_check`, `decide_approval`); an `ems`
 works a strategy in house as child orders of a released order
 (`propose_order(link=OrderLink(kind="split", parent_order_id=...))`); a
-connectivity plugin reports fills, busts and charges (`report_execution`,
-`report_charge`), records an order the venue originated (`record_order`) and
-a locate (`record_locate`), and publishes its venue's catalogue
+connectivity plugin reports fills, busts and charges on the `ems`'s
+placements (`report_execution`, `report_charge`), records a locate
+(`record_locate`), and publishes its venue's catalogue
 (`report_venue_catalogue`), which an `oms` and an `ems` read
 (`read_venue_catalogue`). What they hear is typed too:
 
@@ -1428,7 +1438,25 @@ await plugin.receive(
 )
 ```
 
-A placement is delivered only to the connectivity plugin it names. The
+A placement is delivered only to the connectivity plugin it names, and
+carries its own change requests (`placement.change_requests`), each with
+its `PlacementChange` and outcome: a connectivity plugin tells a cancel from
+a replace by the change's `kind`, and reads a replace's new quantity, limit
+and time in force from it, never from a condition's reason:
+
+```python
+async def on_placement(heard: meridian.Heard[ops.PlacementUpdatedEvent]) -> None:
+    for request in heard.message.placement.change_requests:
+        if request.outcome != ops.CHANGE_REQUEST_OUTCOME_PENDING:
+            continue
+        if request.placement_change.kind == ops.PLACEMENT_CHANGE_KIND_CANCEL:
+            await venue.cancel(heard.message.placement.venue_order_id)
+        elif request.placement_change.kind == ops.PLACEMENT_CHANGE_KIND_REPLACE:
+            await venue.replace(heard.message.placement.venue_order_id,
+                                limit=meridian.as_money(request.placement_change.limit_price))
+```
+
+The
 trading instructions -- a deployment admin's or a plugin admin's pause or
 stop -- reach every subscriber whatever its accounts, and are caught up
 after a loss by a read naming no account (`list_trading_instructions`).
@@ -1483,9 +1511,9 @@ async with meridian.runs_as("ems", algorithm_id="twap-v1") as act:
 
 One the version does not declare is refused before anything is sent. A
 `Caller` carries the algorithm a service account's call named
-(`algorithm_id`) and, for an `ems` or a connectivity plugin, the
-connectivity plugins the user may route through
-(`connectivity_instance_ids`), for showing which may be chosen; the sidecar
+(`algorithm_id`) and, for an `ems`, the connectivity plugins the user may
+route through (`connectivity_instance_ids`), for showing which may be
+chosen; the sidecar
 checks a placement against them whatever is drawn. `meridian.testing`'s
 `caller_header` takes both, `PageClient.call_tool` the algorithm.
 

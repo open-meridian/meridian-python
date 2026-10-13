@@ -18,7 +18,12 @@ read_venue_catalogue, map_venue_account) and its deliveries
 (receive(order_updated=..., placement_updated=..., execution_recorded=...,
 unplaced_fact_recorded=..., trading_instruction_changed=...,
 locate_updated=..., report_venue_catalogue=...)); the trading instructions,
-which name no account, are caught up by a read naming none. The order path's
+which name no account, are caught up by a read naming none. Portfolio and
+the oms own orders, the ems placements and a connectivity plugin fills:
+record_order is the oms's, for a telephoned or outside order; a connectivity
+plugin reports fills on the ems's placements and records no order and
+creates no placement; and a placement carries its own change requests
+(Placement.change_requests, each with its PlacementChange). The order path's
 refusals are CommandRefused codes (REFUSAL_REASON_ORDER_STATE, _CLAIMED,
 _CONNECTIVITY_NOT_ALLOWED and the rest), and the order's transition table
 ships with the SDK as meridian/transitions.json. A plugin works out a date
@@ -29,8 +34,8 @@ A version may declare the algorithms its autonomous work names
 (Declaration(algorithms=[AlgorithmDeclaration(algorithm_id, description)]));
 meridian.runs_as(role, algorithm_id=...) names one on every call its block
 makes. A Caller carries the algorithm a service account's call named
-(algorithm_id) and, for an ems or a connectivity plugin, the connectivity
-plugins the user may route through (connectivity_instance_ids);
+(algorithm_id) and, for an ems, the connectivity plugins the user may route
+through (connectivity_instance_ids);
 meridian.testing's caller_header takes both. Positions, lots and movement
 lines carry a sleeve; a provenance may carry the date basis it was computed
 on; a dataset may name its calendar.
