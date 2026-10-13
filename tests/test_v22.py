@@ -543,7 +543,18 @@ def test_a_calendar_case_may_be_not_presented_and_an_unmarked_case_may_not() -> 
                 assert case.about == "calendars", role
             if case.name == "asks-for-a-settlement-date":
                 assert case.about == "settlement dates", role
-    assert held["connectivity"].case("records-a-locate").about == "locates"
+    connectivity = held["connectivity"]
+    assert connectivity.case("records-a-locate").about == "locates"
+    for name in (
+        "reads-whether-releases-wait-for-compliance",
+        "hears-an-accounts-attributes-change",
+    ):
+        assert connectivity.case(name).about == "compliance waits", name
+    for name in ("resolves-an-executions-venue", "reports-a-venue-not-held"):
+        assert (
+            connectivity.case(name).about_field == "meridian.v1.ReportExecutionRequest.venue_id"
+        ), name
+    assert not connectivity.case("acknowledges-a-placement-naming-it").about
 
     why = "this plugin reports what its venue states; it reads no calendar"
     report = run(

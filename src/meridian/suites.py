@@ -54,10 +54,13 @@ case about what the plugin must not do says so on each row (`sends` false).
 
 From contract v22 `about` names a kind of work as well as a kind of data:
 every role's `reads-a-calendar` is about `calendars`, its
-`asks-for-a-settlement-date` about `settlement dates`, and connectivity's
-`records-a-locate` about `locates`. A plugin whose work never uses one names
-the case in `not_presented`, with why, as a data plugin does a kind of data
-it never publishes:
+`asks-for-a-settlement-date` about `settlement dates`, connectivity's
+`records-a-locate` about `locates`, and its two compliance-wait cases about
+`compliance waits`. A plugin whose work never uses one names the case in
+`not_presented`, with why, as a data plugin does a kind of data it never
+publishes; and connectivity's two cases about a fill's place of execution
+carry `about_field` (`meridian.v1.ReportExecutionRequest.venue_id`), not
+presented by a plugin whose venue never states it:
 
     report = run("custody", producers, not_presented={
         "reads-a-calendar": "this plugin reports what its venue states; it reads no calendar",
@@ -498,7 +501,8 @@ async def run_async(
     cases its source never presents, each with why: a closed-list case, or
     from contract v19 a case about a kind of data (`about`) the plugin
     declares it never publishes, or from v22 a kind of work its work never
-    uses (calendars, settlement dates, locates), or from v20 one about a
+    uses (calendars, settlement dates, locates, compliance waits), or from
+    v20 one about a
     field (`about_field`) its source never states."""
     held = suite(role)
     report = Report(role)

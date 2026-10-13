@@ -285,7 +285,7 @@
     {
       "role": "connectivity",
       "since": "v22",
-      "says": "A connectivity plugin passing every case sends the placements naming its instance and no other, with what its ems set in the venue's account field; reports every acknowledgement, rejection, restatement, fill, bust and charge in the contract's meanings, each with the raw record it was converted from and the venue's text only where no contract reason maps; marks an unconverted status outcome unknown and resolves it by asking, never by sending again; derives an execution ID the same way twice; states every fill's settlement date, the venue's or the date read's; sends nothing new on a pause and cancels at its venue on a stop, reporting each cancel as a fact; and publishes its venue's catalogue. A case about calendars, settlement dates or locates (`about`, contract v22) a plugin whose work never uses them marks not presented, with why.\n",
+      "says": "A connectivity plugin passing every case sends the placements naming its instance and no other, with what its ems set in the venue's account field; reports every acknowledgement, rejection, restatement, fill, bust and charge in the contract's meanings, each with the raw record it was converted from and the venue's text only where no contract reason maps; marks an unconverted status outcome unknown and resolves it by asking, never by sending again; derives an execution ID the same way twice; states every fill's settlement date, the venue's or the date read's; sends nothing new on a pause and cancels at its venue on a stop, reporting each cancel as a fact; and publishes its venue's catalogue. A case about calendars, settlement dates, locates or compliance waits (`about`, contract v22) a plugin whose work never uses them marks not presented, with why, and a case about a fill's place of execution (`about_field`) one whose venue never states it.\n",
       "cases": [
         {
           "name": "acknowledges-a-placement-naming-it",
@@ -563,6 +563,7 @@
         },
         {
           "name": "reads-whether-releases-wait-for-compliance",
+          "about": "compliance waits",
           "given": "the plugin starts with accounts its ems mapped on it",
           "expect": [
             {
@@ -572,6 +573,7 @@
         },
         {
           "name": "hears-an-accounts-attributes-change",
+          "about": "compliance waits",
           "given": "an account its ems mapped on it changes whether its releases wait for compliance",
           "expect": [
             {
@@ -654,6 +656,7 @@
         },
         {
           "name": "resolves-an-executions-venue",
+          "about_field": "meridian.v1.ReportExecutionRequest.venue_id",
           "given": "the venue names a fill's place of execution by its MIC",
           "expect": [
             {
@@ -669,6 +672,7 @@
         },
         {
           "name": "reports-a-venue-not-held",
+          "about_field": "meridian.v1.ReportExecutionRequest.venue_id",
           "given": "the venue names a place of execution the deployment does not hold",
           "expect": [
             {
