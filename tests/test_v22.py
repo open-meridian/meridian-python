@@ -499,3 +499,32 @@ def test_the_suites_carry_the_rows_v22_adds() -> None:
         "ReportVenueCatalogue",
     ):
         assert row in order_rows, row
+
+
+async def test_a_connectivity_plugin_sending_on_a_pause_or_for_another_instance_fails() -> None:
+    """The format's cases about what a plugin must not do (contract v22):
+    each row it must stay silent on is `sends` false, so a plugin reporting
+    a placement it holds under a pause, or one naming another instance,
+    fails the case."""
+    from order_path_cases import PRODUCERS
+
+    for name in ("sends-nothing-new-on-a-pause", "hears-no-placement-of-another-instance"):
+        case = suite("connectivity").case(name)
+        assert case.expect, f"{name}: a case's expect is never empty"
+        recorder = Recorder("sim-venue-1")
+        await PRODUCERS[name](recorder)
+        assert check(case, recorder) is None
+        await recorder.report_placement(placement_id="PLC-1", event="acknowledged")
+        assert "and the case sends none" in (check(case, recorder) or ""), name
+
+
+def test_no_case_of_any_suite_expects_nothing() -> None:
+    from meridian.suites import suites
+
+    empty = [
+        (role, case.name)
+        for role, held in suites().items()
+        for case in held.cases
+        if not case.expect
+    ]
+    assert empty == []

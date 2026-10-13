@@ -47,8 +47,10 @@ From contract v22 the suites hold the order path's roles -- `connectivity`,
 `operations` and `reporting` -- and every role's settlement calendar reads
 (`reads-a-calendar`, `asks-for-a-settlement-date`; `confirmation`,
 `servicing` and `settlement` hold those two). A field a case names `<same>`
-is one value on every message sent on its row, at least two sent: a
-connectivity plugin given the same fill twice derives the same execution ID.
+is one value present and the same on every message the plugin sends on its
+row for the case, at least two sent: a connectivity plugin given the same
+fill twice derives the same execution ID. A case's expect is never empty: a
+case about what the plugin must not do says so on each row (`sends` false).
 
 A case may name a row the plugin hears rather than sends (a want delivered to
 a data plugin, contract v18; an activity recorded, to an operations plugin): the
@@ -105,9 +107,10 @@ HEARD = frozenset(
 )
 
 SET, UNSET = "<set>", "<unset>"
-#: A field every message on the row carries with one value, at least two
-#: sent (contract v22: a connectivity plugin deriving the same execution ID
-#: from the same fill reported twice).
+#: The suite format's `<same>` (contract v22): one value present and the
+#: same on every message the plugin sends on the row for the case, at least
+#: two sent -- a connectivity plugin deriving the same execution ID from the
+#: same fill reported twice.
 _SAME = "<same>"
 
 

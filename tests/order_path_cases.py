@@ -349,6 +349,24 @@ async def hears_nothing_of_another_instance(recorder: Recorder) -> None:
     await recorder.receive(placement_updated=heard)
 
 
+PAUSE_HEARD = (
+    "TradingInstructionChanged",
+    "trading_instruction_changed",
+    ops.TradingInstructionChangedEvent(
+        instruction=ops.TradingInstruction(
+            target=ops.TradingInstructionTarget(instance_id=VENUE),
+            value=ops.TRADING_INSTRUCTION_VALUE_PAUSE,
+        )
+    ),
+)
+
+
+async def sends_nothing_on_a_pause(recorder: Recorder) -> None:
+    # It hears the pause on itself, then a placement naming it, and holds
+    # the placement unsent: no report, no execution.
+    await hearing(PAUSE_HEARD, PLACEMENT_UPDATED)(recorder)
+
+
 async def fills_with_its_settlement_date(recorder: Recorder) -> None:
     await recorder.compute_date(
         settlement=meridian.SettlementDateInputs(instrument_id=AAPL, trade_date="2026-10-09")
@@ -573,7 +591,7 @@ PRODUCERS: dict[str, Producer] = {
     "reports-a-bust": reports_a_bust,
     "reports-a-charge": reports_a_charge,
     "records-a-venue-originated-order": records_a_venue_originated_order,
-    "sends-nothing-new-on-a-pause": hears_nothing_of_another_instance,
+    "sends-nothing-new-on-a-pause": sends_nothing_on_a_pause,
     "cancels-at-the-venue-on-a-stop": cancels_on_a_stop,
     "publishes-its-catalogue": publishes_its_catalogue,
     "reads-the-instrument-it-places": lambda recorder: recorder.resolve_instrument(
