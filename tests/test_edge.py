@@ -160,15 +160,38 @@ def test_only_a_closed_list_case_may_be_not_presented_and_only_saying_why() -> N
         {},
         not_presented={
             "sync-delayed-by-design": "the source is never late by design",
-            "fund-larger-than-cash": "never happens",
+            "a-security-holding": "never happens",
             "sync-stale": "",
         },
     )
     assert report.not_presented == {
         "sync-delayed-by-design": "the source is never late by design"
     }
-    assert "required" in report.failures["fund-larger-than-cash"]
+    assert "required" in report.failures["a-security-holding"]
     assert "says why" in report.failures["sync-stale"]
+
+
+def test_a_custodian_without_plan_codes_sweeps_or_splits_marks_them_not_presented() -> None:
+    """Approved 2026-10-13 (contract v23): the custody cases a custodian may
+    never state carry `about`, as the calendar cases do, so Alpaca or
+    Tradier marks them not presented, with why."""
+    held = suite("custody")
+    markers = {
+        "activity-plan-code-not-linked": "plan fund codes",
+        "activity-plan-code-linked-by-a-person": "plan fund codes",
+        "activity-re-resolved-when-a-plan-code-is-linked-later": "plan fund codes",
+        "cash-net-of-a-fund-counted-in-cash": "sweep funds",
+        "fund-larger-than-cash": "sweep funds",
+        "activity-moves-no-cash": "splits",
+    }
+    for name, about in markers.items():
+        assert held.case(name).about == about, name
+    assert not held.case("activity-split").about
+
+    why = "this custodian sweeps no cash into a fund"
+    report = run("custody", {}, not_presented={"fund-larger-than-cash": why})
+    assert report.not_presented == {"fund-larger-than-cash": why}
+    assert "fund-larger-than-cash" not in report.failures
 
 
 async def test_a_net_cash_row_with_its_provenance_matches_the_sweep_case() -> None:

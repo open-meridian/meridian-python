@@ -12410,7 +12410,7 @@
     {
       "name": "meridian.v1.AcceptExecutionRequest.order_id",
       "type": "text",
-      "empty": "empty when new_order is set",
+      "empty": "empty when new_order, the other arm of the oneof matched_order, is set",
       "intent": "names the existing order the executions are accepted to",
       "meaning": "its `ORD-` ID: released, working or filled, one the accepting ems may place against, never ended; an accept past its ordered quantity is refused",
       "not_meaning": "a venue's order ID",
@@ -12423,7 +12423,7 @@
     {
       "name": "meridian.v1.AcceptExecutionRequest.new_order",
       "type": "message NewOrderFromExecutions",
-      "empty": "unset when order_id is set",
+      "empty": "unset when order_id, the other arm of the oneof matched_order, is set",
       "intent": "asks for a new order made from the executions",
       "meaning": "the order the fills make: their account, instrument, side, trade date and venue order ID, ordered the accepted quantity, market and day by default, filled, never gated, ORDER_ORIGIN_ACCEPTED_EXECUTION (W11.23)",
       "not_meaning": "a proposal through the gate",

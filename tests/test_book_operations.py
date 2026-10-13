@@ -441,6 +441,25 @@ def test_the_sdk_declares_contract_v23() -> None:
     assert meridian.SCHEMA_VERSION == "v23"
 
 
+async def test_an_accept_takes_one_matched_order_and_two_are_refused_naming_the_oneof(
+    sidecar,
+) -> None:
+    """Approved 2026-10-13: AcceptExecutionRequest's oneof is matched_order."""
+    service, _ = sidecar
+    plugin = await connected(sidecar)
+    try:
+        with pytest.raises(ValueError, match="matched_order takes one of order_id, new_order"):
+            await plugin.accept_execution(
+                execution_ids=["EXE-1"],
+                order_id="ORD-1",
+                new_order=operations_pb2.NewOrderFromExecutions(sleeve="core"),
+            )
+    finally:
+        await plugin.leave()
+    assert service.operations.sent == []
+    assert "matched_order" in operations_pb2.AcceptExecutionParams.DESCRIPTOR.oneofs_by_name
+
+
 def test_every_row_of_the_book_is_heard_with_a_handler_of_its_own() -> None:
     from meridian.operations import DELIVERED
 

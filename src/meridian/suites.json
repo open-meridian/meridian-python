@@ -766,7 +766,7 @@
     {
       "role": "custody",
       "since": "v11",
-      "says": "A custody plugin passing every case reports its source's accounts with their kinds, its sync state in the contract's own values, and each account's holdings counted once, every row referencing the raw record it was converted from, the settled and pending quantities stated, the custodian named, and every value it closed rather than read carrying its provenance; it sends a value it cannot convert as not known beside the value as reported, and withholds a statement it cannot serve clean. A case about calendars or settlement dates (`about`, contract v22) a plugin whose work never uses them marks not presented, with why.\n",
+      "says": "A custody plugin passing every case reports its source's accounts with their kinds, its sync state in the contract's own values, and each account's holdings counted once, every row referencing the raw record it was converted from, the settled and pending quantities stated, the custodian named, and every value it closed rather than read carrying its provenance; it sends a value it cannot convert as not known beside the value as reported, and withholds a statement it cannot serve clean. A case about calendars or settlement dates (`about`, contract v22) a plugin whose work never uses them marks not presented, with why; and a case about plan fund codes, sweep funds or splits (`about`, contract v23) a plugin whose custodian never states them marks not presented, with why.\n",
       "cases": [
         {
           "name": "sync-current",
@@ -1006,6 +1006,7 @@
         },
         {
           "name": "cash-net-of-a-fund-counted-in-cash",
+          "about": "sweep funds",
           "given": "the venue reports an account's cash including a money market fund it also lists as a holding, both in the same currency",
           "expect": [
             {
@@ -1045,6 +1046,7 @@
         },
         {
           "name": "fund-larger-than-cash",
+          "about": "sweep funds",
           "given": "the venue reports a money market fund it counts in an account's cash, larger than that cash",
           "expect": [
             {
@@ -1534,6 +1536,7 @@
         },
         {
           "name": "activity-moves-no-cash",
+          "about": "splits",
           "given": "the venue lists a split, which moved units and no cash, and states no price",
           "since": "v14",
           "expect": [
@@ -1552,6 +1555,7 @@
         },
         {
           "name": "activity-plan-code-not-linked",
+          "about": "plan fund codes",
           "given": "the venue names a plan's own fund code for an activity, states no match, and no person has linked the code",
           "since": "v14",
           "expect": [
@@ -1572,6 +1576,7 @@
         },
         {
           "name": "activity-plan-code-linked-by-a-person",
+          "about": "plan fund codes",
           "given": "the venue names a plan's own fund code for an activity, and a person linked the code to an instrument in the plugin's settings",
           "since": "v14",
           "expect": [
@@ -1595,6 +1600,7 @@
         },
         {
           "name": "activity-re-resolved-when-a-plan-code-is-linked-later",
+          "about": "plan fund codes",
           "given": "an activity was recorded with a plan's own fund code unresolved, and a person then links the code to an instrument in the plugin's settings",
           "since": "v15",
           "expect": [
