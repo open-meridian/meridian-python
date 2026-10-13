@@ -1,0 +1,41 @@
+# open-meridian 0.25.0 to 0.26.0: the SDK declares contract v22, the order
+# path's slice A and settlement calendars
+# (sdk-contract/an-order-reaches-a-venue-contract;
+# plans/an-order-reaches-a-venue-through-the-book, "Refreshed 2026-10-12",
+# its names approved 2026-10-12). Additions only: nothing a plugin calls
+# changed shape, so only the pins move.
+from = "0.25.0"
+to = "0.26.0"
+summary = """
+The SDK declares contract v22 (meridian.SCHEMA_VERSION). An order reaches a
+venue through the book: the order path's typed operations (propose_order,
+record_order, request_order_change, record_check, decide_approval,
+release_order, set_working_condition, create_placement,
+request_placement_change, report_placement, report_execution, report_charge,
+acknowledge_flag, list_orders, read_order_history, list_trading_instructions,
+record_locate, list_locates, record_locate_use, report_venue_catalogue,
+read_venue_catalogue, map_venue_account) and its deliveries
+(receive(order_updated=..., placement_updated=..., execution_recorded=...,
+unplaced_fact_recorded=..., trading_instruction_changed=...,
+locate_updated=..., report_venue_catalogue=...)); the trading instructions,
+which name no account, are caught up by a read naming none. The order path's
+refusals are CommandRefused codes (REFUSAL_REASON_ORDER_STATE, _CLAIMED,
+_CONNECTIVITY_NOT_ALLOWED and the rest), and the order's transition table
+ships with the SDK as meridian/transitions.json. A plugin works out a date
+in core: read_calendar and compute_date, answered with the basis it was
+worked out on.
+
+A version may declare the algorithms its autonomous work names
+(Declaration(algorithms=[AlgorithmDeclaration(algorithm_id, description)]));
+meridian.runs_as(role, algorithm_id=...) names one on every call its block
+makes. A Caller carries the algorithm a service account's call named
+(algorithm_id) and, for an ems or a connectivity plugin, the connectivity
+plugins the user may route through (connectivity_instance_ids);
+meridian.testing's caller_header takes both. Positions, lots and movement
+lines carry a sleeve; a provenance may carry the date basis it was computed
+on; a dataset may name its calendar.
+
+Nothing to rewrite, so `meridian plugin migrate` moves the pins and changes no
+code.
+"""
+breaking = false

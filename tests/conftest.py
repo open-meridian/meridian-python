@@ -556,6 +556,29 @@ class FakeOperations(operations_pb2_grpc.PluginOperationsServicer):
         )
         return await self._answer(request, answer, context)
 
+    # The order path and the calendars (contract v22): each command and read
+    # kept as sent and answered with an empty reply of its own, or refused
+    # as a test scripts it, its status, words and Refusal beside it.
+    async def ProposeOrder(self, request, context):  # noqa: N802
+        return await self._answer(request, operations_pb2.ProposeOrderResult(), context)
+
+    async def ReleaseOrder(self, request, context):  # noqa: N802
+        return await self._answer(request, operations_pb2.ReleaseOrderResult(), context)
+
+    async def CreatePlacement(self, request, context):  # noqa: N802
+        return await self._answer(request, operations_pb2.CreatePlacementResult(), context)
+
+    async def ListTradingInstructions(self, request, context):  # noqa: N802
+        return await self._answer(
+            request, operations_pb2.ListTradingInstructionsResult(), context
+        )
+
+    async def ReadCalendar(self, request, context):  # noqa: N802
+        return await self._answer(request, operations_pb2.ReadCalendarResult(), context)
+
+    async def ComputeDate(self, request, context):  # noqa: N802
+        return await self._answer(request, operations_pb2.ComputeDateResult(), context)
+
 
 # ── The lake (contract v18) ───────────────────────────────────────────────
 
@@ -1198,6 +1221,9 @@ class FakeSidecar(sidecar_pb2_grpc.SidecarServiceServicer):
         )
     )
     older_than_v21: bool = False
+    # The algorithms the registered version declared (contract v22), which a
+    # call as a service account is held to, as core's sidecar holds it.
+    algorithms: tuple[str, ...] = ()
     # Told of each heartbeat as it is heard, so a test waits for the beats it
     # asserts on instead of sleeping and counting what happened to arrive.
     beat: asyncio.Condition = field(default_factory=asyncio.Condition, repr=False)
@@ -1219,6 +1245,7 @@ class FakeSidecar(sidecar_pb2_grpc.SidecarServiceServicer):
                     "the lake",
                 )
             self.operations.lake.declare(self.instance_id, request.declaration.catalogue)
+        self.algorithms = tuple(held.algorithm_id for held in request.declaration.algorithms)
         return sidecar_pb2.RegisterReply(
             admitted=True,
             deployment_id="dep-local-1",
@@ -1546,8 +1573,10 @@ class FakeSidecar(sidecar_pb2_grpc.SidecarServiceServicer):
         """An act called as the role's service account (W4.15), answered as
         the sidecar answers it: refused with a person's assertion, since
         nobody is behind the call, and for a role the instance was not
-        launched with, naming `role`; then the dashboard's answer as
-        scripted -- made, prepared, or its refusal by the same fields."""
+        launched with, naming `role`, and from contract v22 for an algorithm
+        the version does not declare, naming `algorithm_id`; then the
+        dashboard's answer as scripted -- made, prepared, or its refusal by
+        the same fields."""
         kept = sidecar_pb2.CallAsServiceAccountRequest()
         kept.CopyFrom(request)
         self.service_account_calls.append((kept, _caller(context)))
@@ -1564,6 +1593,13 @@ class FakeSidecar(sidecar_pb2_grpc.SidecarServiceServicer):
                 grpc.StatusCode.INVALID_ARGUMENT,
                 f"role: {request.role!r} is not a role {self.instance_id} was launched with",
                 ("role",),
+            )
+        elif request.algorithm_id and request.algorithm_id not in self.algorithms:
+            answer = (
+                grpc.StatusCode.INVALID_ARGUMENT,
+                f"algorithm_id: {request.algorithm_id!r} is not an algorithm this version "
+                "declares",
+                ("algorithm_id",),
             )
         if isinstance(answer, tuple):
             status, words, fields = answer

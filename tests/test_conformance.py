@@ -883,3 +883,94 @@ async def test_an_act_called_as_the_service_account_is_the_pinned_bytes(
         "prepared",
         prepared["prepared_call_id"],
     )
+
+
+async def test_an_order_proposed_and_a_date_asked_for_with_the_sdk_are_the_pinned_bytes(
+    sidecar,
+) -> None:
+    """An order proposed through the SDK's typed operation -- its quantity
+    and limit put on the wire by its own conversion, its enums by their
+    names -- and a calendar's days and a settlement date asked for, each
+    its dates given as dates, are the requests v22's fixtures pin (W11.1,
+    W3.19, W3.20); and what the book and the calendars answer and deliver
+    reads back whole as the SDK's."""
+    from datetime import date
+
+    import meridian
+    from meridian.plugin.v1 import operations_pb2 as ops
+    from meridian.v1 import book_pb2, reference_pb2
+
+    def pinned(name: str, section: str = "request") -> tuple[dict[str, Any], bytes]:
+        fixture = yaml.safe_load((fixtures_root() / _find(name)).read_text(encoding="utf-8"))
+        return (
+            fixture[section]["fields"],
+            base64.b64decode(fixture["expected_proto_bytes_b64"][section]),
+        )
+
+    proposed, proposed_pin = pinned("propose-order.yaml")
+    read, read_pin = pinned("read-calendar.yaml")
+    asked, asked_pin = pinned("compute-date.yaml")
+
+    service, address = sidecar
+    service.roles = ("portfolio",)
+    plugin = await meridian.connect(address, heartbeat=False)
+    try:
+        limit = proposed["limit_price"]
+        await plugin.propose_order(
+            account_id=proposed["account_id"],
+            instrument_id=proposed["instrument_id"],
+            sleeve=proposed["sleeve"],
+            side=proposed["side"],
+            quantity=Decimal(proposed["quantity"]),
+            order_type=proposed["order_type"],
+            limit_price=meridian.Money(Decimal(limit["amount"]), limit["currency_code"]),
+            time_in_force=proposed["time_in_force"],
+            decided_by=meridian.Actor(
+                person=ops.PersonActor(subject=proposed["decided_by"]["person"]["subject"])
+            ),
+            customer_id=proposed["customer_id"],
+            received_at_ns=int(proposed["received_at_ns"]),
+            received_precision=proposed["received_precision"],
+            idempotency_key=proposed["idempotency_key"],
+        )
+        await plugin.read_calendar(
+            calendar_id=read["calendar_id"],
+            from_date=date.fromisoformat(read["from_date"]),
+            to_date=date.fromisoformat(read["to_date"]),
+        )
+        await plugin.compute_date(
+            settlement=meridian.SettlementDateInputs(**asked["settlement"])
+        )
+    finally:
+        await plugin.leave()
+
+    by_type = {type(sent).__name__: sent for sent in service.operations.sent}
+    for params, domain, pin in (
+        ("ProposeOrderParams", book_pb2.ProposeOrderRequest, proposed_pin),
+        ("ReadCalendarParams", reference_pb2.ReadCalendarRequest, read_pin),
+        ("ComputeDateParams", reference_pb2.ComputeDateRequest, asked_pin),
+    ):
+        sent = domain.FromString(by_type[params].SerializeToString())
+        assert sent.SerializeToString(deterministic=True) == pin, params
+
+    # What the book and the calendars answer and deliver reads back whole.
+    for name, section, message in (
+        ("propose-order.yaml", "reply", ops.ProposeOrderResult),
+        ("read-calendar.yaml", "reply", ops.ReadCalendarResult),
+        ("compute-date.yaml", "reply", ops.ComputeDateResult),
+        ("list-orders.yaml", "reply", ops.ListOrdersResult),
+        ("list-trading-instructions.yaml", "reply", ops.ListTradingInstructionsResult),
+        ("order-updated.yaml", "event", ops.OrderUpdatedEvent),
+        ("placement-updated.yaml", "event", ops.PlacementUpdatedEvent),
+        ("execution-recorded.yaml", "event", ops.ExecutionRecordedEvent),
+        ("trading-instruction-changed.yaml", "event", ops.TradingInstructionChangedEvent),
+        ("unplaced-fact-recorded.yaml", "event", ops.UnplacedFactRecordedEvent),
+        ("locate-updated.yaml", "event", ops.LocateUpdatedEvent),
+    ):
+        fixture = yaml.safe_load((fixtures_root() / _find(name)).read_text(encoding="utf-8"))
+        if section not in (fixture.get("expected_proto_bytes_b64") or {}):
+            continue
+        _, reply_pin = pinned(name, section)
+        assert (
+            message.FromString(reply_pin).SerializeToString(deterministic=True) == reply_pin
+        ), name

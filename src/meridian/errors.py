@@ -60,6 +60,12 @@ class NotGranted(MeridianError):
     an act called as a service account (`meridian.runs_as`), `role` for an
     account disabled or not granted, `tool_name` for an act at may not.
     Empty for every other refusal.
+
+    From contract v22 the book's refusal of a command naming an order, a
+    placement, a change request or a locate by its ID alone, whose account is
+    outside the sending instance's write scope or the person's write access
+    (W4.9, W11): permission denied with no refusal code, as the sidecar's
+    own refusal is, nothing changed; `reason` holds its words, for a log.
     """
 
     def __init__(self, topic: str, reason: str, *, fields: tuple[str, ...] = ()) -> None:
@@ -84,6 +90,14 @@ class CallFailed(MeridianError):
     service account, "invalid" for a `tool_name` that is not one of the
     role's acts or a `reason` that is not plain text (one past its bound is
     a `ValueError` before anything is sent). Empty where it named none.
+
+    From contract v22 the order path's and the calendars' commands refused
+    "invalid" (invalid argument, no refusal code) name what they refused the
+    same way: an order stating both or neither of `quantity` and
+    `cash_quantity` names both, a trading instruction aimed at a user group
+    names `target.user_group_id`, and a service account's call naming an
+    algorithm its version does not declare names `algorithm_id`. `detail`
+    holds the sidecar's or the book's words, for a log; act on `fields`.
     """
 
     def __init__(
@@ -127,6 +141,19 @@ class CommandRefused(CallFailed):
     v10): the book could not check the command because the instrument store
     did not answer, nothing was recorded, and the same command may be sent
     again. Every other refusal is not retried.
+
+    From contract v22 the order path's refusals, each beside ABORTED:
+    REFUSAL_REASON_ALLOCATION_UNBALANCED (a release whose allocation does not
+    sum to the ordered quantity), _APPROVAL_REQUIRED, _CHECK_BLOCKS,
+    _CLAIMED (another instance holds the order's claim), _ORDER_STATE (the
+    order's or placement's state does not allow it, by the transition table
+    the SDK carries as `meridian/transitions.json`), _IDENTIFIER_IN_USE,
+    _CONNECTIVITY_NOT_ALLOWED (a placement at a connectivity plugin not
+    linked to the placing `ems` or not made available to the user; refused
+    and recorded) and _CONNECTIVITY_LINKED (a connectivity plugin already
+    linked to another `ems`). An `ems`'s venue account mapping naming an
+    account the deployment admin has not granted is
+    REFUSAL_REASON_ACCOUNT_NOT_LINKABLE, beside FAILED_PRECONDITION.
     """
 
     def __init__(

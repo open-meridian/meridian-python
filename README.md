@@ -2,7 +2,7 @@
 
 The Python SDK for building [Open Meridian](https://open-meridian.com) plugins:
 the tools a trader has an AI agent build, and the bots and analytics a
-developer writes. Python 3.11 or newer. This is release 0.25.0; its reference
+developer writes. Python 3.11 or newer. This is release 0.26.0; its reference
 is at [open-meridian.dev](https://open-meridian.dev/api/python-sdk/).
 
 ## Start here
@@ -1334,6 +1334,126 @@ filed. A plugin's own test calls a tool so with
 subject_kind=meridian.SubjectKind.SUBJECT_KIND_SERVICE_ACCOUNT,
 owner_subject="local|ada")`.
 
+### The order path and settlement calendars (contract v22)
+
+An order reaches a venue through the book. Each role does its part through
+typed operations, one per row it may send, and hears the book's records as
+they change; the book holds every order, placement, execution and charge,
+and alone decides what an order's state allows.
+
+```python
+# portfolio, or the oms: propose. A unit quantity or a cash quantity, never both.
+await plugin.propose_order(
+    account_id="ACC-1", instrument_id=aapl, side="buy", quantity=Decimal("10"),
+    order_type="limit", limit_price=Money(Decimal("227.50"), "USD"),
+    time_in_force="day", idempotency_key="propose:ACC-1:pm-ticket-4471",
+)
+
+# the oms: release it to be worked.
+await plugin.release_order(order_id=order_id, idempotency_key=f"release:{order_id}")
+
+# the ems: claim it, and place at a connectivity plugin linked to it, with the
+# venue account code it mapped for the account.
+await plugin.set_working_condition(order_id=order_id, condition="claimed", set=True)
+await plugin.map_venue_account(
+    connectivity_instance_id="snaptrade-1", venue_account_code="X12345", account_id="ACC-1"
+)
+await plugin.create_placement(
+    order_id=order_id, connectivity_instance_id="snaptrade-1", venue_account_code="X12345",
+    quantity=Decimal("10"), idempotency_key=f"place:{order_id}:1",
+)
+
+# a connectivity plugin: say what the venue said, each with its raw record.
+await plugin.report_placement(
+    placement_id=placement_id, event="acknowledged", venue_order_id="V-881",
+    raw_record=plugin.raw_record(key),
+)
+```
+
+`compliance` checks and decides (`record_check`, `decide_approval`); an `ems`
+works a strategy in house as child orders of a released order
+(`propose_order(link=OrderLink(kind="split", parent_order_id=...))`); a
+connectivity plugin reports fills, busts and charges (`report_execution`,
+`report_charge`), records an order the venue originated (`record_order`) and
+a locate (`record_locate`), and publishes its venue's catalogue
+(`report_venue_catalogue`), which an `oms` and an `ems` read
+(`read_venue_catalogue`). What they hear is typed too:
+
+```python
+await plugin.receive(
+    order_updated=on_order,                         # Heard[OrderUpdatedEvent]
+    placement_updated=on_placement,                 # a connectivity plugin hears only its own
+    execution_recorded=on_fill,
+    trading_instruction_changed=on_instruction,     # a pause or stop: no account scope
+)
+```
+
+A placement is delivered only to the connectivity plugin it names. The
+trading instructions -- a deployment admin's or a plugin admin's pause or
+stop -- reach every subscriber whatever its accounts, and are caught up
+after a loss by a read naming no account (`list_trading_instructions`).
+
+A refusal by the order's state, a claim or a link is a `CommandRefused`
+with its code: `REFUSAL_REASON_ORDER_STATE`, `_CLAIMED`, `_CHECK_BLOCKS`,
+`_APPROVAL_REQUIRED`, `_ALLOCATION_UNBALANCED`, `_IDENTIFIER_IN_USE`, and
+`_CONNECTIVITY_NOT_ALLOWED` for a placement at a connectivity plugin not
+linked to the `ems` or not made available to the user (refused and
+recorded). A command naming an order or a placement by its ID alone, its
+account outside the instance's write scope, is `NotGranted` with no code; an
+order stating both or neither of `quantity` and `cash_quantity` is
+`CallFailed` "invalid" naming both in `.fields`. The order's states and
+transitions are one table, which the SDK carries as published,
+`meridian/transitions.json` (read it with
+`importlib.resources.files("meridian").joinpath("transitions.json")`).
+
+**Dates are worked out in core.** A plugin never computes a settlement or
+value date itself: it reads a calendar's days (`read_calendar`) or asks for
+the date (`compute_date`), answered with the rule and calendar versions it
+was worked out on, the same answer for every plugin:
+
+```python
+answer = await plugin.compute_date(
+    settlement=meridian.SettlementDateInputs(instrument_id=aapl, trade_date="2026-10-09")
+)
+if answer.outcome == ops.DATE_OUTCOME_COMPUTED:
+    settles = answer.date                            # "2026-10-13": Columbus Day skipped
+await plugin.compute_date(spot=meridian.SpotDateInputs(pair=[eur, usd], trade_date="2027-03-24"))
+await plugin.compute_date(
+    tenor=meridian.TenorDateInputs(pair=[usd, jpy], tenor=meridian.Tenor(count=1, unit="month"),
+                                   trade_date=date(2026, 10, 30))
+)
+```
+
+A date past a calendar's coverage, or a rule the deployment does not hold,
+is answered as such and never guessed. A connectivity plugin reporting a
+fill states the settlement date it computed and its basis
+(`computed_settlement_date`, `settlement_date_basis`).
+
+**Algorithms.** A version declares the algorithms its autonomous work may
+name, each identifier stable across versions, and the work names the one it
+runs; the book records it on each entry's service account actor, where
+`reporting` reads who decided and who executed:
+
+```python
+DECLARATION = Declaration(algorithms=[AlgorithmDeclaration("twap-v1", "Time-weighted slices.")])
+
+async with meridian.runs_as("ems", algorithm_id="twap-v1") as act:
+    await act("work_order", {"order_id": order_id}, reason="TWAP slice 3 of 12.")
+```
+
+One the version does not declare is refused before anything is sent. A
+`Caller` carries the algorithm a service account's call named
+(`algorithm_id`) and, for an `ems` or a connectivity plugin, the
+connectivity plugins the user may route through
+(`connectivity_instance_ids`), for showing which may be chosen; the sidecar
+checks a placement against them whatever is drawn. `meridian.testing`'s
+`caller_header` takes both, `PageClient.call_tool` the algorithm.
+
+The role suites hold the order path's roles (`connectivity`, `oms`, and its
+cases of `portfolio`, `ems`, `compliance`, `operations` and `reporting`) and
+every role's calendar reads; a field a case names `<same>` is one value on
+every message sent on its row, at least two sent.
+
 ## Moving a plugin to a new release
 
     meridian plugin migrate            # to the latest release
@@ -1397,6 +1517,7 @@ carries libcst.
 | 0.23.0 to 0.24.0: the SDK declares contract v20. Breaking: the roles `dgm`, `ccm` and `match` are `data`, `connectivity` and `confirmation`. An act names its check tool, its accounts and its page (`checked_by=`, `accounts=`, `made_on=`), a page reads the prepared change it was opened from (`request.prepared()`), a route's record names no field `prepare`; a person's own settings (`Setting(per_person=True)`, `plugin.set_own_settings`, `request.own_settings`); a link to an account not granted refused (`REFUSAL_REASON_ACCOUNT_NOT_LINKABLE`); a data plugin's licences (`list_datasets`) and its restart backfilled (`list_trades(latest_recorded=True)`, `meridian.roles.data.backfill_restart`); the data suite's v20 cases and `about_field`; each role's common part (`meridian.roles`), `meridian.environment()`, `@meridian.settings`, `meridian.sample_data()` and `meridian/kit.html` | a role named `dgm`, `ccm` or `match` in `pyproject.toml`'s `[tool.meridian]` roles, a `roles=` argument, or the role a suite is run or an access read for, into `data`, `connectivity` or `confirmation` | a role's old name anywhere else, in words or a variable; a developer setting named `synthetic`, which `meridian.sample_data()` replaces at the plugin's next push; an act to be preparable: name its check tool |
 | 0.22.0 to 0.23.0: the SDK declares contract v19, the lake's 1b: trades and quotes recorded in batches of 1 to 500 (`plugin.record_trades`, `plugin.record_quotes`, `Trade`, `TradeAttributes`, `Eligibility`, `Quote`), read (`list_trades` over a range or `after_watermark=`, `list_quotes`) and heard (`receive(trades_recorded=, quotes_recorded=, subjects=)`: every trade, caught up after the watermark last seen; the latest quote per asset); a price heard is conflated per its asset too; `reporting` resolves an identifier; the data suite's eight 1b cases, a case about a kind of data the plugin never publishes not presented with why (`Case.about`), `signal`'s 1b cases, the `ems` suite, `reporting`'s `resolves-its-reporting-currency` | only the pins move | a data plugin's suite test meeting the eight new cases: map each, or name those about trades or quotes in `not_presented` with why where it publishes neither |
 | 0.24.0 to 0.25.0: the SDK declares contract v21, a service account runs a plugin's autonomous work: an act called as the role's service account (`meridian.runs_as(role)`), answered made or prepared, a refusal naming its field (`NotGranted.fields`, `CallFailed.fields`); a caller who is a service account (`Caller.subject_kind`, `Caller.owner_subject`, `meridian.SubjectKind`), and a tool's call as one in a plugin's own test (`PageClient.call_tool(subject_kind=, owner_subject=)`) | only the pins move | |
+| 0.25.0 to 0.26.0: the SDK declares contract v22, the order path's slice A and settlement calendars: the order path's typed operations (`propose_order`, `release_order`, `record_check`, `decide_approval`, `set_working_condition`, `create_placement`, `request_order_change`, `request_placement_change`, `report_placement`, `report_execution`, `report_charge`, `record_order`, `acknowledge_flag`, `list_orders`, `read_order_history`, `list_trading_instructions`, the locate's and the venue catalogue's, `map_venue_account`) and deliveries (`receive(order_updated=, placement_updated=, execution_recorded=, unplaced_fact_recorded=, trading_instruction_changed=, locate_updated=, report_venue_catalogue=)`), the order path's refusal codes, the transition table (`meridian/transitions.json`); the calendars (`read_calendar`, `compute_date`); a version's algorithms (`Declaration(algorithms=)`, `AlgorithmDeclaration`, `runs_as(role, algorithm_id=)`, `Caller.algorithm_id`); the connectivity plugins a caller may route through (`Caller.connectivity_instance_ids`); a sleeve on positions, lots and movement lines; the suites' v22 cases | only the pins move | a suite test meeting the calendar reads every role now holds (`reads-a-calendar`, `asks-for-a-settlement-date`): map each |
 
 `tests/migrations/` holds the plugins the migrations are recorded for, as
 written and as their migration leaves them, and `make check-migrations` holds

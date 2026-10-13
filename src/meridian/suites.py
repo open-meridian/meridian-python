@@ -42,6 +42,14 @@ never states a trade's aggressor, or its conditions, names the case in
 Every other case is required, and a case with no producer fails. The suites
 are meridian-schema's `boundaries/suites.json`, vendored with the bindings.
 
+From contract v22 the suites hold the order path's roles -- `connectivity`,
+`oms`, and the order path's cases of `portfolio`, `ems`, `compliance`,
+`operations` and `reporting` -- and every role's settlement calendar reads
+(`reads-a-calendar`, `asks-for-a-settlement-date`; `confirmation`,
+`servicing` and `settlement` hold those two). A field a case names `<same>`
+is one value on every message sent on its row, at least two sent: a
+connectivity plugin given the same fill twice derives the same execution ID.
+
 A case may name a row the plugin hears rather than sends (a want delivered to
 a data plugin, contract v18; an activity recorded, to an operations plugin): the
 plugin hears it through its own `receive`, called on the recorder, which
@@ -97,6 +105,10 @@ HEARD = frozenset(
 )
 
 SET, UNSET = "<set>", "<unset>"
+#: A field every message on the row carries with one value, at least two
+#: sent (contract v22: a connectivity plugin deriving the same execution ID
+#: from the same fill reported twice).
+_SAME = "<same>"
 
 
 @dataclass(frozen=True)
@@ -330,7 +342,7 @@ def _same(message: Message, name: str, wanted: Any) -> str | None:
     descriptor = message.DESCRIPTOR.fields_by_name.get(name)
     if descriptor is None:
         return f"{message.DESCRIPTOR.name} has no field {name}"
-    if wanted == SET:
+    if wanted in (SET, _SAME):
         return None if _present(message, name) else f"{name} is unset"
     if wanted == UNSET:
         return None if not _present(message, name) else f"{name} is set"
@@ -407,6 +419,20 @@ class Report:
 Producer = Callable[[Recorder], Awaitable[None]]
 
 
+def _one_value(row: str, on_row: Sequence[Message], wanted: Mapping[str, Any]) -> str | None:
+    """Why the fields a case names `<same>` are not one value across every
+    message on the row, at least two of them, or None."""
+    for name, part in wanted.items():
+        if part != _SAME:
+            continue
+        if len(on_row) < 2:
+            return f"{name}: {len(on_row)} sent on {row}, and the case asks for one value twice"
+        values = {str(getattr(params, name)) for params in on_row if _present(params, name)}
+        if len(values) != 1 or not all(_present(params, name) for params in on_row):
+            return f"{name} is not one value across what was sent: {sorted(values)}"
+    return None
+
+
 def check(case: Case, recorder: Recorder) -> str | None:
     """Why what `recorder` holds does not pass `case`, or None."""
     for i, expected in enumerate(case.expect):
@@ -421,6 +447,9 @@ def check(case: Case, recorder: Recorder) -> str | None:
         if not on_row:
             return f"expect[{i}]: nothing was {verb} on {expected.row}"
         wanted = expected.fields or {}
+        why = _one_value(expected.row, on_row, wanted)
+        if why is not None:
+            return f"expect[{i}] on {expected.row}: {why}"
         whys = [_matches(params, wanted) for params in on_row]
         if all(why is not None for why in whys):
             return f"expect[{i}] on {expected.row}: {whys[0]}"

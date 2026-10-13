@@ -103,10 +103,14 @@ if TYPE_CHECKING:
 #: is made on, the prepared change a page was opened from, a person's own
 #: settings, and a data plugin's datasets' licences and its own last trades,
 #: and from v21 an act called as the role's service account and the kind and
-#: owner of whom the claims vouch for -- and a newer sidecar still admits it.
+#: owner of whom the claims vouch for, and from v22 the order path's
+#: operations and deliveries, a row naming no account caught up whole, the
+#: settlement calendars' reads, the algorithms a version declares and the one
+#: its autonomous work names, and the connectivity plugins a caller may
+#: route through -- and a newer sidecar still admits it.
 #: Raised with every contract revision that adds something a plugin can
 #: depend on.
-SCHEMA_VERSION = "v21"
+SCHEMA_VERSION = "v22"
 
 #: Where a sidecar listens. Loopback, always: a sidecar reachable from another
 #: host is a way around the boundary it exists to enforce.
@@ -715,6 +719,17 @@ class Caller:
     service account. It opens no page, and is refused every
     `platform.config.` command but filing a ticket and reading back what was
     filed. Unspecified, a person, as every caller before v21.
+
+    From contract v22 a service account's call names the algorithm its work
+    runs where the plugin's version declares algorithms (`algorithm_id`,
+    one of `Declaration.algorithms`, checked by the sidecar and stamped on
+    every command the act sends), and an `ems`'s or a connectivity plugin's
+    caller carries the connectivity plugin instances they may route through
+    for it (`connectivity_instance_ids`), computed by the dashboard from the
+    links the `ems`'s admin made: a CreatePlacement naming any other is
+    refused REFUSAL_REASON_CONNECTIVITY_NOT_ALLOWED and recorded. It names
+    which connectivity plugins, never the person's groups. Empty for every
+    other plugin.
     """
 
     subject: str
@@ -769,6 +784,15 @@ class Caller:
     # its owner, empty for a person.
     subject_kind: int = envelope_pb2.SUBJECT_KIND_UNSPECIFIED
     owner_subject: str = ""
+    # The algorithm a service account's call named (contract v22, W4.9,
+    # W4.15), kept in the claims so every command the act sends carries it;
+    # empty for a person and where the call named none.
+    algorithm_id: str = ""
+    # The connectivity plugin instances this user may route through for the
+    # calling plugin, an `ems` or a connectivity plugin (contract v22, W11.8,
+    # W11.21): for showing which may be chosen; the sidecar checks a
+    # placement against them whatever is drawn.
+    connectivity_instance_ids: frozenset[str] = frozenset()
 
     @classmethod
     def from_header(cls, header: str) -> Caller:
@@ -813,6 +837,8 @@ class Caller:
             second_pair_of_eyes=frozenset(claims.second_pair_of_eyes),
             subject_kind=claims.subject_kind,
             owner_subject=claims.owner_subject,
+            algorithm_id=claims.algorithm_id,
+            connectivity_instance_ids=frozenset(claims.connectivity_instance_ids),
         )
 
     def level_for(self, role: str) -> int:
@@ -1050,6 +1076,9 @@ class Plugin(Operations):
     _settings_now: dict[str, Any] | None = field(default=None, repr=False)
     _stored: tuple[sidecar_pb2.StoredSpan, ...] = field(default=(), repr=False)
     _mover: Any = field(default=None, repr=False)
+    # The algorithm identifiers its declaration names (contract v22), which
+    # `runs_as` holds a call's `algorithm_id` to before sending it.
+    _algorithms: tuple[str, ...] = field(default=(), repr=False)
 
     def raw_record(self, key: str) -> Any:
         """A reference to a raw record in this plugin's own storage, by its
@@ -1694,6 +1723,7 @@ async def connect(
             not_carried=declaration.not_carried,
             storage=declaration.storage,
             catalogue=declaration.catalogue,
+            algorithms=declaration.algorithms,
         )
     # From contract v16, the two settings per kind of raw record, which the
     # SDK declares for every edge plugin alike (W4.1, W6.11), and the restore
@@ -1758,6 +1788,7 @@ async def connect(
         _operations_stub=operations_pb2_grpc.PluginOperationsStub(channel),
         _declared=tuple(settings),
         _storage=storage,
+        _algorithms=tuple(held.algorithm_id for held in declaration.algorithms),
     )
     if heartbeat:
         plugin._heartbeat = asyncio.create_task(plugin._beat())
@@ -1777,7 +1808,7 @@ async def connect(
 _registered: Plugin | None = None
 
 
-def runs_as(role: str, *, plugin: Plugin | None = None) -> _RunsAs:
+def runs_as(role: str, *, algorithm_id: str = "", plugin: Plugin | None = None) -> _RunsAs:
     """The context a plugin's autonomous work runs in -- a scheduled sweep, a
     strategy, an agent inside the plugin -- calling the plugin's own acts as
     the service account its role runs as (W4.15, contract v21):
@@ -1819,23 +1850,46 @@ def runs_as(role: str, *, plugin: Plugin | None = None) -> _RunsAs:
     acts, a role the instance was not launched with, or a reason that is not
     plain text; "unimplemented" from a sidecar older than contract v21.
 
+    From contract v22 the work names the algorithm it runs, where the
+    plugin's version declares algorithms (`Declaration(algorithms=[...])`):
+    `algorithm_id`, one of the identifiers declared, carried on every call
+    the block makes. The dashboard keeps it in the call's assertion and the
+    sidecar stamps it on every command the act sends, so the book records
+    it on the entry's service account actor, where `reporting` reads the
+    decision-maker and executor a regime asks for; no command can name
+    another:
+
+        async with meridian.runs_as("ems", algorithm_id="twap-v1") as act:
+            await act("work_order", {"order_id": order_id}, reason="TWAP slice 3 of 12.")
+
+    Empty names none, as a call before v22 named none. One this version does
+    not declare is refused here with `ValueError` before anything is sent,
+    as the sidecar refuses it (invalid, naming `algorithm_id`).
+
     Run beside the plugin `connect` registered, or the one `plugin` names.
     Refused here with `ValueError` (`TypeError` for the wrong type), before
     anything is sent, for a role the plugin does not hold, a tool's name or
     reason past its bound (a reason over 4,000 characters among them), a
-    core tool (`dashboard__...`) or arguments that are not a JSON object.
+    core tool (`dashboard__...`), arguments that are not a JSON object, or
+    an algorithm the version does not declare.
     """
     if not isinstance(role, str) or not role:
         raise ValueError("role is empty; name the role whose service account the work runs as")
-    return _RunsAs(role, plugin)
+    if not isinstance(algorithm_id, str):
+        raise TypeError(
+            f"algorithm_id is a {type(algorithm_id).__name__}; it is one of the algorithm "
+            "identifiers the version declares, as text"
+        )
+    return _RunsAs(role, plugin, algorithm_id)
 
 
 class _RunsAs:
     """`runs_as(role)`, entered: calling it calls an act as the role's
     service account."""
 
-    def __init__(self, role: str, plugin: Plugin | None) -> None:
+    def __init__(self, role: str, plugin: Plugin | None, algorithm_id: str = "") -> None:
         self.role = role
+        self.algorithm_id = algorithm_id
         self._named = plugin
         self._plugin: Plugin | None = None
 
@@ -1852,6 +1906,12 @@ class _RunsAs:
             raise ValueError(
                 f"role is {self.role!r}, which {plugin.identity.instance_id} was not launched "
                 f"with; it holds {held}"
+            )
+        if self.algorithm_id and self.algorithm_id not in plugin._algorithms:
+            declared = ", ".join(plugin._algorithms) or "none"
+            raise ValueError(
+                f"algorithm_id is {self.algorithm_id!r}, which this version does not declare; "
+                f"its declaration names {declared} (Declaration(algorithms=[...]))"
             )
         self._plugin = plugin
         return self
@@ -1889,6 +1949,7 @@ class _RunsAs:
                 tool_name=tool_name,
                 arguments_json=_arguments_json(arguments),
                 reason=reason,
+                algorithm_id=self.algorithm_id,
             )
         )
 

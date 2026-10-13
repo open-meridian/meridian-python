@@ -41,6 +41,7 @@ from meridian.edge import as_reported
 from meridian.plugin.v1 import operations_pb2 as ops
 from meridian.roles.data import backfill_restart
 from meridian.suites import Recorder, check, names, run, suite
+from order_path_cases import PRODUCERS
 
 INSTANCE = "data-coinbase-1"
 DAILY = f"{INSTANCE}:daily"
@@ -1039,13 +1040,16 @@ def producers(**mutations: bool) -> dict[str, object]:
         "the-takers-side-stated": made("a_trade"),
         "a-restarts-gap-backfilled": restarted,
         "reads-its-datasets-licences": made("licences"),
+        # The calendars' reads every role holds (contract v22).
+        "reads-a-calendar": PRODUCERS["reads-a-calendar"],
+        "asks-for-a-settlement-date": PRODUCERS["asks-for-a-settlement-date"],
     }
 
 
-def test_the_data_suite_is_carried_with_its_twenty_four_cases() -> None:
+def test_the_data_suite_is_carried_with_its_twenty_six_cases() -> None:
     held = suite("data")
     assert held.since == "v18"
-    assert len(held.cases) == 24
+    assert len(held.cases) == 26
     assert "a-want-recorded-against" in names("data")
     assert "a-subject-another-source-resolved" in names("data")
     # The 1b's eight (contract v19), each about trades or quotes.
@@ -1058,6 +1062,8 @@ def test_the_data_suite_is_carried_with_its_twenty_four_cases() -> None:
     assert held.case("the-takers-side-stated").about_field == "meridian.v1.Trade.aggressor"
     assert held.case("a-restarts-gap-backfilled").about == "trades"
     assert "reads-its-datasets-licences" in names("data")
+    # Contract v22: the settlement calendars' reads.
+    assert {"reads-a-calendar", "asks-for-a-settlement-date"} <= set(names("data"))
 
 
 V19_DATA_CASES = {
@@ -1075,7 +1081,7 @@ V19_DATA_CASES = {
 def test_a_data_plugin_converting_exactly_passes_every_case_of_its_suite() -> None:
     report = run("data", producers(), instance_id="toy-1")
     assert report.passed, report.failures
-    assert len(report.passed_cases) == 24
+    assert len(report.passed_cases) == 26
 
 
 def test_a_data_plugin_sending_the_makers_side_as_the_aggressor_fails_the_suite() -> None:
@@ -1097,7 +1103,7 @@ def test_a_case_about_a_kind_the_plugin_never_publishes_may_be_not_presented() -
     report = run("data", mapped, not_presented=never)
     assert report.passed, report.failures
     assert report.not_presented == never
-    assert len(report.passed_cases) == 24 - 9
+    assert len(report.passed_cases) == 26 - 9
 
 
 def test_a_case_about_a_field_the_source_never_states_may_be_not_presented() -> None:
@@ -1222,6 +1228,17 @@ def test_a_reading_role_hears_and_reads_as_its_suite_asks() -> None:
             "reads-daily-bars-over-a-range": bars,
             "hears-a-bar-recorded": hearing("BarsRecorded", bar, "bars_recorded"),
             "resolves-its-reporting-currency": currency,
+            # The order path's and the calendars' (contract v22).
+            **{
+                name: PRODUCERS[name]
+                for name in (
+                    "reads-orders-and-catches-up",
+                    "hears-an-order-and-an-execution",
+                    "reads-an-orders-history-for-the-person-roles",
+                    "reads-a-calendar",
+                    "asks-for-a-settlement-date",
+                )
+            },
         },
     )
     assert report.passed, report.failures

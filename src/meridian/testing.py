@@ -119,6 +119,8 @@ def caller_header(
     second_pair_of_eyes: Iterable[str] = (),
     subject_kind: int = envelope_pb2.SUBJECT_KIND_UNSPECIFIED,
     owner_subject: str = "",
+    algorithm_id: str = "",
+    connectivity_instance_ids: Iterable[str] = (),
 ) -> str:
     """The `Meridian-Caller` header a sidecar forwards for a session at
     `level`, with the accounts cut to it: `read` and `write` are those the
@@ -144,7 +146,12 @@ def caller_header(
     From contract v21 `subject_kind` says whom the claims vouch for, a
     `SubjectKind`: unspecified, a person; SUBJECT_KIND_SERVICE_ACCOUNT, a
     service account, `subject` its `SA-` ID and `owner_subject` the person
-    answerable for it."""
+    answerable for it.
+
+    From contract v22 `algorithm_id` is the algorithm a service account's
+    call named, and `connectivity_instance_ids` the connectivity plugin
+    instances the user may route through, for an `ems`'s or a connectivity
+    plugin's tests."""
     at = _levels(level, "the session")[0] if level else sidecar_pb2.ACCESS_LEVEL_UNSPECIFIED
     writes = sorted(set(write))
     reads = sorted(set(read) | set(writes))
@@ -183,6 +190,8 @@ def caller_header(
         second_pair_of_eyes=sorted(set(second_pair_of_eyes)),
         subject_kind=subject_kind,  # type: ignore[arg-type]
         owner_subject=owner_subject,
+        algorithm_id=algorithm_id,
+        connectivity_instance_ids=sorted(set(connectivity_instance_ids)),
         own_settings=(
             []
             if at == sidecar_pb2.ACCESS_LEVEL_ADMIN
@@ -389,6 +398,7 @@ class PageClient:
         subject: str | None = None,
         subject_kind: int = envelope_pb2.SUBJECT_KIND_UNSPECIFIED,
         owner_subject: str = "",
+        algorithm_id: str = "",
     ) -> ToolAnswer:
         """Call a tool as the deployment's MCP surface would (contract v12):
         at `level`, or the highest of the tool's this client's person holds
@@ -403,7 +413,8 @@ class PageClient:
         it a service account's call, as the dashboard sends an act it
         admitted for a role's service account (W4.15): `subject` its `SA-`
         ID (the client's person's otherwise), `owner_subject` the person
-        answerable for it, and no delegation and no client."""
+        answerable for it, and no delegation and no client; from contract
+        v22 `algorithm_id` the algorithm its work named."""
         tool = self.tool(name)
         if subject_kind == envelope_pb2.SUBJECT_KIND_SERVICE_ACCOUNT:
             delegation_id = client_name = ""
@@ -423,6 +434,7 @@ class PageClient:
             subject=self.subject if subject is None else subject,
             subject_kind=subject_kind,
             owner_subject=owner_subject,
+            algorithm_id=algorithm_id,
         )
         sent = body if body is not None else json.dumps(dict(arguments or {})).encode()
         request = Request(

@@ -447,6 +447,11 @@ def reading(role: str) -> dict[str, object]:
             "QuotesRecorded", ops.QuotesRecordedEvent(quote=ops.Quote()), "quotes_recorded"
         ),
     }
+    # The order path's cases and the calendars' (contract v22), as a plugin
+    # holding the role does them.
+    from order_path_cases import PRODUCERS
+
+    cases = {**PRODUCERS, **cases}
     held = {case.name for case in suite(role).cases}
     return {name: made for name, made in cases.items() if name in held}
 
@@ -457,10 +462,10 @@ def test_a_reader_of_trades_and_quotes_passes_its_suite(role: str) -> None:
     assert report.passed, report.failures
 
 
-def test_the_ems_suite_is_carried_with_its_six_cases() -> None:
+def test_the_ems_suite_is_carried_with_its_six_cases_and_v22s() -> None:
     held = suite("ems")
     assert held.since == "v19"
-    assert [case.name for case in held.cases] == [
+    assert [case.name for case in held.cases][:6] == [
         "reads-the-datasets-it-may-read",
         "reads-trades-over-a-range",
         "hears-a-trade-recorded",
@@ -468,6 +473,9 @@ def test_the_ems_suite_is_carried_with_its_six_cases() -> None:
         "reads-the-latest-quotes",
         "hears-a-quote-recorded",
     ]
+    # The order path's and the calendars' (contract v22).
+    assert len(held.cases) == 20
+    assert "places-at-a-linked-connectivity-plugin" in [case.name for case in held.cases]
 
 
 def test_a_reader_catching_up_by_range_alone_fails_the_watermark_case() -> None:

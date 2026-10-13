@@ -66,6 +66,20 @@ and the venue it is, where it is one venue's:
 Its rows then name the dataset as the instance, a colon and the key
 (`coinbase-1:daily`). The catalogue is the lake's, not a declaration of
 support, and only a version holding `data` declares one.
+
+From contract v22 a version declares the algorithms its autonomous work may
+name (W4.1, W4.9): each an `AlgorithmDeclaration`, its identifier stable
+across versions and reinstalls -- what `reporting` maps to a regime's
+decision-maker and executor -- with a description a person reads on the
+plugin's page:
+
+    algorithms=[
+        AlgorithmDeclaration("twap-v1", "Time-weighted slices over the order's window."),
+    ]
+
+`meridian.runs_as(role, algorithm_id="twap-v1")` then names one on every
+call its block makes; one the version does not declare is refused. A
+version declaring none names none.
 """
 
 from __future__ import annotations
@@ -79,6 +93,7 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from .bounds import (
+    ALGORITHM_DECLARATION_DESCRIPTION_LENGTH,
     CATALOGUE_DATASETS_COUNT,
     DATASET_DECLARATION_AGGREGATOR_LENGTH,
     DATASET_DECLARATION_DATA_TYPES_COUNT,
@@ -480,16 +495,47 @@ class DatasetDeclaration:
 
 
 @dataclass(frozen=True)
+class AlgorithmDeclaration:
+    """One algorithm identifier a version declares (contract v22): stable
+    across versions and reinstalls, with what it is, in plain text, for a
+    person reading the plugin's page (1 to 1,024 characters)."""
+
+    algorithm_id: str
+    description: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.algorithm_id, str) or not self.algorithm_id.strip():
+            raise ValueError("an algorithm's algorithm_id is empty; name it, stably")
+        if self.algorithm_id != self.algorithm_id.strip():
+            raise ValueError(
+                f"the algorithm {self.algorithm_id!r}: its algorithm_id has spaces around it"
+            )
+        if not ALGORITHM_DECLARATION_DESCRIPTION_LENGTH.admits(len(self.description)):
+            raise ValueError(
+                f"the algorithm {self.algorithm_id}'s description is 1 to "
+                f"{ALGORITHM_DECLARATION_DESCRIPTION_LENGTH.most} characters"
+            )
+
+    def _wire(self) -> sidecar_pb2.AlgorithmDeclaration:
+        return sidecar_pb2.AlgorithmDeclaration(
+            algorithm_id=self.algorithm_id, description=self.description
+        )
+
+
+@dataclass(frozen=True)
 class Declaration:
     """A version's declaration. `settings` are the ones it declares at
     registration (`meridian.Setting`), whose secret ones' names it carries,
     or a class decorated `@meridian.settings` declaring them.
-    From contract v18 a data plugin's `catalogue`: the datasets it serves the lake."""
+    From contract v18 a data plugin's `catalogue`: the datasets it serves the lake.
+    From contract v22 the `algorithms` its autonomous work may name, each
+    identifier once."""
 
     settings: Sequence[Any] | type[Any] = ()
     not_carried: Sequence[NotCarried] = field(default=())
     storage: Storage | None = None
     catalogue: Sequence[DatasetDeclaration] = ()
+    algorithms: Sequence[AlgorithmDeclaration] = ()
 
     def __post_init__(self) -> None:
         from ._settings import declared_by
@@ -509,6 +555,12 @@ class Declaration:
         twice = next((key for key in keys if keys.count(key) > 1), None)
         if twice is not None:
             raise ValueError(f"the dataset {twice} is declared twice; each key once")
+        algorithms = tuple(self.algorithms)
+        object.__setattr__(self, "algorithms", algorithms)
+        named = [held.algorithm_id for held in algorithms]
+        again = next((one for one in named if named.count(one) > 1), None)
+        if again is not None:
+            raise ValueError(f"the algorithm {again} is declared twice; each identifier once")
         reserved = self.storage._reserved if self.storage is not None else frozenset()
         taken = next(
             (setting.name for setting in self.settings if setting.name in reserved), None
@@ -626,12 +678,14 @@ class Declaration:
                 if self.catalogue
                 else None
             ),
+            algorithms=[held._wire() for held in self.algorithms],
         )
 
     def to_json(self) -> dict[str, Any]:
         """As an upload carries it, which the dashboard reads (W8.1): a
         catalogue only where one is declared, so a version declaring none
-        uploads what it did before v18."""
+        uploads what it did before v18; and its algorithms only where it
+        declares any (contract v22), likewise."""
         out: dict[str, Any] = {
             "secret_settings": self.secret_settings,
             "not_carried": [
@@ -647,6 +701,11 @@ class Declaration:
         }
         if self.catalogue:
             out["catalogue"] = {"datasets": [dataset._to_json() for dataset in self.catalogue]}
+        if self.algorithms:
+            out["algorithms"] = [
+                {"algorithm_id": held.algorithm_id, "description": held.description}
+                for held in self.algorithms
+            ]
         return out
 
 

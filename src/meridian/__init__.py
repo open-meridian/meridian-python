@@ -151,6 +151,37 @@ admins set and the account's own setting; a refusal names the field
 (`.fields`). A route reached for such a call is a `Caller` whose
 `subject_kind` is `SubjectKind.SUBJECT_KIND_SERVICE_ACCOUNT`, naming its
 `owner_subject`, and acts as for a person (`acting_for=request.caller.header`).
+
+From contract v22 an order reaches a venue through the book. Its operations
+are typed as every other's, one per row a role may send: `portfolio` and the
+`oms` propose (`propose_order`, an order of a unit `quantity` or a
+`cash_quantity`, never both), the `oms` releases (`release_order`),
+`compliance` checks and decides (`record_check`, `decide_approval`), the
+`ems` claims (`set_working_condition`), places at a connectivity plugin
+linked to it, setting the venue's account code it mapped
+(`create_placement`, `map_venue_account`), and proposes child orders under a
+released parent (`propose_order(link=OrderLink(...))`); a connectivity
+plugin reports what the venue said (`report_placement`, `report_execution`,
+`report_charge`, `record_order`, `record_locate`) and publishes its venue's
+catalogue (`report_venue_catalogue`). They hear the order path's records
+(`receive(order_updated=..., placement_updated=..., execution_recorded=...,
+unplaced_fact_recorded=..., locate_updated=..., trading_instruction_changed=...)`),
+a placement reaching only the connectivity plugin it names, and the trading
+instructions in force reaching every subscriber with no account scope,
+caught up by a read naming no account (`list_trading_instructions`). A
+refusal by the order's state, a claim or a link is a `CommandRefused` with
+its code; the order's transitions are the table the SDK carries,
+`meridian/transitions.json`. A plugin works out a date in core, one way
+for the deployment: a calendar's days (`read_calendar`) and a settlement,
+spot, tenor or rolled date, or whether a date is a business day
+(`compute_date`, with `SettlementDateInputs`, `SpotDateInputs`,
+`TenorDateInputs`, `RollInputs` or `BusinessDayInputs`), answered with the
+basis it was worked out on. A version declares the algorithms its
+autonomous work may name (`Declaration(algorithms=[AlgorithmDeclaration(...)])`)
+and `runs_as(role, algorithm_id=...)` names one; a `Caller` carries the
+algorithm a service account's call named (`algorithm_id`) and, for an `ems`
+or a connectivity plugin, the connectivity plugins the user may route
+through (`connectivity_instance_ids`).
 """
 
 # Each role's common part (contract v20, spec/plugin-pages-follow-their-role).
@@ -185,6 +216,7 @@ from .client import (
     runs_as,
 )
 from .declaration import (
+    AlgorithmDeclaration,
     DatasetDeclaration,
     DatasetLicence,
     Declaration,
@@ -210,15 +242,25 @@ from .figures import Figure, FigureState
 from .operations import (
     Adjustment,
     AgreementFigures,
+    AllocationInstruction,
+    AllocationLine,
     Bar,
     BasisAdjustment,
     BreakCause,
     BreakDifference,
     BreakValue,
     CustodialActivity,
+    DateBasis,
+    DateCheck,
+    DateRuleRef,
     Eligibility,
     Encumbrance,
     ExternalAccount,
+    Fee,
+    Finality,
+    Leg,
+    LocateAnswer,
+    LocateUse,
     LotTerms,
     Money,
     MovementLine,
@@ -226,22 +268,36 @@ from .operations import (
     OpeningLot,
     OpeningPosition,
     OpeningSource,
+    OrderChange,
+    OrderLink,
+    Party,
     PendingSettlement,
     PendingSettlementRef,
+    PlacementChange,
     PositionEncumbrances,
     PositionKey,
     Price,
     Provenance,
     Quote,
+    ReceiptQuote,
     ReportedCollateral,
     ReportedEncumbrance,
     ReportedLot,
     ReportedPending,
     ReportedPositionValue,
+    RollInputs,
     SourceTime,
     StatementFigures,
+    StrategyInstruction,
+    StrategyParameter,
+    Tenor,
+    TenorDateInputs,
     Trade,
     TradeAttributes,
+    VenueCatalogue,
+    VenueEligibility,
+    VenueOrderType,
+    VenueStrategy,
     as_decimal,
     as_money,
 )
@@ -252,6 +308,7 @@ from .plugin.v1.operations_pb2 import (
     AccountKind,
     ActivityKind,
     ActivityRef,
+    Actor,
     Aggressor,
     AsReported,
     AssetClass,
@@ -260,6 +317,7 @@ from .plugin.v1.operations_pb2 import (
     BreakCauseCategory,
     BreakHandling,
     BreakState,
+    BusinessDayInputs,
     CollateralDirection,
     DatasetRef,
     Eligible,
@@ -282,9 +340,11 @@ from .plugin.v1.operations_pb2 import (
     ResolvedByEntries,
     Reversal,
     SettlementBucket,
+    SettlementDateInputs,
     Source,
     SourceChoice,
     SourceTimeKind,
+    SpotDateInputs,
     StatementSegmentRef,
     StreetRecordRef,
     SubjectRef,
@@ -430,6 +490,35 @@ __all__ = [
     "Trade",
     "TradeAttributes",
     "TradeCharacteristic",
+    "AlgorithmDeclaration",
+    "AllocationInstruction",
+    "AllocationLine",
+    "DateBasis",
+    "DateCheck",
+    "DateRuleRef",
+    "Fee",
+    "Finality",
+    "Leg",
+    "LocateAnswer",
+    "LocateUse",
+    "OrderChange",
+    "OrderLink",
+    "Party",
+    "PlacementChange",
+    "ReceiptQuote",
+    "RollInputs",
+    "StrategyInstruction",
+    "StrategyParameter",
+    "Tenor",
+    "TenorDateInputs",
+    "VenueCatalogue",
+    "VenueEligibility",
+    "VenueOrderType",
+    "VenueStrategy",
+    "Actor",
+    "BusinessDayInputs",
+    "SettlementDateInputs",
+    "SpotDateInputs",
     "environment",
     "roles",
     "runs_as",
