@@ -4,7 +4,8 @@ the order path's (`connectivity`, `oms`, and its cases of `portfolio`,
 calendars' reads every role holds; and contract v23's: venue-originated
 fills (`connectivity`, `ems`, `operations`, `compliance`) and an event
 contract's outcomes heard and read (`reporting`, `portfolio`, `compliance`,
-`signal`, `operations`).
+`signal`, `operations`), and the OANDA batch's value-date roll
+(`connectivity`).
 
 Each producer is what a plugin holding the role does, through the SDK's
 typed operations, for what the case's source presents: it runs against the
@@ -32,6 +33,8 @@ PLACEMENT = "PLC-01JAE00000000000000000001"
 VENUE = "sim-venue-1"
 CODE = "SIM-ACCT-7"
 AAPL = "INS-01J8XQ4M7K0000000000AAPL"
+EUR = "INS-01J8XQ4M7K00000000CASHEUR"
+USD = "INS-01J8XQ4M7K00000000CASHUSD"
 CALENDAR = "CAL-01JAE0000000000000000USSS"
 AFTER = ops.Watermark(partitions=[ops.PartitionSequence(partition="book", sequence=41)])
 
@@ -419,6 +422,36 @@ async def reports_a_charge(recorder: Recorder) -> None:
     )
 
 
+async def reports_a_value_date_roll(recorder: Recorder) -> None:
+    """Contract v23 (W11.25): at the venue's daily cut an open EUR/USD spot
+    position rolls to the next value date; the plugin asks the date read for
+    it, reports the financing charge, then the roll naming it."""
+    rolled_at = 1791925200000000000
+    computed = await recorder.compute_date(
+        spot=meridian.SpotDateInputs(pair=[EUR, USD], at_ns=rolled_at)
+    )
+    charged = await recorder.report_charge(
+        placement_id=PLACEMENT,
+        fee=meridian.Fee(kind="financing", amount=usd("1.37")),
+        trade_date=date(2026, 10, 14),
+        settlement_date=date(2026, 10, 14),
+        raw_record=ops.RawRecordRef(instance_id=VENUE, key="transactions/6311:trades/6290"),
+    )
+    await recorder.report_value_date_roll(
+        venue_account_code=CODE,
+        pair=[EUR, USD],
+        from_value_date=date(2026, 10, 15),
+        to_value_date=computed.date or date(2026, 10, 16),
+        value_date_basis=meridian.DateBasis(
+            rule=meridian.DateRuleRef(kind="spot", subject="EUR/USD", version=1)
+        ),
+        rolled_at_ns=rolled_at,
+        charge_ids=[charged.charge.charge_id or "CHG-01JAF0R5N8M00000000000021"],
+        raw_record=ops.RawRecordRef(instance_id=VENUE, key="transactions/6311"),
+        idempotency_key=f"roll:{CODE}:6311",
+    )
+
+
 async def cancels_on_a_stop(recorder: Recorder) -> None:
     await hearing(INSTRUCTION_CHANGED)(recorder)
     await recorder.request_placement_change(
@@ -802,6 +835,8 @@ PRODUCERS: dict[str, Producer] = {
     "accept-past-ordered-refused": accepts_past_ordered_to_a_new_order,
     "names-an-unmatched-fill-as-a-breaks-cause": names_an_unmatched_fill_as_a_breaks_cause,
     "hears-an-order-created-at-accept": hears_an_order_created_at_accept,
+    # Contract v23: a venue's value-date roll (the OANDA batch's item 1).
+    "reports-a-value-date-roll": reports_a_value_date_roll,
     # Contract v23: an event contract's outcome, for every reader of it.
     "hears-and-reads-an-outcome": hears_and_reads_an_outcome,
 }

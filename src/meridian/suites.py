@@ -94,6 +94,18 @@ stated aggressor (`the-takers-side-stated`), a restart's gap backfilled from
 the venue's history after the last trade the lake holds of the plugin's own
 (`a-restarts-gap-backfilled`, `meridian.roles.data.backfill_restart`), and
 its datasets' licences read (`reads-its-datasets-licences`).
+
+From contract v23 an expectation may name its fields `any_of`, in place of
+`fields`, for a case whose situation the contract answers in more than one
+way: a message on the row passes when it matches one of the ways in full.
+Connectivity's `reports-a-fill-with-its-settlement-date` asks the date read
+with a security's settlement inputs or a currency pair's spot inputs, from
+its trade date or the fill's moment; a plugin sends whichever its market
+needs, named in full, and passes on any one:
+
+    async def fills_with_its_settlement_date(recorder):
+        await recorder.compute_date(spot=SpotDateInputs(pair=[EUR, USD], at_ns=fill_ns))
+        ...
 """
 
 from __future__ import annotations
@@ -133,6 +145,10 @@ class Expectation:
     row: str
     fields: Mapping[str, Any] | None = None
     sends: bool = True
+    #: The suite format's alternatives (contract v23), in place of `fields`:
+    #: each way's fields, a message matched by one of them in full. Empty
+    #: where the expectation names `fields` alone.
+    any_of: tuple[Mapping[str, Any], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -184,6 +200,7 @@ def suites() -> dict[str, Suite]:
                             row=expected["row"],
                             fields=expected.get("fields"),
                             sends=expected.get("sends", True),
+                            any_of=tuple(expected.get("any_of") or ()),
                         )
                         for expected in case.get("expect", [])
                     ),
@@ -450,6 +467,24 @@ def _one_value(row: str, on_row: Sequence[Message], wanted: Mapping[str, Any]) -
     return None
 
 
+def _any_of(
+    row: str, on_row: Sequence[Message], ways: Sequence[Mapping[str, Any]]
+) -> str | None:
+    """Why no message on the row matches one of an expectation's ways in
+    full (contract v23), or None: each way held as `fields` are, its
+    `<same>` across every message on the row."""
+    whys: list[str] = []
+    for k, way in enumerate(ways):
+        why = _one_value(row, on_row, way)
+        if why is None:
+            each = [_matches(params, way) for params in on_row]
+            if any(why is None for why in each):
+                return None
+            why = next(why for why in each if why is not None)
+        whys.append(f"any_of[{k}]: {why}")
+    return "matches none of its ways: " + "; ".join(whys)
+
+
 def check(case: Case, recorder: Recorder) -> str | None:
     """Why what `recorder` holds does not pass `case`, or None."""
     for i, expected in enumerate(case.expect):
@@ -463,6 +498,11 @@ def check(case: Case, recorder: Recorder) -> str | None:
             continue
         if not on_row:
             return f"expect[{i}]: nothing was {verb} on {expected.row}"
+        if expected.any_of:
+            why = _any_of(expected.row, on_row, expected.any_of)
+            if why is not None:
+                return f"expect[{i}] on {expected.row}: {why}"
+            continue
         wanted = expected.fields or {}
         why = _one_value(expected.row, on_row, wanted)
         if why is not None:

@@ -566,8 +566,9 @@ def test_the_suites_carry_the_rows_v22_adds() -> None:
         "servicing",
         "settlement",
     }
-    # Contract v23 adds connectivity's three venue-originated fills.
-    assert len(held["connectivity"].cases) == 30
+    # Contract v23 adds connectivity's three venue-originated fills, and the
+    # OANDA batch's value-date roll.
+    assert len(held["connectivity"].cases) == 31
     assert len(held["oms"].cases) == 18
     every = {case.name for each in held.values() for case in each.cases}
     assert set(_V22_NAMES) <= every, "each producer answers a published case"
