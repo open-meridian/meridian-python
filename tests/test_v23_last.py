@@ -4,9 +4,13 @@ value-date roll the book keeps unplaced."""
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 import meridian
-from meridian.edge import supplied_currency
+from meridian.edge import derived, supplied_currency
+from meridian.operations import Provenance
 from meridian.plugin.v1 import operations_pb2 as ops
+from meridian.suites import Recorder, check, suite
 
 ADMIN = "local|admin"
 ROWS = (
@@ -80,3 +84,39 @@ def test_a_roll_the_book_cannot_apply_is_carried_unplaced() -> None:
         ),
     )
     assert kept.WhichOneof("fact") == "value_date_roll"
+
+
+async def _a_holding_with_no_stated_currency(currency: str, said: list[Provenance]) -> Recorder:
+    recorder = Recorder("custody-1")
+    await recorder.record_holding(
+        statement_id="S",
+        instrument_id="LCL-QQQ",
+        quantity=10,
+        side="long",
+        average_cost=meridian.Money(Decimal("412.50"), currency),
+        provenance=said,
+    )
+    await recorder.resolve_identifier(
+        identifiers=[meridian.Identifier(scheme="symbol", value="QQQ", source="custody-1")],
+    )
+    return recorder
+
+
+async def test_a_currency_not_stated_is_derived_by_a_rule_or_supplied_by_the_admin() -> None:
+    """custody's currency-not-stated expects average_cost's currency derived
+    by a named rule or supplied by a person (approved 2026-10-13): the
+    account's currency its admin set passes the case, said as supplied."""
+    case = suite("custody").case("currency-not-stated")
+    (holding, resolved) = case.expect
+    assert holding.row == "RecordHolding" and len(holding.any_of) == 2
+    assert resolved.row == "ResolveIdentifier"
+
+    given = supplied_currency(ROWS, "ACC-US", "average_cost.currency_code")
+    assert given is not None
+    code, supplied = given
+    recorder = await _a_holding_with_no_stated_currency(code, [supplied])
+    assert check(case, recorder) is None
+    rule = derived("average_cost.currency_code", "the account's base currency")
+    assert check(case, await _a_holding_with_no_stated_currency("USD", [rule])) is None
+    unsaid = await _a_holding_with_no_stated_currency("USD", [])
+    assert "matches none of its ways" in (check(case, unsaid) or "")
