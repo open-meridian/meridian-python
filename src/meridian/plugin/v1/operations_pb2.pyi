@@ -1492,7 +1492,7 @@ class ListSyncStatusesResult(_message.Message):
     def __init__(self, statuses: _Optional[_Iterable[_Union[SyncStatusRecordedEvent, _Mapping]]] = ..., next_cursor: _Optional[str] = ..., as_of: _Optional[_Union[Watermark, _Mapping]] = ...) -> None: ...
 
 class ResolveIdentifierParams(_message.Message):
-    __slots__ = ("identifiers", "as_of_ns", "exchange_mic", "currency", "stated_asset_class", "stated_currency", "stated_description", "stated_instrument_type")
+    __slots__ = ("identifiers", "as_of_ns", "exchange_mic", "currency", "stated_asset_class", "stated_currency", "stated_description", "stated_instrument_type", "provenance")
     IDENTIFIERS_FIELD_NUMBER: _ClassVar[int]
     AS_OF_NS_FIELD_NUMBER: _ClassVar[int]
     EXCHANGE_MIC_FIELD_NUMBER: _ClassVar[int]
@@ -1501,6 +1501,7 @@ class ResolveIdentifierParams(_message.Message):
     STATED_CURRENCY_FIELD_NUMBER: _ClassVar[int]
     STATED_DESCRIPTION_FIELD_NUMBER: _ClassVar[int]
     STATED_INSTRUMENT_TYPE_FIELD_NUMBER: _ClassVar[int]
+    PROVENANCE_FIELD_NUMBER: _ClassVar[int]
     identifiers: _containers.RepeatedCompositeFieldContainer[Identifier]
     as_of_ns: int
     exchange_mic: str
@@ -1509,7 +1510,8 @@ class ResolveIdentifierParams(_message.Message):
     stated_currency: str
     stated_description: str
     stated_instrument_type: InstrumentType
-    def __init__(self, identifiers: _Optional[_Iterable[_Union[Identifier, _Mapping]]] = ..., as_of_ns: _Optional[int] = ..., exchange_mic: _Optional[str] = ..., currency: _Optional[str] = ..., stated_asset_class: _Optional[_Union[AssetClass, str]] = ..., stated_currency: _Optional[str] = ..., stated_description: _Optional[str] = ..., stated_instrument_type: _Optional[_Union[InstrumentType, str]] = ...) -> None: ...
+    provenance: _containers.RepeatedCompositeFieldContainer[Provenance]
+    def __init__(self, identifiers: _Optional[_Iterable[_Union[Identifier, _Mapping]]] = ..., as_of_ns: _Optional[int] = ..., exchange_mic: _Optional[str] = ..., currency: _Optional[str] = ..., stated_asset_class: _Optional[_Union[AssetClass, str]] = ..., stated_currency: _Optional[str] = ..., stated_description: _Optional[str] = ..., stated_instrument_type: _Optional[_Union[InstrumentType, str]] = ..., provenance: _Optional[_Iterable[_Union[Provenance, _Mapping]]] = ...) -> None: ...
 
 class ResolveIdentifierResult(_message.Message):
     __slots__ = ("found", "instrument_id", "miss_reason", "minted")

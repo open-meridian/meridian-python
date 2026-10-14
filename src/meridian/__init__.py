@@ -143,8 +143,9 @@ templates. Settings may be one typed class (`@meridian.settings`, its fields
 `meridian/kit.html`. From contract v23 a plugin whose source states no
 currency declares `meridian.account_currency()`, a linked account's
 currency its admin sets with a plugin-wide default, and gives it with its
-provenance (`meridian.edge.supplied_currency`), reporting nothing that
-needs it until it is set.
+provenance (`meridian.edge.supplied_currency`, its entry ready for
+ResolveIdentifier's `provenance`), reporting nothing that needs it until it
+is set.
 
 From contract v21 a plugin's autonomous work -- a scheduled sweep, a
 strategy, an agent inside the plugin -- calls the plugin's own acts as the

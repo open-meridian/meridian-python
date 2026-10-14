@@ -18597,12 +18597,19 @@
       "name": "meridian.v1.ResolveIdentifierRequest.stated_currency",
       "type": "text",
       "empty": "empty is not stated",
-      "intent": "offers the currency the plugin's source states of the security",
-      "meaning": "an ISO 4217 code, kept as an offer",
+      "intent": "offers the security's currency: the one the plugin's source states, or, where it states none, one derived by a named rule or supplied by a person, with its provenance",
+      "meaning": "an ISO 4217 code, kept as an offer; with no entry in provenance it is the source's, from the record the security came from",
       "not_meaning": "a match constraint, which currency is",
       "filled": "as-reported",
       "filled_by": "custody",
       "since": "v10",
+      "changes": [
+        {
+          "version": "v23",
+          "kind": "clarified",
+          "what": "a currency the source did not state, derived by a named rule or supplied by a person (the linked account's currency its admin set), is sent here with its entry in ResolveIdentifierRequest.provenance (W3.1, approved 2026-10-13)"
+        }
+      ],
       "stability": "stable",
       "store": "instrument"
     },
@@ -18644,6 +18651,25 @@
       "filled": "as-reported",
       "filled_by": "custody",
       "since": "v11",
+      "stability": "stable",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.ResolveIdentifierRequest.provenance",
+      "type": "repeated message Provenance",
+      "bounds": {
+        "count": [
+          0,
+          32
+        ]
+      },
+      "empty": "empty where every value stated is the source's, from the record the security came from",
+      "intent": "says where the security's currency came from, where the plugin closed it rather than read it",
+      "meaning": "one per closed value, by its path, each `{field: stated_currency, kind, person or rule}`: supplied by a named person on the plugin's page (the linked account's currency its admin set), derived by a named rule, or reported from another of the source's records; the store keeps it with the offer (W3.1)",
+      "not_meaning": "a value presented as the source's statement, or one that narrows a symbol match: a supplied or derived currency never narrows one",
+      "filled": "as-reported",
+      "filled_by": "custody",
+      "since": "v23",
       "stability": "stable",
       "store": "instrument"
     },

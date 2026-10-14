@@ -158,6 +158,10 @@ SERVICE_ACCOUNT_PURPOSE_LENGTH = Length(least=0, most=2000)
 SERVICE_ACCOUNT_CHANGE_NOTE_LENGTH = Length(least=0, most=2000)
 """meridian.v1.ServiceAccountChange.note: says why the change was made"""
 
+RESOLVE_IDENTIFIER_REQUEST_PROVENANCE_COUNT = Count(least=0, most=32)
+"""meridian.v1.ResolveIdentifierRequest.provenance: says where the security's
+currency came from, where the plugin closed it rather than read it"""
+
 VENUE_RECORD_COUNTRY_CODE_LENGTH = Length(least=2, most=2)
 """meridian.v1.VenueRecord.country_code: says where the venue operates"""
 

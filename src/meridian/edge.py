@@ -187,7 +187,9 @@ def supplied(field: str, person: str) -> Provenance:
 
 
 def supplied_currency(
-    rows: Sequence[Mapping[str, Any]], external_account_id: str, field: str
+    rows: Sequence[Mapping[str, Any]],
+    external_account_id: str,
+    field: str = "stated_currency",
 ) -> tuple[str, Provenance] | None:
     """A linked account's currency from the `account_currency` setting's
     rows (`meridian.account_currency()`, contract v23, W3.1): the account's
@@ -195,7 +197,14 @@ def supplied_currency(
     with its provenance, supplied by the person the conductor stamped on the
     row (`changed_by`), for the value at `field`. None while no row covers
     the account, or its code is not three letters: the plugin then reports
-    nothing that needs the currency, never a guess."""
+    nothing that needs the currency, never a guess.
+
+    By default the entry is ready to put on ResolveIdentifier, its field
+    `stated_currency` (`ResolveIdentifierRequest.provenance`, approved
+    2026-10-13): `code, entry = supplied_currency(rows, account)`, then
+    `resolve_identifier(..., stated_currency=code, provenance=[entry])`. Name
+    another field for a row's own value: `average_cost.currency_code` on a
+    holding."""
     own = [row for row in rows if (row.get("external_account") or "") == external_account_id]
     every = [row for row in rows if not row.get("external_account")]
     for row in (own or every)[:1]:

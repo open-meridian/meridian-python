@@ -1,13 +1,13 @@
 """Contract v23's last items (approved 2026-10-13): a linked account's
-currency supplied by the plugin's admin, with its provenance; and a
-value-date roll the book keeps unplaced."""
+currency supplied by the plugin's admin, with its provenance, on a holding
+and on ResolveIdentifier; and a value-date roll the book keeps unplaced."""
 
 from __future__ import annotations
 
 from decimal import Decimal
 
 import meridian
-from meridian.edge import derived, supplied_currency
+from meridian.edge import derived, raw_record, reported, supplied_currency
 from meridian.operations import Provenance
 from meridian.plugin.v1 import operations_pb2 as ops
 from meridian.suites import Recorder, check, suite
@@ -120,3 +120,66 @@ async def test_a_currency_not_stated_is_derived_by_a_rule_or_supplied_by_the_adm
     assert check(case, await _a_holding_with_no_stated_currency("USD", [rule])) is None
     unsaid = await _a_holding_with_no_stated_currency("USD", [])
     assert "matches none of its ways" in (check(case, unsaid) or "")
+
+
+def test_the_supplied_currency_is_ready_to_put_on_resolve_identifier() -> None:
+    """ResolveIdentifierRequest.provenance (approved 2026-10-13): by default
+    the entry names stated_currency."""
+    given = supplied_currency(ROWS, "ACC-US")
+    assert given is not None
+    code, entry = given
+    assert code == "USD"
+    assert (entry.field, entry.kind, entry.person) == (
+        "stated_currency",
+        "PROVENANCE_KIND_SUPPLIED",
+        ADMIN,
+    )
+    params = ops.ResolveIdentifierParams(
+        stated_currency=code,
+        provenance=[
+            ops.Provenance(
+                field=entry.field, kind=ops.PROVENANCE_KIND_SUPPLIED, person=entry.person
+            )
+        ],
+    )
+    assert ops.ResolveIdentifierParams.DESCRIPTOR.fields_by_name["provenance"].number == 9
+    assert params.provenance[0].field == "stated_currency"
+
+
+async def _a_resolve(currency: str, said: list[Provenance]) -> Recorder:
+    recorder = Recorder("custody-1")
+    await recorder.resolve_identifier(
+        identifiers=[meridian.Identifier(scheme="symbol", value="QQQ", source="custody-1")],
+        stated_asset_class="ASSET_CLASS_FUND",
+        stated_currency=currency,
+        provenance=said,
+    )
+    return recorder
+
+
+async def test_resolve_gives_the_currency_with_its_provenance() -> None:
+    """custody's renamed case (approved 2026-10-13): a currency stated, or
+    one supplied or derived with its entry."""
+    case = suite("custody").case("resolve-gives-the-currency-with-its-provenance")
+    (resolved,) = case.expect
+    assert resolved.row == "ResolveIdentifier" and len(resolved.any_of) == 4
+    assert case.about == "" and case.about_field == ""
+
+    given = supplied_currency(ROWS, "ACC-EU")
+    assert given is not None
+    code, entry = given
+    assert check(case, await _a_resolve(code, [entry])) is None
+    assert check(case, await _a_resolve("USD", [])) is None, "stated, with no entry"
+    rule = derived("stated_currency", "the account's only cash currency")
+    assert check(case, await _a_resolve("USD", [rule])) is None
+    elsewhere = reported("stated_currency", raw_record("accounts/ACC-US", "custody-1"))
+    assert check(case, await _a_resolve("USD", [elsewhere])) is None
+
+    unstated = await _a_resolve("", [])
+    assert "matches none of its ways" in (check(case, unstated) or "")
+    wrong_field = supplied_currency(ROWS, "ACC-US", "average_cost.currency_code")
+    assert wrong_field is not None
+    misnamed = await _a_resolve("USD", [wrong_field[1]])
+    assert "matches none of its ways" in (check(case, misnamed) or "")
+    names = {c.name for c in suite("custody").cases}
+    assert "resolve-states-what-the-source-states" not in names

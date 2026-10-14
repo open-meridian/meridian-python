@@ -2127,6 +2127,7 @@ class Operations:
         stated_currency: str = "",
         stated_description: str = "",
         stated_instrument_type: ops.InstrumentType | str | None = None,
+        provenance: Sequence[Provenance] = (),
     ) -> ops.ResolveIdentifierResult:
         """W3.1: Reverse resolution: identifiers to an instrument, as of a date. Answered (stable)."""
         params = ops.ResolveIdentifierParams(
@@ -2138,6 +2139,7 @@ class Operations:
             stated_currency=stated_currency,
             stated_description=stated_description,
             stated_instrument_type=_enum(ops.InstrumentType, stated_instrument_type, "stated_instrument_type"),
+            provenance=[_provenance(each, f"provenance[{i}]") for i, each in enumerate(provenance)],
         )
         return await self._operate(self._operations().ResolveIdentifier, params)
 
