@@ -700,7 +700,7 @@
       "from": [
         "EXECUTION_STATE_UNMATCHED"
       ],
-      "cause": "an accept to an existing order the accepting ems may place against, or to a new order made from the fills: the placement created at filled, the position moved as of the trade date; one naming an execution superseded by a bust or a correction is refused REFUSAL_REASON_EXECUTION_STATE",
+      "cause": "an accept to an existing order the accepting ems may place against, or to a new order made from the fills: the placement created at filled, the position moved as of the trade date; one naming an execution superseded by a bust or a correction is refused REFUSAL_REASON_EXECUTION_STATE; fills of more than one account, instrument, side, connectivity plugin or trade date REFUSAL_REASON_EXECUTIONS_DIFFER; an existing order claimed by another REFUSAL_REASON_CLAIMED",
       "caused_by": [
         "ems"
       ],
@@ -710,6 +710,7 @@
       "refusal": [
         "REFUSAL_REASON_ACTOR_REQUIRED",
         "REFUSAL_REASON_ORDER_STATE",
+        "REFUSAL_REASON_CLAIMED",
         "REFUSAL_REASON_QUANTITY_EXCEEDS_ORDER",
         "REFUSAL_REASON_EXECUTION_STATE",
         "REFUSAL_REASON_EXECUTIONS_DIFFER"

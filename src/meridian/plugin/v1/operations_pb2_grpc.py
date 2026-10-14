@@ -284,6 +284,11 @@ class PluginOperationsStub(object):
                 request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.DontKnowExecutionParams.SerializeToString,
                 response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.DontKnowExecutionResult.FromString,
                 _registered_method=True)
+        self.ReportValueDateRoll = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ReportValueDateRoll',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReportValueDateRollParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReportValueDateRollResult.FromString,
+                _registered_method=True)
         self.ResolveVenue = channel.unary_unary(
                 '/meridian.plugin.v1.PluginOperations/ResolveVenue',
                 request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ResolveVenueParams.SerializeToString,
@@ -724,6 +729,13 @@ class PluginOperationsServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def ReportValueDateRoll(self, request, context):
+        """W11.25: platform.book.command.report-value-date-roll (command; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def ResolveVenue(self, request, context):
         """W3.14: platform.reference.query.resolve-venue (query; preview).
         """
@@ -1095,6 +1107,11 @@ def add_PluginOperationsServicer_to_server(servicer, server):
                     servicer.DontKnowExecution,
                     request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.DontKnowExecutionParams.FromString,
                     response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.DontKnowExecutionResult.SerializeToString,
+            ),
+            'ReportValueDateRoll': grpc.unary_unary_rpc_method_handler(
+                    servicer.ReportValueDateRoll,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReportValueDateRollParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReportValueDateRollResult.SerializeToString,
             ),
             'ResolveVenue': grpc.unary_unary_rpc_method_handler(
                     servicer.ResolveVenue,
@@ -2532,6 +2549,33 @@ class PluginOperations(object):
             '/meridian.plugin.v1.PluginOperations/DontKnowExecution',
             meridian_dot_plugin_dot_v1_dot_operations__pb2.DontKnowExecutionParams.SerializeToString,
             meridian_dot_plugin_dot_v1_dot_operations__pb2.DontKnowExecutionResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ReportValueDateRoll(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ReportValueDateRoll',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ReportValueDateRollParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ReportValueDateRollResult.FromString,
             options,
             channel_credentials,
             insecure,

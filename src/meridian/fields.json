@@ -335,6 +335,7 @@
     "ReportMissingVenue": "meridian.v1.MissingVenueDetectedEvent",
     "ReportPlacement": "meridian.v1.ReportPlacementRequest",
     "ReportSyncStatus": "meridian.v1.SyncStatusEvent",
+    "ReportValueDateRoll": "meridian.v1.ReportValueDateRollRequest",
     "ReportVenueCatalogue": "meridian.v1.VenueCatalogueEvent",
     "RequestOrderChange": "meridian.v1.RequestOrderChangeRequest",
     "RequestPlacementChange": "meridian.v1.RequestPlacementChangeRequest",
@@ -5551,6 +5552,19 @@
       "store": "bor"
     },
     {
+      "name": "meridian.v1.Order.quote_currency",
+      "type": "identifier instrument",
+      "empty": "empty unless the order is in a currency's cash instrument traded against another currency",
+      "intent": "names an FX order's other currency, so a market order names its pair (W11.1)",
+      "meaning": "the pair's quote currency, currency2 as the pair is quoted (USD for EUR/USD, JPY for USD/JPY), by its cash instrument's ID: with the order's instrument, the base currency's, it names the pair, as FpML's quotedCurrencyPair and FIX's Symbol (CCY1/CCY2) do; a limit or stop is in it. One naming the order's own instrument is refused INVALID_ARGUMENT naming it, and a limit or stop in another currency INVALID_ARGUMENT naming limit_price or stop_price (approved 2026-10-13)",
+      "not_meaning": "a third settlement currency, which FIX's SettlCurrency (120) names for a non-deliverable forward; or the currency the quantity is in, which dealt_currency names; or an ISO 4217 code",
+      "filled": "as-reported",
+      "filled_by": "portfolio",
+      "since": "v23",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
       "name": "meridian.v1.Order.legs",
       "type": "repeated message Leg",
       "empty": "empty for a single-instrument order",
@@ -8837,6 +8851,19 @@
       "store": "bor"
     },
     {
+      "name": "meridian.v1.Execution.venue_client_order_id",
+      "type": "text",
+      "empty": "empty where the venue sent none, and on a fill on a placement, whose client order ID the placement derives",
+      "intent": "carries the client order ID the venue sent on a fill on no placement (FIX ClOrdID, 11)",
+      "meaning": "copied from ReportExecutionRequest.venue_client_order_id as the venue sent it, so the connectivity plugin can send it back on BN and Q, as FIX requires when the execution carried it (W11.23, W11.24; approved 2026-10-13)",
+      "not_meaning": "a placement's ID, or the client order identifier the platform sends",
+      "filled": "as-reported",
+      "filled_by": "connectivity",
+      "since": "v23",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
       "name": "meridian.v1.Execution.dk_reason",
       "type": "enum DkReason",
       "allowed": [
@@ -8968,15 +8995,52 @@
         {
           "value": "FEE_KIND_NETWORK",
           "meaning": "gas, on an on-chain venue"
+        },
+        {
+          "value": "FEE_KIND_FINANCING",
+          "meaning": "a rolling position's financing: the cost or credit of carrying it to the next value date, charged at each roll (W11.12)",
+          "since": "v23"
+        },
+        {
+          "value": "FEE_KIND_COMMISSION",
+          "meaning": "the broker's commission on a fill, as FIX keeps it apart in Commission (12) and CommType (13)",
+          "since": "v23"
         }
       ],
       "empty": "unspecified where not said",
       "intent": "says the fee's kind (requirement 26)",
-      "meaning": "exchange, cancel or network; grown by revision",
+      "meaning": "exchange, cancel, network, financing or commission; grown by revision",
       "not_meaning": "who charged it",
       "filled": "as-reported",
       "filled_by": "connectivity",
       "since": "v22",
+      "changes": [
+        {
+          "version": "v23",
+          "kind": "widened",
+          "what": "financing, a rolling spot position's charge at each roll, and commission, which FIX keeps apart from MiscFeeType (139)'s other fees (the product owner, 2026-10-13, the OANDA batch's item 2)",
+          "was": {
+            "allowed": [
+              {
+                "value": "FEE_KIND_UNSPECIFIED",
+                "meaning": "not said"
+              },
+              {
+                "value": "FEE_KIND_EXCHANGE",
+                "meaning": "an exchange's fee"
+              },
+              {
+                "value": "FEE_KIND_CANCEL",
+                "meaning": "a venue's cancel fee"
+              },
+              {
+                "value": "FEE_KIND_NETWORK",
+                "meaning": "gas, on an on-chain venue"
+              }
+            ]
+          }
+        }
+      ],
       "stability": "preview",
       "store": "bor"
     },
@@ -10008,6 +10072,19 @@
       "filled": "as-reported",
       "filled_by": "portfolio",
       "since": "v22",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.ProposeOrderRequest.quote_currency",
+      "type": "identifier instrument",
+      "empty": "empty unless the order is in a currency's cash instrument traded against another currency",
+      "intent": "names the pair's quote currency on an FX order (W11.1)",
+      "meaning": "the pair's quote currency, currency2 as the pair is quoted (USD for EUR/USD, JPY for USD/JPY), by its cash instrument's ID: with the order's instrument, the base currency's, it names the pair, as FpML's quotedCurrencyPair and FIX's Symbol (CCY1/CCY2) do; a limit or stop is in it. One naming the order's own instrument is refused INVALID_ARGUMENT naming it, and a limit or stop in another currency INVALID_ARGUMENT naming limit_price or stop_price (approved 2026-10-13)",
+      "not_meaning": "a third settlement currency, which FIX's SettlCurrency (120) names for a non-deliverable forward; or the currency the quantity is in, which dealt_currency names; or an ISO 4217 code",
+      "filled": "as-reported",
+      "filled_by": "portfolio",
+      "since": "v23",
       "stability": "preview",
       "store": "bor"
     },
@@ -12389,6 +12466,185 @@
       "store": "bor"
     },
     {
+      "name": "meridian.v1.ReportValueDateRollRequest.venue_account_code",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "carries the venue account code whose spot position rolled (W11.25)",
+      "meaning": "as the venue states it, from which the sidecar stamps the account, as on an execution",
+      "not_meaning": "an account ID",
+      "filled": "as-reported",
+      "filled_by": "connectivity",
+      "since": "v23",
+      "required": [
+        {
+          "row": "ReportValueDateRoll",
+          "since": "v23"
+        }
+      ],
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.ReportValueDateRollRequest.account_id",
+      "type": "identifier account",
+      "empty": "empty, never refused, where the venue account code maps to no account: kept unplaced",
+      "intent": "names the account whose pending lines roll",
+      "meaning": "stamped by the sidecar from the ems's map (`venue-account-map`), as ReportExecutionRequest's is",
+      "not_meaning": "anything a connectivity plugin chooses",
+      "filled": "stamped",
+      "filled_by": "sidecar",
+      "since": "v23",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.ReportValueDateRollRequest.pair",
+      "type": "repeated identifier instrument",
+      "bounds": {
+        "count": [
+          2,
+          2
+        ]
+      },
+      "empty": "never empty",
+      "intent": "names the currency pair whose spot position rolled",
+      "meaning": "its two cash instruments' `INS-` IDs, in either order, as the date read's spot inputs name a pair",
+      "not_meaning": "ISO 4217 codes, or a pair record, which there is none of",
+      "filled": "as-reported",
+      "filled_by": "connectivity",
+      "since": "v23",
+      "required": [
+        {
+          "row": "ReportValueDateRoll",
+          "since": "v23"
+        }
+      ],
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.ReportValueDateRollRequest.from_value_date",
+      "type": "date",
+      "empty": "never empty",
+      "intent": "says the value date the pending lines leave",
+      "meaning": "the value date the position was pending to before the roll, as the book holds it from the fill or the last roll reported; on a catch-up roll, the value date a fill booked after the venue rolled its trade was recorded with (W11.25)",
+      "not_meaning": "the trade date",
+      "filled": "as-reported",
+      "filled_by": "connectivity",
+      "since": "v23",
+      "required": [
+        {
+          "row": "ReportValueDateRoll",
+          "since": "v23"
+        }
+      ],
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.ReportValueDateRollRequest.to_value_date",
+      "type": "date",
+      "empty": "never empty",
+      "intent": "says the value date the pending lines move to (W11.25)",
+      "meaning": "the date read's answer (W3.20): the pair's spot from the roll's moment, taken through the pair's cut, so the next value date, or on a catch-up roll the current one; never one the plugin works out",
+      "not_meaning": "a date the venue states, or the settlement of a closed trade",
+      "filled": "derived",
+      "filled_by": "connectivity",
+      "since": "v23",
+      "required": [
+        {
+          "row": "ReportValueDateRoll",
+          "since": "v23"
+        }
+      ],
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.ReportValueDateRollRequest.value_date_basis",
+      "type": "message DateBasis",
+      "empty": "never unset",
+      "intent": "says what the new value date was worked out on",
+      "meaning": "the spot-date rule and each calendar, with their versions, as the date read answered them",
+      "not_meaning": "the venue's basis",
+      "filled": "derived",
+      "filled_by": "connectivity",
+      "since": "v23",
+      "required": [
+        {
+          "row": "ReportValueDateRoll",
+          "since": "v23"
+        }
+      ],
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.ReportValueDateRollRequest.rolled_at_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "never 0",
+      "intent": "says when the venue rolled the position",
+      "meaning": "the venue's daily roll, as it reports it: at its cut, 17:00 New York for spot FX; on a catch-up roll, the venue's latest roll",
+      "not_meaning": "when the book recorded it",
+      "filled": "as-reported",
+      "filled_by": "connectivity",
+      "since": "v23",
+      "required": [
+        {
+          "row": "ReportValueDateRoll",
+          "since": "v23"
+        }
+      ],
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.ReportValueDateRollRequest.charge_ids",
+      "type": "repeated text",
+      "empty": "empty where the venue charged nothing at the roll, or the charge waits unplaced",
+      "intent": "links the roll to its financing (W11.12)",
+      "meaning": "the `CHG-` IDs of the financing charges (FEE_KIND_FINANCING) the venue made at this roll, each reported first and answered with its charge",
+      "not_meaning": "a fee carried on the roll, which moves no cash itself",
+      "filled": "as-reported",
+      "filled_by": "connectivity",
+      "since": "v23",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.ReportValueDateRollRequest.raw_record",
+      "type": "message RawRecordRef",
+      "empty": "never unset",
+      "intent": "references the raw record the roll was converted from",
+      "meaning": "the record in the connectivity plugin's own storage (decisions/028), by its instance and key; no venue text crosses the bus otherwise",
+      "not_meaning": "the record itself, which never leaves the plugin's storage",
+      "filled": "as-reported",
+      "filled_by": "connectivity",
+      "since": "v23",
+      "required": [
+        {
+          "row": "ReportValueDateRoll",
+          "since": "v23"
+        }
+      ],
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.ReportValueDateRollRequest.idempotency_key",
+      "type": "text",
+      "empty": "empty is none: the fact is applied once by its message identifier alone",
+      "intent": "lets the report be retried after a lost reply and applied once",
+      "meaning": "the plugin's own key for the report; a second with the same key and other content is refused REFUSAL_REASON_IDEMPOTENCY_CONFLICT",
+      "not_meaning": "the envelope's message identifier",
+      "filled": "as-reported",
+      "filled_by": "connectivity",
+      "since": "v23",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
       "name": "meridian.v1.AcceptExecutionRequest.execution_ids",
       "type": "repeated text",
       "bounds": {
@@ -12399,7 +12655,7 @@
       },
       "empty": "never empty",
       "intent": "names the unmatched executions accepted (W11.23)",
-      "meaning": "their `EXE-` IDs, of one account, instrument and side: a liquidation can arrive in many prints",
+      "meaning": "their `EXE-` IDs, of one account, instrument, side, connectivity plugin and trade date: a liquidation can arrive in many prints; fills differing in any is refused REFUSAL_REASON_EXECUTIONS_DIFFER, and an ID named twice INVALID_ARGUMENT naming `execution_ids[i]`, the second",
       "not_meaning": "the venue's execution IDs",
       "filled": "as-reported",
       "filled_by": "ems",
@@ -12412,7 +12668,7 @@
       "type": "text",
       "empty": "empty when new_order, the other arm of the oneof matched_order, is set",
       "intent": "names the existing order the executions are accepted to",
-      "meaning": "its `ORD-` ID: released, working or filled, one the accepting ems may place against, never ended; an accept past its ordered quantity is refused",
+      "meaning": "its `ORD-` ID: released, working or filled, one the accepting ems may place against, never ended, and claimed by the accepting user or by no one (REFUSAL_REASON_CLAIMED); an accept whose quantity, added to what the order has filled already, is past its ordered quantity is refused REFUSAL_REASON_QUANTITY_EXCEEDS_ORDER",
       "not_meaning": "a venue's order ID",
       "filled": "as-reported",
       "filled_by": "ems",
@@ -12464,7 +12720,7 @@
       "type": "text",
       "empty": "empty is no note",
       "intent": "carries the new order's note",
-      "meaning": "kept on the order, which says it was entered after the trade, by whom and when",
+      "meaning": "kept on the accept's journal entry, beside the order it made, which says it was entered after the trade, by whom and when; the order has no note of its own",
       "not_meaning": "the accept's note",
       "filled": "as-reported",
       "filled_by": "ems",
@@ -27609,7 +27865,7 @@
         },
         {
           "value": "REFUSAL_REASON_CLAIMED",
-          "meaning": "beside ABORTED: a placement, a claim or a change by other than the claimant of a claimed order (W11.3, W11.7 to W11.9); a cancel by anyone who may write the account is admitted past a claim, and so is a connectivity plugin's report of a cancel it sent under a stop",
+          "meaning": "beside ABORTED: a placement, a claim or a change by other than the claimant of a claimed order (W11.3, W11.7 to W11.9), and from v23 an accept onto it (W11.23); a cancel by anyone who may write the account is admitted past a claim, and so is a connectivity plugin's report of a cancel it sent under a stop",
           "since": "v22"
         },
         {
@@ -27634,7 +27890,7 @@
         },
         {
           "value": "REFUSAL_REASON_QUANTITY_EXCEEDS_ORDER",
-          "meaning": "beside ABORTED: an accept of venue-originated fills past the order's ordered quantity (W11.23): the trader accepts to a new order instead, or portfolio upsizes first; nothing changed",
+          "meaning": "beside ABORTED: an accept of venue-originated fills whose quantity, added to what the order has filled already, is past its ordered quantity (W11.23): the trader accepts to a new order instead, or portfolio upsizes first; nothing changed",
           "since": "v23"
         },
         {
@@ -27644,7 +27900,7 @@
         },
         {
           "value": "REFUSAL_REASON_EXECUTIONS_DIFFER",
-          "meaning": "beside ABORTED: an accept of fills of more than one account, instrument or side, or of a fill whose side is the order's opposite (W11.23); nothing changed",
+          "meaning": "beside ABORTED: an accept of fills of more than one account, instrument, side, connectivity plugin or trade date, or of a fill whose side is the order's opposite (W11.23); nothing changed",
           "since": "v23"
         }
       ],
@@ -27665,6 +27921,11 @@
           "version": "v22",
           "kind": "clarified",
           "what": "REFUSAL_REASON_ACCOUNT_NOT_LINKABLE: also an ems's venue account mapping naming an account not granted its instance (W11.22)"
+        },
+        {
+          "version": "v23",
+          "kind": "clarified",
+          "what": "REFUSAL_REASON_CLAIMED: also an accept of venue-originated fills onto an order another claims (W11.23; approved 2026-10-13)"
         }
       ],
       "stability": "stable",
@@ -28826,6 +29087,19 @@
       "empty": "never unset: a DK needs a user, a person or the ems's service account, and the book refuses it sent for no one (REFUSAL_REASON_ACTOR_REQUIRED)",
       "intent": "names the person DontKnowExecution is sent for",
       "meaning": "the assertion the plugin was handed for them, the same bytes, never altered; the sidecar admits it only in a session at write, when the executions it names are in their write access, and stamps them on it (W4.9)",
+      "not_meaning": "the plugin's own identity, which the sidecar knows",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v23",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.plugin.v1.ReportValueDateRollParams.acting_for",
+      "type": "message CallerAssertion",
+      "empty": "unset, the plugin reports a venue's fact as itself, which a fact report may be (W11's invariants)",
+      "intent": "names the person ReportValueDateRoll is sent for",
+      "meaning": "the assertion the plugin was handed for them, the same bytes, never altered; set, a person's entry where the role makes one, admitted only in a session at write when the person may write the account, and stamped on it (W4.9)",
       "not_meaning": "the plugin's own identity, which the sidecar knows",
       "filled": "as-reported",
       "filled_by": "plugin",

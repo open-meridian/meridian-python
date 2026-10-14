@@ -64,6 +64,10 @@ LIST_ACCOUNT_FIGURES_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=T
 LIST_ACCOUNT_ATTRIBUTES_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=True)
 """meridian.v1.ListAccountAttributesRequest.page_size: bounds a page"""
 
+REPORT_VALUE_DATE_ROLL_REQUEST_PAIR_COUNT = Count(least=2, most=2)
+"""meridian.v1.ReportValueDateRollRequest.pair: names the currency pair whose
+spot position rolled"""
+
 ACCEPT_EXECUTION_REQUEST_EXECUTION_IDS_COUNT = Count(least=1, most=500)
 """meridian.v1.AcceptExecutionRequest.execution_ids: names the unmatched
 executions accepted (W11.23)"""

@@ -472,6 +472,8 @@ class FeeKind(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     FEE_KIND_EXCHANGE: _ClassVar[FeeKind]
     FEE_KIND_CANCEL: _ClassVar[FeeKind]
     FEE_KIND_NETWORK: _ClassVar[FeeKind]
+    FEE_KIND_FINANCING: _ClassVar[FeeKind]
+    FEE_KIND_COMMISSION: _ClassVar[FeeKind]
 
 class LiquidityIndicator(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
@@ -1026,6 +1028,8 @@ FEE_KIND_UNSPECIFIED: FeeKind
 FEE_KIND_EXCHANGE: FeeKind
 FEE_KIND_CANCEL: FeeKind
 FEE_KIND_NETWORK: FeeKind
+FEE_KIND_FINANCING: FeeKind
+FEE_KIND_COMMISSION: FeeKind
 LIQUIDITY_INDICATOR_UNSPECIFIED: LiquidityIndicator
 LIQUIDITY_INDICATOR_MAKER: LiquidityIndicator
 LIQUIDITY_INDICATOR_TAKER: LiquidityIndicator
@@ -1944,7 +1948,7 @@ class ListAccountAttributesResult(_message.Message):
     def __init__(self, attributes: _Optional[_Iterable[_Union[AccountAttributes, _Mapping]]] = ..., next_cursor: _Optional[str] = ..., as_of: _Optional[_Union[Watermark, _Mapping]] = ...) -> None: ...
 
 class ProposeOrderParams(_message.Message):
-    __slots__ = ("account_id", "instrument_id", "sleeve", "side", "locate_id", "quantity", "cash_quantity", "order_type", "limit_price", "dealt_currency", "legs", "allocation_instruction", "time_in_force", "lot_relief_method", "relieve_lot_ids", "capacity", "direction", "parties", "decided_by", "customer_id", "firm_designated_id", "handling_instructions", "received_at_ns", "received_precision", "quote_at_receipt", "represents_order_ids", "axe_source", "axe_counterparty_id", "link", "idempotency_key", "stop_price", "expire_date", "expire_time_ns", "execution_instructions", "acting_for")
+    __slots__ = ("account_id", "instrument_id", "sleeve", "side", "locate_id", "quantity", "cash_quantity", "order_type", "limit_price", "dealt_currency", "legs", "allocation_instruction", "time_in_force", "lot_relief_method", "relieve_lot_ids", "capacity", "direction", "parties", "decided_by", "customer_id", "firm_designated_id", "handling_instructions", "received_at_ns", "received_precision", "quote_at_receipt", "represents_order_ids", "axe_source", "axe_counterparty_id", "link", "idempotency_key", "stop_price", "expire_date", "expire_time_ns", "execution_instructions", "quote_currency", "acting_for")
     ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
     INSTRUMENT_ID_FIELD_NUMBER: _ClassVar[int]
     SLEEVE_FIELD_NUMBER: _ClassVar[int]
@@ -1979,6 +1983,7 @@ class ProposeOrderParams(_message.Message):
     EXPIRE_DATE_FIELD_NUMBER: _ClassVar[int]
     EXPIRE_TIME_NS_FIELD_NUMBER: _ClassVar[int]
     EXECUTION_INSTRUCTIONS_FIELD_NUMBER: _ClassVar[int]
+    QUOTE_CURRENCY_FIELD_NUMBER: _ClassVar[int]
     ACTING_FOR_FIELD_NUMBER: _ClassVar[int]
     account_id: str
     instrument_id: str
@@ -2014,8 +2019,9 @@ class ProposeOrderParams(_message.Message):
     expire_date: str
     expire_time_ns: int
     execution_instructions: _containers.RepeatedScalarFieldContainer[ExecutionInstruction]
+    quote_currency: str
     acting_for: _sidecar_pb2.CallerAssertion
-    def __init__(self, account_id: _Optional[str] = ..., instrument_id: _Optional[str] = ..., sleeve: _Optional[str] = ..., side: _Optional[_Union[Side, str]] = ..., locate_id: _Optional[str] = ..., quantity: _Optional[_Union[Decimal, _Mapping]] = ..., cash_quantity: _Optional[_Union[Money, _Mapping]] = ..., order_type: _Optional[_Union[OrderType, str]] = ..., limit_price: _Optional[_Union[Money, _Mapping]] = ..., dealt_currency: _Optional[str] = ..., legs: _Optional[_Iterable[_Union[Leg, _Mapping]]] = ..., allocation_instruction: _Optional[_Union[AllocationInstruction, _Mapping]] = ..., time_in_force: _Optional[_Union[TimeInForce, str]] = ..., lot_relief_method: _Optional[_Union[LotReliefMethod, str]] = ..., relieve_lot_ids: _Optional[_Iterable[str]] = ..., capacity: _Optional[_Union[Capacity, str]] = ..., direction: _Optional[_Union[OrderDirection, str]] = ..., parties: _Optional[_Iterable[_Union[Party, _Mapping]]] = ..., decided_by: _Optional[_Union[Actor, _Mapping]] = ..., customer_id: _Optional[str] = ..., firm_designated_id: _Optional[str] = ..., handling_instructions: _Optional[_Iterable[str]] = ..., received_at_ns: _Optional[int] = ..., received_precision: _Optional[_Union[TimePrecision, str]] = ..., quote_at_receipt: _Optional[_Union[ReceiptQuote, _Mapping]] = ..., represents_order_ids: _Optional[_Iterable[str]] = ..., axe_source: _Optional[str] = ..., axe_counterparty_id: _Optional[str] = ..., link: _Optional[_Union[OrderLink, _Mapping]] = ..., idempotency_key: _Optional[str] = ..., stop_price: _Optional[_Union[Money, _Mapping]] = ..., expire_date: _Optional[str] = ..., expire_time_ns: _Optional[int] = ..., execution_instructions: _Optional[_Iterable[_Union[ExecutionInstruction, str]]] = ..., acting_for: _Optional[_Union[_sidecar_pb2.CallerAssertion, _Mapping]] = ...) -> None: ...
+    def __init__(self, account_id: _Optional[str] = ..., instrument_id: _Optional[str] = ..., sleeve: _Optional[str] = ..., side: _Optional[_Union[Side, str]] = ..., locate_id: _Optional[str] = ..., quantity: _Optional[_Union[Decimal, _Mapping]] = ..., cash_quantity: _Optional[_Union[Money, _Mapping]] = ..., order_type: _Optional[_Union[OrderType, str]] = ..., limit_price: _Optional[_Union[Money, _Mapping]] = ..., dealt_currency: _Optional[str] = ..., legs: _Optional[_Iterable[_Union[Leg, _Mapping]]] = ..., allocation_instruction: _Optional[_Union[AllocationInstruction, _Mapping]] = ..., time_in_force: _Optional[_Union[TimeInForce, str]] = ..., lot_relief_method: _Optional[_Union[LotReliefMethod, str]] = ..., relieve_lot_ids: _Optional[_Iterable[str]] = ..., capacity: _Optional[_Union[Capacity, str]] = ..., direction: _Optional[_Union[OrderDirection, str]] = ..., parties: _Optional[_Iterable[_Union[Party, _Mapping]]] = ..., decided_by: _Optional[_Union[Actor, _Mapping]] = ..., customer_id: _Optional[str] = ..., firm_designated_id: _Optional[str] = ..., handling_instructions: _Optional[_Iterable[str]] = ..., received_at_ns: _Optional[int] = ..., received_precision: _Optional[_Union[TimePrecision, str]] = ..., quote_at_receipt: _Optional[_Union[ReceiptQuote, _Mapping]] = ..., represents_order_ids: _Optional[_Iterable[str]] = ..., axe_source: _Optional[str] = ..., axe_counterparty_id: _Optional[str] = ..., link: _Optional[_Union[OrderLink, _Mapping]] = ..., idempotency_key: _Optional[str] = ..., stop_price: _Optional[_Union[Money, _Mapping]] = ..., expire_date: _Optional[str] = ..., expire_time_ns: _Optional[int] = ..., execution_instructions: _Optional[_Iterable[_Union[ExecutionInstruction, str]]] = ..., quote_currency: _Optional[str] = ..., acting_for: _Optional[_Union[_sidecar_pb2.CallerAssertion, _Mapping]] = ...) -> None: ...
 
 class ProposeOrderResult(_message.Message):
     __slots__ = ("order", "entry", "journal", "change_request_id")
@@ -2710,6 +2716,48 @@ class DontKnowExecutionResult(_message.Message):
     executions: _containers.RepeatedCompositeFieldContainer[Execution]
     journal: JournalRef
     def __init__(self, executions: _Optional[_Iterable[_Union[Execution, _Mapping]]] = ..., journal: _Optional[_Union[JournalRef, _Mapping]] = ...) -> None: ...
+
+class ReportValueDateRollParams(_message.Message):
+    __slots__ = ("venue_account_code", "pair", "from_value_date", "to_value_date", "value_date_basis", "rolled_at_ns", "charge_ids", "raw_record", "idempotency_key", "acting_for")
+    VENUE_ACCOUNT_CODE_FIELD_NUMBER: _ClassVar[int]
+    PAIR_FIELD_NUMBER: _ClassVar[int]
+    FROM_VALUE_DATE_FIELD_NUMBER: _ClassVar[int]
+    TO_VALUE_DATE_FIELD_NUMBER: _ClassVar[int]
+    VALUE_DATE_BASIS_FIELD_NUMBER: _ClassVar[int]
+    ROLLED_AT_NS_FIELD_NUMBER: _ClassVar[int]
+    CHARGE_IDS_FIELD_NUMBER: _ClassVar[int]
+    RAW_RECORD_FIELD_NUMBER: _ClassVar[int]
+    IDEMPOTENCY_KEY_FIELD_NUMBER: _ClassVar[int]
+    ACTING_FOR_FIELD_NUMBER: _ClassVar[int]
+    venue_account_code: str
+    pair: _containers.RepeatedScalarFieldContainer[str]
+    from_value_date: str
+    to_value_date: str
+    value_date_basis: DateBasis
+    rolled_at_ns: int
+    charge_ids: _containers.RepeatedScalarFieldContainer[str]
+    raw_record: RawRecordRef
+    idempotency_key: str
+    acting_for: _sidecar_pb2.CallerAssertion
+    def __init__(self, venue_account_code: _Optional[str] = ..., pair: _Optional[_Iterable[str]] = ..., from_value_date: _Optional[str] = ..., to_value_date: _Optional[str] = ..., value_date_basis: _Optional[_Union[DateBasis, _Mapping]] = ..., rolled_at_ns: _Optional[int] = ..., charge_ids: _Optional[_Iterable[str]] = ..., raw_record: _Optional[_Union[RawRecordRef, _Mapping]] = ..., idempotency_key: _Optional[str] = ..., acting_for: _Optional[_Union[_sidecar_pb2.CallerAssertion, _Mapping]] = ...) -> None: ...
+
+class ReportValueDateRollResult(_message.Message):
+    __slots__ = ("placement", "execution", "order", "charge", "unplaced", "entry", "journal")
+    PLACEMENT_FIELD_NUMBER: _ClassVar[int]
+    EXECUTION_FIELD_NUMBER: _ClassVar[int]
+    ORDER_FIELD_NUMBER: _ClassVar[int]
+    CHARGE_FIELD_NUMBER: _ClassVar[int]
+    UNPLACED_FIELD_NUMBER: _ClassVar[int]
+    ENTRY_FIELD_NUMBER: _ClassVar[int]
+    JOURNAL_FIELD_NUMBER: _ClassVar[int]
+    placement: Placement
+    execution: Execution
+    order: Order
+    charge: Charge
+    unplaced: UnplacedFact
+    entry: EntryMeta
+    journal: JournalRef
+    def __init__(self, placement: _Optional[_Union[Placement, _Mapping]] = ..., execution: _Optional[_Union[Execution, _Mapping]] = ..., order: _Optional[_Union[Order, _Mapping]] = ..., charge: _Optional[_Union[Charge, _Mapping]] = ..., unplaced: _Optional[_Union[UnplacedFact, _Mapping]] = ..., entry: _Optional[_Union[EntryMeta, _Mapping]] = ..., journal: _Optional[_Union[JournalRef, _Mapping]] = ...) -> None: ...
 
 class ResolveVenueParams(_message.Message):
     __slots__ = ("identifiers", "as_of_ns")
@@ -4402,7 +4450,7 @@ class OrderLink(_message.Message):
     def __init__(self, kind: _Optional[_Union[OrderLinkKind, str]] = ..., parent_order_id: _Optional[str] = ...) -> None: ...
 
 class Order(_message.Message):
-    __slots__ = ("order_id", "account_id", "instrument_id", "sleeve", "side", "locate_id", "quantity", "cash_quantity", "order_type", "limit_price", "stop_price", "dealt_currency", "legs", "allocation_instruction", "time_in_force", "expire_date", "expire_time_ns", "execution_instructions", "lot_relief_method", "relieve_lot_ids", "capacity", "direction", "parties", "person_roles", "customer_id", "firm_designated_id", "handling_instructions", "received_at_ns", "received_precision", "quote_at_receipt", "represents_order_ids", "axe_source", "axe_counterparty_id", "link", "origin", "venue_order_id", "status", "checks", "change_requests", "placements", "executions", "charges", "last_change")
+    __slots__ = ("order_id", "account_id", "instrument_id", "sleeve", "side", "locate_id", "quantity", "cash_quantity", "order_type", "limit_price", "stop_price", "dealt_currency", "quote_currency", "legs", "allocation_instruction", "time_in_force", "expire_date", "expire_time_ns", "execution_instructions", "lot_relief_method", "relieve_lot_ids", "capacity", "direction", "parties", "person_roles", "customer_id", "firm_designated_id", "handling_instructions", "received_at_ns", "received_precision", "quote_at_receipt", "represents_order_ids", "axe_source", "axe_counterparty_id", "link", "origin", "venue_order_id", "status", "checks", "change_requests", "placements", "executions", "charges", "last_change")
     ORDER_ID_FIELD_NUMBER: _ClassVar[int]
     ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
     INSTRUMENT_ID_FIELD_NUMBER: _ClassVar[int]
@@ -4415,6 +4463,7 @@ class Order(_message.Message):
     LIMIT_PRICE_FIELD_NUMBER: _ClassVar[int]
     STOP_PRICE_FIELD_NUMBER: _ClassVar[int]
     DEALT_CURRENCY_FIELD_NUMBER: _ClassVar[int]
+    QUOTE_CURRENCY_FIELD_NUMBER: _ClassVar[int]
     LEGS_FIELD_NUMBER: _ClassVar[int]
     ALLOCATION_INSTRUCTION_FIELD_NUMBER: _ClassVar[int]
     TIME_IN_FORCE_FIELD_NUMBER: _ClassVar[int]
@@ -4458,6 +4507,7 @@ class Order(_message.Message):
     limit_price: Money
     stop_price: Money
     dealt_currency: str
+    quote_currency: str
     legs: _containers.RepeatedCompositeFieldContainer[Leg]
     allocation_instruction: AllocationInstruction
     time_in_force: TimeInForce
@@ -4489,7 +4539,7 @@ class Order(_message.Message):
     executions: _containers.RepeatedCompositeFieldContainer[Execution]
     charges: _containers.RepeatedCompositeFieldContainer[Charge]
     last_change: JournalRef
-    def __init__(self, order_id: _Optional[str] = ..., account_id: _Optional[str] = ..., instrument_id: _Optional[str] = ..., sleeve: _Optional[str] = ..., side: _Optional[_Union[Side, str]] = ..., locate_id: _Optional[str] = ..., quantity: _Optional[_Union[Decimal, _Mapping]] = ..., cash_quantity: _Optional[_Union[Money, _Mapping]] = ..., order_type: _Optional[_Union[OrderType, str]] = ..., limit_price: _Optional[_Union[Money, _Mapping]] = ..., stop_price: _Optional[_Union[Money, _Mapping]] = ..., dealt_currency: _Optional[str] = ..., legs: _Optional[_Iterable[_Union[Leg, _Mapping]]] = ..., allocation_instruction: _Optional[_Union[AllocationInstruction, _Mapping]] = ..., time_in_force: _Optional[_Union[TimeInForce, str]] = ..., expire_date: _Optional[str] = ..., expire_time_ns: _Optional[int] = ..., execution_instructions: _Optional[_Iterable[_Union[ExecutionInstruction, str]]] = ..., lot_relief_method: _Optional[_Union[LotReliefMethod, str]] = ..., relieve_lot_ids: _Optional[_Iterable[str]] = ..., capacity: _Optional[_Union[Capacity, str]] = ..., direction: _Optional[_Union[OrderDirection, str]] = ..., parties: _Optional[_Iterable[_Union[Party, _Mapping]]] = ..., person_roles: _Optional[_Union[PersonRoles, _Mapping]] = ..., customer_id: _Optional[str] = ..., firm_designated_id: _Optional[str] = ..., handling_instructions: _Optional[_Iterable[str]] = ..., received_at_ns: _Optional[int] = ..., received_precision: _Optional[_Union[TimePrecision, str]] = ..., quote_at_receipt: _Optional[_Union[ReceiptQuote, _Mapping]] = ..., represents_order_ids: _Optional[_Iterable[str]] = ..., axe_source: _Optional[str] = ..., axe_counterparty_id: _Optional[str] = ..., link: _Optional[_Union[OrderLink, _Mapping]] = ..., origin: _Optional[_Union[OrderOrigin, str]] = ..., venue_order_id: _Optional[str] = ..., status: _Optional[_Union[OrderStatus, _Mapping]] = ..., checks: _Optional[_Iterable[_Union[Check, _Mapping]]] = ..., change_requests: _Optional[_Iterable[_Union[ChangeRequest, _Mapping]]] = ..., placements: _Optional[_Iterable[_Union[Placement, _Mapping]]] = ..., executions: _Optional[_Iterable[_Union[Execution, _Mapping]]] = ..., charges: _Optional[_Iterable[_Union[Charge, _Mapping]]] = ..., last_change: _Optional[_Union[JournalRef, _Mapping]] = ...) -> None: ...
+    def __init__(self, order_id: _Optional[str] = ..., account_id: _Optional[str] = ..., instrument_id: _Optional[str] = ..., sleeve: _Optional[str] = ..., side: _Optional[_Union[Side, str]] = ..., locate_id: _Optional[str] = ..., quantity: _Optional[_Union[Decimal, _Mapping]] = ..., cash_quantity: _Optional[_Union[Money, _Mapping]] = ..., order_type: _Optional[_Union[OrderType, str]] = ..., limit_price: _Optional[_Union[Money, _Mapping]] = ..., stop_price: _Optional[_Union[Money, _Mapping]] = ..., dealt_currency: _Optional[str] = ..., quote_currency: _Optional[str] = ..., legs: _Optional[_Iterable[_Union[Leg, _Mapping]]] = ..., allocation_instruction: _Optional[_Union[AllocationInstruction, _Mapping]] = ..., time_in_force: _Optional[_Union[TimeInForce, str]] = ..., expire_date: _Optional[str] = ..., expire_time_ns: _Optional[int] = ..., execution_instructions: _Optional[_Iterable[_Union[ExecutionInstruction, str]]] = ..., lot_relief_method: _Optional[_Union[LotReliefMethod, str]] = ..., relieve_lot_ids: _Optional[_Iterable[str]] = ..., capacity: _Optional[_Union[Capacity, str]] = ..., direction: _Optional[_Union[OrderDirection, str]] = ..., parties: _Optional[_Iterable[_Union[Party, _Mapping]]] = ..., person_roles: _Optional[_Union[PersonRoles, _Mapping]] = ..., customer_id: _Optional[str] = ..., firm_designated_id: _Optional[str] = ..., handling_instructions: _Optional[_Iterable[str]] = ..., received_at_ns: _Optional[int] = ..., received_precision: _Optional[_Union[TimePrecision, str]] = ..., quote_at_receipt: _Optional[_Union[ReceiptQuote, _Mapping]] = ..., represents_order_ids: _Optional[_Iterable[str]] = ..., axe_source: _Optional[str] = ..., axe_counterparty_id: _Optional[str] = ..., link: _Optional[_Union[OrderLink, _Mapping]] = ..., origin: _Optional[_Union[OrderOrigin, str]] = ..., venue_order_id: _Optional[str] = ..., status: _Optional[_Union[OrderStatus, _Mapping]] = ..., checks: _Optional[_Iterable[_Union[Check, _Mapping]]] = ..., change_requests: _Optional[_Iterable[_Union[ChangeRequest, _Mapping]]] = ..., placements: _Optional[_Iterable[_Union[Placement, _Mapping]]] = ..., executions: _Optional[_Iterable[_Union[Execution, _Mapping]]] = ..., charges: _Optional[_Iterable[_Union[Charge, _Mapping]]] = ..., last_change: _Optional[_Union[JournalRef, _Mapping]] = ...) -> None: ...
 
 class PersonRoles(_message.Message):
     __slots__ = ("entered_by", "executed_by", "decided_by")
@@ -4716,7 +4766,7 @@ class StandingPlacementCondition(_message.Message):
     def __init__(self, condition: _Optional[_Union[PlacementCondition, str]] = ..., reason: _Optional[str] = ..., actor: _Optional[_Union[Actor, _Mapping]] = ..., unknown_reason: _Optional[_Union[UnknownReason, str]] = ..., status_as_reported: _Optional[_Union[AsReported, _Mapping]] = ...) -> None: ...
 
 class Execution(_message.Message):
-    __slots__ = ("execution_id", "order_id", "placement_id", "account_id", "instrument_id", "sleeve", "side", "quantity", "price", "trade_time_ns", "trade_date", "venue_execution_id", "kind", "source", "finality", "fees", "settlement_date", "computed_settlement_date", "settlement_date_basis", "supersedes", "venue_id", "uti", "prior_uti", "upi", "given_up_to", "trade_chain_reference", "settlement_counterparty", "person_roles", "raw_record", "last_change", "effective_date", "counterparty", "liquidity_indicator", "uti_generated_by", "state", "venue_order_id", "dk_reason", "dk_text")
+    __slots__ = ("execution_id", "order_id", "placement_id", "account_id", "instrument_id", "sleeve", "side", "quantity", "price", "trade_time_ns", "trade_date", "venue_execution_id", "kind", "source", "finality", "fees", "settlement_date", "computed_settlement_date", "settlement_date_basis", "supersedes", "venue_id", "uti", "prior_uti", "upi", "given_up_to", "trade_chain_reference", "settlement_counterparty", "person_roles", "raw_record", "last_change", "effective_date", "counterparty", "liquidity_indicator", "uti_generated_by", "state", "venue_order_id", "dk_reason", "dk_text", "venue_client_order_id")
     EXECUTION_ID_FIELD_NUMBER: _ClassVar[int]
     ORDER_ID_FIELD_NUMBER: _ClassVar[int]
     PLACEMENT_ID_FIELD_NUMBER: _ClassVar[int]
@@ -4755,6 +4805,7 @@ class Execution(_message.Message):
     VENUE_ORDER_ID_FIELD_NUMBER: _ClassVar[int]
     DK_REASON_FIELD_NUMBER: _ClassVar[int]
     DK_TEXT_FIELD_NUMBER: _ClassVar[int]
+    VENUE_CLIENT_ORDER_ID_FIELD_NUMBER: _ClassVar[int]
     execution_id: str
     order_id: str
     placement_id: str
@@ -4793,7 +4844,8 @@ class Execution(_message.Message):
     venue_order_id: str
     dk_reason: DkReason
     dk_text: str
-    def __init__(self, execution_id: _Optional[str] = ..., order_id: _Optional[str] = ..., placement_id: _Optional[str] = ..., account_id: _Optional[str] = ..., instrument_id: _Optional[str] = ..., sleeve: _Optional[str] = ..., side: _Optional[_Union[Side, str]] = ..., quantity: _Optional[_Union[Decimal, _Mapping]] = ..., price: _Optional[_Union[Money, _Mapping]] = ..., trade_time_ns: _Optional[int] = ..., trade_date: _Optional[str] = ..., venue_execution_id: _Optional[str] = ..., kind: _Optional[_Union[ExecutionKind, str]] = ..., source: _Optional[_Union[ExecutionSource, str]] = ..., finality: _Optional[_Union[Finality, _Mapping]] = ..., fees: _Optional[_Iterable[_Union[Fee, _Mapping]]] = ..., settlement_date: _Optional[str] = ..., computed_settlement_date: _Optional[str] = ..., settlement_date_basis: _Optional[_Union[DateBasis, _Mapping]] = ..., supersedes: _Optional[str] = ..., venue_id: _Optional[str] = ..., uti: _Optional[str] = ..., prior_uti: _Optional[str] = ..., upi: _Optional[str] = ..., given_up_to: _Optional[str] = ..., trade_chain_reference: _Optional[str] = ..., settlement_counterparty: _Optional[str] = ..., person_roles: _Optional[_Union[PersonRoles, _Mapping]] = ..., raw_record: _Optional[_Union[RawRecordRef, _Mapping]] = ..., last_change: _Optional[_Union[JournalRef, _Mapping]] = ..., effective_date: _Optional[str] = ..., counterparty: _Optional[_Union[Party, _Mapping]] = ..., liquidity_indicator: _Optional[_Union[LiquidityIndicator, str]] = ..., uti_generated_by: _Optional[str] = ..., state: _Optional[_Union[ExecutionState, str]] = ..., venue_order_id: _Optional[str] = ..., dk_reason: _Optional[_Union[DkReason, str]] = ..., dk_text: _Optional[str] = ...) -> None: ...
+    venue_client_order_id: str
+    def __init__(self, execution_id: _Optional[str] = ..., order_id: _Optional[str] = ..., placement_id: _Optional[str] = ..., account_id: _Optional[str] = ..., instrument_id: _Optional[str] = ..., sleeve: _Optional[str] = ..., side: _Optional[_Union[Side, str]] = ..., quantity: _Optional[_Union[Decimal, _Mapping]] = ..., price: _Optional[_Union[Money, _Mapping]] = ..., trade_time_ns: _Optional[int] = ..., trade_date: _Optional[str] = ..., venue_execution_id: _Optional[str] = ..., kind: _Optional[_Union[ExecutionKind, str]] = ..., source: _Optional[_Union[ExecutionSource, str]] = ..., finality: _Optional[_Union[Finality, _Mapping]] = ..., fees: _Optional[_Iterable[_Union[Fee, _Mapping]]] = ..., settlement_date: _Optional[str] = ..., computed_settlement_date: _Optional[str] = ..., settlement_date_basis: _Optional[_Union[DateBasis, _Mapping]] = ..., supersedes: _Optional[str] = ..., venue_id: _Optional[str] = ..., uti: _Optional[str] = ..., prior_uti: _Optional[str] = ..., upi: _Optional[str] = ..., given_up_to: _Optional[str] = ..., trade_chain_reference: _Optional[str] = ..., settlement_counterparty: _Optional[str] = ..., person_roles: _Optional[_Union[PersonRoles, _Mapping]] = ..., raw_record: _Optional[_Union[RawRecordRef, _Mapping]] = ..., last_change: _Optional[_Union[JournalRef, _Mapping]] = ..., effective_date: _Optional[str] = ..., counterparty: _Optional[_Union[Party, _Mapping]] = ..., liquidity_indicator: _Optional[_Union[LiquidityIndicator, str]] = ..., uti_generated_by: _Optional[str] = ..., state: _Optional[_Union[ExecutionState, str]] = ..., venue_order_id: _Optional[str] = ..., dk_reason: _Optional[_Union[DkReason, str]] = ..., dk_text: _Optional[str] = ..., venue_client_order_id: _Optional[str] = ...) -> None: ...
 
 class Finality(_message.Message):
     __slots__ = ("level", "at_ns")

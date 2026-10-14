@@ -2499,6 +2499,7 @@ class Operations:
         expire_date: date | str = "",
         expire_time_ns: int = 0,
         execution_instructions: Sequence[ops.ExecutionInstruction | str] = (),
+        quote_currency: str = "",
         acting_for: str | None = None,
     ) -> ops.ProposeOrderResult:
         """W11.1: W11.1. For a person or a service account; by `portfolio`, the `oms`, or an (preview)."""
@@ -2537,6 +2538,7 @@ class Operations:
             expire_date=_date(expire_date, "expire_date"),
             expire_time_ns=expire_time_ns,
             execution_instructions=[_enum(ops.ExecutionInstruction, value, "execution_instructions") for value in execution_instructions],
+            quote_currency=quote_currency,
             acting_for=_assertion(acting_for),
         )
         return await self._operate(self._operations().ProposeOrder, params)
@@ -3074,6 +3076,35 @@ class Operations:
             acting_for=_assertion(acting_for),
         )
         return await self._operate(self._operations().DontKnowExecution, params)
+
+    async def report_value_date_roll(
+        self,
+        *,
+        venue_account_code: str = "",
+        pair: Sequence[str] = (),
+        from_value_date: date | str = "",
+        to_value_date: date | str = "",
+        value_date_basis: DateBasis | None = None,
+        rolled_at_ns: int = 0,
+        charge_ids: Sequence[str] = (),
+        raw_record: ops.RawRecordRef | None = None,
+        idempotency_key: str = "",
+        acting_for: str | None = None,
+    ) -> ops.ReportValueDateRollResult:
+        """W11.25: W11.25 (contract v23). By a connectivity plugin whose venue rolls a spot (preview)."""
+        params = ops.ReportValueDateRollParams(
+            venue_account_code=venue_account_code,
+            pair=list(pair),
+            from_value_date=_date(from_value_date, "from_value_date"),
+            to_value_date=_date(to_value_date, "to_value_date"),
+            value_date_basis=None if value_date_basis is None else _date_basis(value_date_basis, "value_date_basis"),
+            rolled_at_ns=rolled_at_ns,
+            charge_ids=list(charge_ids),
+            raw_record=raw_record,
+            idempotency_key=idempotency_key,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().ReportValueDateRoll, params)
 
     async def resolve_venue(
         self,
