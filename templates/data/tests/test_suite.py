@@ -187,6 +187,7 @@ KINDS = {
     "trades": "meridian.v1.Trade",
     "quotes": "meridian.v1.Quote",
     "outcomes": "meridian.v1.Outcome",
+    "disputed outcomes": "meridian.v1.Outcome",
 }
 DECLARED = {kind for dataset in DECLARATION.catalogue for kind in dataset.data_types}
 

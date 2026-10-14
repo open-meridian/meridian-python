@@ -5556,7 +5556,7 @@
       "type": "identifier instrument",
       "empty": "empty unless the order is in a currency's cash instrument traded against another currency",
       "intent": "names an FX order's other currency, so a market order names its pair (W11.1)",
-      "meaning": "the pair's quote currency, currency2 as the pair is quoted (USD for EUR/USD, JPY for USD/JPY), by its cash instrument's ID: with the order's instrument, the base currency's, it names the pair, as FpML's quotedCurrencyPair and FIX's Symbol (CCY1/CCY2) do; a limit or stop is in it. One naming the order's own instrument is refused INVALID_ARGUMENT naming it, and a limit or stop in another currency INVALID_ARGUMENT naming limit_price or stop_price (approved 2026-10-13)",
+      "meaning": "the pair's quote currency, currency2 as the pair is quoted (USD for EUR/USD, JPY for USD/JPY), by its cash instrument's ID: with the order's instrument, the base currency's, it names the pair, as FpML's quotedCurrencyPair and FIX's Symbol (CCY1/CCY2) do; a limit or stop is in it. One naming the order's own instrument is refused INVALID_ARGUMENT naming it, and a limit or stop in another currency INVALID_ARGUMENT naming limit_price or stop_price (approved 2026-10-13); a change's limit in another currency is refused INVALID_ARGUMENT naming change.limit_price (W11.3, approved 2026-10-13)",
       "not_meaning": "a third settlement currency, which FIX's SettlCurrency (120) names for a non-deliverable forward; or the currency the quantity is in, which dealt_currency names; or an ISO 4217 code",
       "filled": "as-reported",
       "filled_by": "portfolio",
@@ -7426,11 +7426,18 @@
       "type": "Money",
       "empty": "unset unless the limit is amended",
       "intent": "carries the new limit",
-      "meaning": "the limit asked for",
+      "meaning": "the limit asked for; from v23, on an order naming a quote currency, in that currency, else refused INVALID_ARGUMENT naming change.limit_price (W11.3)",
       "not_meaning": "a placement's limit",
       "filled": "as-reported",
       "filled_by": "oms",
       "since": "v22",
+      "changes": [
+        {
+          "version": "v23",
+          "kind": "clarified",
+          "what": "an FX order's amended limit is in its quote currency: one priced in any other is refused INVALID_ARGUMENT naming change.limit_price (the product owner, 2026-10-13)"
+        }
+      ],
       "stability": "preview",
       "store": "bor"
     },
@@ -9216,6 +9223,11 @@
         {
           "value": "locate",
           "meaning": "a locate and its answer (W11.18)"
+        },
+        {
+          "value": "value-date-roll",
+          "meaning": "a venue's value-date roll (W11.25): on a code no ems mapped, or meeting no pending line to move",
+          "since": "v23"
         }
       ],
       "empty": "never empty",
@@ -9225,6 +9237,33 @@
       "filled": "decided",
       "filled_by": "bor",
       "since": "v22",
+      "changes": [
+        {
+          "version": "v23",
+          "kind": "widened",
+          "what": "a value-date roll the book cannot apply is kept unplaced, never refused or dropped (the product owner, 2026-10-13, the roll's open cases from v23's core build)",
+          "was": {
+            "allowed": [
+              {
+                "value": "execution",
+                "meaning": "a reported execution (W11.11)"
+              },
+              {
+                "value": "placement",
+                "meaning": "a placement's progress (W11.10)"
+              },
+              {
+                "value": "charge",
+                "meaning": "a charge (W11.12)"
+              },
+              {
+                "value": "locate",
+                "meaning": "a locate and its answer (W11.18)"
+              }
+            ]
+          }
+        }
+      ],
       "stability": "preview",
       "store": "bor"
     },
@@ -9243,11 +9282,16 @@
         {
           "value": "UNPLACED_REASON_UNMAPPED_VENUE_ACCOUNT",
           "meaning": "its venue account code maps to no account on the sending connectivity plugin (W11.22)"
+        },
+        {
+          "value": "UNPLACED_REASON_NOTHING_PENDING",
+          "meaning": "a value-date roll meets no pending line on its from date that the sending connectivity plugin's fills or rolls on the code put there (W11.25): kept in the account, so operations sees the venue's position and the book's differ",
+          "since": "v23"
         }
       ],
       "empty": "never unspecified",
       "intent": "says why the fact was kept unplaced (requirement 13)",
-      "meaning": "an unknown placement, or an unmapped venue account",
+      "meaning": "an unknown placement, an unmapped venue account, or a roll with nothing pending to move",
       "not_meaning": "a refusal: a venue's fact is never refused for its state",
       "filled": "decided",
       "filled_by": "bor",
@@ -9256,7 +9300,7 @@
         {
           "version": "v23",
           "kind": "widened",
-          "what": "a charge on no placement is kept as UNPLACED_REASON_UNKNOWN_PLACEMENT, its meaning widened to or none (the order-path plan's v23 ruling 17); an execution on no placement whose account is mapped is an unmatched execution instead",
+          "what": "a charge on no placement is kept as UNPLACED_REASON_UNKNOWN_PLACEMENT, its meaning widened to or none (the order-path plan's v23 ruling 17); an execution on no placement whose account is mapped is an unmatched execution instead; and a value-date roll meeting no pending line is kept as UNPLACED_REASON_NOTHING_PENDING (the product owner, 2026-10-13)",
           "was": {
             "allowed": [
               {
@@ -9353,6 +9397,19 @@
       "filled": "as-reported",
       "filled_by": "connectivity",
       "since": "v22",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.UnplacedFact.value_date_roll",
+      "type": "message ReportValueDateRollRequest",
+      "empty": "unset unless fact_kind is value-date-roll",
+      "intent": "carries the value-date roll as it arrived (W11.25)",
+      "meaning": "the fact whole: a roll on a code no ems mapped, or one meeting no pending line to move; nothing places it later, the venue's next roll its own fact",
+      "not_meaning": "a roll the book applied, which is an entry of kind value-date-rolled",
+      "filled": "as-reported",
+      "filled_by": "connectivity",
+      "since": "v23",
       "stability": "preview",
       "store": "bor"
     },
@@ -12508,7 +12565,7 @@
       },
       "empty": "never empty",
       "intent": "names the currency pair whose spot position rolled",
-      "meaning": "its two cash instruments' `INS-` IDs, in either order, as the date read's spot inputs name a pair",
+      "meaning": "its two cash instruments' `INS-` IDs, in either order, as the date read's spot inputs name a pair; two of the same, or one whose record is not a cash instrument, is refused INVALID_ARGUMENT naming pair",
       "not_meaning": "ISO 4217 codes, or a pair record, which there is none of",
       "filled": "as-reported",
       "filled_by": "connectivity",

@@ -140,7 +140,11 @@ Each role's common part is `meridian.roles` (`data`, `custody`,
 templates. Settings may be one typed class (`@meridian.settings`, its fields
 `meridian.setting(...)`, `meridian.environment()` and
 `meridian.sample_data()`), and every page's loader holds the kit's macros,
-`meridian/kit.html`.
+`meridian/kit.html`. From contract v23 a plugin whose source states no
+currency declares `meridian.account_currency()`, a linked account's
+currency its admin sets with a plugin-wide default, and gives it with its
+provenance (`meridian.edge.supplied_currency`), reporting nothing that
+needs it until it is set.
 
 From contract v21 a plugin's autonomous work -- a scheduled sweep, a
 strategy, an agent inside the plugin -- calls the plugin's own acts as the
@@ -211,7 +215,7 @@ recorded time or after the watermark last seen).
 
 # Each role's common part (contract v20, spec/plugin-pages-follow-their-role).
 from . import roles  # noqa: E402  (after what it imports)
-from ._settings import environment, sample_data, setting, settings
+from ._settings import account_currency, environment, sample_data, setting, settings
 from .asgi import CallerMiddleware
 from .client import (
     _RETIRED_BY_026,
@@ -558,6 +562,7 @@ __all__ = [
     "BusinessDayInputs",
     "SettlementDateInputs",
     "SpotDateInputs",
+    "account_currency",
     "environment",
     "roles",
     "runs_as",

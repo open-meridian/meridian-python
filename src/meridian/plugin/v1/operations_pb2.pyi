@@ -540,6 +540,7 @@ class UnplacedReason(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     UNPLACED_REASON_UNSPECIFIED: _ClassVar[UnplacedReason]
     UNPLACED_REASON_UNKNOWN_PLACEMENT: _ClassVar[UnplacedReason]
     UNPLACED_REASON_UNMAPPED_VENUE_ACCOUNT: _ClassVar[UnplacedReason]
+    UNPLACED_REASON_NOTHING_PENDING: _ClassVar[UnplacedReason]
 
 class TradingInstructionValue(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
@@ -1075,6 +1076,7 @@ RESTATEMENT_REASON_OTHER: RestatementReason
 UNPLACED_REASON_UNSPECIFIED: UnplacedReason
 UNPLACED_REASON_UNKNOWN_PLACEMENT: UnplacedReason
 UNPLACED_REASON_UNMAPPED_VENUE_ACCOUNT: UnplacedReason
+UNPLACED_REASON_NOTHING_PENDING: UnplacedReason
 TRADING_INSTRUCTION_VALUE_UNSPECIFIED: TradingInstructionValue
 TRADING_INSTRUCTION_VALUE_ACTIVE: TradingInstructionValue
 TRADING_INSTRUCTION_VALUE_PAUSE: TradingInstructionValue
@@ -4884,7 +4886,7 @@ class Charge(_message.Message):
     def __init__(self, charge_id: _Optional[str] = ..., placement_id: _Optional[str] = ..., order_id: _Optional[str] = ..., account_id: _Optional[str] = ..., fee: _Optional[_Union[Fee, _Mapping]] = ..., trade_date: _Optional[str] = ..., settlement_date: _Optional[str] = ..., raw_record: _Optional[_Union[RawRecordRef, _Mapping]] = ...) -> None: ...
 
 class UnplacedFact(_message.Message):
-    __slots__ = ("unplaced_id", "account_id", "fact_kind", "reason", "raw_record", "venue_account_code", "execution", "placement", "charge", "locate", "placed_by", "last_change")
+    __slots__ = ("unplaced_id", "account_id", "fact_kind", "reason", "raw_record", "venue_account_code", "execution", "placement", "charge", "locate", "value_date_roll", "placed_by", "last_change")
     UNPLACED_ID_FIELD_NUMBER: _ClassVar[int]
     ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
     FACT_KIND_FIELD_NUMBER: _ClassVar[int]
@@ -4895,6 +4897,7 @@ class UnplacedFact(_message.Message):
     PLACEMENT_FIELD_NUMBER: _ClassVar[int]
     CHARGE_FIELD_NUMBER: _ClassVar[int]
     LOCATE_FIELD_NUMBER: _ClassVar[int]
+    VALUE_DATE_ROLL_FIELD_NUMBER: _ClassVar[int]
     PLACED_BY_FIELD_NUMBER: _ClassVar[int]
     LAST_CHANGE_FIELD_NUMBER: _ClassVar[int]
     unplaced_id: str
@@ -4907,9 +4910,10 @@ class UnplacedFact(_message.Message):
     placement: ReportPlacementRequest
     charge: ReportChargeRequest
     locate: RecordLocateRequest
+    value_date_roll: ReportValueDateRollRequest
     placed_by: JournalRef
     last_change: JournalRef
-    def __init__(self, unplaced_id: _Optional[str] = ..., account_id: _Optional[str] = ..., fact_kind: _Optional[str] = ..., reason: _Optional[_Union[UnplacedReason, str]] = ..., raw_record: _Optional[_Union[RawRecordRef, _Mapping]] = ..., venue_account_code: _Optional[str] = ..., execution: _Optional[_Union[ReportExecutionRequest, _Mapping]] = ..., placement: _Optional[_Union[ReportPlacementRequest, _Mapping]] = ..., charge: _Optional[_Union[ReportChargeRequest, _Mapping]] = ..., locate: _Optional[_Union[RecordLocateRequest, _Mapping]] = ..., placed_by: _Optional[_Union[JournalRef, _Mapping]] = ..., last_change: _Optional[_Union[JournalRef, _Mapping]] = ...) -> None: ...
+    def __init__(self, unplaced_id: _Optional[str] = ..., account_id: _Optional[str] = ..., fact_kind: _Optional[str] = ..., reason: _Optional[_Union[UnplacedReason, str]] = ..., raw_record: _Optional[_Union[RawRecordRef, _Mapping]] = ..., venue_account_code: _Optional[str] = ..., execution: _Optional[_Union[ReportExecutionRequest, _Mapping]] = ..., placement: _Optional[_Union[ReportPlacementRequest, _Mapping]] = ..., charge: _Optional[_Union[ReportChargeRequest, _Mapping]] = ..., locate: _Optional[_Union[RecordLocateRequest, _Mapping]] = ..., value_date_roll: _Optional[_Union[ReportValueDateRollRequest, _Mapping]] = ..., placed_by: _Optional[_Union[JournalRef, _Mapping]] = ..., last_change: _Optional[_Union[JournalRef, _Mapping]] = ...) -> None: ...
 
 class ReportExecutionRequest(_message.Message):
     __slots__ = ("placement_id", "order_id", "account_id", "venue_account_code", "venue_execution_id", "kind", "source", "quantity", "price", "trade_time_ns", "trade_date", "finality", "settlement_date", "computed_settlement_date", "settlement_date_basis", "fees", "supersedes", "venue_id", "uti", "prior_uti", "upi", "given_up_to", "trade_chain_reference", "settlement_counterparty", "raw_record", "idempotency_key", "effective_date", "counterparty", "liquidity_indicator", "uti_generated_by", "instrument_id", "side", "venue_order_id", "venue_client_order_id")
@@ -5058,6 +5062,30 @@ class LocateAnswer(_message.Message):
     expires_at_ns: int
     locate_id: str
     def __init__(self, quantity_approved: _Optional[_Union[Decimal, _Mapping]] = ..., rate: _Optional[_Union[Decimal, _Mapping]] = ..., expires_at_ns: _Optional[int] = ..., locate_id: _Optional[str] = ...) -> None: ...
+
+class ReportValueDateRollRequest(_message.Message):
+    __slots__ = ("account_id", "venue_account_code", "pair", "from_value_date", "to_value_date", "value_date_basis", "rolled_at_ns", "charge_ids", "raw_record", "idempotency_key")
+    ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
+    VENUE_ACCOUNT_CODE_FIELD_NUMBER: _ClassVar[int]
+    PAIR_FIELD_NUMBER: _ClassVar[int]
+    FROM_VALUE_DATE_FIELD_NUMBER: _ClassVar[int]
+    TO_VALUE_DATE_FIELD_NUMBER: _ClassVar[int]
+    VALUE_DATE_BASIS_FIELD_NUMBER: _ClassVar[int]
+    ROLLED_AT_NS_FIELD_NUMBER: _ClassVar[int]
+    CHARGE_IDS_FIELD_NUMBER: _ClassVar[int]
+    RAW_RECORD_FIELD_NUMBER: _ClassVar[int]
+    IDEMPOTENCY_KEY_FIELD_NUMBER: _ClassVar[int]
+    account_id: str
+    venue_account_code: str
+    pair: _containers.RepeatedScalarFieldContainer[str]
+    from_value_date: str
+    to_value_date: str
+    value_date_basis: DateBasis
+    rolled_at_ns: int
+    charge_ids: _containers.RepeatedScalarFieldContainer[str]
+    raw_record: RawRecordRef
+    idempotency_key: str
+    def __init__(self, account_id: _Optional[str] = ..., venue_account_code: _Optional[str] = ..., pair: _Optional[_Iterable[str]] = ..., from_value_date: _Optional[str] = ..., to_value_date: _Optional[str] = ..., value_date_basis: _Optional[_Union[DateBasis, _Mapping]] = ..., rolled_at_ns: _Optional[int] = ..., charge_ids: _Optional[_Iterable[str]] = ..., raw_record: _Optional[_Union[RawRecordRef, _Mapping]] = ..., idempotency_key: _Optional[str] = ...) -> None: ...
 
 class TradingInstruction(_message.Message):
     __slots__ = ("target", "value", "setter_level", "covers", "reason", "entry", "last_change")

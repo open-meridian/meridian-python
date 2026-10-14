@@ -183,6 +183,49 @@ def environment(
     )
 
 
+#: The account's currency's words, every plugin's (contract v23).
+ACCOUNT_CURRENCY_DESCRIPTION = (
+    "The currency of a linked account whose source states none, as an ISO 4217 code "
+    "(USD): a row naming no account is every linked account's, a row naming one is that "
+    "account's own. The plugin reports nothing it needs the currency for until it is set."
+)
+
+
+def account_currency(
+    *, description: str = ACCOUNT_CURRENCY_DESCRIPTION, roles: Sequence[str] = ()
+) -> Any:
+    """The linked account's currency, supplied by the plugin's admin
+    (contract v23, W3.1; its name approved 2026-10-13): `account_currency`, a
+    table labelled "Account currency", each row an `external_account` (one
+    this plugin reported, or none for the plugin-wide default) and its
+    `currency`, an ISO 4217 code. A plugin whose source states no currency
+    for an account's securities declares it and gives the currency with its
+    provenance, supplied by the person who set the row
+    (`meridian.edge.supplied_currency`), never a guess; until a row covers an
+    account it reports nothing that needs the currency."""
+    return Setting(
+        "account_currency",
+        list,
+        label="Account currency",
+        description=description,
+        columns=(
+            Column(
+                "external_account",
+                kind="external_account",
+                label="Account",
+                description="A linked account, or none for every linked account without a row",
+            ),
+            Column(
+                "currency",
+                label="Currency",
+                required=True,
+                description="An ISO 4217 code, such as USD",
+            ),
+        ),
+        roles=roles,
+    )
+
+
 class Typed:
     """The base a class decorated `@meridian.settings` is given: its
     declaration, each field's label, and the settings missing."""
@@ -246,8 +289,9 @@ def _kind(hint: Any, where: str) -> type:
 
 def settings(cls: type[_C]) -> type[_C]:
     """Make `cls` a plugin's typed settings: each annotated field declared
-    with `meridian.setting(...)`, `meridian.environment()` or
-    `meridian.sample_data()` is a setting named as the field. The class
+    with `meridian.setting(...)`, `meridian.environment()`,
+    `meridian.sample_data()` or `meridian.account_currency()` is a setting
+    named as the field. The class
     becomes a frozen dataclass of the values, with `declared()`,
     `label(name)` and `.missing`."""
     hints = typing.get_type_hints(cls)

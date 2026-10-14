@@ -97,7 +97,7 @@ import shutil
 import tempfile
 import time
 import urllib.parse
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any, Protocol
 
@@ -184,6 +184,26 @@ def supplied(field: str, person: str) -> Provenance:
         kind="PROVENANCE_KIND_SUPPLIED",
         person=_within(person, PROVENANCE_PERSON_LENGTH, "person"),
     )
+
+
+def supplied_currency(
+    rows: Sequence[Mapping[str, Any]], external_account_id: str, field: str
+) -> tuple[str, Provenance] | None:
+    """A linked account's currency from the `account_currency` setting's
+    rows (`meridian.account_currency()`, contract v23, W3.1): the account's
+    own row, else the plugin-wide one naming no account, as its ISO 4217 code
+    with its provenance, supplied by the person the conductor stamped on the
+    row (`changed_by`), for the value at `field`. None while no row covers
+    the account, or its code is not three letters: the plugin then reports
+    nothing that needs the currency, never a guess."""
+    own = [row for row in rows if (row.get("external_account") or "") == external_account_id]
+    every = [row for row in rows if not row.get("external_account")]
+    for row in (own or every)[:1]:
+        code = str(row.get("currency") or "").strip().upper()
+        person = str(row.get("changed_by") or "")
+        if len(code) == 3 and code.isalpha() and person:
+            return code, supplied(field, person)
+    return None
 
 
 def second_source(field: str, source: str, record: RawRecordRef | None = None) -> Provenance:

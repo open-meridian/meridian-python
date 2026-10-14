@@ -964,6 +964,37 @@ class ToyDataPlugin:
             )
 
 
+def outcome_producer(determination: str, *stages: str):  # type: ignore[no-untyped-def]
+    # Contract v23: the source's determination of an event contract,
+    # each stage a new version under the contract's one row key.
+    async def produce(recorder: Recorder) -> None:
+        for stage in stages or ("determined",):
+            await recorder.record_outcomes(
+                outcomes=[
+                    meridian.Outcome(
+                        meta=meridian.ObservationMeta(
+                            row_key="KXFEDDECISION-26OCT-H0:outcome",
+                            subjects=[ops.SubjectRef(entity_id="INS-KXFED-H0")],
+                            source=ops.Source(dataset=DAILY),
+                            valid_from_ns=DAY,
+                            raw=ops.RawRecordRef(instance_id=INSTANCE, key="market:1"),
+                        ),
+                        determination=determination,
+                        stage=stage,
+                        settlement_value=meridian.Money(
+                            Decimal("1.00" if determination == "pays" else "0.50"), "USD"
+                        ),
+                        determination_as_reported=ops.AsReported(
+                            scheme="venue",
+                            code="yes" if determination == "pays" else "scalar",
+                        ),
+                    )
+                ]
+            )
+
+    return produce
+
+
 def producers(**mutations: bool) -> dict[str, object]:
     def made(step: str):  # type: ignore[no-untyped-def]
         async def produce(recorder: Recorder) -> None:
@@ -1003,35 +1034,7 @@ def producers(**mutations: bool) -> dict[str, object]:
         recorder.answer("ObservationsWanted", lambda _: want)
         await recorder.receive(observations_wanted=toy.on_trades_wanted)
 
-    def outcome(determination: str, *stages: str):  # type: ignore[no-untyped-def]
-        # Contract v23: the source's determination of an event contract,
-        # each stage a new version under the contract's one row key.
-        async def produce(recorder: Recorder) -> None:
-            for stage in stages or ("determined",):
-                await recorder.record_outcomes(
-                    outcomes=[
-                        meridian.Outcome(
-                            meta=meridian.ObservationMeta(
-                                row_key="KXFEDDECISION-26OCT-H0:outcome",
-                                subjects=[ops.SubjectRef(entity_id="INS-KXFED-H0")],
-                                source=ops.Source(dataset=DAILY),
-                                valid_from_ns=DAY,
-                                raw=ops.RawRecordRef(instance_id=INSTANCE, key="market:1"),
-                            ),
-                            determination=determination,
-                            stage=stage,
-                            settlement_value=meridian.Money(
-                                Decimal("1.00" if determination == "pays" else "0.50"), "USD"
-                            ),
-                            determination_as_reported=ops.AsReported(
-                                scheme="venue",
-                                code="yes" if determination == "pays" else "scalar",
-                            ),
-                        )
-                    ]
-                )
-
-        return produce
+    outcome = outcome_producer
 
     disputed = outcome("pays", "determined", "disputed")
 
@@ -1100,9 +1103,44 @@ def test_the_data_suite_is_carried_with_its_twenty_nine_cases() -> None:
     assert "reads-its-datasets-licences" in names("data")
     # Contract v22: the settlement calendars' reads.
     assert {"reads-a-calendar", "asks-for-a-settlement-date"} <= set(names("data"))
-    # Contract v23: an event contract's outcome, each about outcomes.
+    # Contract v23: an event contract's outcome, about outcomes, and a
+    # disputed one about disputed outcomes (approved 2026-10-13).
     outcomes = [case for case in held.cases if case.name in V23_DATA_CASES]
-    assert {case.about for case in outcomes} == {"outcomes"} and len(outcomes) == 3
+    assert len(outcomes) == 3
+    assert held.case("records-an-outcome").about == "outcomes"
+    assert held.case("records-a-partial-payout").about == "outcomes"
+    assert held.case("restates-a-disputed-outcome").about == "disputed outcomes"
+
+
+async def test_an_outcome_is_recorded_at_its_determined_or_its_final_stage() -> None:
+    """records-an-outcome's expectation is any_of the determined stage and
+    the final one (approved 2026-10-13): a source stating only its final word
+    passes; a proposed one passes neither way."""
+    case = suite("data").case("records-an-outcome")
+    (expected,) = case.expect
+    assert expected.row == "RecordOutcomes" and expected.fields is None
+    assert len(expected.any_of) == 2
+    for stage in ("determined", "final"):
+        recorder = Recorder(INSTANCE)
+        await outcome_producer("pays", stage)(recorder)
+        assert check(case, recorder) is None, stage
+    recorder = Recorder(INSTANCE)
+    await outcome_producer("pays", "proposed")(recorder)
+    assert "matches none of its ways" in (check(case, recorder) or "")
+
+
+def test_a_source_with_no_disputes_marks_the_disputed_case_not_presented() -> None:
+    why = "this venue's determinations are final when made; it has no dispute process"
+    cases = producers()
+    del cases["restates-a-disputed-outcome"]
+    report = run(
+        "data",
+        cases,
+        instance_id="toy-1",
+        not_presented={"restates-a-disputed-outcome": why},
+    )
+    assert report.passed, report.failures
+    assert report.not_presented["restates-a-disputed-outcome"] == why
 
 
 V23_DATA_CASES = {
