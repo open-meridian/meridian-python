@@ -22,9 +22,11 @@
 # closes it.
 name: ci
 
+# On the pull request and by hand, and not again on main: a change lands
+# through a pull request that must be up to date with main and merges with a
+# merge commit, so the tree this run passed is the tree the merge puts on main
+# (the product owner, 2026-10-14).
 on:
-  push:
-    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -62,13 +64,11 @@ jobs:
         run: |
           case "${{ github.event_name }}" in
             pull_request) base="${{ github.event.pull_request.base.sha }}" ;;
-            push)         base="${{ github.event.before }}" ;;
             *)            base="" ;;
           esac
-          # A branch's first push reports an all-zero "before", and a manual run
-          # has no range at all. HEAD against itself inspects nothing, which is
-          # the right answer there: nothing arrived to inspect.
-          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
+          # A manual run has no range at all. HEAD against itself inspects
+          # nothing, which is the right answer there: nothing arrived to inspect.
+          if [ -z "$base" ]; then
             base="$(git rev-parse HEAD)"
           fi
           echo "CONTRACT_DIFF_BASE=$base" >> "$GITHUB_ENV"
