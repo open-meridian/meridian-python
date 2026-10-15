@@ -388,3 +388,31 @@ def test_the_templates_hook_runs_nothing_for_a_branch_push(tmp_path) -> None:
         check=False,
     )
     assert branch.returncode == 0 and "CI on its pull request is the gate" in branch.stdout
+
+
+# ── A dataset's calendar (contract v22's field, carried from 0.28.0) ─────────
+
+
+def test_a_dataset_names_its_calendar_on_the_wire_and_in_the_upload() -> None:
+    from meridian.declaration import Declaration
+
+    daily = meridian.DatasetDeclaration(
+        key="daily",
+        vendor="Tiingo",
+        data_types=["meridian.v1.Price"],
+        modes=["pull"],
+        day_time_zone="America/New_York",
+        day_end_minute=960,
+        calendar_id="CAL-01M4VF0F4XGP3RATCCSKDPZSBP",
+    )
+    assert daily._wire().calendar_id == "CAL-01M4VF0F4XGP3RATCCSKDPZSBP"
+    assert daily._to_json()["calendar_id"] == "CAL-01M4VF0F4XGP3RATCCSKDPZSBP"
+    assert Declaration(catalogue=[daily]) is not None
+    with pytest.raises(ValueError, match="no calendar's ID"):
+        meridian.DatasetDeclaration(
+            key="daily",
+            vendor="Tiingo",
+            data_types=["meridian.v1.Price"],
+            modes=["pull"],
+            calendar_id="XNYS",
+        )
