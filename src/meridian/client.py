@@ -109,10 +109,13 @@ if TYPE_CHECKING:
 #: its autonomous work names, and the connectivity plugins a caller may
 #: route through, and from v23 a fill on no placement, its accept and DK, the
 #: executions a connectivity plugin reported, and an event contract's
-#: outcomes recorded, heard and read -- and a newer sidecar still admits it.
-#: Raised with every contract revision that adds something a plugin can
-#: depend on.
-SCHEMA_VERSION = "v23"
+#: outcomes recorded, heard and read, and from v24 an execution booked to
+#: its accounts (bookings, the alert, the give-up and the sleeve cross), an
+#: instrument's replacement heard by every role and caught up by sequence,
+#: the template catalogue, a record's provisional mark and the escape
+#: hatch's setting -- and a newer sidecar still admits it. Raised with every
+#: contract revision that adds something a plugin can depend on.
+SCHEMA_VERSION = "v24"
 
 #: Where a sidecar listens. Loopback, always: a sidecar reachable from another
 #: host is a way around the boundary it exists to enforce.

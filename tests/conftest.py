@@ -249,6 +249,20 @@ class FakeOperations(operations_pb2_grpc.PluginOperationsServicer):
             await context.abort(script.breaks, "the stream broke")
         await asyncio.Event().wait()
 
+    # The instrument store's replacements (W3.22, contract v24), in sequence;
+    # ListReplacements answers at most `replacements_page` after the one asked.
+    replacements: list[operations_pb2.InstrumentReplacedEvent] = field(default_factory=list)
+    replacements_page: int = 2
+
+    async def ListReplacements(self, request, context):  # noqa: N802
+        self.reads.append(request)
+        after = [r for r in self.replacements if r.sequence > request.after_sequence]
+        page = after[: self.replacements_page]
+        return operations_pb2.ListReplacementsResult(
+            replacements=page,
+            sequence=page[-1].sequence if page else request.after_sequence,
+        )
+
     async def ListCustodialPositions(self, request, context):  # noqa: N802
         self.reads.append(request)
         return self.store.positions(request)  # type: ignore[union-attr]

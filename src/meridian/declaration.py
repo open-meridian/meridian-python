@@ -369,7 +369,11 @@ class DatasetDeclaration:
     minute after local midnight the day ends, which say which candle or
     session counts as the date and when it is final. `venue_id` is the venue
     the dataset is, the venue master's ID, empty for a dataset that is not
-    one venue's, which is the consolidated view."""
+    one venue's, which is the consolidated view. `calendar_id` is the
+    settlement calendar its business dates follow, its `CAL-` ID (W10.1,
+    contract v22; carried from SDK 0.28.0), empty for none: the lake flags a
+    daily value dated on a day it says is closed, and refuses nothing by
+    it."""
 
     key: str
     vendor: str
@@ -382,6 +386,7 @@ class DatasetDeclaration:
     day_time_zone: str = ""
     day_end_minute: int = 0
     venue_id: str = ""
+    calendar_id: str = ""
 
     def __post_init__(self) -> None:
         from .operations import _enum
@@ -452,6 +457,11 @@ class DatasetDeclaration:
                 f"{at}'s venue_id {self.venue_id!r} is no venue master ID (VEN-): a MIC or "
                 "a vendor's code is resolved to one first (resolve_venue)"
             )
+        if self.calendar_id and not self.calendar_id.startswith("CAL-"):
+            raise ValueError(
+                f"{at}'s calendar_id {self.calendar_id!r} is no calendar's ID (CAL-): the "
+                "deployment's Calendars name each (list_calendars, read_calendar)"
+            )
 
     def _wire(self) -> sidecar_pb2.DatasetDeclaration:
         return sidecar_pb2.DatasetDeclaration(
@@ -468,6 +478,7 @@ class DatasetDeclaration:
             day_time_zone=self.day_time_zone,
             day_end_minute=self.day_end_minute,
             venue_id=self.venue_id,
+            calendar_id=self.calendar_id,
         )
 
     def _to_json(self) -> dict[str, Any]:
@@ -491,6 +502,7 @@ class DatasetDeclaration:
             "day_time_zone": self.day_time_zone,
             "day_end_minute": self.day_end_minute,
             "venue_id": self.venue_id,
+            "calendar_id": self.calendar_id,
         }
 
 

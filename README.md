@@ -2,7 +2,7 @@
 
 The Python SDK for building [Open Meridian](https://open-meridian.com) plugins:
 the tools a trader has an AI agent build, and the bots and analytics a
-developer writes. Python 3.11 or newer. This is release 0.27.0; its reference
+developer writes. Python 3.11 or newer. This is release 0.28.0; its reference
 is at [open-meridian.dev](https://open-meridian.dev/api/python-sdk/).
 
 ## Start here
@@ -1522,6 +1522,81 @@ cases of `portfolio`, `ems`, `compliance`, `operations` and `reporting`) and
 every role's calendar reads; a field a case names `<same>` is one value on
 every message sent on its row, at least two sent.
 
+### Booking, and one ID for every instrument (contract v24)
+
+An execution is booked to its accounts. The `oms` books an explicit list of
+executions on one order, each account's part an `Allocation` tied out
+exactly in quantity, gross and each fee kind; hands the booking off to
+`operations`, or cancels or replaces it before then; and records a cross
+between two sleeves of one account:
+
+```python
+usd = lambda amount: Money(Decimal(amount), "USD")
+await plugin.book_order(
+    order_id=order_id, execution_ids=[execution_id],
+    allocations=[
+        meridian.Allocation(account_id="ACC-FUND-A", quantity=Decimal("60"),
+                            average_price=usd("227.50"), gross_amount=usd("13650.00"),
+                            net_amount=usd("13650.00"), intended_settlement_date="2026-10-16"),
+        meridian.Allocation(account_id="ACC-FUND-B", quantity=Decimal("40"),
+                            average_price=usd("227.50"), gross_amount=usd("9100.00"),
+                            net_amount=usd("9100.00"), intended_settlement_date="2026-10-16"),
+    ],
+)
+await plugin.hand_off_booking(booking_id=booking_id)
+await plugin.correct_booking(booking_id=booking_id, kind="cancel", reason="Wrong fund")
+```
+
+A block's allocations share one average price (`average_priced=True`); an
+overfill goes to the account the deployment admin marked its error account,
+with its reason and `ErrorCause`, and raises an alert. `operations` and
+`portfolio` amend an order's allocation instruction
+(`set_allocation_instruction`); `connectivity` and `confirmation` report a
+prime's answer to a give-up (`report_give_up`). The readers hear and read
+bookings (`receive(booking_updated=...)`, `list_bookings`) and alerts
+(`receive(alert_changed=...)`, `list_alerts`), and `compliance` raises its
+own and acknowledges one for a person (`raise_alert`, `acknowledge_alert`). A
+booking's states are a table beside the order's, in `meridian/transitions.json`.
+Cash follows option (c): the account's base currency is a balance, every
+other currency opens lots with base-currency cost, and every currency does
+until a base currency is set.
+
+Every instrument is named by the platform master's ID. A record the
+deployment keeps locally while the platform has none is provisional
+(`InstrumentRecord.provisional`, and a resolve's `provisional`), held to the
+template it names; read the mark, never an ID's prefix. When it resolves to
+the platform's `INS-` record, or two records merge, every role hears the
+replacement and catches up on what it missed by sequence. A plugin that keeps
+instrument IDs follows each to the record it became:
+
+```python
+ids = meridian.CurrentIdMap()
+await ids.catch_up(plugin)                                    # on start
+await plugin.receive(replace_merged_instrument=ids.heard, order_updated=on_order)
+if ids.same(held.instrument_id, order.instrument_id): ...      # never by the IDs' text
+```
+
+The templates the store holds are read with `meridian.TemplateCatalogue`
+(`list_templates`, `read_template`), and a `reference` plugin offers a
+record's template fields with their provenance (`offer_template_fields`), its
+suite in preview. Whether orders may name a provisional record is the
+deployment admin's setting, read with `read_local_record_orders`.
+
+Every role's suite holds `hears-and-reads-a-replacement` and
+`reads-the-template-catalogue`, which the SDK answers itself for a plugin
+that maps neither (`Report.answered_by_sdk`). The suites' resolves answer the
+platform's `INS-suite-n`; `run(..., provisional=True)` runs every case on
+the deployment's provisional records instead, which a plugin passes alike.
+
+A data plugin's dataset names the settlement calendar its business dates
+follow (`DatasetDeclaration(calendar_id="CAL-...")`), the field contract v22
+added and the SDK carries from 0.28.0, so the lake can flag a daily value
+dated on a closed day.
+
+`meridian.environment()` now defaults to `sandbox`: a plugin is Live only
+where a person chose Live, or where its own code says
+`meridian.environment(default="live")`.
+
 ## Moving a plugin to a new release
 
     meridian plugin migrate            # to the latest release
@@ -1587,6 +1662,7 @@ carries libcst.
 | 0.24.0 to 0.25.0: the SDK declares contract v21, a service account runs a plugin's autonomous work: an act called as the role's service account (`meridian.runs_as(role)`), answered made or prepared, a refusal naming its field (`NotGranted.fields`, `CallFailed.fields`); a caller who is a service account (`Caller.subject_kind`, `Caller.owner_subject`, `meridian.SubjectKind`), and a tool's call as one in a plugin's own test (`PageClient.call_tool(subject_kind=, owner_subject=)`) | only the pins move | |
 | 0.25.0 to 0.26.0: the SDK declares contract v22, the order path's slice A and settlement calendars: the order path's typed operations (`propose_order`, `release_order`, `record_check`, `decide_approval`, `set_working_condition`, `create_placement`, `request_order_change`, `request_placement_change`, `report_placement`, `report_execution`, `report_charge`, `record_order`, `acknowledge_flag`, `list_orders`, `read_order_history`, `list_trading_instructions`, the locate's and the venue catalogue's, `map_venue_account`) and deliveries (`receive(order_updated=, placement_updated=, execution_recorded=, unplaced_fact_recorded=, trading_instruction_changed=, locate_updated=, report_venue_catalogue=)`), the order path's refusal codes, the transition table (`meridian/transitions.json`); the calendars (`read_calendar`, `compute_date`); a version's algorithms (`Declaration(algorithms=)`, `AlgorithmDeclaration`, `runs_as(role, algorithm_id=)`, `Caller.algorithm_id`); the connectivity plugins a caller may route through (`Caller.connectivity_instance_ids`); a sleeve on positions, lots and movement lines; the suites' v22 cases | only the pins move | a suite test meeting the calendar reads every role now holds (`reads-a-calendar`, `asks-for-a-settlement-date`): map each |
 | 0.26.0 to 0.27.0: the SDK declares contract v23, venue-originated fills and the lake's outcomes: a connectivity plugin's fill on no placement (`report_execution`'s `instrument_id`, `side`, `venue_order_id`, `venue_client_order_id`), waiting unmatched (`Execution.state`, `ExecutionState`); the ems's accept and DK (`accept_execution`, `NewOrderFromExecutions`, `dont_know_execution`, `DkReason`) and their refusal codes; a connectivity plugin hearing the executions it reported (`receive(execution_recorded=)`); `VenueCatalogue.execution_acknowledgement`; `list_orders(execution_state=)`; an event contract's outcomes (`record_outcomes`, `Outcome`, `receive(outcomes_recorded=)`, `list_outcomes`); the closed-day flag (`ObservationMeta.closed_day`) and a dataset's closed-day counts; the suites' v23 cases | only the pins move | none |
+| 0.27.0 to 0.28.0: the SDK declares contract v24, an execution booked to its accounts and one ID for every instrument: booking (`book_order`, `Allocation`, `hand_off_booking`, `correct_booking`, `BookingCorrectionKind`, `list_bookings`, `receive(booking_updated=)`, `BookingState`, `ErrorCause`), the allocation instruction amended (`set_allocation_instruction`), the give-up (`report_give_up`, `GiveUpAnswer`), the sleeve cross (`record_sleeve_cross`, `SleeveCross`), the alert (`raise_alert`, `acknowledge_alert`, `list_alerts`, `receive(alert_changed=)`, `AlertKind`, `AlertState`); cash under option (c); a provisional record (`InstrumentRecord.provisional`, `ResolveIdentifierResult.provisional`, `template_id`, `template_version`), the replacement heard by every role and caught up by sequence (`receive(replace_merged_instrument=)`, `list_replacements`, `ReplacementCause`) and followed by `meridian.CurrentIdMap`; the template catalogue (`list_templates`, `read_template`, `meridian.TemplateCatalogue`); `offer_template_fields` and the `reference` suite, in preview; `read_local_record_orders`; every suite's two cases the SDK answers; the suites' resolves answering `INS-suite-n`, and `LCL-suite-n` on `Recorder(provisional=True)`; `DatasetDeclaration.calendar_id`; `meridian.environment()` defaulting to `sandbox` | a record's `instrument_id.startswith("LCL-")` into its `provisional`; the platform's ID read from the `open_meridian` identifier into the record's `instrument_id` (the read's default where the record is provisional); a test's `LCL-suite-n` into `INS-suite-n` | an ID tested for the prefix `LCL-` with no record at hand: read the record's `provisional`; `open_meridian` read or written any other way; a plugin whose environment was Live by default: say `environment(default="live")` only where Live is meant, otherwise its admin chooses |
 
 `tests/migrations/` holds the plugins the migrations are recorded for, as
 written and as their migration leaves them, and `make check-migrations` holds

@@ -88,6 +88,17 @@ LIST_TRADING_INSTRUCTIONS_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, cap
 LIST_LOCATES_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=True)
 """meridian.v1.ListLocatesRequest.page_size: bounds a page"""
 
+BOOK_ORDER_REQUEST_EXECUTION_IDS_COUNT = Count(least=1, most=500)
+"""meridian.v1.BookOrderRequest.execution_ids: names the executions to book
+(W11.27)"""
+
+LIST_BOOKINGS_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=True)
+"""meridian.v1.ListBookingsRequest.page_size: bounds a page (approved
+2026-10-14)"""
+
+LIST_ALERTS_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=True)
+"""meridian.v1.ListAlertsRequest.page_size: bounds a page (approved 2026-10-14)"""
+
 ACCOUNT_RECORD_CUSTODIAN_LENGTH = Length(least=0, most=200)
 """meridian.v1.AccountRecord.custodian: says where the account is held, for a
 person to find it by"""

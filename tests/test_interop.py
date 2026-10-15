@@ -113,20 +113,41 @@ async def test_a_set_nothing_matches_is_answered_with_a_minted_record(plugin) ->
     deployment's own record for the set (W3.7, contract v10: its LCL- ID is its
     key for life, not a placeholder), saying so; asked again, the same record
     matches and nothing is minted. What the source states is offered, never in
-    force, so a resolve stating it is answered the same way.
+    force, so a resolve stating it is answered the same way. From contract v24
+    the record is provisional, the platform not reached within the bounded
+    ask (there is none here), and says so (W3.1, W3.7). The source states
+    the minimum a record needs -- an identifier, a description and a
+    currency -- as a v24 source must; a thinner one is answered not found
+    (below).
     """
     asked = {
         "identifiers": [meridian.Identifier(scheme="isin", value="US0000000000")],
         "as_of_ns": NOW,
         "stated_asset_class": "equity",
         "stated_currency": "USD",
+        "stated_description": "Synthetic Interop Corp. common stock",
     }
     reply = await plugin.resolve_identifier(**asked)
     assert reply.found
-    assert reply.instrument_id.startswith("LCL-")
+    assert reply.provisional and reply.instrument_id.startswith("LCL-")
     again = await plugin.resolve_identifier(**asked)
     assert again.instrument_id == reply.instrument_id
     assert not again.minted
+
+
+async def test_a_source_thinner_than_the_minimum_is_answered_not_found(plugin) -> None:
+    """Contract v24 (W3.7; the one-ID model's rule 3): a record needs an
+    identifier, a description and a currency as the source stated them. A
+    resolve naming a symbol alone, or a description with no currency, is
+    answered not found and mints nothing, asked again or not: the custody
+    plugin records the row unresolved (W2.4), and operations reconciles it
+    as an unrecognized security (W9.3)."""
+    symbol = meridian.Identifier(scheme="symbol", value="ZZTHIN1", source="interop")
+    for stated in ({}, {"stated_description": "ZZ Thin One"}):
+        reply = await plugin.resolve_identifier(identifiers=[symbol], as_of_ns=NOW, **stated)
+        assert not reply.found, stated
+        assert not reply.minted and not reply.instrument_id, stated
+        assert reply.miss_reason == operations_pb2.MISS_REASON_NOT_FOUND, stated
 
 
 async def test_there_is_no_path_onto_the_bus_but_a_typed_operation(plugin) -> None:

@@ -24,6 +24,12 @@ placement or on no placement, its accept, its DK, its correction and its
 bust. They are read apart from the order's, so an order's state never meets
 an execution's row.
 
+From contract v24 it holds a booking's rows too, keyed `b1` onward, their
+states BookingState names (`booking_states`): booked, held, handed off,
+corrected and cancelled (decisions/035 as amended for a booking's states).
+They are read apart from the order's and the execution's
+(`booking_table`).
+
 Internal: `table()` reads the order's rows, `execution_table()` the
 execution's, and `caused_from(state, role)` picks the order's rows a role may
 cause from a state. Neither is a public name of the SDK;
@@ -42,8 +48,10 @@ from importlib import resources
 #: The words the table uses beside OrderState names.
 NONE, ANY, UNCHANGED = "none", "any", "unchanged"
 
-#: An execution's rows are keyed e1 onward (contract v23).
+#: An execution's rows are keyed e1 onward (contract v23), a booking's b1
+#: onward (contract v24).
 _EXECUTION_ROW = re.compile(r"^e\d+$")
+_BOOKING_ROW = re.compile(r"^b\d+$")
 
 
 @dataclass(frozen=True)
@@ -76,7 +84,21 @@ def execution_states() -> tuple[str, ...]:
     return tuple(str(state) for state in held)  # type: ignore[attr-defined]
 
 
-def _rows(executions: bool) -> tuple[Transition, ...]:
+def booking_states() -> tuple[str, ...]:
+    """Every BookingState the table names, in its order (contract v24)."""
+    held = _published().get("booking_states", [])
+    return tuple(str(state) for state in held)  # type: ignore[attr-defined]
+
+
+def _kind(row: str) -> str:
+    if _EXECUTION_ROW.match(row):
+        return "execution"
+    if _BOOKING_ROW.match(row):
+        return "booking"
+    return "order"
+
+
+def _rows(kind: str) -> tuple[Transition, ...]:
     rows = _published()["transitions"]
     return tuple(
         Transition(
@@ -88,18 +110,23 @@ def _rows(executions: bool) -> tuple[Transition, ...]:
             refusal=tuple(held["refusal"]),
         )
         for held in rows  # type: ignore[attr-defined]
-        if bool(_EXECUTION_ROW.match(str(held["row"]))) == executions
+        if _kind(str(held["row"])) == kind
     )
 
 
 def table() -> tuple[Transition, ...]:
     """Every row of the order's table, in its order."""
-    return _rows(executions=False)
+    return _rows("order")
 
 
 def execution_table() -> tuple[Transition, ...]:
     """Every row of an execution's table, in its order (contract v23)."""
-    return _rows(executions=True)
+    return _rows("execution")
+
+
+def booking_table() -> tuple[Transition, ...]:
+    """Every row of a booking's table, in its order (contract v24)."""
+    return _rows("booking")
 
 
 def caused_from(state: str, role: str) -> tuple[Transition, ...]:

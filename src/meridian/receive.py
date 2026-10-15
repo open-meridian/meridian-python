@@ -53,6 +53,18 @@ dataset none of whose trades the plugin has had yet has no watermark to
 read after, and nothing is read of it; on its start nothing is read, since
 there is no latest trade to seed with: a plugin wanting the day's trades
 reads them by range (`list_trades`).
+
+From contract v24 an instrument replaced (`SEQUENCED`, W3.8) is reference
+data heard by every role whatever its scope: no account and no journal, each
+event numbered by the instrument store (`InstrumentReplacedEvent.sequence`,
+monotonic per deployment). What the plugin has had is the last sequence
+handed on. On its start every replacement is read (`list_replacements`, after
+sequence 0, page by page until a read answers none), handed on marked
+`caught_up` when seeding; after a `Lost` naming the row, and after a broken
+stream, those after the last sequence handed on, in sequence, before anything
+heard after; and one heard at or below it is not handed on again. As GLEIF's
+Golden Copy delta files are read after the last delta applied, and FIX's
+resend request asks again from BeginSeqNo (7) (W4.3, W3.22).
 """
 
 from __future__ import annotations
@@ -70,7 +82,15 @@ from meridian.plugin.v1 import operations_pb2 as ops
 
 from . import bounds
 from .errors import CallFailed, MeridianError, NotGranted
-from .operations import CONFLATED, DELIVERED, UNCONFLATED, ConflatedRow, DeliveredRow
+from .operations import (
+    CONFLATED,
+    DELIVERED,
+    SEQUENCED,
+    UNCONFLATED,
+    ConflatedRow,
+    DeliveredRow,
+    SequencedRow,
+)
 
 if TYPE_CHECKING:
     from .client import Plugin
@@ -666,6 +686,85 @@ class _InFull(_Latest):
                 await self.hand(row, message, caught_up=True)
 
 
+class _Sequenced:
+    """The rows heard as reference data caught up by sequence (contract v24:
+    an instrument replaced), and the last sequence handed on of each."""
+
+    def __init__(
+        self, plugin: Plugin, rows: list[SequencedRow], handlers: Mapping[str, Handler]
+    ) -> None:
+        self.plugin = plugin
+        self.rows = rows
+        self.handlers = handlers
+        self.by_arm = {row.arm: row for row in rows}
+        self.seen: dict[str, int] = {row.name: 0 for row in rows}
+
+    async def _give(
+        self, row: SequencedRow, message: Any, *, caught_up: bool, meta: Any = None
+    ) -> None:
+        given = type(message)()
+        given.CopyFrom(message)
+        await self.handlers[row.name](
+            Heard(
+                row=row.name,
+                message=given,
+                caught_up=caught_up,
+                own=bool(meta.own) if meta is not None else False,
+                message_id=meta.message_id if meta is not None else "",
+                correlation_id=meta.correlation_id if meta is not None else "",
+                causation_id=meta.causation_id if meta is not None else "",
+                published_at_ns=meta.published_at_ns if meta is not None else 0,
+            )
+        )
+
+    async def hand(
+        self, row: SequencedRow, message: Any, *, caught_up: bool, meta: Any = None
+    ) -> None:
+        """One handed on, unless one at or after its sequence was: a
+        replacement read after a loss may be delivered too. One recorded
+        before v24 carries no sequence, and is handed on as heard."""
+        sequence = int(message.sequence)
+        if sequence:
+            if sequence <= self.seen[row.name]:
+                return
+            self.seen[row.name] = sequence
+        await self._give(row, message, caught_up=caught_up, meta=meta)
+
+    async def delivered(self, delivery: ops.Delivery) -> None:
+        which = delivery.WhichOneof("item")
+        row = self.by_arm.get(which or "")
+        if row is not None:
+            await self.hand(
+                row, getattr(delivery, row.arm), caught_up=False, meta=delivery.meta
+            )
+
+    async def read(self, names: set[str] | None = None, *, handing: bool = True) -> None:
+        """Each row's records after the last sequence handed on, in sequence,
+        read until a read answers none: the plugin's start (after 0), a
+        loss, a broken stream. Not handing (a start without seeding), the
+        sequence is moved to where the store is, nothing handed on."""
+        for row in self.rows:
+            if names is not None and row.name not in names:
+                continue
+            method = getattr(self.plugin, row.caught_up_by)
+            after = self.seen[row.name]
+            while True:
+                page = await method(after_sequence=after)
+                records = sorted(getattr(page, row.records), key=lambda held: held.sequence)
+                for record in records:
+                    message = row.message()
+                    message.CopyFrom(record)
+                    if handing:
+                        await self.hand(row, message, caught_up=True)
+                    else:
+                        self.seen[row.name] = max(self.seen[row.name], int(record.sequence))
+                if not records or int(page.sequence) <= after:
+                    break
+                after = int(page.sequence)
+                if not handing:
+                    self.seen[row.name] = max(self.seen[row.name], after)
+
+
 async def follow(
     plugin: Plugin,
     handlers: Mapping[str, Handler | None],
@@ -678,7 +777,8 @@ async def follow(
     rows = [row for row in DELIVERED if row.name in given]
     latest_rows = [row for row in CONFLATED if row.name in given]
     full_rows = [row for row in UNCONFLATED if row.name in given]
-    if not rows and not latest_rows and not full_rows:
+    sequenced_rows = [row for row in SEQUENCED if row.name in given]
+    if not rows and not latest_rows and not full_rows and not sequenced_rows:
         raise ValueError("receive() names no row to hear: give a handler for at least one")
     if isinstance(subjects, str):
         raise TypeError("subjects is a sequence of entity IDs, not one string")
@@ -689,6 +789,7 @@ async def follow(
     follower = _Follower(plugin, rows, given)
     latest = _Latest(plugin, latest_rows, given, wanted)
     full = _InFull(plugin, full_rows, given, wanted)
+    sequenced = _Sequenced(plugin, sequenced_rows, given)
     # One listing of the datasets, shared: each is learned once.
     full.datasets, full.asked = latest.datasets, latest.asked
     watching = asyncio.create_task(_watch_scope(plugin, follower)) if rows else None
@@ -702,6 +803,7 @@ async def follow(
                         *(row.name for row in rows),
                         *(row.name for row in latest_rows),
                         *(row.name for row in full_rows),
+                        *(row.name for row in sequenced_rows),
                     ],
                     subjects=list(wanted),
                 )
@@ -723,11 +825,13 @@ async def follow(
                         await follower.seed(handing=seed)
                         if seed:
                             await latest.read()
+                        await sequenced.read(handing=seed)
                         started = True
                     else:
                         await follower.catch_up_all()
                         await latest.read()
                         await full.read()
+                        await sequenced.read()
                 wait = RETRY_SECONDS
                 async for delivery in call:
                     async with follower.lock:
@@ -738,11 +842,15 @@ async def follow(
                         if which in full.by_arm:
                             await full.delivered(delivery)
                             continue
+                        if which in sequenced.by_arm:
+                            await sequenced.delivered(delivery)
+                            continue
                         await follower.delivered(delivery)
                         if which == "lost":
                             named = set(delivery.lost.rows)
                             await latest.read(named or None)
                             await full.read(named or None)
+                            await sequenced.read(named or None)
                 _log.warning("the delivery stream ended; opening it again")
             except grpc.aio.AioRpcError as failed:
                 if failed.code() is grpc.StatusCode.PERMISSION_DENIED:

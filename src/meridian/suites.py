@@ -106,6 +106,21 @@ needs, named in full, and passes on any one:
     async def fills_with_its_settlement_date(recorder):
         await recorder.compute_date(spot=SpotDateInputs(pair=[EUR, USD], at_ns=fill_ns))
         ...
+
+From contract v24 the suites hold booking (the `oms`'s bookings, block,
+error account, corrections and sleeve cross; `operations`' allocation
+instruction, hand-off, correction and unsettled allocation; the alert for
+`compliance`, the `oms`, `operations` and `reporting`; the give-up for
+`connectivity` and `confirmation`), the escape hatch's setting read by each
+role that proposes, places or checks an order, a custodian's thinly
+described holding left unresolved, and the `reference` suite, in preview.
+Every role's suite holds two cases the SDK answers itself, since what they
+ask is the SDK's work rather than the plugin's: `hears-and-reads-a-replacement`
+(a replacement heard and caught up, followed through the SDK's
+`CurrentIdMap`) and `reads-the-template-catalogue` (the templates listed and
+one read, through its `TemplateCatalogue`). A plugin mapping neither passes
+both, each named in `Report.answered_by_sdk`; one with its own way of doing
+either maps the case to its own producer, which is run instead.
 """
 
 from __future__ import annotations
@@ -120,7 +135,7 @@ from typing import Any, cast
 
 from google.protobuf.message import Message
 
-from .operations import CONFLATED, DELIVERED, UNCONFLATED, Operations, as_decimal
+from .operations import CONFLATED, DELIVERED, SEQUENCED, UNCONFLATED, Operations, as_decimal
 from .plugin.v1 import operations_pb2 as ops
 
 #: The rows a plugin hears rather than sends, by name.
@@ -129,6 +144,7 @@ HEARD = frozenset(
         *(row.name for row in DELIVERED),
         *(row.name for row in CONFLATED),
         *(row.name for row in UNCONFLATED),
+        *(row.name for row in SEQUENCED),
     }
 )
 
@@ -239,7 +255,10 @@ class Recorder(Operations):
 
     Each call is kept as a `Sent` and answered as a sidecar would answer it
     in the ordinary case: a statement opened, a row recorded and resolved, an
-    identifier resolved to a record this recorder names, a link made, no
+    identifier resolved to a record this recorder names (from contract v24
+    the platform's `INS-suite-n`, or with `provisional=True` the deployment's
+    provisional `LCL-suite-n`, minted only where the resolve states the
+    minimum a record needs and otherwise not found), a link made, no
     accounts to link to; from contract v18 a batch of prices or bars (from v19
     of trades or quotes) recorded whole, a venue resolved to a record this
     recorder names, a want declined, a read answering nothing. `raw_record`
@@ -247,8 +266,12 @@ class Recorder(Operations):
     row otherwise, and to give a row the plugin hears what is delivered on
     it."""
 
-    def __init__(self, instance_id: str = "suite-plugin") -> None:
+    def __init__(self, instance_id: str = "suite-plugin", *, provisional: bool = False) -> None:
         self.instance_id = instance_id
+        #: Whether an ordinary resolve answers the deployment's provisional
+        #: record (contract v24): `LCL-suite-n`, minted and provisional,
+        #: rather than the platform's `INS-suite-n`.
+        self.provisional = provisional
         self.sent: list[Sent] = []
         self.seen: dict[tuple[str, str], int] = {}
         self._answers: dict[str, Callable[[Message], Message | Sequence[Message]]] = {}
@@ -285,7 +308,7 @@ class Recorder(Operations):
         self.sent.append(Sent(row, params))
         if row in self._answers:
             return self._answers[row](params)
-        return _ordinary(row, params, len(self.sent))
+        return _ordinary(row, params, len(self.sent), provisional=self.provisional)
 
     async def _receive(
         self,
@@ -315,7 +338,23 @@ class Recorder(Operations):
         return [sent.params for sent in self.sent if sent.row == row]
 
 
-def _ordinary(row: str, params: Any, n: int) -> Message:
+def meets_minimum(params: Any) -> bool:
+    """Whether a resolve states the minimum a record needs (contract v24,
+    W3.7; the one-ID model's rule 3): an identifier, a description and a
+    currency as the source stated them -- a currency's own code states both,
+    and a crypto asset, its own unit, needs no currency. A resolve below it
+    is answered not found, and the deployment mints nothing."""
+    named = [each for each in params.identifiers if each.value.strip()]
+    if not named:
+        return False
+    if any(each.scheme == "iso4217" for each in named):
+        return True
+    crypto = params.stated_asset_class == ops.ASSET_CLASS_CRYPTO_ASSET
+    currency = bool(params.stated_currency.strip() or params.currency.strip())
+    return bool(params.stated_description.strip()) and (crypto or currency)
+
+
+def _ordinary(row: str, params: Any, n: int, *, provisional: bool = False) -> Message:
     if row == "RecordHoldingsStatement":
         return ops.RecordHoldingsStatementResult(statement_id=f"STMT-suite-{n}")
     if row == "RecordHolding":
@@ -323,9 +362,19 @@ def _ordinary(row: str, params: Any, n: int) -> Message:
             holding_id=f"HLD-suite-{n}", resolved=bool(params.instrument_id)
         )
     if row == "ResolveIdentifier":
-        return ops.ResolveIdentifierResult(
-            found=True, instrument_id=f"LCL-suite-{n}", minted=True
-        )
+        # From 0.28.0 (contract v24) the platform's record, keyed by its INS-
+        # ID; the deployment's provisional record where the recorder says.
+        if provisional:
+            # Minted only where the source states the minimum a record needs
+            # (contract v24, W3.7): below it, not found, nothing minted.
+            if not meets_minimum(params):
+                return ops.ResolveIdentifierResult(
+                    found=False, miss_reason=ops.MISS_REASON_NOT_FOUND
+                )
+            return ops.ResolveIdentifierResult(
+                found=True, instrument_id=f"LCL-suite-{n}", minted=True, provisional=True
+            )
+        return ops.ResolveIdentifierResult(found=True, instrument_id=f"INS-suite-{n}")
     if row == "ReadAccountsForLinking":
         return ops.ReadAccountsForLinkingResult()
     if row == "LinkExternalAccount":
@@ -444,6 +493,9 @@ class Report:
     failures: dict[str, str] = field(default_factory=dict)
     not_presented: dict[str, str] = field(default_factory=dict)
     passed_cases: list[str] = field(default_factory=list)
+    #: The cases the plugin did not map that the SDK answered itself
+    #: (contract v24), each passed through the SDK's own helper.
+    answered_by_sdk: list[str] = field(default_factory=list)
 
     @property
     def passed(self) -> bool:
@@ -451,6 +503,84 @@ class Report:
 
 
 Producer = Callable[[Recorder], Awaitable[None]]
+
+
+# ── The cases the SDK answers itself (contract v24) ─────────────────────────
+
+#: What the runner's own replacement says: a provisional record resolved to
+#: the platform's, heard, then merged on the platform, read after a loss.
+_PROVISIONAL = "LCL-01JSUITE0000000000000000001"
+_RESOLVED = "INS-01JSUITE0000000000000000001"
+_MERGED_INTO = "INS-01JSUITE0000000000000000002"
+_TEMPLATE = "TPL-01JSUITE0000000000000000001"
+
+
+async def follows_a_replacement(recorder: Recorder) -> None:
+    """`hears-and-reads-a-replacement`, as the SDK does it for every plugin:
+    a provisional record's resolution heard, and the platform's later merge
+    read after a loss (`list_replacements` after the sequence heard), both
+    followed by a `CurrentIdMap` to the record the ID names now."""
+    from .replacements import CurrentIdMap
+
+    resolved = ops.InstrumentReplacedEvent(
+        replaced_instrument_id=_PROVISIONAL,
+        instrument=ops.InstrumentRecord(instrument_id=_RESOLVED),
+        cause=ops.REPLACEMENT_CAUSE_RESOLVED,
+        sequence=1,
+    )
+    merged = ops.InstrumentReplacedEvent(
+        replaced_instrument_id=_RESOLVED,
+        instrument=ops.InstrumentRecord(instrument_id=_MERGED_INTO),
+        cause=ops.REPLACEMENT_CAUSE_PLATFORM_MERGED,
+        sequence=2,
+    )
+
+    def replacements(params: Message) -> Message:
+        after = cast(ops.ListReplacementsParams, params).after_sequence
+        if after < merged.sequence:
+            return ops.ListReplacementsResult(replacements=[merged], sequence=merged.sequence)
+        return ops.ListReplacementsResult(sequence=after)
+
+    recorder.answer("ReplaceMergedInstrument", lambda _: resolved)
+    recorder.answer("ListReplacements", replacements)
+    ids = CurrentIdMap()
+    await recorder.receive(replace_merged_instrument=ids.heard)
+    await ids.catch_up(recorder)
+    if ids.current(_PROVISIONAL) != _MERGED_INTO:
+        raise AssertionError(
+            f"the current-ID map follows {_PROVISIONAL} to {ids.current(_PROVISIONAL)}, "
+            f"not {_MERGED_INTO}"
+        )
+
+
+async def reads_the_template_catalogue(recorder: Recorder) -> None:
+    """`reads-the-template-catalogue`, as the SDK does it for every plugin:
+    the templates listed, and the one a record names read at its version,
+    through a `TemplateCatalogue`."""
+    from .replacements import TemplateCatalogue
+
+    listed = ops.SecurityTemplate(
+        template_id=_TEMPLATE,
+        template_version="1",
+        name="Common stock",
+        asset_class=ops.ASSET_CLASS_EQUITY,
+        fields=[ops.TemplateField(path="share_class_figi", type="string", required=True)],
+        match_rule=["share_class_figi"],
+    )
+    recorder.answer("ListTemplates", lambda _: ops.ListTemplatesResult(templates=[listed]))
+    recorder.answer("ReadTemplate", lambda _: ops.ReadTemplateResult(template=listed))
+    catalogue = TemplateCatalogue()
+    held = await catalogue.load(recorder)
+    for template in held[:1]:
+        await catalogue.template(recorder, template.template_id, template.template_version)
+
+
+#: The cases every role's suite holds that the SDK answers for a plugin that
+#: maps neither (contract v24).
+ANSWERED_BY_SDK: Mapping[str, Producer] = {
+    "hears-and-reads-a-replacement": follows_a_replacement,
+    "reads-the-template-catalogue": reads_the_template_catalogue,
+}
 
 
 def _one_value(row: str, on_row: Sequence[Message], wanted: Mapping[str, Any]) -> str | None:
@@ -519,10 +649,17 @@ def run(
     *,
     not_presented: Mapping[str, str] | None = None,
     instance_id: str = "suite-plugin",
+    provisional: bool = False,
 ) -> Report:
     """`run_async`, from a plain test: not from inside a running event loop."""
     return asyncio.run(
-        run_async(role, producers, not_presented=not_presented, instance_id=instance_id)
+        run_async(
+            role,
+            producers,
+            not_presented=not_presented,
+            instance_id=instance_id,
+            provisional=provisional,
+        )
     )
 
 
@@ -532,6 +669,7 @@ async def run_async(
     *,
     not_presented: Mapping[str, str] | None = None,
     instance_id: str = "suite-plugin",
+    provisional: bool = False,
 ) -> Report:
     """Run every case of `role`'s suite against the plugin's producers.
 
@@ -543,7 +681,14 @@ async def run_async(
     declares it never publishes, or from v22 a kind of work its work never
     uses (calendars, settlement dates, locates, compliance waits), or from
     v20 one about a
-    field (`about_field`) its source never states."""
+    field (`about_field`) its source never states.
+
+    From contract v24 `provisional` runs every case with an ordinary resolve
+    answering the deployment's provisional record (`LCL-suite-n`) rather than
+    the platform's (`INS-suite-n`): the provisional cases beside the suite's,
+    which a plugin's conversion passes alike. A case the plugin does not map
+    that the SDK answers itself (`ANSWERED_BY_SDK`) is answered so, and named
+    in `Report.answered_by_sdk`."""
     held = suite(role)
     report = Report(role)
     skipped = dict(not_presented or {})
@@ -564,10 +709,13 @@ async def run_async(
                 report.not_presented[case.name] = skipped[case.name]
             continue
         producer = producers.get(case.name)
+        by_sdk = producer is None and case.name in ANSWERED_BY_SDK
+        if by_sdk:
+            producer = ANSWERED_BY_SDK[case.name]
         if producer is None:
             report.failures[case.name] = "no producer: the plugin does not map this case"
             continue
-        recorder = Recorder(instance_id)
+        recorder = Recorder(instance_id, provisional=provisional)
         try:
             await producer(recorder)
         except Exception as failed:  # noqa: BLE001 - a case's failure, reported
@@ -576,6 +724,8 @@ async def run_async(
         why = check(case, recorder)
         if why is None:
             report.passed_cases.append(case.name)
+            if by_sdk:
+                report.answered_by_sdk.append(case.name)
         else:
             report.failures[case.name] = why
     return report

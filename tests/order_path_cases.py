@@ -5,7 +5,14 @@ calendars' reads every role holds; and contract v23's: venue-originated
 fills (`connectivity`, `ems`, `operations`, `compliance`) and an event
 contract's outcomes heard and read (`reporting`, `portfolio`, `compliance`,
 `signal`, `operations`), and the OANDA batch's value-date roll
-(`connectivity`).
+(`connectivity`); and contract v24's: booking (the `oms`'s bookings, block,
+error account, corrections, sleeve cross and held-bookings alert;
+`operations`' allocation instruction, hand-off, correction and unsettled
+allocation; `portfolio`'s instruction amended; `compliance`'s alerts and an
+order on a local record; the give-up; bookings and alerts heard by their
+readers), the escape hatch's setting read, a custodian's thinly described
+holding left unresolved, the `reference` suite, and the two every-role cases
+the SDK answers itself.
 
 Each producer is what a plugin holding the role does, through the SDK's
 typed operations, for what the case's source presents: it runs against the
@@ -22,8 +29,9 @@ from decimal import Decimal
 
 import meridian
 from meridian.plugin.v1 import operations_pb2 as ops
-from meridian.suites import Recorder
+from meridian.suites import ANSWERED_BY_SDK, Recorder
 from meridian.testing import caller_header
+from meridian.v1 import sidecar_pb2
 
 Producer = Callable[[Recorder], Awaitable[None]]
 
@@ -714,6 +722,400 @@ async def hears_and_reads_an_outcome(recorder: Recorder) -> None:
     await recorder.list_outcomes(subjects=[ops.SubjectRef(entity_id=EVENT_CONTRACT)])
 
 
+# ── Contract v24: booking, the escape hatch, one ID ─────────────────────────
+
+FUND_A = "ACC-FUND-A"
+FUND_B = "ACC-FUND-B"
+ERRORS = "ACC-ERRORS"
+BLOCK = "ACC-BLOCK"
+BOOKING = "BKG-01JB10000000000000000001"
+ALERT = "ALR-01JB10000000000000000001"
+LOCAL = "LCL-01JB1000000000000000LOCAL"
+EXECUTION_2 = "EXE-01JAF0R5N8M00000000000012"
+
+
+def allocation(account: str, quantity: str, price: str = "227.50", **extra: object) -> object:
+    """One account's part, tied out at the booking's average price."""
+    amount = (Decimal(quantity) * Decimal(price)).quantize(Decimal("0.01"))
+    return meridian.Allocation(
+        account_id=account,
+        quantity=Decimal(quantity),
+        average_price=usd(price),
+        gross_amount=meridian.Money(amount, "USD"),
+        net_amount=meridian.Money(amount, "USD"),
+        intended_settlement_date=date(2026, 10, 16),
+        **extra,  # type: ignore[arg-type]
+    )
+
+
+BOOKED = ops.Booking(
+    booking_id=BOOKING,
+    order_id=ORDER,
+    account_id=BLOCK,
+    execution_ids=[EXECUTION],
+    state=ops.BOOKING_STATE_BOOKED,
+)
+BOOKING_UPDATED = ("BookingUpdated", "booking_updated", ops.BookingUpdatedEvent(booking=BOOKED))
+HANDED_OFF = (
+    "BookingUpdated",
+    "booking_updated",
+    ops.BookingUpdatedEvent(
+        booking=ops.Booking(
+            booking_id=BOOKING,
+            order_id=ORDER,
+            account_id=BLOCK,
+            state=ops.BOOKING_STATE_HANDED_OFF,
+        )
+    ),
+)
+HELD = (
+    "BookingUpdated",
+    "booking_updated",
+    ops.BookingUpdatedEvent(
+        booking=ops.Booking(
+            booking_id=BOOKING,
+            order_id=ORDER,
+            account_id=BLOCK,
+            state=ops.BOOKING_STATE_HELD,
+            held_reason="an execution it books was busted",
+        )
+    ),
+)
+ERROR_ALERT = (
+    "AlertChanged",
+    "alert_changed",
+    ops.AlertChangedEvent(
+        alert=ops.Alert(
+            alert_id=ALERT,
+            account_id=ERRORS,
+            kind=ops.ALERT_KIND_ERROR_ACCOUNT_BOOKING,
+            state=ops.ALERT_STATE_RAISED,
+            reason="Overfill of 10 booked to the error account",
+            subject=ops.AlertSubject(booking_id=BOOKING),
+        )
+    ),
+)
+HELD_ALERT = (
+    "AlertChanged",
+    "alert_changed",
+    ops.AlertChangedEvent(
+        alert=ops.Alert(
+            alert_id=ALERT,
+            account_id=BLOCK,
+            kind=ops.ALERT_KIND_BOOKING_HELD,
+            state=ops.ALERT_STATE_RAISED,
+            reason="A booking is held past its affirmation deadline",
+            subject=ops.AlertSubject(booking_id=BOOKING),
+        )
+    ),
+)
+LOCAL_ORDER = (
+    "OrderUpdated",
+    "order_updated",
+    ops.OrderUpdatedEvent(order=ops.Order(order_id=ORDER, instrument_id=LOCAL)),
+)
+
+
+def instruction() -> object:
+    return meridian.AllocationInstruction(
+        lines=[
+            meridian.AllocationLine(account_id=FUND_A, quantity=Decimal("60")),
+            meridian.AllocationLine(account_id=FUND_B, quantity=Decimal("40")),
+        ]
+    )
+
+
+async def books_to_its_instructed_accounts(recorder: Recorder) -> None:
+    recorder.answer(
+        "BookOrder",
+        lambda _: ops.BookOrderResult(booking=BOOKED),
+    )
+    await recorder.book_order(
+        order_id=ORDER,
+        execution_ids=[EXECUTION],
+        allocations=[allocation(FUND_A, "60"), allocation(FUND_B, "40")],
+    )
+    await hearing(BOOKING_UPDATED)(recorder)
+
+
+async def books_a_block(recorder: Recorder) -> None:
+    await recorder.book_order(
+        order_id=ORDER,
+        execution_ids=[EXECUTION, EXECUTION_2],
+        allocations=[
+            allocation(FUND_A, "60", "227.4150", average_priced=True),
+            allocation(FUND_B, "40", "227.4150", average_priced=True),
+        ],
+    )
+    # The same block booked again names the same average price on both.
+    await recorder.book_order(
+        order_id=ORDER,
+        execution_ids=[EXECUTION, EXECUTION_2],
+        allocations=[
+            allocation(FUND_A, "60", "227.4150", average_priced=True),
+            allocation(FUND_B, "40", "227.4150", average_priced=True),
+        ],
+    )
+
+
+async def puts_the_residual_on_a_named_allocation(recorder: Recorder) -> None:
+    # 100 shares to three funds by weight: 33, 33 and the residual 34 on the
+    # one the instruction names for it.
+    await recorder.book_order(
+        order_id=ORDER,
+        execution_ids=[EXECUTION],
+        allocations=[
+            allocation(FUND_A, "33"),
+            allocation(FUND_B, "33"),
+            allocation("ACC-FUND-C", "34", reason="the instruction's residual account"),
+        ],
+    )
+
+
+async def books_an_overfill_to_the_error_account(recorder: Recorder) -> None:
+    await recorder.book_order(
+        order_id=ORDER,
+        execution_ids=[EXECUTION],
+        allocations=[
+            allocation(FUND_A, "100"),
+            allocation(
+                ERRORS,
+                "10",
+                reason="Overfill of 10 past the order's 100",
+                error_cause="overfill",
+            ),
+        ],
+    )
+    await hearing(ERROR_ALERT)(recorder)
+
+
+async def cancels_and_rebooks(recorder: Recorder) -> None:
+    await recorder.correct_booking(
+        booking_id=BOOKING, kind="cancel", reason="Booked to the wrong fund before hand-off"
+    )
+    await recorder.book_order(
+        order_id=ORDER,
+        execution_ids=[EXECUTION],
+        allocations=[allocation(FUND_B, "100")],
+    )
+
+
+async def holds_after_a_bust(recorder: Recorder) -> None:
+    await hearing(HELD)(recorder)
+    await recorder.hand_off_booking(booking_id=BOOKING, close=False)
+
+
+def refused(reason: str) -> Producer:
+    """A booking the book refuses with `reason`, sent as the oms sends it:
+    the refusal is the book's, the case asks only what was sent."""
+
+    async def produce(recorder: Recorder) -> None:
+        def refuse(_: object) -> object:
+            raise meridian.CommandRefused(
+                "platform.book.command.book-order",
+                "refused by the book",
+                sidecar_pb2.RefusalReason.Value(reason),
+            )
+
+        recorder.answer("BookOrder", refuse)
+        try:
+            await recorder.book_order(
+                order_id=ORDER,
+                execution_ids=[EXECUTION],
+                allocations=[allocation("ACC-NOT-INSTRUCTED", "100")]
+                if reason.endswith("NOT_INSTRUCTED")
+                else [allocation(FUND_A, "60"), allocation(FUND_B, "30")],
+            )
+        except meridian.CommandRefused as answered:
+            assert answered.reason_name == reason
+
+    return produce
+
+
+async def reads_bookings_and_catches_up(recorder: Recorder) -> None:
+    await recorder.list_bookings()
+    await recorder.list_bookings(since=AFTER)
+
+
+async def records_a_sleeve_cross(recorder: Recorder) -> None:
+    await recorder.record_sleeve_cross(
+        sleeve_cross=meridian.SleeveCross(
+            account_id=FUND_A,
+            instrument_id=AAPL,
+            giving_sleeve="value",
+            receiving_sleeve="growth",
+            quantity=Decimal("25"),
+            cross_price=usd("227.50"),
+            price_source="the close",
+            order_ids=[ORDER, "ORD-01JAE00000000000000000002"],
+            reason="Rebalance between sleeves",
+        )
+    )
+
+
+async def hears_and_reads_a_held_bookings_alert(recorder: Recorder) -> None:
+    await hearing(HELD_ALERT)(recorder)
+    await recorder.list_alerts(account_id=BLOCK)
+
+
+async def reads_whether_orders_may_name_local_records(recorder: Recorder) -> None:
+    await recorder.read_local_record_orders()
+
+
+async def corrects_a_handed_off_booking(recorder: Recorder) -> None:
+    await recorder.correct_booking(
+        booking_id=BOOKING,
+        kind="replace",
+        allocations=[allocation(FUND_A, "50"), allocation(FUND_B, "50")],
+        reason="The client's allocation, corrected after hand-off",
+    )
+
+
+async def names_an_unsettled_allocation_as_a_breaks_cause(recorder: Recorder) -> None:
+    await recorder.list_bookings(account_id=FUND_A, state="handed_off")
+    await recorder.record_break(
+        account_id=FUND_A,
+        position=meridian.PositionKey(instrument_id=AAPL, side="long"),
+        category="settled_quantity",
+        differences=[
+            meridian.BreakDifference(
+                field="settled_quantity",
+                book=meridian.BreakValue(quantity=Decimal("60")),
+                street=meridian.BreakValue(quantity=Decimal("0")),
+            )
+        ],
+        business_date="2026-10-16",
+        candidate_causes=[
+            meridian.BreakCause(
+                category="settlement_timing",
+                book_entry=ops.JournalRef(partition="P0", sequence=71),
+            )
+        ],
+        idempotency_key="break:ACC-FUND-A:BKG-1:AAPL",
+    )
+
+
+async def sets_an_allocation_instruction(recorder: Recorder) -> None:
+    await recorder.set_allocation_instruction(
+        order_id=ORDER,
+        allocation_instruction=instruction(),
+        reason="The client's allocation, received by email",
+        acting_for=caller_header("write"),
+    )
+
+
+async def acknowledges_an_error_account_alert(recorder: Recorder) -> None:
+    await hearing(ERROR_ALERT)(recorder)
+    await recorder.acknowledge_alert(
+        alert_id=ALERT,
+        reason="Reviewed: the overfill is the broker's",
+        acting_for=caller_header("write"),
+    )
+
+
+async def raises_its_own_alert(recorder: Recorder) -> None:
+    await recorder.raise_alert(
+        account_id=FUND_A,
+        kind="compliance",
+        reason="Concentration in AAPL past 10% after the fill",
+        subject=meridian.AlertSubject(order_id=ORDER),
+    )
+
+
+async def decides_an_order_on_a_local_record(recorder: Recorder) -> None:
+    recorder.answer(
+        "ResolveInstrument",
+        lambda _: ops.ResolveInstrumentResult(
+            found=True,
+            instrument=ops.InstrumentRecord(instrument_id=LOCAL, provisional=True),
+        ),
+    )
+    await hearing(LOCAL_ORDER)(recorder)
+    (heard,) = recorder.on("OrderUpdated")
+    answer = await recorder.resolve_instrument(instrument_id=heard.order.instrument_id)
+    await recorder.record_check(
+        order_id=heard.order.order_id,
+        rule="local-record",
+        verdict="warn" if answer.instrument.provisional else "pass",
+    )
+
+
+async def reports_a_give_up_rejected(recorder: Recorder) -> None:
+    await recorder.report_give_up(
+        execution_id=EXECUTION,
+        answer="rejected",
+        prime_reference="PB-7781",
+        reason="Account not set up with the prime",
+        raw_record=RAW,
+    )
+
+
+async def records_a_thin_holding_unresolved(recorder: Recorder) -> None:
+    recorder.answer(
+        "ResolveIdentifier",
+        lambda _: ops.ResolveIdentifierResult(
+            found=False, miss_reason=ops.MISS_REASON_NOT_FOUND
+        ),
+    )
+    symbol = ops.Identifier(scheme="symbol", value="ZZTOP", source="custodian")
+    answer = await recorder.resolve_identifier(identifiers=[symbol])
+    await recorder.record_holding(
+        statement_id="STMT-1",
+        instrument_id=answer.instrument_id if answer.found else "",
+        unresolved_identifiers=[] if answer.found else [symbol],
+        quantity=Decimal("50"),
+        raw_record=ops.RawRecordRef(instance_id="custodian-1", key="holdings:ZZTOP"),
+    )
+
+
+# reference.
+TEMPLATE = ops.SecurityTemplate(
+    template_id="TPL-01JB1000000000000000EQUITY",
+    template_version="3",
+    asset_class=ops.ASSET_CLASS_EQUITY,
+    fields=[ops.TemplateField(path="share_class_figi", type="string", required=True)],
+    match_rule=["share_class_figi"],
+)
+
+
+async def fills_a_template(recorder: Recorder) -> None:
+    recorder.answer("ReadTemplate", lambda _: ops.ReadTemplateResult(template=TEMPLATE))
+    read = await recorder.read_template(
+        template_id=TEMPLATE.template_id, template_version=TEMPLATE.template_version
+    )
+    await recorder.offer_template_fields(
+        instrument_id=AAPL,
+        template_id=read.template.template_id,
+        template_version=read.template.template_version,
+        fields=[meridian.TemplateFieldValue(path="share_class_figi", value="BBG001S5N8V8")],
+    )
+
+
+async def offers_with_the_vendors_provenance(recorder: Recorder) -> None:
+    await recorder.offer_template_fields(
+        instrument_id=AAPL,
+        template_id=TEMPLATE.template_id,
+        template_version=TEMPLATE.template_version,
+        fields=[
+            meridian.TemplateFieldValue(
+                path="share_class_figi",
+                value="BBG001S5N8V8",
+                provenance=meridian.Provenance(kind="second_source", source="licensed-vendor"),
+            )
+        ],
+    )
+
+
+async def reads_the_record_it_fills(recorder: Recorder) -> None:
+    await recorder.resolve_instrument(instrument_id=AAPL)
+
+
+async def resolves_a_security_it_reconciles(recorder: Recorder) -> None:
+    await recorder.resolve_identifier(
+        identifiers=[ops.Identifier(scheme="isin", value="US0378331005")]
+    )
+
+
 PRODUCERS: dict[str, Producer] = {
     # Every role's settlement calendar reads.
     "reads-a-calendar": reads_a_calendar,
@@ -839,4 +1241,46 @@ PRODUCERS: dict[str, Producer] = {
     "reports-a-value-date-roll": reports_a_value_date_roll,
     # Contract v23: an event contract's outcome, for every reader of it.
     "hears-and-reads-an-outcome": hears_and_reads_an_outcome,
+    # Contract v24: every role's two cases, as the SDK answers them.
+    **ANSWERED_BY_SDK,
+    # Contract v24: booking, the oms.
+    "books-an-order-to-its-instructed-accounts": books_to_its_instructed_accounts,
+    "books-a-block-at-average-price": books_a_block,
+    "puts-the-residual-on-a-named-allocation": puts_the_residual_on_a_named_allocation,
+    "books-an-overfill-to-the-error-account": books_an_overfill_to_the_error_account,
+    "cancels-and-rebooks-before-hand-off": cancels_and_rebooks,
+    "holds-after-a-bust": holds_after_a_bust,
+    "account-not-instructed-refused": refused("REFUSAL_REASON_ACCOUNT_NOT_INSTRUCTED"),
+    "unbalanced-booking-refused": refused("REFUSAL_REASON_BOOKING_UNBALANCED"),
+    "reads-bookings-and-catches-up": reads_bookings_and_catches_up,
+    "records-a-sleeve-cross-for-two-orders": records_a_sleeve_cross,
+    "hears-and-reads-a-held-bookings-alert": hears_and_reads_a_held_bookings_alert,
+    "reads-whether-orders-may-name-local-records": reads_whether_orders_may_name_local_records,
+    # Contract v24: booking, operations and portfolio.
+    "corrects-a-handed-off-booking": corrects_a_handed_off_booking,
+    "names-an-unsettled-allocation-as-a-breaks-cause": (
+        names_an_unsettled_allocation_as_a_breaks_cause
+    ),
+    "sets-a-clients-allocation-instruction": sets_an_allocation_instruction,
+    "amends-an-allocation-instruction": sets_an_allocation_instruction,
+    "hears-a-booking-handed-off": hearing(HANDED_OFF),
+    "hears-and-reads-bookings": then(hearing(BOOKING_UPDATED), reads_bookings_and_catches_up),
+    # Contract v24: the alert, compliance and reporting.
+    "acknowledges-an-error-account-alert": acknowledges_an_error_account_alert,
+    "raises-its-own-alert": raises_its_own_alert,
+    "reads-alerts-and-catches-up": lambda recorder: recorder.list_alerts(since=AFTER),
+    "hears-and-reads-alerts": then(
+        hearing(ERROR_ALERT), lambda recorder: recorder.list_alerts(state="raised")
+    ),
+    "decides-an-order-on-a-local-record": decides_an_order_on_a_local_record,
+    # Contract v24: the give-up, connectivity and confirmation.
+    "reports-a-give-up-rejected": reports_a_give_up_rejected,
+    # Contract v24: custody's thin holding.
+    "records-a-thinly-described-holding-unresolved": records_a_thin_holding_unresolved,
+    # Contract v24: reference, in preview.
+    "fills-a-template": fills_a_template,
+    "licensed-vendor-value-stays": offers_with_the_vendors_provenance,
+    "offers-never-overwrite-a-person": offers_with_the_vendors_provenance,
+    "reads-the-record-it-fills": reads_the_record_it_fills,
+    "resolves-a-security-it-reconciles": resolves_a_security_it_reconciles,
 }

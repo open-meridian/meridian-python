@@ -138,8 +138,8 @@ async def test_the_sdk_declares_the_contract_it_was_built_for(
     await plugin.leave()
 
     (sent,) = service.registered
-    assert meridian.SCHEMA_VERSION == "v23"
-    assert sent.schema_version == "v23"
+    assert meridian.SCHEMA_VERSION == "v24"
+    assert sent.schema_version == "v24"
 
 
 async def test_identity_and_grants_come_back(sidecar: tuple[FakeSidecar, str]) -> None:
