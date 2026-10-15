@@ -361,3 +361,30 @@ def test_a_typed_class_is_on_the_sandbox_until_a_value_is_set() -> None:
 
     assert Config._of({}).environment == "sandbox"  # type: ignore[attr-defined]
     assert Config._of({"environment": "live"}).environment == "live"  # type: ignore[attr-defined]
+
+
+# ── The templates' pre-push hook: CI-first ───────────────────────────────────
+
+
+def test_the_templates_hook_runs_nothing_for_a_branch_push(tmp_path) -> None:
+    import os
+    import subprocess
+    from pathlib import Path
+
+    root = Path(__file__).parents[1]
+    hook = root / "template" / "hooks" / "pre-push"
+    assert os.access(hook, os.X_OK), "the hook is executable"
+    for role in ("data", "reporting", "custody", "operations"):
+        assert (root / "templates" / role / "hooks" / "pre-push").read_bytes() == (
+            hook.read_bytes()
+        ), role
+    sha = "0" * 40
+    branch = subprocess.run(
+        [str(hook)],
+        input=f"refs/heads/v24 {sha} refs/heads/v24 {sha}\n",
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+        check=False,
+    )
+    assert branch.returncode == 0 and "CI on its pull request is the gate" in branch.stdout

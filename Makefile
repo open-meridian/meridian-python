@@ -153,7 +153,8 @@ base-image:
 # byte for byte, so the agents' instructions, the CI and the image are one.
 ROLE_TEMPLATES := data reporting custody operations
 SHARED := AGENTS.md CLAUDE.md Dockerfile .dockerignore .gitignore \
-          .claude/skills/develop-live/SKILL.md .github/workflows/check.yaml
+          .claude/skills/develop-live/SKILL.md .github/workflows/check.yaml \
+          hooks/pre-push
 
 # What a plugin author gets: the template built on the base, as its Dockerfile
 # says. It must hold the base's SDK rather than a second copy -- what it adds
