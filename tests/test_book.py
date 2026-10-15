@@ -197,14 +197,20 @@ def person(
 # ── What the custody plugin records ──────────────────────────────────────────
 
 
-async def resolved(custody: meridian.Plugin, scheme: str, value: str) -> str:
+async def resolved(
+    custody: meridian.Plugin, scheme: str, value: str, description: str, currency: str = "USD"
+) -> str:
     """An instrument as custody resolves it: the deployment's record its
     identifier meets (W3.1), AAPL's and USD's completed by the deployment admin
     before the run (e2e/book/instruments.sql); anything else, a record the
-    deployment mints, with nothing in force (W3.7, contract v10)."""
+    deployment mints, with nothing in force (W3.7, contract v10). Its source
+    states the minimum a record needs from contract v24 -- an identifier, a
+    description and a currency (W3.7) -- each an offer, never in force."""
     reply = await custody.resolve_identifier(
         identifiers=[meridian.Identifier(scheme=scheme, value=value, source="e2e-book")],
         as_of_ns=time.time_ns(),
+        stated_description=description,
+        stated_currency=currency,
     )
     assert reply.found, (scheme, value)
     return reply.instrument_id
@@ -319,8 +325,8 @@ async def test_the_book_of_record_end_to_end() -> None:
         return kept
 
     try:
-        aapl = await resolved(custody, "symbol", "AAPL")
-        usd = await resolved(custody, "iso4217", "USD")
+        aapl = await resolved(custody, "symbol", "AAPL", "Apple Inc. common stock")
+        usd = await resolved(custody, "iso4217", "USD", "US dollar")
 
         # ── Day 1 ────────────────────────────────────────────────────────
         day_one = await statement(
@@ -477,7 +483,12 @@ async def test_the_book_of_record_end_to_end() -> None:
         # in force: the book refuses an entry naming it, by its asset class
         # and currency, until the deployment admin completes it at the
         # dashboard (contract v10; "flagged, not blocking" ended).
-        snap = await resolved(custody, "symbol", f"SNAP{uuid.uuid4().hex[:6].upper()}")
+        snap = await resolved(
+            custody,
+            "symbol",
+            f"SNAP{uuid.uuid4().hex[:6].upper()}",
+            "Snap Synthetic Holdings common stock",
+        )
         with pytest.raises(CommandRefused) as unusable:
             await operations.record_opening_balance(
                 account_id=FUTURES,

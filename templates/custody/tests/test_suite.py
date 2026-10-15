@@ -47,8 +47,11 @@ def account(**given: Any) -> dict[str, Any]:
 
 
 def position(**given: Any) -> dict[str, Any]:
+    # From contract v24 a resolve states the minimum a record needs (W3.7):
+    # an identifier, a description and a currency.
     return {
         "symbol": "QQQ",
+        "description": "Invesco QQQ Trust",
         "kind": "ETF",
         "units": "10",
         "settled": "10",
@@ -104,7 +107,7 @@ async def thinly_described(recorder: Recorder) -> None:
         ),
     )
     await Converter(recorder).statement(
-        account(positions=[position(symbol="ZZTOP")]), CONNECTION, DAY
+        account(positions=[position(symbol="ZZTOP", description="")]), CONNECTION, DAY
     )
 
 

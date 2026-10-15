@@ -255,10 +255,20 @@ async def test_an_ordinary_resolve_answers_the_platforms_record_or_a_provisional
     )
     assert found.instrument_id == "INS-suite-1" and not found.provisional and not found.minted
     local = Recorder(provisional=True)
+    symbol = ops.Identifier(scheme="symbol", value="ZZTOP", source="custodian")
     found = await local.resolve_identifier(
-        identifiers=[ops.Identifier(scheme="symbol", value="ZZTOP", source="custodian")]
+        identifiers=[symbol], stated_description="ZZ Top Corp.", stated_currency="USD"
     )
     assert found.instrument_id == "LCL-suite-1" and found.provisional and found.minted
+    # Below the minimum a record needs (W3.7): not found, nothing minted.
+    for thin in ({}, {"stated_description": "ZZ Top Corp."}):
+        missed = await local.resolve_identifier(identifiers=[symbol], **thin)
+        assert not missed.found and not missed.minted and not missed.instrument_id, thin
+        assert missed.miss_reason == ops.MISS_REASON_NOT_FOUND
+    coded = await local.resolve_identifier(
+        identifiers=[ops.Identifier(scheme="iso4217", value="CHF")]
+    )
+    assert coded.found and coded.provisional, "a currency's code states both"
 
 
 def test_the_reference_suite_is_carried_in_preview_with_its_cases() -> None:

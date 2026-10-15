@@ -257,7 +257,8 @@ class Recorder(Operations):
     in the ordinary case: a statement opened, a row recorded and resolved, an
     identifier resolved to a record this recorder names (from contract v24
     the platform's `INS-suite-n`, or with `provisional=True` the deployment's
-    provisional `LCL-suite-n`), a link made, no
+    provisional `LCL-suite-n`, minted only where the resolve states the
+    minimum a record needs and otherwise not found), a link made, no
     accounts to link to; from contract v18 a batch of prices or bars (from v19
     of trades or quotes) recorded whole, a venue resolved to a record this
     recorder names, a want declined, a read answering nothing. `raw_record`
@@ -337,6 +338,22 @@ class Recorder(Operations):
         return [sent.params for sent in self.sent if sent.row == row]
 
 
+def meets_minimum(params: Any) -> bool:
+    """Whether a resolve states the minimum a record needs (contract v24,
+    W3.7; the one-ID model's rule 3): an identifier, a description and a
+    currency as the source stated them -- a currency's own code states both,
+    and a crypto asset, its own unit, needs no currency. A resolve below it
+    is answered not found, and the deployment mints nothing."""
+    named = [each for each in params.identifiers if each.value.strip()]
+    if not named:
+        return False
+    if any(each.scheme == "iso4217" for each in named):
+        return True
+    crypto = params.stated_asset_class == ops.ASSET_CLASS_CRYPTO_ASSET
+    currency = bool(params.stated_currency.strip() or params.currency.strip())
+    return bool(params.stated_description.strip()) and (crypto or currency)
+
+
 def _ordinary(row: str, params: Any, n: int, *, provisional: bool = False) -> Message:
     if row == "RecordHoldingsStatement":
         return ops.RecordHoldingsStatementResult(statement_id=f"STMT-suite-{n}")
@@ -348,6 +365,12 @@ def _ordinary(row: str, params: Any, n: int, *, provisional: bool = False) -> Me
         # From 0.28.0 (contract v24) the platform's record, keyed by its INS-
         # ID; the deployment's provisional record where the recorder says.
         if provisional:
+            # Minted only where the source states the minimum a record needs
+            # (contract v24, W3.7): below it, not found, nothing minted.
+            if not meets_minimum(params):
+                return ops.ResolveIdentifierResult(
+                    found=False, miss_reason=ops.MISS_REASON_NOT_FOUND
+                )
             return ops.ResolveIdentifierResult(
                 found=True, instrument_id=f"LCL-suite-{n}", minted=True, provisional=True
             )
