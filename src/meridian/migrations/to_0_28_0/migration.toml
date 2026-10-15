@@ -1,0 +1,92 @@
+# open-meridian 0.27.0 to 0.28.0: the SDK declares contract v24, an execution
+# is booked to its accounts and every instrument is named by the platform
+# master's ID (sdk-contract/an-execution-is-booked-to-its-accounts-contract;
+# spec/the-platform-master-mints-every-instrument-from-a-template,
+# requirement 20: "`meridian plugin migrate` rewrites a test of the prefix
+# `LCL-` to `provisional`; a read of the `open_meridian` identifier for the
+# platform ID to the `instrument_id`; and the suites' `LCL-suite-n` fixtures
+# to `INS-` IDs with provisional cases beside them"). No plugin must change
+# to keep working: IDs are opaque and the floor stays at 2.
+from = "0.27.0"
+to = "0.28.0"
+summary = """
+The SDK declares contract v24 (meridian.SCHEMA_VERSION). An execution is
+booked to its accounts: the oms books an explicit list of executions on one
+order (book_order, each an Allocation; a block at one average price, an
+overfill to the error account with its ErrorCause), hands a booking off
+(hand_off_booking), cancels or replaces it (correct_booking) and records a
+sleeve cross (record_sleeve_cross); operations and portfolio amend an
+order's allocation instruction (set_allocation_instruction);
+connectivity and confirmation report a give-up's answer (report_give_up);
+the readers hear and read bookings and alerts (receive(booking_updated=...,
+alert_changed=...), list_bookings, list_alerts; compliance's raise_alert and
+acknowledge_alert), a booking's states in the transition table. Cash follows
+option (c): the account's base currency is a balance, every other currency
+opens lots, and every currency does until a base currency is set.
+
+Every instrument is named by the platform master's ID. A record the
+deployment keeps locally is provisional (InstrumentRecord.provisional,
+ResolveIdentifierResult.provisional), held to a template
+(template_id, template_version); the open_meridian identifier is no longer
+written, the platform's record being keyed by its INS- ID. Every role hears
+a replacement (receive(replace_merged_instrument=...), with its
+ReplacementCause and sequence) and catches up by sequence
+(list_replacements); the SDK follows each ID to the record it became
+(meridian.CurrentIdMap) and reads the template catalogue (list_templates,
+read_template, meridian.TemplateCatalogue). Every suite gains
+hears-and-reads-a-replacement and reads-the-template-catalogue, which the
+SDK answers for a plugin that maps neither. A reference plugin offers
+template fields (offer_template_fields), its suite in preview. Whether
+orders may name a provisional record is read with read_local_record_orders.
+The suites' resolves answer INS-suite-n, and LCL-suite-n where a case asks
+for a provisional record (Recorder(provisional=True)).
+
+meridian.environment() defaults to sandbox: a plugin is Live only where a
+person chose Live or its code says environment(default="live").
+
+`meridian plugin migrate` rewrites a test of a record's ID for the prefix
+LCL- into a read of its provisional mark, a read of the open_meridian
+identifier into the record's instrument_id, and a test's LCL-suite-n into
+INS-suite-n; a prefix test or an open_meridian read it cannot place on a
+record is left by hand.
+"""
+breaking = false
+rewrite = "rewrite.py"
+
+[[rewrites]]
+rule = "lcl-prefix-provisional"
+what = """a record's instrument_id tested for the prefix LCL- (record.instrument_id\
+.startswith("LCL-")) rewritten to its provisional mark (record.provisional): from \
+contract v24 an ID's prefix says who minted it, and whether a record is the \
+deployment's local one is InstrumentRecord.provisional, or a resolve's \
+ResolveIdentifierResult.provisional"""
+
+[[rewrites]]
+rule = "open-meridian-instrument-id"
+what = """the platform's ID read from a record's open_meridian identifier \
+(next(i.value for i in record.identifiers if i.scheme == "open_meridian")) rewritten \
+to the record's own instrument_id, or the read's default where the record is \
+provisional: from contract v24 the platform's record is keyed by its INS- ID and \
+open_meridian is no longer written"""
+
+[[rewrites]]
+rule = "suite-fixture-ins"
+what = """a test's LCL-suite-n, the ID the suite runner's resolve answered, rewritten \
+to INS-suite-n, the platform's record it answers from 0.28.0; a provisional record's \
+is LCL-suite-n, answered by a Recorder made with provisional=True"""
+
+[[by_hand]]
+rule = "lcl-prefix-tested"
+what = """an ID tested for the prefix LCL- where no record is at hand to read: from \
+contract v24 an LCL- ID is the deployment's local record, provisional, which the \
+platform's record later replaces, and the prefix says nothing more"""
+instead = """read the record's mark: resolve_instrument's instrument.provisional, or a \
+resolve's provisional; a plugin keeping IDs follows each to the record it became with \
+meridian.CurrentIdMap. A stand-in that mints LCL- records itself keeps which it minted"""
+
+[[by_hand]]
+rule = "open-meridian-read"
+what = """the open_meridian identifier read or written another way: from contract v24 \
+the platform's record is keyed by its INS- ID, and no record carries open_meridian"""
+instead = """read the record's instrument_id, and its provisional mark for whether it is \
+the platform's; a test's fixture writing open_meridian names the INS- ID as the key"""

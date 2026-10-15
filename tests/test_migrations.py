@@ -95,7 +95,7 @@ def test_every_release_since_the_first_recorded_has_its_step() -> None:
         ("0.6.0", "0.6.1"),
         ("0.6.1", "0.7.0"),
     ]
-    assert (steps[-1].source, steps[-1].target) == ("0.26.0", "0.27.0")
+    assert (steps[-1].source, steps[-1].target) == ("0.27.0", "0.28.0")
     # A release that moves the version records its step, if only the pins.
     assert steps[-1].target == SDK
 
@@ -765,3 +765,130 @@ def test_the_renamed_roles_are_rewritten_in_the_plugins_metadata() -> None:
     text = result.files["pyproject.toml"]
     assert '[tool.meridian]\nroles = ["data"]' in text
     assert '[tool.other]\nroles = ["dgm"]' in text
+
+
+# ── 0.27.0 to 0.28.0: one ID (contract v24, the one-ID spec's requirement 20) ─
+
+
+def test_a_records_lcl_prefix_test_becomes_its_provisional_mark() -> None:
+    result = one(
+        """\
+        import meridian
+
+        async def local(plugin: meridian.Plugin, instrument_id: str) -> bool:
+            answer = await plugin.resolve_instrument(instrument_id=instrument_id)
+            found = await plugin.resolve_identifier(identifiers=[])
+            if not answer.instrument.instrument_id.startswith("LCL-"):
+                return False
+            return found.instrument_id.startswith("LCL-") or "INS-" in instrument_id
+        """,
+        "0.27.0",
+        "0.28.0",
+    )
+    text = result.files["src/p/x.py"]
+    assert "if not answer.instrument.provisional:" in text
+    assert "return found.provisional or" in text
+    assert "startswith" not in text
+    (step,) = result.steps
+    assert step.rewrote == {"src/p/x.py": {"lcl-prefix-provisional": 2}}
+    assert left_by_hand(result) == []
+
+
+def test_an_ids_prefix_tested_with_no_record_at_hand_is_left_by_hand() -> None:
+    # sample-operations' stand-in store, as it was at 0.12.0.
+    result = one(
+        """\
+        import meridian
+
+        def resolve(self, instrument_id: str) -> object:
+            if instrument_id.startswith("LCL-"):
+                return self.minted.get(instrument_id)
+            if instrument_id[:4] == "LCL-" or "LCL-" in instrument_id:
+                return None
+            return RECORDS.get(instrument_id, "LCL-0001")
+        """,
+        "0.27.0",
+        "0.28.0",
+    )
+    assert result.files == {}
+    assert left_by_hand(result) == [
+        ("lcl-prefix-tested", "src/p/x.py", 4),
+        ("lcl-prefix-tested", "src/p/x.py", 6),
+    ]
+
+
+def test_the_platforms_id_read_from_open_meridian_becomes_the_instrument_id() -> None:
+    result = one(
+        """\
+        import meridian
+
+        def platform_id(record: meridian.InstrumentRecord) -> str:
+            return next(
+                (i.value for i in record.identifiers if i.scheme == "open_meridian"), ""
+            )
+
+        def must(answer) -> str:
+            held = answer.instrument
+            return next(x.value for x in held.identifiers if "open_meridian" == x.scheme)
+        """,
+        "0.27.0",
+        "0.28.0",
+    )
+    text = result.files["src/p/x.py"]
+    assert '("" if record.provisional else record.instrument_id)' in text
+    assert "return held.instrument_id" in text
+    (step,) = result.steps
+    assert step.rewrote == {"src/p/x.py": {"open-meridian-instrument-id": 2}}
+    assert left_by_hand(result) == []
+
+
+def test_open_meridian_written_or_read_another_way_is_left_by_hand() -> None:
+    result = one(
+        """\
+        import meridian
+
+        KEY = meridian.Identifier(scheme="open_meridian", value="INS-1")
+
+        def ids(record) -> list[str]:
+            return [i.value for i in record.identifiers if i.scheme == "open_meridian"]
+        """,
+        "0.27.0",
+        "0.28.0",
+    )
+    assert result.files == {}
+    assert left_by_hand(result) == [
+        ("open-meridian-read", "src/p/x.py", 3),
+        ("open-meridian-read", "src/p/x.py", 6),
+    ]
+
+
+def test_a_tests_lcl_suite_id_becomes_the_platforms() -> None:
+    files = {
+        "tests/test_suite.py": textwrap.dedent(
+            """\
+            from meridian.suites import Recorder, run
+
+            def test_held() -> None:
+                assert held == "LCL-suite-3"
+                assert [f"LCL-suite-{n}" for n in range(2)] == ids
+                assert other == "LCL-0001"
+            """
+        ),
+        # Not a test: the plugin's own code is not the suite's fixtures.
+        "src/p/x.py": 'import meridian\nKEEP = "LCL-suite-3"\n',
+    }
+    result = migrations.migrate(files, "0.27.0", "0.28.0")
+    text = result.files["tests/test_suite.py"]
+    assert 'held == "INS-suite-3"' in text
+    assert 'f"INS-suite-{n}"' in text
+    assert 'other == "LCL-0001"' in text
+    assert "src/p/x.py" not in result.files
+    (step,) = result.steps
+    assert step.rewrote == {"tests/test_suite.py": {"suite-fixture-ins": 2}}
+
+
+def test_a_file_not_using_the_sdk_keeps_its_prefix_tests() -> None:
+    text = 'def f(x):\n    return x.instrument_id.startswith("LCL-")\n'
+    result = one(text, "0.27.0", "0.28.0")
+    assert result.files == {}
+    assert left_by_hand(result) == []
