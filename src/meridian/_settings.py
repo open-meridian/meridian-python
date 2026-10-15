@@ -5,7 +5,7 @@ Q9).
 
     @meridian.settings
     class Config:
-        environment: str = meridian.environment()
+        environment: str = meridian.environment()   # sandbox, until a person chooses Live
         api_key: str = meridian.setting("API key", required=True, secret=True)
         poll_seconds: int = meridian.setting("Read every", default=300, at_least=60)
         sample_data: bool = meridian.sample_data()
@@ -158,27 +158,50 @@ def sample_data(
     )
 
 
+#: The values `meridian.environment()` offers, in its order.
+ENVIRONMENTS = (Choice("live", "Live"), Choice("sandbox", "Sandbox"))
+
+
 def environment(
     *,
-    description: str = "Which of the vendor's environments this plugin reads: its live "
-    "service, or its sandbox.",
+    default: str = "sandbox",
+    description: str = "",
     roles: Sequence[str] = (),
 ) -> Any:
     """The vendor's environment, for a vendor with more than one
     (spec/plugin-pages-follow-their-role, Q12 as amended 2026-10-10): the
     setting `environment`, a required choice, label "Environment", values
-    `live` ("Live") and `sandbox` ("Sandbox"), default `live`, declared
-    first, before every other setting; a credential differing by
-    environment is gated on it with `applies_when=("environment",
-    "sandbox")`."""
+    `live` ("Live") and `sandbox` ("Sandbox"), declared first, before every
+    other setting; a credential differing by environment is gated on it with
+    `applies_when=("environment", "sandbox")`.
+
+    It defaults to `sandbox` (SDK 0.28.0, approved by the product owner
+    2026-10-14): a plugin is Live only where a person chose Live, or where
+    its own code says so, `environment(default="live")`, never because an
+    upgrade added the setting or a value went missing. A plugin reading the
+    value treats anything but `live` as the sandbox. The description says
+    which it starts on, unless the plugin gives its own."""
+    offered = {choice.value for choice in ENVIRONMENTS}
+    if default not in offered:
+        raise ValueError(
+            f"environment's default is {default!r}; it is one of {', '.join(sorted(offered))}"
+        )
+    words = description or (
+        "Which of the vendor's environments this plugin reads: its live service, or its "
+        + (
+            "sandbox. Live unless a person chooses Sandbox."
+            if default == "live"
+            else "sandbox. Sandbox until a person chooses Live."
+        )
+    )
     return Setting(
         "environment",
         str,
         required=True,
-        default="live",
+        default=default,
         label="Environment",
-        description=description,
-        choices=(Choice("live", "Live"), Choice("sandbox", "Sandbox")),
+        description=words,
+        choices=ENVIRONMENTS,
         roles=roles,
     )
 

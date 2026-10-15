@@ -336,7 +336,7 @@ def test_a_class_declares_the_settings_in_its_order() -> None:
         "sample_data",
     ]
     environment = Config.declared()[0]._declared()
-    assert environment.required and environment.default_value == "live"
+    assert environment.required and environment.default_value == "sandbox"
     assert [c.value for c in environment.choices] == ["live", "sandbox"]
     assert Config.declared()[2]._declared().applies_when.one_of == ["sandbox"]
     sample = Config.declared()[-1]._declared()
@@ -348,7 +348,7 @@ def test_a_class_declares_the_settings_in_its_order() -> None:
 
 def test_an_instance_is_typed_defaulted_bounded_and_keeps_its_secrets_out_of_repr() -> None:
     held = Config._of({"api_key": "s3cret-value", "every": 5}, ["sandbox_key"])
-    assert held.environment == "live" and held.poll_seconds == 900
+    assert held.environment == "sandbox" and held.poll_seconds == 900
     assert held.every == 10  # held to at_least
     assert held.missing == ("sandbox_key",)
     assert held.api_key == "s3cret-value"

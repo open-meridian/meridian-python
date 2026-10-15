@@ -248,6 +248,10 @@ template catalogue (`list_templates`, `read_template`,
 Whether orders may name a provisional record is the deployment admin's
 setting, read by the roles that propose, place or check them
 (`read_local_record_orders`).
+
+`meridian.environment()` defaults to the vendor's sandbox: Live is a
+plugin's only when its code says so (`environment(default="live")`), and
+otherwise a person's choice.
 """
 
 # Each role's common part (contract v20, spec/plugin-pages-follow-their-role).

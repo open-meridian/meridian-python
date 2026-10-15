@@ -8,8 +8,9 @@ names now, and the template catalogue keeps each version it reads; that the
 suite runner answers the two every-role cases for a plugin that maps
 neither, runs a plugin's own producer where it has one, and runs a suite on
 provisional records too; that a booking's rows are read apart in the
-transition table; and that the booking operations reach the sidecar as
-typed.
+transition table; that the booking operations reach the sidecar as typed;
+and that `meridian.environment()` defaults to the sandbox, Live only where
+code says so.
 """
 
 from __future__ import annotations
@@ -334,3 +335,29 @@ async def test_a_booking_and_an_alert_reach_the_sidecar_typed() -> None:
                 )
             ],
         )
+
+
+# ── The environment's safe default ───────────────────────────────────────────
+
+
+def test_the_environment_defaults_to_the_sandbox_and_live_only_in_code() -> None:
+    held = meridian.environment()._declared()
+    assert held.name == "environment" and held.required
+    assert held.default_value == "sandbox"
+    assert [c.value for c in held.choices] == ["live", "sandbox"]
+    assert "Sandbox until a person chooses Live" in held.description
+    live = meridian.environment(default="live")._declared()
+    assert live.default_value == "live" and "Live unless" in live.description
+    own = meridian.environment(description="Paper or live trading.")._declared()
+    assert own.description == "Paper or live trading."
+    with pytest.raises(ValueError, match="one of live, sandbox"):
+        meridian.environment(default="practice")
+
+
+def test_a_typed_class_is_on_the_sandbox_until_a_value_is_set() -> None:
+    @meridian.settings
+    class Config:
+        environment: str = meridian.environment()
+
+    assert Config._of({}).environment == "sandbox"  # type: ignore[attr-defined]
+    assert Config._of({"environment": "live"}).environment == "live"  # type: ignore[attr-defined]
