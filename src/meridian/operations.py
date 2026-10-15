@@ -1275,6 +1275,7 @@ class Fee:
 
     kind: ops.FeeKind | str | None = None
     amount: Money
+    capitalised: bool = False
 
 
 def _fee(value: Fee, name: str) -> ops.Fee:
@@ -1284,6 +1285,7 @@ def _fee(value: Fee, name: str) -> ops.Fee:
     return ops.Fee(
         kind=_enum(ops.FeeKind, value.kind, f"{name}.kind"),
         amount=_money(value.amount, f"{name}.amount"),
+        capitalised=value.capitalised,
     )
 
 
@@ -1489,6 +1491,147 @@ def _venue_eligibility(value: VenueEligibility, name: str) -> ops.VenueEligibili
 
 
 @dataclass(frozen=True, kw_only=True)
+class Allocation:
+    """One account's part of a booking (W11.27).
+
+    The SDK's form of the wire's Allocation: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    allocation_id: str = ""
+    account_id: str = ""
+    sleeve: str = ""
+    quantity: Decimal | int
+    average_price: Money
+    gross_amount: Money
+    fees: Sequence[Fee] = ()
+    net_amount: Money
+    intended_settlement_date: date | str = ""
+    average_priced: bool = False
+    relieve_lot_ids: Sequence[str] = ()
+    reason: str = ""
+    error_cause: ops.ErrorCause | str | None = None
+    error_text: str = ""
+    give_up_answers: Sequence[GiveUpRecord] = ()
+
+
+def _allocation(value: Allocation, name: str) -> ops.Allocation:
+    """A Allocation as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, Allocation):
+        raise TypeError(f"{name} is a meridian.Allocation, not {type(value).__name__}")
+    return ops.Allocation(
+        allocation_id=value.allocation_id,
+        account_id=value.account_id,
+        sleeve=value.sleeve,
+        quantity=_decimal(value.quantity, f"{name}.quantity"),
+        average_price=_money(value.average_price, f"{name}.average_price"),
+        gross_amount=_money(value.gross_amount, f"{name}.gross_amount"),
+        fees=[_fee(each, f"{name}.fees[{i}]") for i, each in enumerate(value.fees)],
+        net_amount=_money(value.net_amount, f"{name}.net_amount"),
+        intended_settlement_date=_date(value.intended_settlement_date, f"{name}.intended_settlement_date"),
+        average_priced=value.average_priced,
+        relieve_lot_ids=list(value.relieve_lot_ids),
+        reason=value.reason,
+        error_cause=_enum(ops.ErrorCause, value.error_cause, f"{name}.error_cause"),
+        error_text=value.error_text,
+        give_up_answers=[_give_up_record(each, f"{name}.give_up_answers[{i}]") for i, each in enumerate(value.give_up_answers)],
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class GiveUpRecord:
+    """A prime's answer to a give-up (W11.32), its own record, as FIX sends
+    each AllocationReport (AS) as its own message.
+
+    The SDK's form of the wire's GiveUpRecord: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    answer: ops.GiveUpAnswer | str | None = None
+    prime_reference: str = ""
+    reason: str = ""
+    entry: ops.EntryMeta | None = None
+
+
+def _give_up_record(value: GiveUpRecord, name: str) -> ops.GiveUpRecord:
+    """A GiveUpRecord as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, GiveUpRecord):
+        raise TypeError(f"{name} is a meridian.GiveUpRecord, not {type(value).__name__}")
+    return ops.GiveUpRecord(
+        answer=_enum(ops.GiveUpAnswer, value.answer, f"{name}.answer"),
+        prime_reference=value.prime_reference,
+        reason=value.reason,
+        entry=value.entry,
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class SleeveCross:
+    """A cross between two sleeves of one account (W11.33), its tax and
+    performance layers; no execution is minted for it.
+
+    The SDK's form of the wire's SleeveCross: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    sleeve_cross_id: str = ""
+    account_id: str = ""
+    instrument_id: str = ""
+    giving_sleeve: str = ""
+    receiving_sleeve: str = ""
+    quantity: Decimal | int
+    cross_price: Money
+    price_source: str = ""
+    order_ids: Sequence[str] = ()
+    reason: str = ""
+
+
+def _sleeve_cross(value: SleeveCross, name: str) -> ops.SleeveCross:
+    """A SleeveCross as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, SleeveCross):
+        raise TypeError(f"{name} is a meridian.SleeveCross, not {type(value).__name__}")
+    return ops.SleeveCross(
+        sleeve_cross_id=value.sleeve_cross_id,
+        account_id=value.account_id,
+        instrument_id=value.instrument_id,
+        giving_sleeve=value.giving_sleeve,
+        receiving_sleeve=value.receiving_sleeve,
+        quantity=_decimal(value.quantity, f"{name}.quantity"),
+        cross_price=_money(value.cross_price, f"{name}.cross_price"),
+        price_source=value.price_source,
+        order_ids=list(value.order_ids),
+        reason=value.reason,
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class AlertSubject:
+    """What an alert is about: a booking and its allocation, or for
+    `compliance`'s own an order or a position.
+
+    The SDK's form of the wire's AlertSubject: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    order_id: str = ""
+    booking_id: str = ""
+    allocation_id: str = ""
+    position: PositionKey | None = None
+
+
+def _alert_subject(value: AlertSubject, name: str) -> ops.AlertSubject:
+    """A AlertSubject as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, AlertSubject):
+        raise TypeError(f"{name} is a meridian.AlertSubject, not {type(value).__name__}")
+    return ops.AlertSubject(
+        order_id=value.order_id,
+        booking_id=value.booking_id,
+        allocation_id=value.allocation_id,
+        position=None if value.position is None else _position_key(value.position, f"{name}.position"),
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
 class TenorDateInputs:
     """W3.20: a tenor date from a trade date.
 
@@ -1555,6 +1698,31 @@ def _roll_inputs(value: RollInputs, name: str) -> ops.RollInputs:
         date=_date(value.date, f"{name}.date"),
         convention=_enum(ops.BusinessDayConvention, value.convention, f"{name}.convention"),
         calendars=list(value.calendars),
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class TemplateFieldValue:
+    """A value at a template field's path, with its provenance (W3.4,
+    W3.23).
+
+    The SDK's form of the wire's TemplateFieldValue: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    path: str = ""
+    value: str = ""
+    provenance: Provenance | None = None
+
+
+def _template_field_value(value: TemplateFieldValue, name: str) -> ops.TemplateFieldValue:
+    """A TemplateFieldValue as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, TemplateFieldValue):
+        raise TypeError(f"{name} is a meridian.TemplateFieldValue, not {type(value).__name__}")
+    return ops.TemplateFieldValue(
+        path=value.path,
+        value=value.value,
+        provenance=None if value.provenance is None else _provenance(value.provenance, f"{name}.provenance"),
     )
 
 
@@ -2502,9 +2670,10 @@ class Operations:
         expire_time_ns: int = 0,
         execution_instructions: Sequence[ops.ExecutionInstruction | str] = (),
         quote_currency: str = "",
+        block_member_order_ids: Sequence[str] = (),
         acting_for: str | None = None,
     ) -> ops.ProposeOrderResult:
-        """W11.1: W11.1. For a person or a service account; by `portfolio`, the `oms`, or an (preview)."""
+        """W11.1: W11.1. For a person or a service account; by `portfolio`, the `oms`, or an (stable)."""
         params = ops.ProposeOrderParams(
             account_id=account_id,
             instrument_id=instrument_id,
@@ -2541,6 +2710,7 @@ class Operations:
             expire_time_ns=expire_time_ns,
             execution_instructions=[_enum(ops.ExecutionInstruction, value, "execution_instructions") for value in execution_instructions],
             quote_currency=quote_currency,
+            block_member_order_ids=list(block_member_order_ids),
             acting_for=_assertion(acting_for),
         )
         return await self._operate(self._operations().ProposeOrder, params)
@@ -2561,7 +2731,7 @@ class Operations:
         idempotency_key: str = "",
         acting_for: str | None = None,
     ) -> ops.RecordOrderResult:
-        """W11.2: W11.2. A fact: never through the gate. By the `oms`, for a user, naming (preview)."""
+        """W11.2: W11.2. A fact: never through the gate. By the `oms`, for a user, naming (stable)."""
         params = ops.RecordOrderParams(
             account_id=account_id,
             instrument_id=instrument_id,
@@ -2587,7 +2757,7 @@ class Operations:
         idempotency_key: str = "",
         acting_for: str | None = None,
     ) -> ops.RequestOrderChangeResult:
-        """W11.3: W11.3 (preview)."""
+        """W11.3: W11.3 (stable)."""
         params = ops.RequestOrderChangeParams(
             order_id=order_id,
             change=None if change is None else _order_change(change, "change"),
@@ -2609,7 +2779,7 @@ class Operations:
         idempotency_key: str = "",
         acting_for: str | None = None,
     ) -> ops.RecordCheckResult:
-        """W11.4: W11.4. By `compliance`; on an order version, or on a placement before it (preview)."""
+        """W11.4: W11.4. By `compliance`; on an order version, or on a placement before it (stable)."""
         params = ops.RecordCheckParams(
             order_id=order_id,
             order_version=order_version,
@@ -2631,7 +2801,7 @@ class Operations:
         idempotency_key: str = "",
         acting_for: str | None = None,
     ) -> ops.DecideApprovalResult:
-        """W11.5: W11.5 (preview)."""
+        """W11.5: W11.5 (stable)."""
         params = ops.DecideApprovalParams(
             order_id=order_id,
             decision=_enum(ops.ApprovalDecision, decision, "decision"),
@@ -2648,7 +2818,7 @@ class Operations:
         idempotency_key: str = "",
         acting_for: str | None = None,
     ) -> ops.ReleaseOrderResult:
-        """W11.6: W11.6. Through the gate, in its order: allocation, block, approval, (preview)."""
+        """W11.6: W11.6. Through the gate, in its order: allocation, block, approval, (stable)."""
         params = ops.ReleaseOrderParams(
             order_id=order_id,
             idempotency_key=idempotency_key,
@@ -2666,7 +2836,7 @@ class Operations:
         idempotency_key: str = "",
         acting_for: str | None = None,
     ) -> ops.SetWorkingConditionResult:
-        """W11.7: W11.7. Claimed, held or paused, set or cleared (preview)."""
+        """W11.7: W11.7. Claimed, held or paused, set or cleared (stable)."""
         params = ops.SetWorkingConditionParams(
             order_id=order_id,
             condition=_enum(ops.OrderCondition, condition, "condition"),
@@ -2695,7 +2865,7 @@ class Operations:
         idempotency_key: str = "",
         acting_for: str | None = None,
     ) -> ops.CreatePlacementResult:
-        """W11.8: W11.8. By the `ems` alone (ruled 2026-10-13) (preview)."""
+        """W11.8: W11.8. By the `ems` alone (ruled 2026-10-13) (stable)."""
         params = ops.CreatePlacementParams(
             order_id=order_id,
             connectivity_instance_id=connectivity_instance_id,
@@ -2724,7 +2894,7 @@ class Operations:
         idempotency_key: str = "",
         acting_for: str | None = None,
     ) -> ops.RequestPlacementChangeResult:
-        """W11.9: W11.9. By the `ems` or the `oms`; by a connectivity plugin only to report (preview)."""
+        """W11.9: W11.9. By the `ems` or the `oms`; by a connectivity plugin only to report (stable)."""
         params = ops.RequestPlacementChangeParams(
             placement_id=placement_id,
             change=None if change is None else _placement_change(change, "change"),
@@ -2753,7 +2923,7 @@ class Operations:
         raw_record: ops.RawRecordRef | None = None,
         acting_for: str | None = None,
     ) -> ops.ReportPlacementResult:
-        """W11.10: W11.10. A fact, each with the raw record it was converted from (preview)."""
+        """W11.10: W11.10. A fact, each with the raw record it was converted from (stable)."""
         params = ops.ReportPlacementParams(
             placement_id=placement_id,
             event=_enum(ops.PlacementEvent, event, "event"),
@@ -2811,7 +2981,7 @@ class Operations:
         venue_client_order_id: str = "",
         acting_for: str | None = None,
     ) -> ops.ReportExecutionResult:
-        """W11.11: W11.11. A fact by a connectivity plugin; or, for a person, a manual or (preview)."""
+        """W11.11: W11.11. A fact by a connectivity plugin; or, for a person, a manual or (stable)."""
         params = ops.ReportExecutionParams(
             placement_id=placement_id,
             order_id=order_id,
@@ -2861,7 +3031,7 @@ class Operations:
         raw_record: ops.RawRecordRef | None = None,
         acting_for: str | None = None,
     ) -> ops.ReportChargeResult:
-        """W11.12: W11.12 (preview)."""
+        """W11.12: W11.12 (stable)."""
         params = ops.ReportChargeParams(
             placement_id=placement_id,
             fee=None if fee is None else _fee(fee, "fee"),
@@ -2881,7 +3051,7 @@ class Operations:
         idempotency_key: str = "",
         acting_for: str | None = None,
     ) -> ops.AcknowledgeFlagResult:
-        """W11.14: W11.14. Late fact only; does not tie out is never acknowledged (preview)."""
+        """W11.14: W11.14. Late fact only; does not tie out is never acknowledged (stable)."""
         params = ops.AcknowledgeFlagParams(
             order_id=order_id,
             condition=_enum(ops.OrderCondition, condition, "condition"),
@@ -2898,7 +3068,7 @@ class Operations:
         page_size: int = 0,
         cursor: str = "",
     ) -> ops.ListTradingInstructionsResult:
-        """W11.16: Those in force, never a history; read on start, whatever the scope (preview)."""
+        """W11.16: Those in force, never a history; read on start, whatever the scope (stable)."""
         params = ops.ListTradingInstructionsParams(
             since=since,
             page_size=page_size,
@@ -2915,7 +3085,7 @@ class Operations:
         cursor: str = "",
         execution_state: ops.ExecutionState | str | None = None,
     ) -> ops.ListOrdersResult:
-        """W11.17: The orders in the reader's scope, as of now or changed since a watermark; (preview)."""
+        """W11.17: The orders in the reader's scope, as of now or changed since a watermark; (stable)."""
         params = ops.ListOrdersParams(
             account_id=account_id,
             since=since,
@@ -2933,7 +3103,7 @@ class Operations:
         page_size: int = 0,
         cursor: str = "",
     ) -> ops.ReadOrderHistoryResult:
-        """W11.17: One order's journal from its first entry; the history never changes (preview)."""
+        """W11.17: One order's journal from its first entry; the history never changes (stable)."""
         params = ops.ReadOrderHistoryParams(
             account_id=account_id,
             order_id=order_id,
@@ -2954,7 +3124,7 @@ class Operations:
         idempotency_key: str = "",
         acting_for: str | None = None,
     ) -> ops.RecordLocateResult:
-        """W11.18: W11.18. By the fund's connectivity plugin; the answer later on the same (preview)."""
+        """W11.18: W11.18. By the fund's connectivity plugin; the answer later on the same (stable)."""
         params = ops.RecordLocateParams(
             venue_account_code=venue_account_code,
             instrument_id=instrument_id,
@@ -2975,7 +3145,7 @@ class Operations:
         page_size: int = 0,
         cursor: str = "",
     ) -> ops.ListLocatesResult:
-        """W11.18: ListLocates (preview)."""
+        """W11.18: ListLocates (stable)."""
         params = ops.ListLocatesParams(
             account_id=account_id,
             since=since,
@@ -2992,7 +3162,7 @@ class Operations:
         idempotency_key: str = "",
         acting_for: str | None = None,
     ) -> ops.RecordLocateUseResult:
-        """W11.19: W11.19. By `compliance` or the `oms`; on an expired locate, (preview)."""
+        """W11.19: W11.19. By `compliance` or the `oms`; on an expired locate, (stable)."""
         params = ops.RecordLocateUseParams(
             locate_record_id=locate_record_id,
             use=None if use is None else _locate_use(use, "use"),
@@ -3006,7 +3176,7 @@ class Operations:
         *,
         catalogue: VenueCatalogue | None = None,
     ) -> ops.Published:
-        """W11.20: W11.20. Published by a connectivity plugin, per venue account code its (preview)."""
+        """W11.20: W11.20. Published by a connectivity plugin, per venue account code its (stable)."""
         params = ops.ReportVenueCatalogueParams(
             catalogue=None if catalogue is None else _venue_catalogue(catalogue, "catalogue"),
         )
@@ -3019,7 +3189,7 @@ class Operations:
         venue_account_code: str = "",
         acting_for: str | None = None,
     ) -> ops.ReadVenueCatalogueResult:
-        """W11.20: W11.20. The latest per venue account code; a code the plugin has not (preview)."""
+        """W11.20: W11.20. The latest per venue account code; a code the plugin has not (stable)."""
         params = ops.ReadVenueCatalogueParams(
             connectivity_instance_id=connectivity_instance_id,
             venue_account_code=venue_account_code,
@@ -3035,7 +3205,7 @@ class Operations:
         account_id: str = "",
         acting_for: str | None = None,
     ) -> ops.MapVenueAccountResult:
-        """W11.22: W11.22. Sent by the `ems` acting for the admin viewing its page (W4.9): (preview)."""
+        """W11.22: W11.22. Sent by the `ems` acting for the admin viewing its page (W4.9): (stable)."""
         params = ops.MapVenueAccountParams(
             connectivity_instance_id=connectivity_instance_id,
             venue_account_code=venue_account_code,
@@ -3053,7 +3223,7 @@ class Operations:
         note: str = "",
         acting_for: str | None = None,
     ) -> ops.AcceptExecutionResult:
-        """W11.23: W11.23 (contract v23). By the `ems`, for a person or its service account: (preview)."""
+        """W11.23: W11.23 (contract v23). By the `ems`, for a person or its service account: (stable)."""
         params = ops.AcceptExecutionParams(
             execution_ids=list(execution_ids),
             **_arm("matched_order", order_id=order_id, new_order=new_order),
@@ -3070,7 +3240,7 @@ class Operations:
         text: str = "",
         acting_for: str | None = None,
     ) -> ops.DontKnowExecutionResult:
-        """W11.24: W11.24 (contract v23). By the `ems`, for a person or its service account: (preview)."""
+        """W11.24: W11.24 (contract v23). By the `ems`, for a person or its service account: (stable)."""
         params = ops.DontKnowExecutionParams(
             execution_ids=list(execution_ids),
             reason=_enum(ops.DkReason, reason, "reason"),
@@ -3107,6 +3277,196 @@ class Operations:
             acting_for=_assertion(acting_for),
         )
         return await self._operate(self._operations().ReportValueDateRoll, params)
+
+    async def set_allocation_instruction(
+        self,
+        *,
+        order_id: str = "",
+        allocation_instruction: AllocationInstruction | None = None,
+        reason: str = "",
+        acting_for: str | None = None,
+    ) -> ops.SetAllocationInstructionResult:
+        """W11.26: W11.26: an order's allocation instruction amended, with a reason; (preview)."""
+        params = ops.SetAllocationInstructionParams(
+            order_id=order_id,
+            allocation_instruction=None if allocation_instruction is None else _allocation_instruction(allocation_instruction, "allocation_instruction"),
+            reason=reason,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().SetAllocationInstruction, params)
+
+    async def book_order(
+        self,
+        *,
+        order_id: str = "",
+        execution_ids: Sequence[str] = (),
+        allocations: Sequence[Allocation] = (),
+        hand_off: bool = False,
+        acting_for: str | None = None,
+    ) -> ops.BookOrderResult:
+        """W11.27: W11.27: book an explicit list of executions on one order (preview)."""
+        params = ops.BookOrderParams(
+            order_id=order_id,
+            execution_ids=list(execution_ids),
+            allocations=[_allocation(each, f"allocations[{i}]") for i, each in enumerate(allocations)],
+            hand_off=hand_off,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().BookOrder, params)
+
+    async def hand_off_booking(
+        self,
+        *,
+        booking_id: str = "",
+        close: bool = False,
+        acting_for: str | None = None,
+    ) -> ops.HandOffBookingResult:
+        """W11.28: W11.28: hand a booked or held booking off to `operations`, or close a (preview)."""
+        params = ops.HandOffBookingParams(
+            booking_id=booking_id,
+            close=close,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().HandOffBooking, params)
+
+    async def correct_booking(
+        self,
+        *,
+        booking_id: str = "",
+        kind: ops.BookingCorrectionKind | str | None = None,
+        allocations: Sequence[Allocation] = (),
+        effective_date: date | str = "",
+        reason: str = "",
+        acting_for: str | None = None,
+    ) -> ops.CorrectBookingResult:
+        """W11.29: W11.29: cancel a booking before its hand-off, or replace its allocations (preview)."""
+        params = ops.CorrectBookingParams(
+            booking_id=booking_id,
+            kind=_enum(ops.BookingCorrectionKind, kind, "kind"),
+            allocations=[_allocation(each, f"allocations[{i}]") for i, each in enumerate(allocations)],
+            effective_date=_date(effective_date, "effective_date"),
+            reason=reason,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().CorrectBooking, params)
+
+    async def list_bookings(
+        self,
+        *,
+        account_id: str = "",
+        since: ops.Watermark | None = None,
+        state: ops.BookingState | str | None = None,
+        page_size: int = 0,
+        cursor: str = "",
+    ) -> ops.ListBookingsResult:
+        """W11.31: W11.31: the bookings in the reader's scope, as of now or changed since a (preview)."""
+        params = ops.ListBookingsParams(
+            account_id=account_id,
+            since=since,
+            state=_enum(ops.BookingState, state, "state"),
+            page_size=page_size,
+            cursor=cursor,
+        )
+        return await self._operate(self._operations().ListBookings, params)
+
+    async def report_give_up(
+        self,
+        *,
+        execution_id: str = "",
+        allocation_id: str = "",
+        answer: ops.GiveUpAnswer | str | None = None,
+        prime_reference: str = "",
+        reason: str = "",
+        raw_record: ops.RawRecordRef | None = None,
+        acting_for: str | None = None,
+    ) -> ops.ReportGiveUpResult:
+        """W11.32: W11.32: a prime's answer to a give-up, from `connectivity` or (preview)."""
+        params = ops.ReportGiveUpParams(
+            execution_id=execution_id,
+            allocation_id=allocation_id,
+            answer=_enum(ops.GiveUpAnswer, answer, "answer"),
+            prime_reference=prime_reference,
+            reason=reason,
+            raw_record=raw_record,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().ReportGiveUp, params)
+
+    async def record_sleeve_cross(
+        self,
+        *,
+        sleeve_cross: SleeveCross | None = None,
+        acting_for: str | None = None,
+    ) -> ops.RecordSleeveCrossResult:
+        """W11.33: W11.33: a cross between two sleeves of one account, the `oms`'s (preview)."""
+        params = ops.RecordSleeveCrossParams(
+            sleeve_cross=None if sleeve_cross is None else _sleeve_cross(sleeve_cross, "sleeve_cross"),
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().RecordSleeveCross, params)
+
+    async def raise_alert(
+        self,
+        *,
+        account_id: str = "",
+        kind: ops.AlertKind | str | None = None,
+        reason: str = "",
+        subject: AlertSubject | None = None,
+        acting_for: str | None = None,
+    ) -> ops.RaiseAlertResult:
+        """W11.34: W11.34: `compliance`'s own alert (preview)."""
+        params = ops.RaiseAlertParams(
+            account_id=account_id,
+            kind=_enum(ops.AlertKind, kind, "kind"),
+            reason=reason,
+            subject=None if subject is None else _alert_subject(subject, "subject"),
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().RaiseAlert, params)
+
+    async def acknowledge_alert(
+        self,
+        *,
+        alert_id: str = "",
+        reason: str = "",
+        acting_for: str | None = None,
+    ) -> ops.AcknowledgeAlertResult:
+        """W11.34: W11.34: an alert acknowledged, for a person, with a reason (preview)."""
+        params = ops.AcknowledgeAlertParams(
+            alert_id=alert_id,
+            reason=reason,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().AcknowledgeAlert, params)
+
+    async def list_alerts(
+        self,
+        *,
+        account_id: str = "",
+        state: ops.AlertState | str | None = None,
+        since: ops.Watermark | None = None,
+        page_size: int = 0,
+        cursor: str = "",
+        kind: ops.AlertKind | str | None = None,
+    ) -> ops.ListAlertsResult:
+        """W11.35: W11.35: the alerts in the reader's scope, as of now or changed since a (preview)."""
+        params = ops.ListAlertsParams(
+            account_id=account_id,
+            state=_enum(ops.AlertState, state, "state"),
+            since=since,
+            page_size=page_size,
+            cursor=cursor,
+            kind=_enum(ops.AlertKind, kind, "kind"),
+        )
+        return await self._operate(self._operations().ListAlerts, params)
+
+    async def read_local_record_orders(
+        self,
+    ) -> ops.ReadLocalRecordOrdersResult:
+        """W11.37: W11.37: the setting read (preview)."""
+        params = ops.ReadLocalRecordOrdersParams(
+        )
+        return await self._operate(self._operations().ReadLocalRecordOrders, params)
 
     async def resolve_venue(
         self,
@@ -3173,6 +3533,60 @@ class Operations:
             as_of_ns=as_of_ns,
         )
         return await self._operate(self._operations().ComputeDate, params)
+
+    async def list_replacements(
+        self,
+        *,
+        after_sequence: int = 0,
+    ) -> ops.ListReplacementsResult:
+        """W3.22: W3.22: the replacements the instrument store recorded after a sequence, (preview)."""
+        params = ops.ListReplacementsParams(
+            after_sequence=after_sequence,
+        )
+        return await self._operate(self._operations().ListReplacements, params)
+
+    async def offer_template_fields(
+        self,
+        *,
+        instrument_id: str = "",
+        template_id: str = "",
+        template_version: str = "",
+        fields: Sequence[TemplateFieldValue] = (),
+        acting_for: str | None = None,
+    ) -> ops.OfferTemplateFieldsResult:
+        """W3.23: W3.23: a `reference` plugin's offer of a record's template fields (preview)."""
+        params = ops.OfferTemplateFieldsParams(
+            instrument_id=instrument_id,
+            template_id=template_id,
+            template_version=template_version,
+            fields=[_template_field_value(each, f"fields[{i}]") for i, each in enumerate(fields)],
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().OfferTemplateFields, params)
+
+    async def list_templates(
+        self,
+        *,
+        asset_class: ops.AssetClass | str | None = None,
+    ) -> ops.ListTemplatesResult:
+        """W3.24: W3.24: the templates the store holds, unscoped reference data (preview)."""
+        params = ops.ListTemplatesParams(
+            asset_class=_enum(ops.AssetClass, asset_class, "asset_class"),
+        )
+        return await self._operate(self._operations().ListTemplates, params)
+
+    async def read_template(
+        self,
+        *,
+        template_id: str = "",
+        template_version: str = "",
+    ) -> ops.ReadTemplateResult:
+        """W3.24: W3.24: one template, at a version (preview)."""
+        params = ops.ReadTemplateParams(
+            template_id=template_id,
+            template_version=template_version,
+        )
+        return await self._operate(self._operations().ReadTemplate, params)
 
     async def record_prices(
         self,
@@ -3420,6 +3834,9 @@ class Operations:
         unplaced_fact_recorded: Callable[[Heard[ops.UnplacedFactRecordedEvent]], Awaitable[None]] | None = None,
         trading_instruction_changed: Callable[[Heard[ops.TradingInstructionChangedEvent]], Awaitable[None]] | None = None,
         locate_updated: Callable[[Heard[ops.LocateUpdatedEvent]], Awaitable[None]] | None = None,
+        replace_merged_instrument: Callable[[Heard[ops.InstrumentReplacedEvent]], Awaitable[None]] | None = None,
+        booking_updated: Callable[[Heard[ops.BookingUpdatedEvent]], Awaitable[None]] | None = None,
+        alert_changed: Callable[[Heard[ops.AlertChangedEvent]], Awaitable[None]] | None = None,
         prices_recorded: Callable[[Heard[ops.PricesRecordedEvent]], Awaitable[None]] | None = None,
         bars_recorded: Callable[[Heard[ops.BarsRecordedEvent]], Awaitable[None]] | None = None,
         observations_wanted: Callable[[Heard[ops.ObservationsWantedEvent]], Awaitable[None]] | None = None,
@@ -3460,6 +3877,9 @@ class Operations:
             "UnplacedFactRecorded": unplaced_fact_recorded,
             "TradingInstructionChanged": trading_instruction_changed,
             "LocateUpdated": locate_updated,
+            "ReplaceMergedInstrument": replace_merged_instrument,
+            "BookingUpdated": booking_updated,
+            "AlertChanged": alert_changed,
             "PricesRecorded": prices_recorded,
             "BarsRecorded": bars_recorded,
             "ObservationsWanted": observations_wanted,
@@ -3697,6 +4117,61 @@ DELIVERED: tuple[DeliveredRow, ...] = (
         within="locate",
         record_journal="last_change",
         record_account=("account_id",),
+    ),
+    DeliveredRow(
+        name="BookingUpdated",
+        step="W11.30",
+        arm="booking_updated",
+        message=ops.BookingUpdatedEvent,
+        account=("booking", "account_id"),
+        caught_up_by="list_bookings",
+        account_param="account_id",
+        records="bookings",
+        within="booking",
+        record_journal="last_change",
+        record_account=("account_id",),
+    ),
+    DeliveredRow(
+        name="AlertChanged",
+        step="W11.35",
+        arm="alert_changed",
+        message=ops.AlertChangedEvent,
+        account=("alert", "account_id"),
+        caught_up_by="list_alerts",
+        account_param="account_id",
+        records="alerts",
+        within="alert",
+        record_journal="last_change",
+        record_account=("account_id",),
+    ),
+)
+
+
+@dataclass(frozen=True)
+class SequencedRow:
+    """A row a plugin's roles may hear that is reference data caught up by
+    sequence (contract v24), as matrix/scoped.tsv declares it: the Delivery's
+    arm carrying it, its message, and the query reading the rows after the
+    last sequence seen (`after_sequence`), whose reply holds them in
+    `records` and says the `sequence` read to."""
+
+    name: str
+    step: str
+    arm: str
+    message: Any
+    caught_up_by: str
+    records: str
+
+
+#: Every row a plugin's roles may hear caught up by sequence, by arm number.
+SEQUENCED: tuple[SequencedRow, ...] = (
+    SequencedRow(
+        name="ReplaceMergedInstrument",
+        step="W3.8",
+        arm="replace_merged_instrument",
+        message=ops.InstrumentReplacedEvent,
+        caught_up_by="list_replacements",
+        records="replacements",
     ),
 )
 

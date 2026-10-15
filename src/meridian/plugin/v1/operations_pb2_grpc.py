@@ -289,6 +289,61 @@ class PluginOperationsStub(object):
                 request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReportValueDateRollParams.SerializeToString,
                 response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReportValueDateRollResult.FromString,
                 _registered_method=True)
+        self.SetAllocationInstruction = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/SetAllocationInstruction',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.SetAllocationInstructionParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.SetAllocationInstructionResult.FromString,
+                _registered_method=True)
+        self.BookOrder = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/BookOrder',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.BookOrderParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.BookOrderResult.FromString,
+                _registered_method=True)
+        self.HandOffBooking = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/HandOffBooking',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.HandOffBookingParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.HandOffBookingResult.FromString,
+                _registered_method=True)
+        self.CorrectBooking = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/CorrectBooking',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.CorrectBookingParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.CorrectBookingResult.FromString,
+                _registered_method=True)
+        self.ListBookings = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ListBookings',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListBookingsParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListBookingsResult.FromString,
+                _registered_method=True)
+        self.ReportGiveUp = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ReportGiveUp',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReportGiveUpParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReportGiveUpResult.FromString,
+                _registered_method=True)
+        self.RecordSleeveCross = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/RecordSleeveCross',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordSleeveCrossParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordSleeveCrossResult.FromString,
+                _registered_method=True)
+        self.RaiseAlert = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/RaiseAlert',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RaiseAlertParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RaiseAlertResult.FromString,
+                _registered_method=True)
+        self.AcknowledgeAlert = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/AcknowledgeAlert',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.AcknowledgeAlertParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.AcknowledgeAlertResult.FromString,
+                _registered_method=True)
+        self.ListAlerts = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ListAlerts',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListAlertsParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListAlertsResult.FromString,
+                _registered_method=True)
+        self.ReadLocalRecordOrders = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ReadLocalRecordOrders',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadLocalRecordOrdersParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadLocalRecordOrdersResult.FromString,
+                _registered_method=True)
         self.ResolveVenue = channel.unary_unary(
                 '/meridian.plugin.v1.PluginOperations/ResolveVenue',
                 request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ResolveVenueParams.SerializeToString,
@@ -308,6 +363,26 @@ class PluginOperationsStub(object):
                 '/meridian.plugin.v1.PluginOperations/ComputeDate',
                 request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ComputeDateParams.SerializeToString,
                 response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ComputeDateResult.FromString,
+                _registered_method=True)
+        self.ListReplacements = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ListReplacements',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListReplacementsParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListReplacementsResult.FromString,
+                _registered_method=True)
+        self.OfferTemplateFields = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/OfferTemplateFields',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.OfferTemplateFieldsParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.OfferTemplateFieldsResult.FromString,
+                _registered_method=True)
+        self.ListTemplates = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ListTemplates',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListTemplatesParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListTemplatesResult.FromString,
+                _registered_method=True)
+        self.ReadTemplate = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ReadTemplate',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadTemplateParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadTemplateResult.FromString,
                 _registered_method=True)
         self.RecordPrices = channel.unary_unary(
                 '/meridian.plugin.v1.PluginOperations/RecordPrices',
@@ -562,168 +637,168 @@ class PluginOperationsServicer(object):
         raise NotImplementedError('Method not implemented!')
 
     def ProposeOrder(self, request, context):
-        """W11.1: platform.book.command.propose-order (command; preview).
+        """W11.1: platform.book.command.propose-order (command; stable).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def RecordOrder(self, request, context):
-        """W11.2: platform.book.command.record-order (command; preview).
+        """W11.2: platform.book.command.record-order (command; stable).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def RequestOrderChange(self, request, context):
-        """W11.3: platform.book.command.request-order-change (command; preview).
+        """W11.3: platform.book.command.request-order-change (command; stable).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def RecordCheck(self, request, context):
-        """W11.4: platform.book.command.record-check (command; preview).
+        """W11.4: platform.book.command.record-check (command; stable).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def DecideApproval(self, request, context):
-        """W11.5: platform.book.command.decide-approval (command; preview).
+        """W11.5: platform.book.command.decide-approval (command; stable).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def ReleaseOrder(self, request, context):
-        """W11.6: platform.book.command.release-order (command; preview).
+        """W11.6: platform.book.command.release-order (command; stable).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def SetWorkingCondition(self, request, context):
-        """W11.7: platform.book.command.set-working-condition (command; preview).
+        """W11.7: platform.book.command.set-working-condition (command; stable).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def CreatePlacement(self, request, context):
-        """W11.8: platform.book.command.create-placement (command; preview).
+        """W11.8: platform.book.command.create-placement (command; stable).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def RequestPlacementChange(self, request, context):
-        """W11.9: platform.book.command.request-placement-change (command; preview).
+        """W11.9: platform.book.command.request-placement-change (command; stable).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def ReportPlacement(self, request, context):
-        """W11.10: platform.book.command.report-placement (command; preview).
+        """W11.10: platform.book.command.report-placement (command; stable).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def ReportExecution(self, request, context):
-        """W11.11: platform.book.command.report-execution (command; preview).
+        """W11.11: platform.book.command.report-execution (command; stable).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def ReportCharge(self, request, context):
-        """W11.12: platform.book.command.report-charge (command; preview).
+        """W11.12: platform.book.command.report-charge (command; stable).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def AcknowledgeFlag(self, request, context):
-        """W11.14: platform.book.command.acknowledge-flag (command; preview).
+        """W11.14: platform.book.command.acknowledge-flag (command; stable).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def ListTradingInstructions(self, request, context):
-        """W11.16: platform.book.query.list-trading-instructions (query; preview).
+        """W11.16: platform.book.query.list-trading-instructions (query; stable).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def ListOrders(self, request, context):
-        """W11.17: platform.book.query.list-orders (query; preview).
+        """W11.17: platform.book.query.list-orders (query; stable).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def ReadOrderHistory(self, request, context):
-        """W11.17: platform.book.query.order-history (query; preview).
+        """W11.17: platform.book.query.order-history (query; stable).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def RecordLocate(self, request, context):
-        """W11.18: platform.book.command.record-locate (command; preview).
+        """W11.18: platform.book.command.record-locate (command; stable).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def ListLocates(self, request, context):
-        """W11.18: platform.book.query.list-locates (query; preview).
+        """W11.18: platform.book.query.list-locates (query; stable).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def RecordLocateUse(self, request, context):
-        """W11.19: platform.book.command.record-locate-use (command; preview).
+        """W11.19: platform.book.command.record-locate-use (command; stable).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def ReportVenueCatalogue(self, request, context):
-        """W11.20: platform.config.event.venue-catalogue (event; preview).
+        """W11.20: platform.config.event.venue-catalogue (event; stable).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def ReadVenueCatalogue(self, request, context):
-        """W11.20: platform.config.query.venue-catalogue (query; preview).
+        """W11.20: platform.config.query.venue-catalogue (query; stable).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def MapVenueAccount(self, request, context):
-        """W11.22: platform.config.command.map-venue-account (command; preview).
+        """W11.22: platform.config.command.map-venue-account (command; stable).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def AcceptExecution(self, request, context):
-        """W11.23: platform.book.command.accept-execution (command; preview).
+        """W11.23: platform.book.command.accept-execution (command; stable).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def DontKnowExecution(self, request, context):
-        """W11.24: platform.book.command.dont-know-execution (command; preview).
+        """W11.24: platform.book.command.dont-know-execution (command; stable).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -731,6 +806,83 @@ class PluginOperationsServicer(object):
 
     def ReportValueDateRoll(self, request, context):
         """W11.25: platform.book.command.report-value-date-roll (command; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def SetAllocationInstruction(self, request, context):
+        """W11.26: platform.book.command.set-allocation-instruction (command; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def BookOrder(self, request, context):
+        """W11.27: platform.book.command.book-order (command; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def HandOffBooking(self, request, context):
+        """W11.28: platform.book.command.hand-off-booking (command; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def CorrectBooking(self, request, context):
+        """W11.29: platform.book.command.correct-booking (command; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListBookings(self, request, context):
+        """W11.31: platform.book.query.list-bookings (query; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ReportGiveUp(self, request, context):
+        """W11.32: platform.book.command.report-give-up (command; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RecordSleeveCross(self, request, context):
+        """W11.33: platform.book.command.record-sleeve-cross (command; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RaiseAlert(self, request, context):
+        """W11.34: platform.book.command.raise-alert (command; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def AcknowledgeAlert(self, request, context):
+        """W11.34: platform.book.command.acknowledge-alert (command; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListAlerts(self, request, context):
+        """W11.35: platform.book.query.list-alerts (query; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ReadLocalRecordOrders(self, request, context):
+        """W11.37: platform.book.query.read-local-record-orders (query; preview).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -759,6 +911,34 @@ class PluginOperationsServicer(object):
 
     def ComputeDate(self, request, context):
         """W3.20: platform.reference.query.compute-date (query; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListReplacements(self, request, context):
+        """W3.22: platform.reference.query.list-replacements (query; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def OfferTemplateFields(self, request, context):
+        """W3.23: platform.reference.command.offer-template-fields (command; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListTemplates(self, request, context):
+        """W3.24: platform.reference.query.list-templates (query; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ReadTemplate(self, request, context):
+        """W3.24: platform.reference.query.read-template (query; preview).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -1113,6 +1293,61 @@ def add_PluginOperationsServicer_to_server(servicer, server):
                     request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReportValueDateRollParams.FromString,
                     response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReportValueDateRollResult.SerializeToString,
             ),
+            'SetAllocationInstruction': grpc.unary_unary_rpc_method_handler(
+                    servicer.SetAllocationInstruction,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.SetAllocationInstructionParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.SetAllocationInstructionResult.SerializeToString,
+            ),
+            'BookOrder': grpc.unary_unary_rpc_method_handler(
+                    servicer.BookOrder,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.BookOrderParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.BookOrderResult.SerializeToString,
+            ),
+            'HandOffBooking': grpc.unary_unary_rpc_method_handler(
+                    servicer.HandOffBooking,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.HandOffBookingParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.HandOffBookingResult.SerializeToString,
+            ),
+            'CorrectBooking': grpc.unary_unary_rpc_method_handler(
+                    servicer.CorrectBooking,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.CorrectBookingParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.CorrectBookingResult.SerializeToString,
+            ),
+            'ListBookings': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListBookings,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListBookingsParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListBookingsResult.SerializeToString,
+            ),
+            'ReportGiveUp': grpc.unary_unary_rpc_method_handler(
+                    servicer.ReportGiveUp,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReportGiveUpParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReportGiveUpResult.SerializeToString,
+            ),
+            'RecordSleeveCross': grpc.unary_unary_rpc_method_handler(
+                    servicer.RecordSleeveCross,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordSleeveCrossParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordSleeveCrossResult.SerializeToString,
+            ),
+            'RaiseAlert': grpc.unary_unary_rpc_method_handler(
+                    servicer.RaiseAlert,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RaiseAlertParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RaiseAlertResult.SerializeToString,
+            ),
+            'AcknowledgeAlert': grpc.unary_unary_rpc_method_handler(
+                    servicer.AcknowledgeAlert,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.AcknowledgeAlertParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.AcknowledgeAlertResult.SerializeToString,
+            ),
+            'ListAlerts': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListAlerts,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListAlertsParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListAlertsResult.SerializeToString,
+            ),
+            'ReadLocalRecordOrders': grpc.unary_unary_rpc_method_handler(
+                    servicer.ReadLocalRecordOrders,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadLocalRecordOrdersParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadLocalRecordOrdersResult.SerializeToString,
+            ),
             'ResolveVenue': grpc.unary_unary_rpc_method_handler(
                     servicer.ResolveVenue,
                     request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ResolveVenueParams.FromString,
@@ -1132,6 +1367,26 @@ def add_PluginOperationsServicer_to_server(servicer, server):
                     servicer.ComputeDate,
                     request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ComputeDateParams.FromString,
                     response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ComputeDateResult.SerializeToString,
+            ),
+            'ListReplacements': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListReplacements,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListReplacementsParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListReplacementsResult.SerializeToString,
+            ),
+            'OfferTemplateFields': grpc.unary_unary_rpc_method_handler(
+                    servicer.OfferTemplateFields,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.OfferTemplateFieldsParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.OfferTemplateFieldsResult.SerializeToString,
+            ),
+            'ListTemplates': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListTemplates,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListTemplatesParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListTemplatesResult.SerializeToString,
+            ),
+            'ReadTemplate': grpc.unary_unary_rpc_method_handler(
+                    servicer.ReadTemplate,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadTemplateParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadTemplateResult.SerializeToString,
             ),
             'RecordPrices': grpc.unary_unary_rpc_method_handler(
                     servicer.RecordPrices,
@@ -2587,6 +2842,303 @@ class PluginOperations(object):
             _registered_method=True)
 
     @staticmethod
+    def SetAllocationInstruction(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/SetAllocationInstruction',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.SetAllocationInstructionParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.SetAllocationInstructionResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def BookOrder(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/BookOrder',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.BookOrderParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.BookOrderResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def HandOffBooking(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/HandOffBooking',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.HandOffBookingParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.HandOffBookingResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def CorrectBooking(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/CorrectBooking',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.CorrectBookingParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.CorrectBookingResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListBookings(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ListBookings',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListBookingsParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListBookingsResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ReportGiveUp(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ReportGiveUp',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ReportGiveUpParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ReportGiveUpResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RecordSleeveCross(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/RecordSleeveCross',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordSleeveCrossParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordSleeveCrossResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RaiseAlert(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/RaiseAlert',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RaiseAlertParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RaiseAlertResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def AcknowledgeAlert(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/AcknowledgeAlert',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.AcknowledgeAlertParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.AcknowledgeAlertResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListAlerts(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ListAlerts',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListAlertsParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListAlertsResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ReadLocalRecordOrders(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ReadLocalRecordOrders',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadLocalRecordOrdersParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadLocalRecordOrdersResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
     def ResolveVenue(request,
             target,
             options=(),
@@ -2684,6 +3236,114 @@ class PluginOperations(object):
             '/meridian.plugin.v1.PluginOperations/ComputeDate',
             meridian_dot_plugin_dot_v1_dot_operations__pb2.ComputeDateParams.SerializeToString,
             meridian_dot_plugin_dot_v1_dot_operations__pb2.ComputeDateResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListReplacements(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ListReplacements',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListReplacementsParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListReplacementsResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def OfferTemplateFields(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/OfferTemplateFields',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.OfferTemplateFieldsParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.OfferTemplateFieldsResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListTemplates(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ListTemplates',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListTemplatesParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListTemplatesResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ReadTemplate(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ReadTemplate',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadTemplateParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadTemplateResult.FromString,
             options,
             channel_credentials,
             insecure,

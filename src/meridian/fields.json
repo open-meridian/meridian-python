@@ -56,6 +56,22 @@
         {
           "message": "meridian.v1.Locate",
           "intent": "a locate the fund requested of its prime, the prime's answer and each use on it (contract v22, W11.18, W11.19)"
+        },
+        {
+          "message": "meridian.v1.Booking",
+          "intent": "a booking of an order's executions to their accounts, its allocations and its state folded from its journal (contract v24, W11.27 to W11.30)"
+        },
+        {
+          "message": "meridian.v1.Allocation",
+          "intent": "one account's part of a booking: its quantity, average price, gross, fees and net, and its intended settlement date (contract v24, W11.27)"
+        },
+        {
+          "message": "meridian.v1.Alert",
+          "intent": "a post-trade alert in an account's partition, raised, acknowledged or cleared, never deleted (contract v24, W11.34)"
+        },
+        {
+          "message": "meridian.v1.SleeveCross",
+          "intent": "a cross between two sleeves of one account, its tax and performance layers (contract v24, W11.33)"
         }
       ]
     },
@@ -278,19 +294,25 @@
   },
   "operations": {
     "AcceptExecution": "meridian.v1.AcceptExecutionRequest",
+    "AcknowledgeAlert": "meridian.v1.AcknowledgeAlertRequest",
     "AcknowledgeFlag": "meridian.v1.AcknowledgeFlagRequest",
+    "BookOrder": "meridian.v1.BookOrderRequest",
     "CloseBreaksAsCleared": "meridian.v1.CloseBreaksAsClearedRequest",
     "ComputeDate": "meridian.v1.ComputeDateRequest",
+    "CorrectBooking": "meridian.v1.CorrectBookingRequest",
     "CreatePlacement": "meridian.v1.CreatePlacementRequest",
     "DecideApproval": "meridian.v1.DecideApprovalRequest",
     "DeclineWant": "meridian.v1.DeclineWantRequest",
     "DontKnowExecution": "meridian.v1.DontKnowExecutionRequest",
+    "HandOffBooking": "meridian.v1.HandOffBookingRequest",
     "HandleBreak": "meridian.v1.HandleBreakRequest",
     "LinkExternalAccount": "meridian.v1.LinkExternalAccountRequest",
     "ListAccountAttributes": "meridian.v1.ListAccountAttributesRequest",
     "ListAccountFigures": "meridian.v1.ListAccountFiguresRequest",
     "ListActivities": "meridian.v1.ListActivitiesRequest",
+    "ListAlerts": "meridian.v1.ListAlertsRequest",
     "ListBars": "meridian.v1.ListBarsRequest",
+    "ListBookings": "meridian.v1.ListBookingsRequest",
     "ListBreaks": "meridian.v1.ListBreaksRequest",
     "ListCustodialPositions": "meridian.v1.ListCustodialPositionsRequest",
     "ListDatasets": "meridian.v1.ListDatasetsRequest",
@@ -300,16 +322,22 @@
     "ListPositions": "meridian.v1.ListPositionsRequest",
     "ListPrices": "meridian.v1.ListPricesRequest",
     "ListQuotes": "meridian.v1.ListQuotesRequest",
+    "ListReplacements": "meridian.v1.ListReplacementsRequest",
     "ListStatements": "meridian.v1.ListStatementsRequest",
     "ListSyncStatuses": "meridian.v1.ListSyncStatusesRequest",
+    "ListTemplates": "meridian.v1.ListTemplatesRequest",
     "ListTrades": "meridian.v1.ListTradesRequest",
     "ListTradingInstructions": "meridian.v1.ListTradingInstructionsRequest",
     "MapVenueAccount": "meridian.v1.MapVenueAccountRequest",
+    "OfferTemplateFields": "meridian.v1.OfferTemplateFieldsRequest",
     "ProposeOrder": "meridian.v1.ProposeOrderRequest",
+    "RaiseAlert": "meridian.v1.RaiseAlertRequest",
     "ReResolveActivity": "meridian.v1.ReResolveActivityRequest",
     "ReadAccountsForLinking": "meridian.v1.AccountsRequest",
     "ReadCalendar": "meridian.v1.ReadCalendarRequest",
+    "ReadLocalRecordOrders": "meridian.v1.ReadLocalRecordOrdersRequest",
     "ReadOrderHistory": "meridian.v1.OrderHistoryRequest",
+    "ReadTemplate": "meridian.v1.ReadTemplateRequest",
     "ReadVenueCatalogue": "meridian.v1.ReadVenueCatalogueRequest",
     "RecordAccountFigures": "meridian.v1.RecordAccountFiguresRequest",
     "RecordActivity": "meridian.v1.RecordActivityRequest",
@@ -326,11 +354,13 @@
     "RecordOutcomes": "meridian.v1.RecordOutcomesRequest",
     "RecordPrices": "meridian.v1.RecordPricesRequest",
     "RecordQuotes": "meridian.v1.RecordQuotesRequest",
+    "RecordSleeveCross": "meridian.v1.RecordSleeveCrossRequest",
     "RecordTrades": "meridian.v1.RecordTradesRequest",
     "ReleaseOrder": "meridian.v1.ReleaseOrderRequest",
     "ReportCharge": "meridian.v1.ReportChargeRequest",
     "ReportExecution": "meridian.v1.ReportExecutionRequest",
     "ReportExternalAccounts": "meridian.v1.ExternalAccountsEvent",
+    "ReportGiveUp": "meridian.v1.ReportGiveUpRequest",
     "ReportMissingInstrument": "meridian.v1.MissingInstrumentDetectedEvent",
     "ReportMissingVenue": "meridian.v1.MissingVenueDetectedEvent",
     "ReportPlacement": "meridian.v1.ReportPlacementRequest",
@@ -343,6 +373,7 @@
     "ResolveIdentifier": "meridian.v1.ResolveIdentifierRequest",
     "ResolveInstrument": "meridian.v1.ResolveInstrumentRequest",
     "ResolveVenue": "meridian.v1.ResolveVenueRequest",
+    "SetAllocationInstruction": "meridian.v1.SetAllocationInstructionRequest",
     "SetWorkingCondition": "meridian.v1.SetWorkingConditionRequest",
     "SidecarCallAsServiceAccount": "meridian.v1.CallAsServiceAccountRequest",
     "SidecarFileTicket": "meridian.v1.FileTicketRequest",
@@ -1285,13 +1316,20 @@
     {
       "name": "meridian.v1.BookPosition.lots",
       "type": "repeated message Lot",
-      "empty": "empty on cash, and on a position closed to zero",
+      "empty": "empty on the account's base currency (until v24, on cash), and on a position closed to zero",
       "intent": "lists the open lots",
-      "meaning": "the book's own lots, their open quantities summing to the trade-date quantity, cash excepted",
+      "meaning": "the book's own lots, their open quantities summing to the trade-date quantity, the account's base currency excepted; from v24 a currency other than the base carries lots with base-currency cost (W11.13)",
       "not_meaning": "the custodian's lots, which CustodialPosition carries as reported",
       "filled": "derived",
       "filled_by": "bor",
       "since": "v8",
+      "changes": [
+        {
+          "version": "v24",
+          "kind": "clarified",
+          "what": "the account's base currency alone has no lots; every other currency carries them (the order-path plan's v24 item 19, option (c))"
+        }
+      ],
       "stability": "stable",
       "store": "bor"
     },
@@ -2183,7 +2221,7 @@
     {
       "name": "meridian.v1.OpeningPosition.lots",
       "type": "repeated message OpeningLot",
-      "empty": "empty on cash, which has none; on any other position refused (REFUSAL_REASON_INCOMPLETE), naming it; from v10 the instrument's record always says whether it is cash, or the position is refused naming its asset class",
+      "empty": "empty on the account's base currency, which has none (until v24, on cash); on any other position refused (REFUSAL_REASON_INCOMPLETE), naming it; from v10 the instrument's record always says whether it is cash, or the position is refused naming its asset class",
       "intent": "states its lots",
       "meaning": "as reported and completed by a person, each with its quantity, cost and acquisition date; a money market fund's one lot at stable value; they sum to the quantity, or the balance is refused",
       "not_meaning": "the book's lots, which the book mints from these",
@@ -2194,7 +2232,7 @@
         {
           "row": "RecordOpeningBalance",
           "since": "v9",
-          "unless": "the position's instrument is cash by its record; a record naming no asset class is refused for that, and the lots asked for once it does"
+          "unless": "the position is in the account's base currency (W9.13; until v24, the position's instrument is cash by its record); a record naming no asset class is refused for that, and the lots asked for once it does"
         }
       ],
       "changes": [
@@ -2204,6 +2242,20 @@
           "what": "required on every position but cash: no lot of unknown cost stands in for missing lots",
           "was": {
             "required": []
+          }
+        },
+        {
+          "version": "v24",
+          "kind": "narrowed",
+          "what": "required on every position but the account's base currency: a currency other than the base carries lots with base-currency cost and acquisition date (the order-path plan's v24 item 19, option (c))",
+          "was": {
+            "required": [
+              {
+                "row": "RecordOpeningBalance",
+                "since": "v9",
+                "unless": "the position's instrument is cash by its record; a record naming no asset class is refused for that, and the lots asked for once it does"
+              }
+            ]
           }
         }
       ],
@@ -2994,7 +3046,7 @@
     {
       "name": "meridian.v1.Break.position",
       "type": "message PositionKey",
-      "empty": "unset unless of a position",
+      "empty": "unset unless of a position: unset for a figure, and from v24 for an unrecognized security, which the street record alone names",
       "intent": "names the position the break is of",
       "meaning": "the instrument and side",
       "not_meaning": "a figure",
@@ -3052,6 +3104,11 @@
         {
           "value": "BREAK_CATEGORY_FIGURE",
           "meaning": "a figure the book holds a value of its own for, such as the street's available and not available against the book's position, or a sub-balance against the book's encumbrance of its kind, location and pledgee"
+        },
+        {
+          "value": "BREAK_CATEGORY_UNRECOGNIZED_SECURITY",
+          "meaning": "a statement row the street kept unresolved because its source is thinner than an instrument record's minimum (W3.7): no instrument and no position, the street record naming it by value, never silent (W9.3); ISO 15022/20022's DSEC",
+          "since": "v24"
         }
       ],
       "empty": "never unspecified",
@@ -3061,6 +3118,49 @@
       "filled": "as-reported",
       "filled_by": "operations",
       "since": "v8",
+      "changes": [
+        {
+          "version": "v24",
+          "kind": "widened",
+          "what": "an unrecognized security, a placeholder outside the book (the one-ID model, approved 2026-10-14)",
+          "was": {
+            "allowed": [
+              {
+                "value": "BREAK_CATEGORY_UNSPECIFIED",
+                "meaning": "not said; refused"
+              },
+              {
+                "value": "BREAK_CATEGORY_TRADE_DATE_QUANTITY",
+                "meaning": "the trade-date quantities differ"
+              },
+              {
+                "value": "BREAK_CATEGORY_SETTLED_QUANTITY",
+                "meaning": "the settled quantities differ, or one side states none"
+              },
+              {
+                "value": "BREAK_CATEGORY_COST_OR_LOTS",
+                "meaning": "the cost or the lots differ"
+              },
+              {
+                "value": "BREAK_CATEGORY_SETTLED_AGAINST_PENDING",
+                "meaning": "the trade-date quantities agree and the split between settled and pending does not"
+              },
+              {
+                "value": "BREAK_CATEGORY_BOOK_ONLY",
+                "meaning": "the book holds a position the street does not"
+              },
+              {
+                "value": "BREAK_CATEGORY_STREET_ONLY",
+                "meaning": "the street holds a position the book does not"
+              },
+              {
+                "value": "BREAK_CATEGORY_FIGURE",
+                "meaning": "a figure the book holds a value of its own for, such as the street's available and not available against the book's position, or a sub-balance against the book's encumbrance of its kind, location and pledgee"
+              }
+            ]
+          }
+        }
+      ],
       "stability": "stable",
       "store": "bor"
     },
@@ -3267,7 +3367,7 @@
     {
       "name": "meridian.v1.RecordBreakRequest.position",
       "type": "message PositionKey",
-      "empty": "unset unless of a position",
+      "empty": "unset unless of a position: unset for a figure, and from v24 for an unrecognized security, which the street record alone names",
       "intent": "names the position the break is of",
       "meaning": "the instrument and side",
       "not_meaning": "a figure",
@@ -3325,6 +3425,11 @@
         {
           "value": "BREAK_CATEGORY_FIGURE",
           "meaning": "a figure the book holds a value of its own for, such as the street's available and not available against the book's position, or a sub-balance against the book's encumbrance of its kind, location and pledgee"
+        },
+        {
+          "value": "BREAK_CATEGORY_UNRECOGNIZED_SECURITY",
+          "meaning": "a statement row the street kept unresolved because its source is thinner than an instrument record's minimum (W3.7): no instrument and no position, the street record naming it by value, never silent (W9.3); ISO 15022/20022's DSEC",
+          "since": "v24"
         }
       ],
       "empty": "never unspecified",
@@ -3334,6 +3439,49 @@
       "filled": "as-reported",
       "filled_by": "operations",
       "since": "v8",
+      "changes": [
+        {
+          "version": "v24",
+          "kind": "widened",
+          "what": "an unrecognized security, a placeholder outside the book (the one-ID model, approved 2026-10-14)",
+          "was": {
+            "allowed": [
+              {
+                "value": "BREAK_CATEGORY_UNSPECIFIED",
+                "meaning": "not said; refused"
+              },
+              {
+                "value": "BREAK_CATEGORY_TRADE_DATE_QUANTITY",
+                "meaning": "the trade-date quantities differ"
+              },
+              {
+                "value": "BREAK_CATEGORY_SETTLED_QUANTITY",
+                "meaning": "the settled quantities differ, or one side states none"
+              },
+              {
+                "value": "BREAK_CATEGORY_COST_OR_LOTS",
+                "meaning": "the cost or the lots differ"
+              },
+              {
+                "value": "BREAK_CATEGORY_SETTLED_AGAINST_PENDING",
+                "meaning": "the trade-date quantities agree and the split between settled and pending does not"
+              },
+              {
+                "value": "BREAK_CATEGORY_BOOK_ONLY",
+                "meaning": "the book holds a position the street does not"
+              },
+              {
+                "value": "BREAK_CATEGORY_STREET_ONLY",
+                "meaning": "the street holds a position the book does not"
+              },
+              {
+                "value": "BREAK_CATEGORY_FIGURE",
+                "meaning": "a figure the book holds a value of its own for, such as the street's available and not available against the book's position, or a sub-balance against the book's encumbrance of its kind, location and pledgee"
+              }
+            ]
+          }
+        }
+      ],
       "stability": "stable",
       "store": "bor"
     },
@@ -5583,10 +5731,17 @@
       "empty": "unset: the whole is in the order's own account; a child order carries none, its parent's governing (Q47)",
       "intent": "says how the order is allocated across accounts (principle 1)",
       "meaning": "portfolio's accounts with amounts or weights; at release it sums to the ordered quantity (REFUSAL_REASON_ALLOCATION_UNBALANCED)",
-      "not_meaning": "a booking, which is slice B's",
+      "not_meaning": "a booking, its own record from v24 (W11.27)",
       "filled": "as-reported",
       "filled_by": "portfolio",
       "since": "v22",
+      "changes": [
+        {
+          "version": "v24",
+          "kind": "clarified",
+          "what": "amended after release by SetAllocationInstruction, with a reason, never for what is booked (W11.26)"
+        }
+      ],
       "stability": "preview",
       "store": "bor"
     },
@@ -6713,13 +6868,20 @@
     {
       "name": "meridian.v1.AllocationLine.sleeve",
       "type": "text",
-      "empty": "empty until slice B lands",
+      "empty": "empty for the account's unsleeved part; until v24, always empty",
       "intent": "names the sleeve an account's part is allocated to",
-      "meaning": "slice B's, with the allocation; carried empty until then",
+      "meaning": "from v24 the sleeve a booking allocates the account's part to (W11.26, W11.27); the order's own sleeve the default",
       "not_meaning": "the order's own sleeve",
       "filled": "as-reported",
       "filled_by": "portfolio",
       "since": "v22",
+      "changes": [
+        {
+          "version": "v24",
+          "kind": "clarified",
+          "what": "carried from v24, with booking's allocation to sleeves (step 5's requirement 63); empty still means the unsleeved part"
+        }
+      ],
       "stability": "preview",
       "store": "bor"
     },
@@ -8674,11 +8836,18 @@
       "type": "text",
       "empty": "empty unless given up",
       "intent": "names the prime broker the execution is given up to (requirement 58)",
-      "meaning": "as carried; the give-up's acceptance is slice B's",
+      "meaning": "as carried; from v24 the prime's answer is recorded by ReportGiveUp (W11.32)",
       "not_meaning": "the counterparty",
       "filled": "as-reported",
       "filled_by": "connectivity",
       "since": "v22",
+      "changes": [
+        {
+          "version": "v24",
+          "kind": "clarified",
+          "what": "the give-up's answer is recorded from v24 (W11.32)"
+        }
+      ],
       "stability": "preview",
       "store": "bor"
     },
@@ -9069,6 +9238,14 @@
         {
           "row": "ReportCharge",
           "since": "v22"
+        },
+        {
+          "row": "BookOrder",
+          "since": "v24"
+        },
+        {
+          "row": "CorrectBooking",
+          "since": "v24"
         }
       ],
       "stability": "preview",
@@ -9950,11 +10127,18 @@
       "type": "identifier instrument",
       "empty": "never empty",
       "intent": "names what the order trades",
-      "meaning": "the deployment's instrument ID; one whose record lacks its asset class or currency is refused REFUSAL_REASON_INCOMPLETE naming the field (Q18); a child's is its parent's, another refused INVALID_ARGUMENT",
+      "meaning": "the deployment's instrument ID; one whose record lacks its asset class or currency is refused REFUSAL_REASON_INCOMPLETE naming the field (Q18); a child's is its parent's, another refused INVALID_ARGUMENT. From v24 one whose record is provisional is the escape hatch: admitted while the deployment's setting allows_local_record_orders allows it, as it does by default, the order shown \"local record: not priced\", and refused REFUSAL_REASON_LOCAL_RECORD_NOT_ALLOWED while it is off (W11's invariant, W11.36)",
       "not_meaning": "a ticker or a venue's symbol",
       "filled": "as-reported",
       "filled_by": "portfolio",
       "since": "v22",
+      "changes": [
+        {
+          "version": "v24",
+          "kind": "clarified",
+          "what": "an order on a provisional record is the escape hatch, refused REFUSAL_REASON_LOCAL_RECORD_NOT_ALLOWED while the deployment's setting allows_local_record_orders is off (the one-ID model, ruled 2026-10-14; the names approved the same day)"
+        }
+      ],
       "stability": "preview",
       "store": "bor"
     },
@@ -13154,6 +13338,59 @@
       "store": "bor"
     },
     {
+      "name": "meridian.v1.SetLocalRecordOrdersRequest.allows_local_record_orders",
+      "type": "boolean",
+      "empty": "false turns the escape hatch off",
+      "intent": "sets whether an order may name a local record (W11.36)",
+      "meaning": "true, as by default: an order or an accept naming an instrument whose record is provisional is admitted and marked local; false: refused REFUSAL_REASON_LOCAL_RECORD_NOT_ALLOWED from then, orders already working continuing. Shown \"Allow orders on local records\"",
+      "not_meaning": "a setting per account",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.SetLocalRecordOrdersRequest.reason",
+      "type": "text",
+      "empty": "empty is refused, REFUSAL_REASON_REASON_REQUIRED",
+      "intent": "records why",
+      "meaning": "the deployment admin's words",
+      "not_meaning": "a code",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.LocalRecordOrdersSetting.allows_local_record_orders",
+      "type": "boolean",
+      "empty": "false: the escape hatch is off",
+      "intent": "says whether an order may name a local record (W11.36, W11.37)",
+      "meaning": "the deployment's setting in force, true by default and at the upgrade to v24",
+      "not_meaning": "whether any order is on a local record",
+      "filled": "decided",
+      "filled_by": "bor",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.LocalRecordOrdersSetting.open_order_count",
+      "type": "integer",
+      "unit": "live orders",
+      "empty": "0: no live order names a local record",
+      "intent": "counts the live orders on local records across the deployment, for the home page (W11.37)",
+      "meaning": "orders not ended whose instrument's record is provisional, as of the answer; a count naming no account and no order",
+      "not_meaning": "the local records held, which the instrument store counts",
+      "filled": "derived",
+      "filled_by": "bor",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
       "name": "meridian.v1.RecordLocateRequest.account_id",
       "type": "identifier account",
       "empty": "empty, never refused, where the venue account code maps to no account: kept unplaced",
@@ -14314,6 +14551,1851 @@
       "filled": "decided",
       "filled_by": "bor",
       "since": "v22",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.AccountAttributes.error_account",
+      "type": "boolean",
+      "empty": "false unless a deployment admin marked the account",
+      "intent": "says whether the account is the firm's error account (W9.13; step 5's Q30)",
+      "meaning": "true: a booking may allocate to it without the instruction naming it, every allocation carrying its reason and ErrorCause and raising an alert (W11.27, W11.34); unmarking is recorded, and past allocations keep their flag",
+      "not_meaning": "a FINRA Rule 4515 approval, or any regulatory status",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.AccountAttributes.allocation_account",
+      "type": "boolean",
+      "empty": "false unless a deployment admin marked the account",
+      "intent": "says whether the account is an allocation account a block order is proposed in (W9.13, W11.1)",
+      "meaning": "true: it has no statement to reconcile against and should be flat once booked; a non-zero balance after booking holds the booking (W11.28)",
+      "not_meaning": "an account a client or fund owns",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.SetAccountAttributeRequest.error_account",
+      "type": "boolean",
+      "empty": "unset unless this is the attribute",
+      "intent": "marks or unmarks the account as the firm's error account (W9.13)",
+      "meaning": "a deployment admin's, from the dashboard or dashboard__set_account_attribute, with its reason; each change its own record, unmarking never refused",
+      "not_meaning": "anything a plugin sets",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.SetAccountAttributeRequest.allocation_account",
+      "type": "boolean",
+      "empty": "unset unless this is the attribute",
+      "intent": "marks or unmarks the account as an allocation account (W9.13)",
+      "meaning": "a deployment admin's, with its reason, each change its own record",
+      "not_meaning": "anything a plugin sets",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.ProposeOrderRequest.block_member_order_ids",
+      "type": "repeated text",
+      "empty": "empty unless the oms proposes a block order",
+      "intent": "names the member orders a block order merges (W11.1; step 5's link 2)",
+      "meaning": "each a released order of one instrument and side, compared through the replacement; the block's quantity is the sum of their idle quantities, and it is released on creation in the allocation account",
+      "not_meaning": "a split child's parent, or orders a firm's order represents",
+      "filled": "as-reported",
+      "filled_by": "oms",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.Fee.capitalised",
+      "type": "boolean",
+      "empty": "false: the fee is not in a lot's cost",
+      "intent": "says whether a fee on an allocation enters the cost of the lot it opens (W11.27; the order-path plan's v24 item 4)",
+      "meaning": "the oms's choice by its policy; a capitalised fee enters the lot's cost on a buy; every fee stays its own cash line either way, so cash is unchanged, and on a sale a reader nets proceeds from the flags",
+      "not_meaning": "a default core sets: core sets none (26 CFR 1.1012-1(h)(1))",
+      "filled": "as-reported",
+      "filled_by": "oms",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.Booking.booking_id",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "identifies the booking",
+      "meaning": "minted by the book, a ULID behind its prefix, never reused (decisions/035, point 7); the reference the street echoes back",
+      "not_meaning": "an allocation's identifier, or FIX's AllocID as a venue keeps it",
+      "filled": "minted",
+      "filled_by": "bor",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.Booking.order_id",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the order the booking books, a block order included",
+      "meaning": "the order's `ORD-` ID; a child's executions are booked as its parent's",
+      "not_meaning": "a member order of a block, which each allocation names by its account",
+      "filled": "decided",
+      "filled_by": "bor",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.Booking.execution_ids",
+      "type": "repeated text",
+      "empty": "never empty",
+      "intent": "names the executions the booking books (W11.27)",
+      "meaning": "an explicit list on one order, sharing instrument, side, trade date and settlement date, as FIX's AllocationInstruction (J) requires of NoExecs; any subset of the unbooked",
+      "not_meaning": "every execution on the order: a late fill stays visibly unbooked",
+      "filled": "as-reported",
+      "filled_by": "oms",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.Booking.allocations",
+      "type": "repeated message Allocation",
+      "empty": "never empty",
+      "intent": "carries the booking's allocations, one per account",
+      "meaning": "summing exactly to the executions booked in quantity, gross and each fee kind, the residual on a named allocation (step 5's Q29)",
+      "not_meaning": "the allocation instruction, which is the order's",
+      "filled": "as-reported",
+      "filled_by": "oms",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.Booking.state",
+      "type": "enum BookingState",
+      "allowed": [
+        {
+          "value": "BOOKING_STATE_UNSPECIFIED",
+          "meaning": "not said; never answered"
+        },
+        {
+          "value": "BOOKING_STATE_BOOKED",
+          "meaning": "booked, its allocations tying out, not yet handed off or closed"
+        },
+        {
+          "value": "BOOKING_STATE_HELD",
+          "meaning": "executed does not equal allocated -- a bust, a correction, a late fill or a later fee since booking, or a failed hand-off -- held with the reason, its alert raised (W11.28)"
+        },
+        {
+          "value": "BOOKING_STATE_HANDED_OFF",
+          "meaning": "handed off to operations, which owns each allocation's post-trade life"
+        },
+        {
+          "value": "BOOKING_STATE_CLOSED",
+          "meaning": "a client's booking the firm does not settle, closed, its error-account allocations handed off"
+        },
+        {
+          "value": "BOOKING_STATE_CANCELLED",
+          "meaning": "cancelled by the oms before the hand-off, so the executions may be booked again"
+        }
+      ],
+      "empty": "never unspecified",
+      "intent": "says where the booking stands (decisions/035 as amended at v24)",
+      "meaning": "derived from its journal, never stored; its transitions are matrix/transitions.tsv's b-rows",
+      "not_meaning": "the order's state, which booking leaves unchanged but for a block's member order",
+      "filled": "derived",
+      "filled_by": "bor",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.BookOrderRequest.execution_ids",
+      "type": "repeated text",
+      "bounds": {
+        "count": [
+          1,
+          500
+        ]
+      },
+      "empty": "never empty",
+      "intent": "names the executions to book (W11.27)",
+      "meaning": "an explicit list on one order sharing instrument, side, trade date and settlement date; an unmatched, DK'd, superseded or already-booked one refused REFUSAL_REASON_ORDER_STATE, naming it",
+      "not_meaning": "the order's executions as a whole",
+      "filled": "as-reported",
+      "filled_by": "oms",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.BookOrderRequest.allocations",
+      "type": "repeated message Allocation",
+      "empty": "never empty",
+      "intent": "carries the booking's allocations (W11.27)",
+      "meaning": "one per account, the error account's included, tying out exactly or refused REFUSAL_REASON_BOOKING_UNBALANCED; an account neither instructed nor marked an error account refused REFUSAL_REASON_ACCOUNT_NOT_INSTRUCTED",
+      "not_meaning": "the allocation instruction",
+      "filled": "as-reported",
+      "filled_by": "oms",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.BookOrderRequest.hand_off",
+      "type": "boolean",
+      "empty": "false: booked, to be handed off by its own act",
+      "intent": "asks to hand off in the same act (W11.27; the order-path plan's v24 item 8)",
+      "meaning": "true: handed off in the same act where the check passes, and booked where it does not, as FIX's Ready-To-Book (AllocType, 626) in one step",
+      "not_meaning": "closing a client's booking",
+      "filled": "as-reported",
+      "filled_by": "oms",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.HandOffBookingRequest.booking_id",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the booking to hand off or close (W11.28)",
+      "meaning": "a booked or held booking; any other refused REFUSAL_REASON_ORDER_STATE",
+      "not_meaning": "an order",
+      "filled": "as-reported",
+      "filled_by": "oms",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.CorrectBookingRequest.booking_id",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the booking to correct (W11.29)",
+      "meaning": "the booking, as FIX's RefAllocID (72) names the allocation it replaces",
+      "not_meaning": "an order",
+      "filled": "as-reported",
+      "filled_by": "oms",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.CorrectBookingRequest.allocations",
+      "type": "repeated message Allocation",
+      "empty": "empty on a cancel",
+      "intent": "carries the full new allocation set (W11.29)",
+      "meaning": "the whole set, as FIX's allocation Replace carries it; the book computes the movement lines from the difference",
+      "not_meaning": "the lines to move, which the book computes",
+      "filled": "as-reported",
+      "filled_by": "operations",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.CorrectBookingRequest.effective_date",
+      "type": "date",
+      "empty": "empty: the trade date",
+      "intent": "says when a replace takes effect (W11.29)",
+      "meaning": "as of that date, like v23's accept; empty on a cancel",
+      "not_meaning": "when it was recorded, which the journal stamps",
+      "filled": "as-reported",
+      "filled_by": "operations",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.CorrectBookingRequest.reason",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "says why the booking is corrected (W11.29)",
+      "meaning": "bounded text a person wrote, as FIX's AllocCancReplaceReason (796) records why; refused REFUSAL_REASON_REASON_REQUIRED without it",
+      "not_meaning": "instructions to any agent that reads it",
+      "filled": "entered",
+      "filled_by": "operations",
+      "required": [
+        {
+          "row": "CorrectBooking",
+          "since": "v24"
+        }
+      ],
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.Allocation.account_id",
+      "type": "identifier account",
+      "empty": "never empty",
+      "intent": "names the account the allocation books to",
+      "meaning": "an account the allocation instruction names, or one marked an error account (W9.13)",
+      "not_meaning": "the account the executions moved, for a block the allocation account",
+      "filled": "as-reported",
+      "filled_by": "oms",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.Allocation.sleeve",
+      "type": "text",
+      "empty": "empty for the account's unsleeved part",
+      "intent": "names the sleeve the allocation moves (W11.27; step 5's requirement 63)",
+      "meaning": "the instruction line's sleeve, the order's own the default",
+      "not_meaning": "the order's sleeve as such",
+      "filled": "as-reported",
+      "filled_by": "oms",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.Allocation.quantity",
+      "type": "Decimal",
+      "bounds": {
+        "digits": 38,
+        "scale": [
+          0,
+          18
+        ]
+      },
+      "unit": "units of the instrument",
+      "empty": "never empty",
+      "intent": "says how much of the executions the account receives",
+      "meaning": "at the instrument's scale; the allocations sum exactly to the executions booked",
+      "not_meaning": "an ordered quantity",
+      "filled": "as-reported",
+      "filled_by": "oms",
+      "since": "v24",
+      "required": [
+        {
+          "row": "BookOrder",
+          "since": "v24"
+        },
+        {
+          "row": "CorrectBooking",
+          "since": "v24"
+        }
+      ],
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.Allocation.average_price",
+      "type": "Money",
+      "empty": "never empty",
+      "intent": "carries the allocation's average price (W11.27)",
+      "meaning": "the price the account's confirmation states, a lot opening at it plus its capitalised fees",
+      "not_meaning": "an execution's price",
+      "filled": "as-reported",
+      "filled_by": "oms",
+      "since": "v24",
+      "required": [
+        {
+          "row": "BookOrder",
+          "since": "v24"
+        },
+        {
+          "row": "CorrectBooking",
+          "since": "v24"
+        }
+      ],
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.Allocation.gross_amount",
+      "type": "Money",
+      "empty": "never empty",
+      "intent": "carries the allocation's gross amount",
+      "meaning": "quantity times average price, as the oms rounds it; the allocations' gross sums exactly to the executions', the residual on a named allocation (step 5's Q29)",
+      "not_meaning": "the net amount",
+      "filled": "as-reported",
+      "filled_by": "oms",
+      "since": "v24",
+      "required": [
+        {
+          "row": "BookOrder",
+          "since": "v24"
+        },
+        {
+          "row": "CorrectBooking",
+          "since": "v24"
+        }
+      ],
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.Allocation.fees",
+      "type": "repeated message Fee",
+      "empty": "empty where none",
+      "intent": "carries the allocation's fees by kind, each marked capitalised or not",
+      "meaning": "each kind summing exactly to the executions' fees of that kind; every fee its own cash line",
+      "not_meaning": "a fee reported after booking, which holds the booking",
+      "filled": "as-reported",
+      "filled_by": "oms",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.Allocation.net_amount",
+      "type": "Money",
+      "empty": "never empty",
+      "intent": "carries the allocation's net amount",
+      "meaning": "derived from gross and fees, not checked by the book",
+      "not_meaning": "a figure core computes",
+      "filled": "as-reported",
+      "filled_by": "oms",
+      "since": "v24",
+      "required": [
+        {
+          "row": "BookOrder",
+          "since": "v24"
+        },
+        {
+          "row": "CorrectBooking",
+          "since": "v24"
+        }
+      ],
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.Allocation.intended_settlement_date",
+      "type": "date",
+      "empty": "never empty",
+      "intent": "says when the allocation is intended to settle (W11.27, W9.3)",
+      "meaning": "the date operations reconciles the allocation by, superseding the fill's",
+      "not_meaning": "a settled date, which waits for slice D",
+      "filled": "as-reported",
+      "filled_by": "oms",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.Allocation.average_priced",
+      "type": "boolean",
+      "empty": "false: not an average",
+      "intent": "says the allocation states an average of several executions (FIX AvgPxIndicator, 819)",
+      "meaning": "true: priced at the average, as the SEC's average-price notation marks a confirmation",
+      "not_meaning": "a price the venue reported",
+      "filled": "as-reported",
+      "filled_by": "oms",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.Allocation.relieve_lot_ids",
+      "type": "repeated text",
+      "empty": "empty: relieved by the method",
+      "intent": "names specific lots the receiving account relieves on a sale (W11.27)",
+      "meaning": "the account's own lots; the book records when each designation was made and refuses nothing for lateness",
+      "not_meaning": "lots of another account",
+      "filled": "as-reported",
+      "filled_by": "oms",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.Allocation.reason",
+      "type": "text",
+      "empty": "empty unless the allocation is to an error account; never empty there",
+      "intent": "says why an allocation goes to the error account (W11.27; step 5's Q30)",
+      "meaning": "bounded text a person wrote, required on an error-account allocation, REFUSAL_REASON_REASON_REQUIRED without it",
+      "not_meaning": "instructions to any agent that reads it",
+      "filled": "entered",
+      "filled_by": "oms",
+      "required": [
+        {
+          "row": "BookOrder",
+          "since": "v24",
+          "unless": "the allocation's account is not marked an error account"
+        },
+        {
+          "row": "CorrectBooking",
+          "since": "v24",
+          "unless": "the allocation's account is not marked an error account"
+        }
+      ],
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.SleeveCross.order_ids",
+      "type": "repeated text",
+      "empty": "empty where the cross stands in for no orders",
+      "intent": "names the two opposite orders a sleeve cross stands in for (W11.33; the order-path plan's v24 item 17)",
+      "meaning": "each order's filled quantity counts the cross, so each PM's order shows as done, and how; no Execution is minted",
+      "not_meaning": "executions, which a sleeve cross never mints",
+      "filled": "as-reported",
+      "filled_by": "oms",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.SleeveCross.account_id",
+      "type": "identifier account",
+      "empty": "never empty",
+      "intent": "names the account whose sleeves the cross is between",
+      "meaning": "one account; a cross between accounts is an internal cross, a real trade",
+      "not_meaning": "either sleeve",
+      "filled": "as-reported",
+      "filled_by": "oms",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.SleeveCross.instrument_id",
+      "type": "identifier instrument",
+      "empty": "never empty",
+      "intent": "names the instrument crossed",
+      "meaning": "the deployment's record, compared through the replacement",
+      "not_meaning": "a price",
+      "filled": "as-reported",
+      "filled_by": "oms",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.SleeveCross.quantity",
+      "type": "Decimal",
+      "bounds": {
+        "digits": 38,
+        "scale": [
+          0,
+          18
+        ]
+      },
+      "unit": "units of the instrument",
+      "empty": "never empty",
+      "intent": "says how much is crossed",
+      "meaning": "at the instrument's scale; a partial cross splits a lot",
+      "not_meaning": "an order's quantity",
+      "filled": "as-reported",
+      "filled_by": "oms",
+      "since": "v24",
+      "required": [
+        {
+          "row": "RecordSleeveCross",
+          "since": "v24"
+        }
+      ],
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.SleeveCross.reason",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "says who decided the cross and why",
+      "meaning": "bounded text, refused REFUSAL_REASON_REASON_REQUIRED without it",
+      "not_meaning": "instructions to any agent that reads it",
+      "filled": "entered",
+      "filled_by": "oms",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.Alert.account_id",
+      "type": "identifier account",
+      "empty": "never empty",
+      "intent": "names the account whose partition the alert is in (W11.34)",
+      "meaning": "the account a booking, an allocation or compliance's own subject is in",
+      "not_meaning": "who raised it",
+      "filled": "decided",
+      "filled_by": "bor",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.Alert.state",
+      "type": "enum AlertState",
+      "allowed": [
+        {
+          "value": "ALERT_STATE_UNSPECIFIED",
+          "meaning": "not said; never answered"
+        },
+        {
+          "value": "ALERT_STATE_RAISED",
+          "meaning": "raised, by the book or by compliance"
+        },
+        {
+          "value": "ALERT_STATE_ACKNOWLEDGED",
+          "meaning": "acknowledged by compliance for a person, with a reason"
+        },
+        {
+          "value": "ALERT_STATE_CLEARED",
+          "meaning": "cleared: a held booking handed off or closed, the book's own act"
+        }
+      ],
+      "empty": "never unspecified",
+      "intent": "says where the alert stands (W11.34)",
+      "meaning": "raised, acknowledged or cleared; nothing is deleted",
+      "not_meaning": "whether it is overdue, which is a reader's comparison",
+      "filled": "decided",
+      "filled_by": "bor",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.Alert.kind",
+      "type": "enum AlertKind",
+      "allowed": [
+        {
+          "value": "ALERT_KIND_UNSPECIFIED",
+          "meaning": "not said; never answered"
+        },
+        {
+          "value": "ALERT_KIND_ERROR_ACCOUNT_BOOKING",
+          "meaning": "an allocation to an error account, raised by the book on each (step 5's Q30)"
+        },
+        {
+          "value": "ALERT_KIND_BOOKING_HELD",
+          "meaning": "a booking held, raised by the book and cleared by it at the hand-off or closing (step 5's Q27)"
+        },
+        {
+          "value": "ALERT_KIND_COMPLIANCE",
+          "meaning": "compliance's own, through RaiseAlert (step 5's Q11)"
+        }
+      ],
+      "empty": "never unspecified",
+      "intent": "says what raised the alert (W11.34)",
+      "meaning": "an error-account allocation, a held booking, or compliance's own; v26 adds rule results to the same record",
+      "not_meaning": "a severity",
+      "filled": "decided",
+      "filled_by": "bor",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.Alert.reason",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "says why the alert was raised",
+      "meaning": "bounded text, the book's words or compliance's",
+      "not_meaning": "instructions to any agent that reads it",
+      "filled": "decided",
+      "filled_by": "bor",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.Booking.held_reason",
+      "type": "text",
+      "empty": "empty unless the booking is held",
+      "intent": "says why a booking is held (W11.28)",
+      "meaning": "the book's words: what moved executed away from allocated -- a bust, a correction, a late fill, a later fee, or a failed hand-off -- as FIX keeps a rejection's reason in AllocRejCode (88)",
+      "not_meaning": "a reason a person wrote",
+      "filled": "decided",
+      "filled_by": "bor",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.HandOffBookingRequest.close",
+      "type": "boolean",
+      "empty": "false: handed off to operations",
+      "intent": "closes a client's booking the firm does not settle, rather than handing it off (W11.28)",
+      "meaning": "true: the client's allocations close and any error-account allocation on it is handed off to the firm's operations in the same act",
+      "not_meaning": "cancelling the booking",
+      "filled": "as-reported",
+      "filled_by": "oms",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.CorrectBookingRequest.kind",
+      "type": "enum BookingCorrectionKind",
+      "allowed": [
+        {
+          "value": "BOOKING_CORRECTION_KIND_UNSPECIFIED",
+          "meaning": "not said; refused"
+        },
+        {
+          "value": "BOOKING_CORRECTION_KIND_CANCEL",
+          "meaning": "cancel the booking before its hand-off or closing, so its executions may be booked again"
+        },
+        {
+          "value": "BOOKING_CORRECTION_KIND_REPLACE",
+          "meaning": "replace the booking's allocations after its hand-off or closing, a new version, its state kept"
+        }
+      ],
+      "empty": "never unspecified",
+      "intent": "says whether the correction cancels or replaces the booking (W11.29)",
+      "meaning": "cancel, the oms's, before the hand-off or closing; replace, operations', after it, with the full new allocation set; as FIX's AllocTransType (71)",
+      "not_meaning": "a new booking",
+      "filled": "as-reported",
+      "filled_by": "operations",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.Allocation.allocation_id",
+      "type": "text",
+      "empty": "never empty on an allocation the book holds; empty on a command, where the book mints it",
+      "intent": "identifies the allocation",
+      "meaning": "minted by the book, a ULID behind its prefix, never reused, even for one account; the reference the street echoes back (FIX IndividualAllocID, 467)",
+      "not_meaning": "the booking's identifier",
+      "filled": "minted",
+      "filled_by": "bor",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.Allocation.error_cause",
+      "type": "enum ErrorCause",
+      "allowed": [
+        {
+          "value": "ERROR_CAUSE_UNSPECIFIED",
+          "meaning": "not an error-account allocation"
+        },
+        {
+          "value": "ERROR_CAUSE_OVERFILL",
+          "meaning": "the venue filled more than ordered; the excess booked to the error account"
+        },
+        {
+          "value": "ERROR_CAUSE_CLIENT_RENEGED",
+          "meaning": "the client reneged on its allocation"
+        },
+        {
+          "value": "ERROR_CAUSE_WRONG_ACCEPT",
+          "meaning": "a venue-originated fill accepted to the wrong order (W11.23)"
+        },
+        {
+          "value": "ERROR_CAUSE_BOOKING_ERROR",
+          "meaning": "the firm's own booking error"
+        },
+        {
+          "value": "ERROR_CAUSE_OTHER",
+          "meaning": "another cause, which error_text says"
+        }
+      ],
+      "empty": "unspecified unless the allocation is to an error account",
+      "intent": "says why an allocation goes to the error account (W11.27; step 5's cases)",
+      "meaning": "overfill, client reneged, wrong accept, booking error, or other with its text; FIX has no standard list",
+      "not_meaning": "a reason a person wrote, which reason carries",
+      "filled": "as-reported",
+      "filled_by": "oms",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.Allocation.error_text",
+      "type": "text",
+      "empty": "empty unless error_cause is ERROR_CAUSE_OTHER; never empty then, refused INVALID_ARGUMENT naming it",
+      "intent": "carries the words of an other error cause",
+      "meaning": "as FIX's Text (58), and as a DK's text is required with other (W11.24)",
+      "not_meaning": "a note on the order",
+      "filled": "as-reported",
+      "filled_by": "oms",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.Allocation.give_up_answers",
+      "type": "repeated message GiveUpRecord",
+      "empty": "empty until a prime answers a give-up of this allocation",
+      "intent": "keeps each answer a prime gave to the give-up of this allocation (W11.32)",
+      "meaning": "each its own record, in the order recorded, as FIX sends each AllocationReport (AS) as its own message",
+      "not_meaning": "the allocation's state",
+      "filled": "decided",
+      "filled_by": "bor",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.Execution.give_up_answers",
+      "type": "repeated message GiveUpRecord",
+      "empty": "empty until a prime answers a give-up of this execution",
+      "intent": "keeps each answer a prime gave to the give-up of this execution (W11.32)",
+      "meaning": "each its own record, in the order recorded; a rejection moves no position",
+      "not_meaning": "the execution's state",
+      "filled": "decided",
+      "filled_by": "bor",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.GiveUpRecord.answer",
+      "type": "enum GiveUpAnswer",
+      "allowed": [
+        {
+          "value": "GIVE_UP_ANSWER_UNSPECIFIED",
+          "meaning": "not said; never recorded"
+        },
+        {
+          "value": "GIVE_UP_ANSWER_ACCEPTED",
+          "meaning": "the prime accepted the trade given up to it"
+        },
+        {
+          "value": "GIVE_UP_ANSWER_REJECTED",
+          "meaning": "the prime rejected it; the trade stays with the executing side"
+        }
+      ],
+      "empty": "never unspecified",
+      "intent": "says the prime's answer, as ReportGiveUp reported it",
+      "meaning": "accepted or rejected, as FIX's AllocStatus (87)",
+      "not_meaning": "a DK of an unmatched fill",
+      "filled": "as-reported",
+      "filled_by": "connectivity",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.GiveUpRecord.prime_reference",
+      "type": "text",
+      "empty": "empty where the prime gave none",
+      "intent": "keeps the prime's own reference for its answer",
+      "meaning": "as reported, FIX's SecondaryAllocID (793)",
+      "not_meaning": "the book's identifiers",
+      "filled": "as-reported",
+      "filled_by": "connectivity",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.GiveUpRecord.reason",
+      "type": "text",
+      "empty": "empty where the prime gave none",
+      "intent": "keeps the prime's reason",
+      "meaning": "as reported, bounded text",
+      "not_meaning": "instructions to any agent that reads it",
+      "filled": "as-reported",
+      "filled_by": "connectivity",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.GiveUpRecord.entry",
+      "type": "message EntryMeta",
+      "empty": "never unset",
+      "intent": "says when the book recorded the answer, and who reported it",
+      "meaning": "its entry in the account's partition",
+      "not_meaning": "when the prime decided",
+      "filled": "decided",
+      "filled_by": "bor",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.Order.block_member_order_ids",
+      "type": "repeated text",
+      "empty": "empty unless the order is a block",
+      "intent": "names a block order's member orders (W11.1)",
+      "meaning": "as proposed, kept on the block: released orders of one instrument and side, each in no other live block",
+      "not_meaning": "a split child's parent",
+      "filled": "as-reported",
+      "filled_by": "oms",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.SleeveCross.sleeve_cross_id",
+      "type": "text",
+      "empty": "never empty on a cross the book holds",
+      "intent": "identifies the sleeve cross",
+      "meaning": "minted by the book, a ULID behind its prefix, never reused",
+      "not_meaning": "an execution's identifier: a cross mints none",
+      "filled": "minted",
+      "filled_by": "bor",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.SleeveCross.giving_sleeve",
+      "type": "text",
+      "empty": "empty for the account's unsleeved part",
+      "intent": "names the sleeve the lots leave",
+      "meaning": "a sleeve of the account",
+      "not_meaning": "an account",
+      "filled": "as-reported",
+      "filled_by": "oms",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.SleeveCross.receiving_sleeve",
+      "type": "text",
+      "empty": "empty for the account's unsleeved part",
+      "intent": "names the sleeve the lots join",
+      "meaning": "a sleeve of the account, never the giving one",
+      "not_meaning": "an account",
+      "filled": "as-reported",
+      "filled_by": "oms",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.SleeveCross.cross_price",
+      "type": "Money",
+      "empty": "never unset",
+      "intent": "carries the price the cross is made at",
+      "meaning": "the plugin's choice (mid, last or close; principle 3): each moved lot's performance cost, never its tax basis",
+      "not_meaning": "a traded price",
+      "filled": "as-reported",
+      "filled_by": "oms",
+      "since": "v24",
+      "required": [
+        {
+          "row": "RecordSleeveCross",
+          "since": "v24"
+        }
+      ],
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.SleeveCross.price_source",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "says where the cross price came from",
+      "meaning": "the plugin's words: which price and when",
+      "not_meaning": "a vendor's name as an identifier",
+      "filled": "as-reported",
+      "filled_by": "oms",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.RecordSleeveCrossRequest.sleeve_cross",
+      "type": "message SleeveCross",
+      "empty": "never unset",
+      "intent": "carries the cross to record (W11.33)",
+      "meaning": "the account, instrument, sleeves, quantity, price and source, the orders it stands in for, and why",
+      "not_meaning": "an execution",
+      "filled": "as-reported",
+      "filled_by": "oms",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.SleeveCrossReply.sleeve_cross",
+      "type": "message SleeveCross",
+      "empty": "never unset",
+      "intent": "answers the cross as recorded",
+      "meaning": "with its minted identifier",
+      "not_meaning": "the orders it filled, which OrderUpdated carries",
+      "filled": "decided",
+      "filled_by": "bor",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.SetAllocationInstructionRequest.order_id",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the order whose instruction changes (W11.26)",
+      "meaning": "its `ORD-` ID",
+      "not_meaning": "a child order, which carries none",
+      "filled": "as-reported",
+      "filled_by": "portfolio",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.SetAllocationInstructionRequest.allocation_instruction",
+      "type": "message AllocationInstruction",
+      "empty": "never unset",
+      "intent": "carries the amended instruction",
+      "meaning": "the whole instruction; refused REFUSAL_REASON_ORDER_STATE where an account's amount falls below what its live bookings allocate",
+      "not_meaning": "a booking",
+      "filled": "as-reported",
+      "filled_by": "portfolio",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.SetAllocationInstructionRequest.reason",
+      "type": "text",
+      "required": [
+        {
+          "row": "SetAllocationInstruction",
+          "since": "v24"
+        }
+      ],
+      "empty": "never empty",
+      "intent": "says why the instruction changes",
+      "meaning": "bounded text a person wrote, refused REFUSAL_REASON_REASON_REQUIRED without it",
+      "not_meaning": "instructions to any agent that reads it",
+      "filled": "entered",
+      "filled_by": "portfolio",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.BookingReply.booking",
+      "type": "message Booking",
+      "empty": "never unset",
+      "intent": "answers the booking as it stands after the act",
+      "meaning": "whole, with its state and allocations",
+      "not_meaning": "the order",
+      "filled": "decided",
+      "filled_by": "bor",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.BookingUpdatedEvent.booking",
+      "type": "message Booking",
+      "empty": "never unset",
+      "intent": "delivers the booking whole (W11.30)",
+      "meaning": "its whole new state, safe to apply twice",
+      "not_meaning": "the order, which OrderUpdated delivers",
+      "filled": "decided",
+      "filled_by": "bor",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.ListBookingsRequest.account_id",
+      "type": "identifier account",
+      "empty": "empty reads every account in scope",
+      "intent": "narrows the read to one account",
+      "meaning": "an account in the reader's scope",
+      "not_meaning": "a member account of a block, which each allocation names",
+      "filled": "as-reported",
+      "filled_by": "operations",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.ListBookingsRequest.state",
+      "type": "enum BookingState",
+      "allowed": [
+        {
+          "value": "BOOKING_STATE_UNSPECIFIED",
+          "meaning": "every state"
+        },
+        {
+          "value": "BOOKING_STATE_BOOKED",
+          "meaning": "booked"
+        },
+        {
+          "value": "BOOKING_STATE_HELD",
+          "meaning": "held"
+        },
+        {
+          "value": "BOOKING_STATE_HANDED_OFF",
+          "meaning": "handed off"
+        },
+        {
+          "value": "BOOKING_STATE_CLOSED",
+          "meaning": "closed"
+        },
+        {
+          "value": "BOOKING_STATE_CANCELLED",
+          "meaning": "cancelled"
+        }
+      ],
+      "empty": "unspecified reads every state",
+      "intent": "filters the read by state (W11.31)",
+      "meaning": "only bookings in that state, so held ones are counted without reading every order",
+      "not_meaning": "an order's state",
+      "filled": "as-reported",
+      "filled_by": "operations",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.ListBookingsRequest.since",
+      "type": "message Watermark",
+      "empty": "unset reads every record in scope as of now",
+      "intent": "reads only what changed above a watermark",
+      "meaning": "a sequence per partition, as every record row's catch-up reads (W4.3)",
+      "not_meaning": "a time",
+      "filled": "as-reported",
+      "filled_by": "operations",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.ListBookingsReply.bookings",
+      "type": "repeated message Booking",
+      "empty": "empty when none",
+      "intent": "answers the bookings read",
+      "meaning": "each whole",
+      "not_meaning": "orders",
+      "filled": "decided",
+      "filled_by": "bor",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.ReportGiveUpRequest.execution_id",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the execution given up",
+      "meaning": "its `EXE-` ID; one the book does not hold keeps the fact unplaced",
+      "not_meaning": "the venue's execution ID",
+      "filled": "as-reported",
+      "filled_by": "connectivity",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.ReportGiveUpRequest.allocation_id",
+      "type": "text",
+      "empty": "empty where no allocation is booked",
+      "intent": "names the allocation the answer is for, where one is booked",
+      "meaning": "its allocation ID (FIX IndividualAllocID, 467)",
+      "not_meaning": "the booking",
+      "filled": "as-reported",
+      "filled_by": "connectivity",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.ReportGiveUpRequest.answer",
+      "type": "enum GiveUpAnswer",
+      "allowed": [
+        {
+          "value": "GIVE_UP_ANSWER_UNSPECIFIED",
+          "meaning": "not said; refused"
+        },
+        {
+          "value": "GIVE_UP_ANSWER_ACCEPTED",
+          "meaning": "the prime accepted the trade given up to it"
+        },
+        {
+          "value": "GIVE_UP_ANSWER_REJECTED",
+          "meaning": "the prime rejected it; the trade stays with the executing side"
+        }
+      ],
+      "empty": "never unspecified",
+      "intent": "says the prime broker's answer (W11.32)",
+      "meaning": "accepted or rejected, as FIX's AllocStatus (87) answers an allocation; a rejection moves no position",
+      "not_meaning": "a DK of an unmatched fill",
+      "filled": "as-reported",
+      "filled_by": "connectivity",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.ReportGiveUpRequest.prime_reference",
+      "type": "text",
+      "empty": "empty where the prime gives none",
+      "intent": "carries the prime broker's own reference for its answer",
+      "meaning": "as the prime states it, as FIX's SecondaryAllocID (793) carries a counterparty's reference",
+      "not_meaning": "the book's identifiers",
+      "filled": "as-reported",
+      "filled_by": "connectivity",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.ReportGiveUpRequest.reason",
+      "type": "text",
+      "empty": "empty where the prime gives none",
+      "intent": "carries the prime's reason",
+      "meaning": "as the prime states it, bounded text",
+      "not_meaning": "instructions to any agent that reads it",
+      "filled": "as-reported",
+      "filled_by": "connectivity",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.Alert.alert_id",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "identifies the alert",
+      "meaning": "minted by the book, a ULID behind its prefix, never reused",
+      "not_meaning": "a ticket",
+      "filled": "minted",
+      "filled_by": "bor",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.Alert.due_by",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "zero unless the alert is a held booking's",
+      "intent": "says when a held booking's alert is due (W11.34)",
+      "meaning": "the moment the operations plugin's affirmation_deadline falls on the trade date, in the deployment's time zone; overdue is a reader's comparison against the one clock",
+      "not_meaning": "a second record of overdue",
+      "filled": "decided",
+      "filled_by": "bor",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.RaiseAlertRequest.account_id",
+      "type": "identifier account",
+      "empty": "never empty",
+      "intent": "names the account the alert is raised in",
+      "meaning": "an account in the plugin's write scope",
+      "not_meaning": "who raised it",
+      "filled": "as-reported",
+      "filled_by": "compliance",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.RaiseAlertRequest.reason",
+      "type": "text",
+      "required": [
+        {
+          "row": "RaiseAlert",
+          "since": "v24"
+        }
+      ],
+      "empty": "never empty",
+      "intent": "says why compliance raises the alert",
+      "meaning": "bounded text, refused REFUSAL_REASON_REASON_REQUIRED without it",
+      "not_meaning": "instructions to any agent that reads it",
+      "filled": "entered",
+      "filled_by": "compliance",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.AcknowledgeAlertRequest.alert_id",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the alert acknowledged",
+      "meaning": "its alert ID",
+      "not_meaning": "an order",
+      "filled": "as-reported",
+      "filled_by": "compliance",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.AcknowledgeAlertRequest.reason",
+      "type": "text",
+      "required": [
+        {
+          "row": "AcknowledgeAlert",
+          "since": "v24"
+        }
+      ],
+      "empty": "never empty",
+      "intent": "says why the alert is acknowledged",
+      "meaning": "bounded text a person wrote, a deviation kept with the user and time; refused REFUSAL_REASON_REASON_REQUIRED without it",
+      "not_meaning": "instructions to any agent that reads it",
+      "filled": "entered",
+      "filled_by": "compliance",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.AlertReply.alert",
+      "type": "message Alert",
+      "empty": "never unset",
+      "intent": "answers the alert after the act",
+      "meaning": "whole, with its state",
+      "not_meaning": "a verdict",
+      "filled": "decided",
+      "filled_by": "bor",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.AlertChangedEvent.alert",
+      "type": "message Alert",
+      "empty": "never unset",
+      "intent": "delivers the alert whole (W11.35)",
+      "meaning": "its whole new state",
+      "not_meaning": "a check on an order",
+      "filled": "decided",
+      "filled_by": "bor",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.ListAlertsRequest.account_id",
+      "type": "identifier account",
+      "empty": "empty reads every account in scope",
+      "intent": "narrows the read to one account",
+      "meaning": "an account in the reader's scope",
+      "not_meaning": "who raised it",
+      "filled": "as-reported",
+      "filled_by": "compliance",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.ListAlertsRequest.state",
+      "type": "enum AlertState",
+      "allowed": [
+        {
+          "value": "ALERT_STATE_UNSPECIFIED",
+          "meaning": "every state"
+        },
+        {
+          "value": "ALERT_STATE_RAISED",
+          "meaning": "raised"
+        },
+        {
+          "value": "ALERT_STATE_ACKNOWLEDGED",
+          "meaning": "acknowledged"
+        },
+        {
+          "value": "ALERT_STATE_CLEARED",
+          "meaning": "cleared"
+        }
+      ],
+      "empty": "unspecified reads every state",
+      "intent": "filters the read by state",
+      "meaning": "only alerts in that state",
+      "not_meaning": "whether one is overdue",
+      "filled": "as-reported",
+      "filled_by": "compliance",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.ListAlertsRequest.since",
+      "type": "message Watermark",
+      "empty": "unset reads every record in scope as of now",
+      "intent": "reads only what changed above a watermark",
+      "meaning": "a sequence per partition, as every record row's catch-up reads (W4.3)",
+      "not_meaning": "a time",
+      "filled": "as-reported",
+      "filled_by": "compliance",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.ListAlertsReply.alerts",
+      "type": "repeated message Alert",
+      "empty": "empty when none",
+      "intent": "answers the alerts read",
+      "meaning": "each whole",
+      "not_meaning": "bookings",
+      "filled": "decided",
+      "filled_by": "bor",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.Order.sleeve_cross_ids",
+      "type": "repeated text",
+      "empty": "empty unless a sleeve cross filled the order",
+      "intent": "names the sleeve crosses that filled the order (W11.33)",
+      "meaning": "each cross's identifier; the order's filled quantity counts each, and no execution is minted for one (FIX names a cross on each side by CrossID, 548)",
+      "not_meaning": "executions",
+      "filled": "decided",
+      "filled_by": "bor",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.Alert.subject",
+      "type": "message AlertSubject",
+      "empty": "never unset",
+      "intent": "names what the alert is about (W11.34)",
+      "meaning": "one of an order, a booking, an allocation or a position",
+      "not_meaning": "the account, which account_id names",
+      "filled": "decided",
+      "filled_by": "bor",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.AlertSubject.order_id",
+      "type": "text",
+      "empty": "empty unless the alert is about an order",
+      "intent": "names the order",
+      "meaning": "its `ORD-` ID",
+      "not_meaning": "a booking",
+      "filled": "as-reported",
+      "filled_by": "compliance",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.AlertSubject.booking_id",
+      "type": "text",
+      "empty": "empty unless the alert is about a booking",
+      "intent": "names the booking",
+      "meaning": "its booking ID; a held booking's alert names it",
+      "not_meaning": "an order",
+      "filled": "decided",
+      "filled_by": "bor",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.AlertSubject.allocation_id",
+      "type": "text",
+      "empty": "empty unless the alert is about an allocation",
+      "intent": "names the allocation",
+      "meaning": "its allocation ID; an error-account allocation's alert names it",
+      "not_meaning": "the booking alone",
+      "filled": "decided",
+      "filled_by": "bor",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.AlertSubject.position",
+      "type": "message PositionKey",
+      "empty": "unset unless the alert is about a position",
+      "intent": "names the position",
+      "meaning": "an instrument and a side in the account, as a break names one (W9.4)",
+      "not_meaning": "a lot",
+      "filled": "as-reported",
+      "filled_by": "compliance",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.Booking.account_id",
+      "type": "identifier account",
+      "empty": "never empty",
+      "intent": "names the account whose partition the booking is in",
+      "meaning": "the order's account, the allocation account for a block, which a booking's delivery and read are scoped by (matrix/scoped.tsv)",
+      "not_meaning": "an allocation's receiving account, which each allocation names",
+      "filled": "decided",
+      "filled_by": "bor",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.Booking.last_change",
+      "type": "message JournalRef",
+      "empty": "never unset",
+      "intent": "says where the booking last changed (approved 2026-10-14)",
+      "meaning": "the journal reference of its latest entry, which a catch-up reads it by (W4.3)",
+      "not_meaning": "a time",
+      "filled": "decided",
+      "filled_by": "bor",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.Alert.last_change",
+      "type": "message JournalRef",
+      "empty": "never unset",
+      "intent": "says where the alert last changed (approved 2026-10-14)",
+      "meaning": "the journal reference of its latest entry, which a catch-up reads it by (W4.3)",
+      "not_meaning": "a time",
+      "filled": "decided",
+      "filled_by": "bor",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.BookOrderRequest.order_id",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the order whose executions are booked (W11.27)",
+      "meaning": "the order's ORD- ID, a block order included; its executions are named in execution_ids",
+      "not_meaning": "a member order of a block, which each allocation names by its account",
+      "filled": "as-reported",
+      "filled_by": "oms",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.BookingReply.entry",
+      "type": "message EntryMeta",
+      "empty": "never unset",
+      "intent": "says what the book recorded of the act",
+      "meaning": "the entry's ID, kind, actor, times and the control partition's sequence in force (W9.8)",
+      "not_meaning": "the record's state, which the record beside it carries",
+      "filled": "decided",
+      "filled_by": "bor",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.BookingReply.journal",
+      "type": "message JournalRef",
+      "empty": "never unset",
+      "intent": "says where the change sits in the account's journal",
+      "meaning": "the partition and sequence the entry committed at; the answer is sent only after it commits (W11's invariants)",
+      "not_meaning": "a time",
+      "filled": "decided",
+      "filled_by": "bor",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.BookingUpdatedEvent.entry",
+      "type": "message EntryMeta",
+      "empty": "never unset",
+      "intent": "says what the book recorded of the act",
+      "meaning": "the entry's ID, kind, actor, times and the control partition's sequence in force (W9.8)",
+      "not_meaning": "the record's state, which the record beside it carries",
+      "filled": "decided",
+      "filled_by": "bor",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.BookingUpdatedEvent.journal",
+      "type": "message JournalRef",
+      "empty": "never unset",
+      "intent": "says where the change sits in the account's journal",
+      "meaning": "the partition and sequence the entry committed at; the answer is sent only after it commits (W11's invariants)",
+      "not_meaning": "a time",
+      "filled": "decided",
+      "filled_by": "bor",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.BookingUpdatedEvent.cause",
+      "type": "message ChangeCause",
+      "empty": "never unset",
+      "intent": "says what caused the change",
+      "meaning": "the message that caused it, its instance and its identifiers, as every delivery's cause (W9.8)",
+      "not_meaning": "who answered for it, which the entry's actor says",
+      "filled": "decided",
+      "filled_by": "bor",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.AlertReply.journal",
+      "type": "message JournalRef",
+      "empty": "never unset",
+      "intent": "says where the change sits in the account's journal",
+      "meaning": "the partition and sequence the entry committed at; the answer is sent only after it commits (W11's invariants)",
+      "not_meaning": "a time",
+      "filled": "decided",
+      "filled_by": "bor",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.SleeveCrossReply.journal",
+      "type": "message JournalRef",
+      "empty": "never unset",
+      "intent": "says where the change sits in the account's journal",
+      "meaning": "the partition and sequence the entry committed at; the answer is sent only after it commits (W11's invariants)",
+      "not_meaning": "a time",
+      "filled": "decided",
+      "filled_by": "bor",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.AlertChangedEvent.journal",
+      "type": "message JournalRef",
+      "empty": "never unset",
+      "intent": "says where the change sits in the account's journal",
+      "meaning": "the partition and sequence the entry committed at; the answer is sent only after it commits (W11's invariants)",
+      "not_meaning": "a time",
+      "filled": "decided",
+      "filled_by": "bor",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.AlertChangedEvent.cause",
+      "type": "message ChangeCause",
+      "empty": "never unset",
+      "intent": "says what caused the change",
+      "meaning": "the message that caused it, its instance and its identifiers, as every delivery's cause (W9.8)",
+      "not_meaning": "who answered for it, which the entry's actor says",
+      "filled": "decided",
+      "filled_by": "bor",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.RaiseAlertRequest.kind",
+      "type": "enum AlertKind",
+      "allowed": [
+        {
+          "value": "ALERT_KIND_UNSPECIFIED",
+          "meaning": "not said; refused"
+        },
+        {
+          "value": "ALERT_KIND_ERROR_ACCOUNT_BOOKING",
+          "meaning": "an allocation to an error account, raised by the book on each (step 5's Q30)"
+        },
+        {
+          "value": "ALERT_KIND_BOOKING_HELD",
+          "meaning": "a booking held, raised by the book and cleared by it at the hand-off or closing (step 5's Q27)"
+        },
+        {
+          "value": "ALERT_KIND_COMPLIANCE",
+          "meaning": "compliance's own, through RaiseAlert (step 5's Q11)"
+        }
+      ],
+      "empty": "compliance's own: a compliance plugin raises ALERT_KIND_COMPLIANCE, the other kinds being the book's",
+      "intent": "says what raises the alert (W11.34)",
+      "meaning": "ALERT_KIND_COMPLIANCE from a compliance plugin; the book raises the other two itself",
+      "not_meaning": "a severity",
+      "filled": "as-reported",
+      "filled_by": "compliance",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.RaiseAlertRequest.subject",
+      "type": "message AlertSubject",
+      "empty": "never unset",
+      "intent": "names what the alert is about (W11.34)",
+      "meaning": "one of an order, a booking, an allocation or a position",
+      "not_meaning": "the account, which account_id names",
+      "filled": "as-reported",
+      "filled_by": "compliance",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.ReportGiveUpRequest.raw_record",
+      "type": "message RawRecordRef",
+      "empty": "never unset on a prime's answer",
+      "intent": "references the raw record the answer was converted from (W11.32)",
+      "meaning": "the record in the reporting plugin's own storage (decisions/028), by its instance and key",
+      "not_meaning": "the record itself, which never leaves the plugin's storage",
+      "filled": "as-reported",
+      "filled_by": "connectivity",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.ListBookingsRequest.page_size",
+      "type": "integer",
+      "bounds": {
+        "range": {
+          "least": "0",
+          "most": "500"
+        },
+        "past": "capped"
+      },
+      "unit": "records",
+      "empty": "0 is 100; past 500, answered at 500",
+      "intent": "bounds a page (approved 2026-10-14)",
+      "meaning": "how many records a page holds at most",
+      "not_meaning": "a promise that a page is full",
+      "filled": "as-reported",
+      "filled_by": "oms",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.ListBookingsRequest.cursor",
+      "type": "text",
+      "empty": "empty is the first page",
+      "intent": "continues a read where its last page ended (approved 2026-10-14)",
+      "meaning": "the next_cursor a page answered, as written",
+      "not_meaning": "anything a plugin composes: one the book did not write is refused",
+      "filled": "as-reported",
+      "filled_by": "oms",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.ListBookingsReply.next_cursor",
+      "type": "text",
+      "empty": "empty when nothing follows",
+      "intent": "says where the next page starts (approved 2026-10-14)",
+      "meaning": "opaque",
+      "not_meaning": "a count or an offset",
+      "filled": "decided",
+      "filled_by": "bor",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.ListBookingsReply.as_of",
+      "type": "message Watermark",
+      "empty": "never unset",
+      "intent": "says where the read was answered (approved 2026-10-14)",
+      "meaning": "the head of each account partition the read saw, at one snapshot, which the next catch-up reads since (W4.3)",
+      "not_meaning": "a business date",
+      "filled": "decided",
+      "filled_by": "bor",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.ListAlertsRequest.page_size",
+      "type": "integer",
+      "bounds": {
+        "range": {
+          "least": "0",
+          "most": "500"
+        },
+        "past": "capped"
+      },
+      "unit": "records",
+      "empty": "0 is 100; past 500, answered at 500",
+      "intent": "bounds a page (approved 2026-10-14)",
+      "meaning": "how many records a page holds at most",
+      "not_meaning": "a promise that a page is full",
+      "filled": "as-reported",
+      "filled_by": "compliance",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.ListAlertsRequest.cursor",
+      "type": "text",
+      "empty": "empty is the first page",
+      "intent": "continues a read where its last page ended (approved 2026-10-14)",
+      "meaning": "the next_cursor a page answered, as written",
+      "not_meaning": "anything a plugin composes: one the book did not write is refused",
+      "filled": "as-reported",
+      "filled_by": "compliance",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.ListAlertsReply.next_cursor",
+      "type": "text",
+      "empty": "empty when nothing follows",
+      "intent": "says where the next page starts (approved 2026-10-14)",
+      "meaning": "opaque",
+      "not_meaning": "a count or an offset",
+      "filled": "decided",
+      "filled_by": "bor",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.ListAlertsReply.as_of",
+      "type": "message Watermark",
+      "empty": "never unset",
+      "intent": "says where the read was answered (approved 2026-10-14)",
+      "meaning": "the head of each account partition the read saw, at one snapshot, which the next catch-up reads since (W4.3)",
+      "not_meaning": "a business date",
+      "filled": "decided",
+      "filled_by": "bor",
+      "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.ListAlertsRequest.kind",
+      "type": "enum AlertKind",
+      "allowed": [
+        {
+          "value": "ALERT_KIND_UNSPECIFIED",
+          "meaning": "every kind"
+        },
+        {
+          "value": "ALERT_KIND_ERROR_ACCOUNT_BOOKING",
+          "meaning": "an allocation to an error account, raised by the book on each (step 5's Q30)"
+        },
+        {
+          "value": "ALERT_KIND_BOOKING_HELD",
+          "meaning": "a booking held, raised by the book and cleared by it at the hand-off or closing (step 5's Q27)"
+        },
+        {
+          "value": "ALERT_KIND_COMPLIANCE",
+          "meaning": "compliance's own, through RaiseAlert (step 5's Q11)"
+        }
+      ],
+      "empty": "unspecified for every kind",
+      "intent": "narrows the read to one kind of alert (W11.35) (approved 2026-10-14)",
+      "meaning": "the alerts of that kind",
+      "not_meaning": "a severity",
+      "filled": "as-reported",
+      "filled_by": "compliance",
+      "since": "v24",
       "stability": "preview",
       "store": "bor"
     },
@@ -17598,7 +19680,7 @@
       "type": "text",
       "empty": "never empty",
       "intent": "says what kind of identifier a value is",
-      "meaning": "a global scheme -- figi, isin, cusip, sedol, iso4217 for a currency's cash, caip19 for a crypto asset, open_meridian for the platform's own, and from v18 iso10383 for a venue's MIC -- or symbol, a source-scoped one",
+      "meaning": "a global scheme -- figi, isin, cusip, sedol, iso4217 for a currency's cash, caip19 for a crypto asset, open_meridian for the platform's own until v24, from v18 iso10383 for a venue's MIC, and from v24 open_meridian_local for a resolved LCL- ID -- or symbol, a source-scoped one",
       "not_meaning": "a source: a symbol means something only beside the source it came from",
       "filled": "as-reported",
       "filled_by": "custody",
@@ -17608,6 +19690,21 @@
           "version": "v18",
           "kind": "clarified",
           "what": "iso10383 names a venue's MIC, on a venue's identifiers (W3.14)"
+        },
+        {
+          "version": "v24",
+          "kind": "clarified",
+          "what": "open_meridian is no longer written, each window closed at the resolution and still resolvable; open_meridian_local, the deployment-only scheme, keeps a resolved LCL- ID for life and never leaves the deployment (the one-ID spec's requirements 1, 2 and 13)"
+        },
+        {
+          "version": "v24",
+          "kind": "clarified",
+          "what": "the schemes the first templates match on are spelled as the platform builds them: share_class_figi, composite_figi, sec_series and sec_class beside figi, and ticker, a ticker carrying its venue as an ISO 10383 MIC in source, or the venue's VEN- ID where it has no MIC (ruled 2026-10-14)"
+        },
+        {
+          "version": "v24",
+          "kind": "clarified",
+          "what": "the FIGI specification's three levels: share_class_figi identifies a security, one per security across its listings, and keys its INS- record; composite_figi (per country) and figi (per exchange) are listing identifiers, kept paired with their venue or country, resolved to the share class before matching, never a reason to merge two records; the composite identifies a security that has no share-class FIGI (ruled 2026-10-14)"
         }
       ],
       "stability": "stable",
@@ -18678,11 +20775,18 @@
       "type": "boolean",
       "empty": "false is a miss, with its reason",
       "intent": "says whether the identifiers named a record",
-      "meaning": "true when a record matched or this resolve minted one",
+      "meaning": "true when a record matched or this resolve minted one; from v24 false, not found, for a source thinner than an instrument record's minimum (an identifier, a description and a currency), nothing minted (W3.7)",
       "not_meaning": "that the record is complete",
       "filled": "decided",
       "filled_by": "instrument",
       "since": "v2",
+      "changes": [
+        {
+          "version": "v24",
+          "kind": "clarified",
+          "what": "a source thinner than the minimum is answered not found, no record minted; the custody plugin keeps the holding unresolved (W3.7, W2.4; the one-ID model, ruled 2026-10-14)"
+        }
+      ],
       "stability": "stable",
       "store": "instrument"
     },
@@ -18730,12 +20834,32 @@
       "name": "meridian.v1.ResolveIdentifierReply.minted",
       "type": "boolean",
       "empty": "false for a record already held, and for a miss",
-      "intent": "says the resolve minted the record it answers",
-      "meaning": "nothing matched and this resolve minted instrument_id, the deployment's record for the set (W3.7); found is true beside it, and a later resolve of the same identifiers matches it",
-      "not_meaning": "a placeholder, which it meant before v10",
+      "intent": "says the resolve created the deployment's record it answers",
+      "meaning": "nothing matched and this resolve created instrument_id, the deployment's record for the set; found is true beside it, and a later resolve of the same identifiers matches it. From v24 the record is the platform's INS- record where it answered within the bounded ask, or a provisional one (W3.1, W3.7)",
+      "not_meaning": "a placeholder, which it meant before v10; or that the platform minted the INS- ID, which it may have matched",
       "filled": "decided",
       "filled_by": "instrument",
       "since": "v10",
+      "changes": [
+        {
+          "version": "v24",
+          "kind": "clarified",
+          "what": "the record created may be the platform's INS- record (the one-ID spec's requirement 15); minted keeps its meaning, this resolve created the deployment's record"
+        }
+      ],
+      "stability": "stable",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.ResolveIdentifierReply.provisional",
+      "type": "boolean",
+      "empty": "false: the record answered is not provisional",
+      "intent": "says the resolve answered a provisional record (W3.1, W3.7)",
+      "meaning": "the platform could not be reached within the bounded ask, its staff must review the request, or the record has no open identifier to ask by, so the record is the deployment's provisional LCL- record, naming its template, asked again on reconnect or once it has an open identifier (decisions/037, point 2 as amended 2026-10-14)",
+      "not_meaning": "a miss: found is true beside it",
+      "filled": "decided",
+      "filled_by": "instrument",
+      "since": "v24",
       "stability": "stable",
       "store": "instrument"
     },
@@ -20179,6 +22303,591 @@
       "filled": "entered",
       "filled_by": "platform",
       "since": "v23",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.InstrumentRecord.provisional",
+      "type": "boolean",
+      "empty": "false: the record is named by the platform's INS- ID, or was keyed before v10",
+      "intent": "says the record is a provisional LCL- record not yet resolved (W3.7)",
+      "meaning": "the deployment's own local record: the platform unreachable, the request waiting for its staff, or, at the current stage, no open identifier to ask by; it carries the vendor's identifiers in the deployment, names its template and may be incomplete; at least an identifier, a description and a currency; a local line in the book, never priced, counted on the home page, and an order on it the escape hatch (W3.7, W9.1, W11; the one-ID model, ruled 2026-10-14). A record the migration found keeps its LCL- ID, unresolved, until the admin approves its line, which is no new mint",
+      "not_meaning": "the LCL- prefix, which says only that the deployment minted the ID",
+      "filled": "decided",
+      "filled_by": "instrument",
+      "since": "v24",
+      "stability": "stable",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.InstrumentRecord.template_id",
+      "type": "text",
+      "empty": "empty on a record kept before v24 and not yet migrated, and on a record whose source stated no class (\"class needed\"); a provisional record otherwise names its type's template, or its class's base template (ruled 2026-10-14)",
+      "intent": "names the template the record was minted against (W3.24; the intent's ruling 9)",
+      "meaning": "the platform's template, a base template where the type had none of its own",
+      "not_meaning": "the record's asset class or type",
+      "filled": "decided",
+      "filled_by": "instrument",
+      "since": "v24",
+      "stability": "stable",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.InstrumentRecord.template_version",
+      "type": "text",
+      "empty": "empty where template_id is",
+      "intent": "names the template version the record was minted against",
+      "meaning": "a published version, immutable; moving to a new one is a recorded change",
+      "not_meaning": "the record's own version",
+      "filled": "decided",
+      "filled_by": "platform",
+      "since": "v24",
+      "stability": "stable",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.InstrumentRecord.missing_fields",
+      "type": "repeated text",
+      "empty": "empty for a record complete against its template, and for every INS- record the platform minted",
+      "intent": "lists what a local record lacks against its template (W3.7; approved 2026-10-14)",
+      "meaning": "each required field of the record's template it does not hold, by its path in the template (TemplateField.path), from the catalogue the store holds; shown on the Instruments page and filled there or by a reference plugin's offer (W3.10, W3.23); never a gate on asking the platform, which fills a template from its own source (W1.25)",
+      "not_meaning": "a refusal's fields; or the fields a person has yet to accept, which offers show",
+      "filled": "derived",
+      "filled_by": "instrument",
+      "since": "v24",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.InstrumentReplacedEvent.replaced_instrument_id",
+      "type": "identifier instrument",
+      "empty": "never empty",
+      "intent": "names the record replaced (W3.8)",
+      "meaning": "a record merged, resolved or merged on the platform; kept by everything made with it, and answered as the record it became",
+      "not_meaning": "a deleted record: none is deleted",
+      "filled": "decided",
+      "filled_by": "instrument",
+      "since": "v24",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.InstrumentReplacedEvent.instrument",
+      "type": "message InstrumentRecord",
+      "empty": "never empty",
+      "intent": "carries the record that replaces it",
+      "meaning": "the record that stays, at its version",
+      "not_meaning": "a copy of the replaced record",
+      "filled": "decided",
+      "filled_by": "instrument",
+      "since": "v24",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.InstrumentReplacedEvent.replaced_at_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "never empty",
+      "intent": "says when the replacement was recorded",
+      "meaning": "the instrument store's record time",
+      "not_meaning": "when the security changed in the world",
+      "filled": "decided",
+      "filled_by": "instrument",
+      "since": "v24",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.InstrumentReplacedEvent.cause",
+      "type": "enum ReplacementCause",
+      "allowed": [
+        {
+          "value": "REPLACEMENT_CAUSE_UNSPECIFIED",
+          "meaning": "not said: a replacement before v24 whose facts are missing, recorded as a gap"
+        },
+        {
+          "value": "REPLACEMENT_CAUSE_MERGED",
+          "meaning": "a person merged the record into the one that stays (W3.13)"
+        },
+        {
+          "value": "REPLACEMENT_CAUSE_RESOLVED",
+          "meaning": "a provisional record resolved to the platform's INS- record"
+        },
+        {
+          "value": "REPLACEMENT_CAUSE_PLATFORM_MERGED",
+          "meaning": "the platform merged two INS- records, followed from the replacement feed (W3.27)"
+        }
+      ],
+      "empty": "unspecified only on a replacement recorded before v24 and not yet backfilled",
+      "intent": "says why the record was replaced (W3.8; the one-ID spec's requirement 3)",
+      "meaning": "a person's merge, a provisional record resolved, or a platform merge its staff decided; past replacements backfilled honestly, each saying so",
+      "not_meaning": "a reason a person wrote",
+      "filled": "decided",
+      "filled_by": "instrument",
+      "since": "v24",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.InstrumentReplacedEvent.sequence",
+      "type": "integer",
+      "unit": "replacements recorded",
+      "empty": "never zero on a replacement recorded from v24",
+      "intent": "numbers the replacement in the store's sequence (W3.22)",
+      "meaning": "monotonic per deployment; ListReplacements reads after it",
+      "not_meaning": "a book partition's sequence",
+      "filled": "decided",
+      "filled_by": "instrument",
+      "since": "v24",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.ListReplacementsRequest.after_sequence",
+      "type": "integer",
+      "unit": "replacements recorded",
+      "empty": "zero reads every replacement",
+      "intent": "reads the replacements recorded after a sequence (W3.22)",
+      "meaning": "the last sequence the plugin saw, as GLEIF's delta files and FIX's resend from BeginSeqNo (7) do",
+      "not_meaning": "a time",
+      "filled": "as-reported",
+      "filled_by": "operations",
+      "since": "v24",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.ListReplacementsReply.replacements",
+      "type": "repeated message InstrumentReplacedEvent",
+      "empty": "empty when none since",
+      "intent": "answers the replacements in sequence",
+      "meaning": "each as its delivery carried it",
+      "not_meaning": "records not replaced",
+      "filled": "decided",
+      "filled_by": "instrument",
+      "since": "v24",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.ListReplacementsReply.sequence",
+      "type": "integer",
+      "unit": "replacements recorded",
+      "empty": "the sequence asked after, when none since",
+      "intent": "says the sequence read to",
+      "meaning": "the next read's after_sequence",
+      "not_meaning": "a count",
+      "filled": "decided",
+      "filled_by": "instrument",
+      "since": "v24",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.OfferTemplateFieldsRequest.instrument_id",
+      "type": "identifier instrument",
+      "empty": "never empty",
+      "intent": "names the record the fields are offered for (W3.23)",
+      "meaning": "a record the deployment holds, followed through its replacement",
+      "not_meaning": "a mint request: the plugin never asks for one",
+      "filled": "as-reported",
+      "filled_by": "reference",
+      "since": "v24",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.OfferTemplateFieldsRequest.template_id",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the template the fields belong to",
+      "meaning": "a template the catalogue holds",
+      "not_meaning": "the record's asset class",
+      "filled": "as-reported",
+      "filled_by": "reference",
+      "since": "v24",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.OfferTemplateFieldsRequest.template_version",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the template version",
+      "meaning": "a version the catalogue holds; one it does not is refused naming it",
+      "not_meaning": "the record's own version",
+      "filled": "as-reported",
+      "filled_by": "reference",
+      "since": "v24",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.OfferTemplateFieldsRequest.fields",
+      "type": "repeated message TemplateFieldValue",
+      "empty": "never empty",
+      "intent": "carries the values offered",
+      "meaning": "each a value at its template field's path with its provenance; offers, in force once a person accepts them",
+      "not_meaning": "values in force",
+      "filled": "as-reported",
+      "filled_by": "reference",
+      "since": "v24",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.TemplateFieldValue.path",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the template field",
+      "meaning": "the field's path in the template; one the template lacks is refused naming it",
+      "not_meaning": "a dictionary entry of the contract",
+      "filled": "as-reported",
+      "filled_by": "reference",
+      "since": "v24",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.TemplateFieldValue.value",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "carries the value offered",
+      "meaning": "as the template's field type writes it",
+      "not_meaning": "a value in force",
+      "filled": "as-reported",
+      "filled_by": "reference",
+      "since": "v24",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.TemplateFieldValue.provenance",
+      "type": "message Provenance",
+      "empty": "unset means the plugin's own source, its raw record named",
+      "intent": "says where the value came from",
+      "meaning": "the source the plugin reconciled it from, so a licensed vendor's value stays in the deployment",
+      "not_meaning": "the decider: a person decides by accepting",
+      "filled": "as-reported",
+      "filled_by": "reference",
+      "since": "v24",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.OfferTemplateFieldsReply.instrument",
+      "type": "message InstrumentRecord",
+      "empty": "never unset",
+      "intent": "answers the record with the offers kept",
+      "meaning": "at its new version",
+      "not_meaning": "the platform's record",
+      "filled": "decided",
+      "filled_by": "instrument",
+      "since": "v24",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.ListTemplatesRequest.asset_class",
+      "type": "enum AssetClass",
+      "allowed": [
+        {
+          "value": "ASSET_CLASS_UNSPECIFIED",
+          "meaning": "every class"
+        },
+        {
+          "value": "ASSET_CLASS_EQUITY",
+          "meaning": "a share of ownership"
+        },
+        {
+          "value": "ASSET_CLASS_DEBT",
+          "meaning": "somebody owes the holder"
+        },
+        {
+          "value": "ASSET_CLASS_FUND",
+          "meaning": "a share of a pool, exchange-traded and mutual funds among them"
+        },
+        {
+          "value": "ASSET_CLASS_DERIVATIVE",
+          "meaning": "a contract whose value comes from something else, options and futures among them"
+        },
+        {
+          "value": "ASSET_CLASS_CRYPTO_ASSET",
+          "meaning": "a crypto asset"
+        },
+        {
+          "value": "ASSET_CLASS_EVENT_CONTRACT",
+          "meaning": "pays on whether an event happens"
+        },
+        {
+          "value": "ASSET_CLASS_CASH",
+          "meaning": "a currency's cash instrument"
+        }
+      ],
+      "empty": "unspecified lists every class",
+      "intent": "narrows the list to a class",
+      "meaning": "the class's templates, its base template among them",
+      "not_meaning": "a type",
+      "filled": "as-reported",
+      "filled_by": "reference",
+      "since": "v24",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.ListTemplatesReply.templates",
+      "type": "repeated message SecurityTemplate",
+      "empty": "empty when none held",
+      "intent": "answers the templates held",
+      "meaning": "each at its latest version",
+      "not_meaning": "instrument records",
+      "filled": "decided",
+      "filled_by": "instrument",
+      "since": "v24",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.ReadTemplateRequest.template_id",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the template to read",
+      "meaning": "a template the catalogue holds; one it does not is answered not found",
+      "not_meaning": "an instrument",
+      "filled": "as-reported",
+      "filled_by": "reference",
+      "since": "v24",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.ReadTemplateRequest.template_version",
+      "type": "text",
+      "empty": "empty reads the latest",
+      "intent": "names the version to read",
+      "meaning": "a published version, answered the same every time",
+      "not_meaning": "the record's version",
+      "filled": "as-reported",
+      "filled_by": "reference",
+      "since": "v24",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.ReadTemplateReply.template",
+      "type": "message SecurityTemplate",
+      "empty": "never unset",
+      "intent": "answers the template at its version",
+      "meaning": "whole: its class, fields and match rule",
+      "not_meaning": "an instrument record",
+      "filled": "decided",
+      "filled_by": "instrument",
+      "since": "v24",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.SecurityTemplate.template_id",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "identifies the template",
+      "meaning": "the platform's, never a deployment's",
+      "not_meaning": "an asset class",
+      "filled": "decided",
+      "filled_by": "platform",
+      "since": "v24",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.SecurityTemplate.template_version",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the template's version",
+      "meaning": "published and immutable; a change is a new version",
+      "not_meaning": "a deployment's copy",
+      "filled": "decided",
+      "filled_by": "platform",
+      "since": "v24",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.SecurityTemplate.asset_class",
+      "type": "enum AssetClass",
+      "allowed": [
+        {
+          "value": "ASSET_CLASS_UNSPECIFIED",
+          "meaning": "not said; never answered"
+        },
+        {
+          "value": "ASSET_CLASS_EQUITY",
+          "meaning": "a share of ownership"
+        },
+        {
+          "value": "ASSET_CLASS_DEBT",
+          "meaning": "somebody owes the holder"
+        },
+        {
+          "value": "ASSET_CLASS_FUND",
+          "meaning": "a share of a pool, exchange-traded and mutual funds among them"
+        },
+        {
+          "value": "ASSET_CLASS_DERIVATIVE",
+          "meaning": "a contract whose value comes from something else, options and futures among them"
+        },
+        {
+          "value": "ASSET_CLASS_CRYPTO_ASSET",
+          "meaning": "a crypto asset"
+        },
+        {
+          "value": "ASSET_CLASS_EVENT_CONTRACT",
+          "meaning": "pays on whether an event happens"
+        },
+        {
+          "value": "ASSET_CLASS_CASH",
+          "meaning": "a currency's cash instrument"
+        }
+      ],
+      "empty": "never unspecified",
+      "intent": "names the class the template is for",
+      "meaning": "a base template's class, or a type's",
+      "not_meaning": "a type",
+      "filled": "decided",
+      "filled_by": "platform",
+      "since": "v24",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.SecurityTemplate.match_rule",
+      "type": "repeated text",
+      "empty": "never empty",
+      "intent": "says what makes two records one security",
+      "meaning": "the identifier schemes it matches on, identifiers only for the first six templates (the one-ID spec's requirement 17), each by its scheme's spelling: share_class_figi first, the security's key, a composite_figi or a figi (exchange-level) resolved to it before matching and the composite where no share-class FIGI exists; ticker with its venue's ISO 10383 MIC in the Identifier's source, or its VEN- ID where the venue has none; sec_series, sec_class, iso4217, caip19, symbol (ruled 2026-10-14)",
+      "not_meaning": "a terms match, which arrives with bonds",
+      "filled": "decided",
+      "filled_by": "platform",
+      "since": "v24",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.SecurityTemplate.name",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the template for a person (approved 2026-10-14)",
+      "meaning": "the platform's words for it, shown where a record names its template",
+      "not_meaning": "its ID, which template_id is",
+      "filled": "decided",
+      "filled_by": "platform",
+      "since": "v24",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.SecurityTemplate.instrument_type",
+      "type": "enum InstrumentType",
+      "allowed": [
+        {
+          "value": "INSTRUMENT_TYPE_UNSPECIFIED",
+          "meaning": "no type: a class's base template, or a class's template that is no type's"
+        },
+        {
+          "value": "INSTRUMENT_TYPE_MONEY_MARKET_FUND",
+          "meaning": "the money market fund's template, under fund"
+        },
+        {
+          "value": "INSTRUMENT_TYPE_BINARY_EVENT_CONTRACT",
+          "meaning": "the binary event contract's template, under event_contract"
+        }
+      ],
+      "empty": "unspecified for a class's base template",
+      "intent": "says which type within its asset class the template is for (approved 2026-10-14)",
+      "meaning": "a type on the contract's list, under the template's asset class",
+      "not_meaning": "a code of ISO 10962, a reference only",
+      "filled": "decided",
+      "filled_by": "platform",
+      "since": "v24",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.SecurityTemplate.base",
+      "type": "boolean",
+      "empty": "false: the template adds a type's or a class's terms",
+      "intent": "says the template is its class's base template (approved 2026-10-14)",
+      "meaning": "true for the one template per asset class carrying identifiers, a description and a currency, which a local record of a type the catalogue lacks names (W3.7); the platform mints no INS- record under it",
+      "not_meaning": "a default a record falls back to when minted",
+      "filled": "decided",
+      "filled_by": "platform",
+      "since": "v24",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.SecurityTemplate.calculation",
+      "type": "text",
+      "empty": "empty in every template until the template calculations (row 6i')",
+      "intent": "names the template version's calculation package (approved 2026-10-14)",
+      "meaning": "the slot is defined and empty at v24; the package's form is the template calculations' to rule",
+      "not_meaning": "a calculation a deployment or a plugin defines",
+      "filled": "decided",
+      "filled_by": "platform",
+      "since": "v24",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.SecurityTemplate.fields",
+      "type": "repeated message TemplateField",
+      "empty": "never empty",
+      "intent": "lists the template's fields (W3.24)",
+      "meaning": "each by its path, its type and whether it is required; a record missing a required field is incomplete (W3.7)",
+      "not_meaning": "the record's values",
+      "filled": "decided",
+      "filled_by": "platform",
+      "since": "v24",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.TemplateField.path",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the field within the template",
+      "meaning": "its path, as an offer (TemplateFieldValue.path) and a missing field name it",
+      "not_meaning": "a dictionary entry of the contract",
+      "filled": "decided",
+      "filled_by": "platform",
+      "since": "v24",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.TemplateField.type",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "says what the field's value is",
+      "meaning": "one of the contract's types (format.yaml's `lists.types`), as a dictionary entry's type is written",
+      "not_meaning": "a vendor's type",
+      "filled": "decided",
+      "filled_by": "platform",
+      "since": "v24",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.TemplateField.required",
+      "type": "boolean",
+      "empty": "false: the field may be empty",
+      "intent": "says whether the template requires the field",
+      "meaning": "true: a record without it is incomplete, its missing fields listed (W3.7); the platform mints an INS- record only when its own source's values fill every required field, and queues the request for its staff otherwise (W1.25)",
+      "not_meaning": "whether a person must set it",
+      "filled": "decided",
+      "filled_by": "platform",
+      "since": "v24",
       "stability": "preview",
       "store": "instrument"
     },
@@ -23869,6 +26578,18 @@
         {
           "row": "RecordOutcomes",
           "since": "v23"
+        },
+        {
+          "row": "BookOrder",
+          "since": "v24"
+        },
+        {
+          "row": "CorrectBooking",
+          "since": "v24"
+        },
+        {
+          "row": "RecordSleeveCross",
+          "since": "v24"
         }
       ],
       "empty": "never unset in an amount that is set: the amount is the Money",
@@ -27985,6 +30706,21 @@
           "value": "REFUSAL_REASON_EXECUTIONS_DIFFER",
           "meaning": "beside ABORTED: an accept of fills of more than one account, instrument, side, connectivity plugin or trade date, or of a fill whose side is the order's opposite (W11.23); nothing changed",
           "since": "v23"
+        },
+        {
+          "value": "REFUSAL_REASON_BOOKING_UNBALANCED",
+          "meaning": "beside ABORTED: a booking or a correction whose allocations do not tie out exactly to the executions booked, in quantity, gross and each fee kind (W11.27, W11.29); nothing changed",
+          "since": "v24"
+        },
+        {
+          "value": "REFUSAL_REASON_ACCOUNT_NOT_INSTRUCTED",
+          "meaning": "beside ABORTED: a booking or a correction allocating to an account neither the order's allocation instruction names nor marked an error account (W11.27, W11.29); nothing changed",
+          "since": "v24"
+        },
+        {
+          "value": "REFUSAL_REASON_LOCAL_RECORD_NOT_ALLOWED",
+          "meaning": "beside ABORTED: a proposal, or an accept of venue-originated fills, naming an instrument whose record is provisional, a local record, while the deployment's setting allows_local_record_orders is off (W11's invariant, W11.1, W11.23); nothing changed, a fill staying unmatched. FIX's OrdRejReason (103) 1, Unknown symbol",
+          "since": "v24"
         }
       ],
       "empty": "unspecified where the status says all there is",
@@ -28498,10 +31234,17 @@
       "empty": "unset unless the delivery is an execution the book recorded",
       "intent": "delivers an execution the book recorded (W11.13)",
       "meaning": "the execution's whole record, a superseding one included, within the plugin's read scope",
-      "not_meaning": "a booking: booking is slice B",
+      "not_meaning": "a booking, which BookingUpdated delivers from v24",
       "filled": "decided",
       "filled_by": "bor",
       "since": "v22",
+      "changes": [
+        {
+          "version": "v24",
+          "kind": "clarified",
+          "what": "a booking is delivered by BookingUpdated from v24 (W11.30)"
+        }
+      ],
       "stability": "preview",
       "store": "sidecar"
     },
@@ -30642,6 +33385,198 @@
       "store": "sidecar"
     },
     {
+      "name": "meridian.plugin.v1.SetAllocationInstructionParams.acting_for",
+      "type": "message CallerAssertion",
+      "required": [
+        {
+          "row": "SetAllocationInstruction",
+          "since": "v24"
+        }
+      ],
+      "empty": "never unset: a command other than a fact report needs a user, a person or a service account, and the book refuses it sent for no one (REFUSAL_REASON_ACTOR_REQUIRED)",
+      "intent": "names the person SetAllocationInstruction is sent for",
+      "meaning": "the assertion the plugin was handed for them, the same bytes, never altered; the sidecar admits it only in a session at write, when the person may write the account it names or the record it names is in their write access, and stamps them on it (W4.9)",
+      "not_meaning": "the plugin's own identity, which the sidecar knows",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v24",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.plugin.v1.BookOrderParams.acting_for",
+      "type": "message CallerAssertion",
+      "required": [
+        {
+          "row": "BookOrder",
+          "since": "v24"
+        }
+      ],
+      "empty": "never unset: a command other than a fact report needs a user, a person or a service account, and the book refuses it sent for no one (REFUSAL_REASON_ACTOR_REQUIRED)",
+      "intent": "names the person BookOrder is sent for",
+      "meaning": "the assertion the plugin was handed for them, the same bytes, never altered; the sidecar admits it only in a session at write, when the person may write the account it names or the record it names is in their write access, and stamps them on it (W4.9)",
+      "not_meaning": "the plugin's own identity, which the sidecar knows",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v24",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.plugin.v1.HandOffBookingParams.acting_for",
+      "type": "message CallerAssertion",
+      "required": [
+        {
+          "row": "HandOffBooking",
+          "since": "v24"
+        }
+      ],
+      "empty": "never unset: a command other than a fact report needs a user, a person or a service account, and the book refuses it sent for no one (REFUSAL_REASON_ACTOR_REQUIRED)",
+      "intent": "names the person HandOffBooking is sent for",
+      "meaning": "the assertion the plugin was handed for them, the same bytes, never altered; the sidecar admits it only in a session at write, when the person may write the account it names or the record it names is in their write access, and stamps them on it (W4.9)",
+      "not_meaning": "the plugin's own identity, which the sidecar knows",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v24",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.plugin.v1.CorrectBookingParams.acting_for",
+      "type": "message CallerAssertion",
+      "required": [
+        {
+          "row": "CorrectBooking",
+          "since": "v24"
+        }
+      ],
+      "empty": "never unset: a command other than a fact report needs a user, a person or a service account, and the book refuses it sent for no one (REFUSAL_REASON_ACTOR_REQUIRED)",
+      "intent": "names the person CorrectBooking is sent for",
+      "meaning": "the assertion the plugin was handed for them, the same bytes, never altered; the sidecar admits it only in a session at write, when the person may write the account it names or the record it names is in their write access, and stamps them on it (W4.9)",
+      "not_meaning": "the plugin's own identity, which the sidecar knows",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v24",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.plugin.v1.RecordSleeveCrossParams.acting_for",
+      "type": "message CallerAssertion",
+      "required": [
+        {
+          "row": "RecordSleeveCross",
+          "since": "v24"
+        }
+      ],
+      "empty": "never unset: a command other than a fact report needs a user, a person or a service account, and the book refuses it sent for no one (REFUSAL_REASON_ACTOR_REQUIRED)",
+      "intent": "names the person RecordSleeveCross is sent for",
+      "meaning": "the assertion the plugin was handed for them, the same bytes, never altered; the sidecar admits it only in a session at write, when the person may write the account it names or the record it names is in their write access, and stamps them on it (W4.9)",
+      "not_meaning": "the plugin's own identity, which the sidecar knows",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v24",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.plugin.v1.AcknowledgeAlertParams.acting_for",
+      "type": "message CallerAssertion",
+      "required": [
+        {
+          "row": "AcknowledgeAlert",
+          "since": "v24"
+        }
+      ],
+      "empty": "never unset: a command other than a fact report needs a user, a person or a service account, and the book refuses it sent for no one (REFUSAL_REASON_ACTOR_REQUIRED)",
+      "intent": "names the person AcknowledgeAlert is sent for",
+      "meaning": "the assertion the plugin was handed for them, the same bytes, never altered; the sidecar admits it only in a session at write, when the person may write the account it names or the record it names is in their write access, and stamps them on it (W4.9)",
+      "not_meaning": "the plugin's own identity, which the sidecar knows",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v24",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.plugin.v1.RaiseAlertParams.acting_for",
+      "type": "message CallerAssertion",
+      "empty": "unset, compliance raises its own alert as itself, a finding as RecordBreak's is (W11.34)",
+      "intent": "names the person RaiseAlert is sent for",
+      "meaning": "the assertion the plugin was handed for them, the same bytes, never altered; set, the sidecar admits it only in a session at write, when the person may write the account or the record it names, and stamps them on it (W4.9)",
+      "not_meaning": "the plugin's own identity, which the sidecar knows",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v24",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.plugin.v1.ReportGiveUpParams.acting_for",
+      "type": "message CallerAssertion",
+      "empty": "unset, the plugin reports a prime's answer as itself, which a fact report may be (W11.32)",
+      "intent": "names the person ReportGiveUp is sent for",
+      "meaning": "the assertion the plugin was handed for them, the same bytes, never altered; set, the sidecar admits it only in a session at write, when the person may write the account or the record it names, and stamps them on it (W4.9)",
+      "not_meaning": "the plugin's own identity, which the sidecar knows",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v24",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.plugin.v1.OfferTemplateFieldsParams.acting_for",
+      "type": "message CallerAssertion",
+      "empty": "unset, the reference plugin offers its fields as itself, the offers' source (W3.23)",
+      "intent": "names the person OfferTemplateFields is sent for",
+      "meaning": "the assertion the plugin was handed for them, the same bytes, never altered; set, the sidecar admits it only in a session at write, when the person may write the account or the record it names, and stamps them on it (W4.9)",
+      "not_meaning": "the plugin's own identity, which the sidecar knows",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v24",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.plugin.v1.Delivery.booking_updated",
+      "type": "message BookingUpdatedEvent",
+      "empty": "unset unless the delivery is a booking that changed",
+      "intent": "delivers a booking that changed (W11.30)",
+      "meaning": "the booking's whole new state with its entry, within the plugin's read scope",
+      "not_meaning": "an execution or an order, each its own arm",
+      "filled": "decided",
+      "filled_by": "bor",
+      "since": "v24",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.plugin.v1.Delivery.alert_changed",
+      "type": "message AlertChangedEvent",
+      "empty": "unset unless the delivery is an alert raised, acknowledged or cleared",
+      "intent": "delivers an alert that changed (W11.35)",
+      "meaning": "the alert's whole new state, within the plugin's read scope",
+      "not_meaning": "a booking, its own arm",
+      "filled": "decided",
+      "filled_by": "bor",
+      "since": "v24",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.plugin.v1.Delivery.replace_merged_instrument",
+      "type": "message InstrumentReplacedEvent",
+      "empty": "unset unless the delivery is an instrument replaced",
+      "intent": "delivers an instrument replaced (W3.8), sequenced reference data (approved 2026-10-14)",
+      "meaning": "the replaced record, the record it became, why and its sequence, heard by every role whatever its scope and caught up by ListReplacements after the last sequence seen (W3.22)",
+      "not_meaning": "a record of the book, caught up by watermark",
+      "filled": "decided",
+      "filled_by": "instrument",
+      "since": "v24",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
       "name": "meridian.v1.SyncStatusEvent.source",
       "type": "text",
       "empty": "never empty",
@@ -31403,12 +34338,19 @@
       "name": "meridian.v1.RecordHoldingRequest.unresolved_identifiers",
       "type": "repeated message Identifier",
       "empty": "empty when instrument_id is set: never both, never neither",
-      "intent": "carries what the plugin held when the resolve was ambiguous",
-      "meaning": "everything it held, so a person sees exactly what could not be accounted for; the row is recorded all the same, since a dropped holding is invisible",
+      "intent": "carries what the plugin held when the resolve was ambiguous, or from v24 not found for a source thinner than an instrument record's minimum",
+      "meaning": "everything it held, so a person sees exactly what could not be accounted for; the row is recorded all the same, since a dropped holding is invisible. From v24 also a placeholder for a source stating less than an identifier, a description and a currency, outside the book and flagged on reconciliation as an unrecognized security (W3.7, W9.3)",
       "not_meaning": "a record",
       "filled": "as-reported",
       "filled_by": "custody",
       "since": "v2",
+      "changes": [
+        {
+          "version": "v24",
+          "kind": "clarified",
+          "what": "also a holding whose source is thinner than an instrument record's minimum, answered not found (W3.7; the one-ID model, ruled 2026-10-14)"
+        }
+      ],
       "stability": "stable",
       "store": "street"
     },

@@ -199,6 +199,7 @@ class BreakCategory(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     BREAK_CATEGORY_BOOK_ONLY: _ClassVar[BreakCategory]
     BREAK_CATEGORY_STREET_ONLY: _ClassVar[BreakCategory]
     BREAK_CATEGORY_FIGURE: _ClassVar[BreakCategory]
+    BREAK_CATEGORY_UNRECOGNIZED_SECURITY: _ClassVar[BreakCategory]
 
 class BreakState(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
@@ -499,6 +500,12 @@ class DkReason(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     DK_REASON_CALCULATION_DIFFERENCE: _ClassVar[DkReason]
     DK_REASON_OTHER: _ClassVar[DkReason]
 
+class GiveUpAnswer(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    GIVE_UP_ANSWER_UNSPECIFIED: _ClassVar[GiveUpAnswer]
+    GIVE_UP_ANSWER_ACCEPTED: _ClassVar[GiveUpAnswer]
+    GIVE_UP_ANSWER_REJECTED: _ClassVar[GiveUpAnswer]
+
 class ApprovalDecision(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
     APPROVAL_DECISION_UNSPECIFIED: _ClassVar[ApprovalDecision]
@@ -591,6 +598,44 @@ class ExecutionAcknowledgement(int, metaclass=_enum_type_wrapper.EnumTypeWrapper
     EXECUTION_ACKNOWLEDGEMENT_BN: _ClassVar[ExecutionAcknowledgement]
     EXECUTION_ACKNOWLEDGEMENT_DONT_KNOW_TRADE: _ClassVar[ExecutionAcknowledgement]
 
+class ErrorCause(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    ERROR_CAUSE_UNSPECIFIED: _ClassVar[ErrorCause]
+    ERROR_CAUSE_OVERFILL: _ClassVar[ErrorCause]
+    ERROR_CAUSE_CLIENT_RENEGED: _ClassVar[ErrorCause]
+    ERROR_CAUSE_WRONG_ACCEPT: _ClassVar[ErrorCause]
+    ERROR_CAUSE_BOOKING_ERROR: _ClassVar[ErrorCause]
+    ERROR_CAUSE_OTHER: _ClassVar[ErrorCause]
+
+class BookingState(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    BOOKING_STATE_UNSPECIFIED: _ClassVar[BookingState]
+    BOOKING_STATE_BOOKED: _ClassVar[BookingState]
+    BOOKING_STATE_HELD: _ClassVar[BookingState]
+    BOOKING_STATE_HANDED_OFF: _ClassVar[BookingState]
+    BOOKING_STATE_CLOSED: _ClassVar[BookingState]
+    BOOKING_STATE_CANCELLED: _ClassVar[BookingState]
+
+class BookingCorrectionKind(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    BOOKING_CORRECTION_KIND_UNSPECIFIED: _ClassVar[BookingCorrectionKind]
+    BOOKING_CORRECTION_KIND_CANCEL: _ClassVar[BookingCorrectionKind]
+    BOOKING_CORRECTION_KIND_REPLACE: _ClassVar[BookingCorrectionKind]
+
+class AlertKind(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    ALERT_KIND_UNSPECIFIED: _ClassVar[AlertKind]
+    ALERT_KIND_ERROR_ACCOUNT_BOOKING: _ClassVar[AlertKind]
+    ALERT_KIND_BOOKING_HELD: _ClassVar[AlertKind]
+    ALERT_KIND_COMPLIANCE: _ClassVar[AlertKind]
+
+class AlertState(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    ALERT_STATE_UNSPECIFIED: _ClassVar[AlertState]
+    ALERT_STATE_RAISED: _ClassVar[AlertState]
+    ALERT_STATE_ACKNOWLEDGED: _ClassVar[AlertState]
+    ALERT_STATE_CLEARED: _ClassVar[AlertState]
+
 class VenueKind(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
     VENUE_KIND_UNSPECIFIED: _ClassVar[VenueKind]
@@ -643,6 +688,13 @@ class DateOutcome(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     DATE_OUTCOME_CALENDAR_NOT_HELD: _ClassVar[DateOutcome]
     DATE_OUTCOME_OUTSIDE_COVERAGE: _ClassVar[DateOutcome]
     DATE_OUTCOME_RULE_NOT_HELD: _ClassVar[DateOutcome]
+
+class ReplacementCause(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    REPLACEMENT_CAUSE_UNSPECIFIED: _ClassVar[ReplacementCause]
+    REPLACEMENT_CAUSE_MERGED: _ClassVar[ReplacementCause]
+    REPLACEMENT_CAUSE_RESOLVED: _ClassVar[ReplacementCause]
+    REPLACEMENT_CAUSE_PLATFORM_MERGED: _ClassVar[ReplacementCause]
 
 class SourceTimeKind(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
@@ -858,6 +910,7 @@ BREAK_CATEGORY_SETTLED_AGAINST_PENDING: BreakCategory
 BREAK_CATEGORY_BOOK_ONLY: BreakCategory
 BREAK_CATEGORY_STREET_ONLY: BreakCategory
 BREAK_CATEGORY_FIGURE: BreakCategory
+BREAK_CATEGORY_UNRECOGNIZED_SECURITY: BreakCategory
 BREAK_STATE_UNSPECIFIED: BreakState
 BREAK_STATE_OPEN: BreakState
 BREAK_STATE_RESOLVED: BreakState
@@ -1046,6 +1099,9 @@ DK_REASON_NO_MATCHING_ORDER: DkReason
 DK_REASON_PRICE_EXCEEDS_LIMIT: DkReason
 DK_REASON_CALCULATION_DIFFERENCE: DkReason
 DK_REASON_OTHER: DkReason
+GIVE_UP_ANSWER_UNSPECIFIED: GiveUpAnswer
+GIVE_UP_ANSWER_ACCEPTED: GiveUpAnswer
+GIVE_UP_ANSWER_REJECTED: GiveUpAnswer
 APPROVAL_DECISION_UNSPECIFIED: ApprovalDecision
 APPROVAL_DECISION_REQUIRE: ApprovalDecision
 APPROVAL_DECISION_APPROVE: ApprovalDecision
@@ -1108,6 +1164,29 @@ EXECUTION_ACKNOWLEDGEMENT_UNSPECIFIED: ExecutionAcknowledgement
 EXECUTION_ACKNOWLEDGEMENT_NONE: ExecutionAcknowledgement
 EXECUTION_ACKNOWLEDGEMENT_BN: ExecutionAcknowledgement
 EXECUTION_ACKNOWLEDGEMENT_DONT_KNOW_TRADE: ExecutionAcknowledgement
+ERROR_CAUSE_UNSPECIFIED: ErrorCause
+ERROR_CAUSE_OVERFILL: ErrorCause
+ERROR_CAUSE_CLIENT_RENEGED: ErrorCause
+ERROR_CAUSE_WRONG_ACCEPT: ErrorCause
+ERROR_CAUSE_BOOKING_ERROR: ErrorCause
+ERROR_CAUSE_OTHER: ErrorCause
+BOOKING_STATE_UNSPECIFIED: BookingState
+BOOKING_STATE_BOOKED: BookingState
+BOOKING_STATE_HELD: BookingState
+BOOKING_STATE_HANDED_OFF: BookingState
+BOOKING_STATE_CLOSED: BookingState
+BOOKING_STATE_CANCELLED: BookingState
+BOOKING_CORRECTION_KIND_UNSPECIFIED: BookingCorrectionKind
+BOOKING_CORRECTION_KIND_CANCEL: BookingCorrectionKind
+BOOKING_CORRECTION_KIND_REPLACE: BookingCorrectionKind
+ALERT_KIND_UNSPECIFIED: AlertKind
+ALERT_KIND_ERROR_ACCOUNT_BOOKING: AlertKind
+ALERT_KIND_BOOKING_HELD: AlertKind
+ALERT_KIND_COMPLIANCE: AlertKind
+ALERT_STATE_UNSPECIFIED: AlertState
+ALERT_STATE_RAISED: AlertState
+ALERT_STATE_ACKNOWLEDGED: AlertState
+ALERT_STATE_CLEARED: AlertState
 VENUE_KIND_UNSPECIFIED: VenueKind
 VENUE_KIND_EXCHANGE: VenueKind
 VENUE_KIND_ALTERNATIVE_TRADING_SYSTEM: VenueKind
@@ -1143,6 +1222,10 @@ DATE_OUTCOME_COMPUTED: DateOutcome
 DATE_OUTCOME_CALENDAR_NOT_HELD: DateOutcome
 DATE_OUTCOME_OUTSIDE_COVERAGE: DateOutcome
 DATE_OUTCOME_RULE_NOT_HELD: DateOutcome
+REPLACEMENT_CAUSE_UNSPECIFIED: ReplacementCause
+REPLACEMENT_CAUSE_MERGED: ReplacementCause
+REPLACEMENT_CAUSE_RESOLVED: ReplacementCause
+REPLACEMENT_CAUSE_PLATFORM_MERGED: ReplacementCause
 SOURCE_TIME_KIND_UNSPECIFIED: SourceTimeKind
 SOURCE_TIME_KIND_EVENT: SourceTimeKind
 SOURCE_TIME_KIND_CONSOLIDATED: SourceTimeKind
@@ -1514,16 +1597,18 @@ class ResolveIdentifierParams(_message.Message):
     def __init__(self, identifiers: _Optional[_Iterable[_Union[Identifier, _Mapping]]] = ..., as_of_ns: _Optional[int] = ..., exchange_mic: _Optional[str] = ..., currency: _Optional[str] = ..., stated_asset_class: _Optional[_Union[AssetClass, str]] = ..., stated_currency: _Optional[str] = ..., stated_description: _Optional[str] = ..., stated_instrument_type: _Optional[_Union[InstrumentType, str]] = ..., provenance: _Optional[_Iterable[_Union[Provenance, _Mapping]]] = ...) -> None: ...
 
 class ResolveIdentifierResult(_message.Message):
-    __slots__ = ("found", "instrument_id", "miss_reason", "minted")
+    __slots__ = ("found", "instrument_id", "miss_reason", "minted", "provisional")
     FOUND_FIELD_NUMBER: _ClassVar[int]
     INSTRUMENT_ID_FIELD_NUMBER: _ClassVar[int]
     MISS_REASON_FIELD_NUMBER: _ClassVar[int]
     MINTED_FIELD_NUMBER: _ClassVar[int]
+    PROVISIONAL_FIELD_NUMBER: _ClassVar[int]
     found: bool
     instrument_id: str
     miss_reason: MissReason
     minted: bool
-    def __init__(self, found: bool = ..., instrument_id: _Optional[str] = ..., miss_reason: _Optional[_Union[MissReason, str]] = ..., minted: bool = ...) -> None: ...
+    provisional: bool
+    def __init__(self, found: bool = ..., instrument_id: _Optional[str] = ..., miss_reason: _Optional[_Union[MissReason, str]] = ..., minted: bool = ..., provisional: bool = ...) -> None: ...
 
 class ReportMissingInstrumentParams(_message.Message):
     __slots__ = ("source", "asset_class", "identifiers", "as_of_ns", "reason", "observed_at_ns", "asset_class_as_reported")
@@ -1952,7 +2037,7 @@ class ListAccountAttributesResult(_message.Message):
     def __init__(self, attributes: _Optional[_Iterable[_Union[AccountAttributes, _Mapping]]] = ..., next_cursor: _Optional[str] = ..., as_of: _Optional[_Union[Watermark, _Mapping]] = ...) -> None: ...
 
 class ProposeOrderParams(_message.Message):
-    __slots__ = ("account_id", "instrument_id", "sleeve", "side", "locate_id", "quantity", "cash_quantity", "order_type", "limit_price", "dealt_currency", "legs", "allocation_instruction", "time_in_force", "lot_relief_method", "relieve_lot_ids", "capacity", "direction", "parties", "decided_by", "customer_id", "firm_designated_id", "handling_instructions", "received_at_ns", "received_precision", "quote_at_receipt", "represents_order_ids", "axe_source", "axe_counterparty_id", "link", "idempotency_key", "stop_price", "expire_date", "expire_time_ns", "execution_instructions", "quote_currency", "acting_for")
+    __slots__ = ("account_id", "instrument_id", "sleeve", "side", "locate_id", "quantity", "cash_quantity", "order_type", "limit_price", "dealt_currency", "legs", "allocation_instruction", "time_in_force", "lot_relief_method", "relieve_lot_ids", "capacity", "direction", "parties", "decided_by", "customer_id", "firm_designated_id", "handling_instructions", "received_at_ns", "received_precision", "quote_at_receipt", "represents_order_ids", "axe_source", "axe_counterparty_id", "link", "idempotency_key", "stop_price", "expire_date", "expire_time_ns", "execution_instructions", "quote_currency", "block_member_order_ids", "acting_for")
     ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
     INSTRUMENT_ID_FIELD_NUMBER: _ClassVar[int]
     SLEEVE_FIELD_NUMBER: _ClassVar[int]
@@ -1988,6 +2073,7 @@ class ProposeOrderParams(_message.Message):
     EXPIRE_TIME_NS_FIELD_NUMBER: _ClassVar[int]
     EXECUTION_INSTRUCTIONS_FIELD_NUMBER: _ClassVar[int]
     QUOTE_CURRENCY_FIELD_NUMBER: _ClassVar[int]
+    BLOCK_MEMBER_ORDER_IDS_FIELD_NUMBER: _ClassVar[int]
     ACTING_FOR_FIELD_NUMBER: _ClassVar[int]
     account_id: str
     instrument_id: str
@@ -2024,8 +2110,9 @@ class ProposeOrderParams(_message.Message):
     expire_time_ns: int
     execution_instructions: _containers.RepeatedScalarFieldContainer[ExecutionInstruction]
     quote_currency: str
+    block_member_order_ids: _containers.RepeatedScalarFieldContainer[str]
     acting_for: _sidecar_pb2.CallerAssertion
-    def __init__(self, account_id: _Optional[str] = ..., instrument_id: _Optional[str] = ..., sleeve: _Optional[str] = ..., side: _Optional[_Union[Side, str]] = ..., locate_id: _Optional[str] = ..., quantity: _Optional[_Union[Decimal, _Mapping]] = ..., cash_quantity: _Optional[_Union[Money, _Mapping]] = ..., order_type: _Optional[_Union[OrderType, str]] = ..., limit_price: _Optional[_Union[Money, _Mapping]] = ..., dealt_currency: _Optional[str] = ..., legs: _Optional[_Iterable[_Union[Leg, _Mapping]]] = ..., allocation_instruction: _Optional[_Union[AllocationInstruction, _Mapping]] = ..., time_in_force: _Optional[_Union[TimeInForce, str]] = ..., lot_relief_method: _Optional[_Union[LotReliefMethod, str]] = ..., relieve_lot_ids: _Optional[_Iterable[str]] = ..., capacity: _Optional[_Union[Capacity, str]] = ..., direction: _Optional[_Union[OrderDirection, str]] = ..., parties: _Optional[_Iterable[_Union[Party, _Mapping]]] = ..., decided_by: _Optional[_Union[Actor, _Mapping]] = ..., customer_id: _Optional[str] = ..., firm_designated_id: _Optional[str] = ..., handling_instructions: _Optional[_Iterable[str]] = ..., received_at_ns: _Optional[int] = ..., received_precision: _Optional[_Union[TimePrecision, str]] = ..., quote_at_receipt: _Optional[_Union[ReceiptQuote, _Mapping]] = ..., represents_order_ids: _Optional[_Iterable[str]] = ..., axe_source: _Optional[str] = ..., axe_counterparty_id: _Optional[str] = ..., link: _Optional[_Union[OrderLink, _Mapping]] = ..., idempotency_key: _Optional[str] = ..., stop_price: _Optional[_Union[Money, _Mapping]] = ..., expire_date: _Optional[str] = ..., expire_time_ns: _Optional[int] = ..., execution_instructions: _Optional[_Iterable[_Union[ExecutionInstruction, str]]] = ..., quote_currency: _Optional[str] = ..., acting_for: _Optional[_Union[_sidecar_pb2.CallerAssertion, _Mapping]] = ...) -> None: ...
+    def __init__(self, account_id: _Optional[str] = ..., instrument_id: _Optional[str] = ..., sleeve: _Optional[str] = ..., side: _Optional[_Union[Side, str]] = ..., locate_id: _Optional[str] = ..., quantity: _Optional[_Union[Decimal, _Mapping]] = ..., cash_quantity: _Optional[_Union[Money, _Mapping]] = ..., order_type: _Optional[_Union[OrderType, str]] = ..., limit_price: _Optional[_Union[Money, _Mapping]] = ..., dealt_currency: _Optional[str] = ..., legs: _Optional[_Iterable[_Union[Leg, _Mapping]]] = ..., allocation_instruction: _Optional[_Union[AllocationInstruction, _Mapping]] = ..., time_in_force: _Optional[_Union[TimeInForce, str]] = ..., lot_relief_method: _Optional[_Union[LotReliefMethod, str]] = ..., relieve_lot_ids: _Optional[_Iterable[str]] = ..., capacity: _Optional[_Union[Capacity, str]] = ..., direction: _Optional[_Union[OrderDirection, str]] = ..., parties: _Optional[_Iterable[_Union[Party, _Mapping]]] = ..., decided_by: _Optional[_Union[Actor, _Mapping]] = ..., customer_id: _Optional[str] = ..., firm_designated_id: _Optional[str] = ..., handling_instructions: _Optional[_Iterable[str]] = ..., received_at_ns: _Optional[int] = ..., received_precision: _Optional[_Union[TimePrecision, str]] = ..., quote_at_receipt: _Optional[_Union[ReceiptQuote, _Mapping]] = ..., represents_order_ids: _Optional[_Iterable[str]] = ..., axe_source: _Optional[str] = ..., axe_counterparty_id: _Optional[str] = ..., link: _Optional[_Union[OrderLink, _Mapping]] = ..., idempotency_key: _Optional[str] = ..., stop_price: _Optional[_Union[Money, _Mapping]] = ..., expire_date: _Optional[str] = ..., expire_time_ns: _Optional[int] = ..., execution_instructions: _Optional[_Iterable[_Union[ExecutionInstruction, str]]] = ..., quote_currency: _Optional[str] = ..., block_member_order_ids: _Optional[_Iterable[str]] = ..., acting_for: _Optional[_Union[_sidecar_pb2.CallerAssertion, _Mapping]] = ...) -> None: ...
 
 class ProposeOrderResult(_message.Message):
     __slots__ = ("order", "entry", "journal", "change_request_id")
@@ -2763,6 +2850,254 @@ class ReportValueDateRollResult(_message.Message):
     journal: JournalRef
     def __init__(self, placement: _Optional[_Union[Placement, _Mapping]] = ..., execution: _Optional[_Union[Execution, _Mapping]] = ..., order: _Optional[_Union[Order, _Mapping]] = ..., charge: _Optional[_Union[Charge, _Mapping]] = ..., unplaced: _Optional[_Union[UnplacedFact, _Mapping]] = ..., entry: _Optional[_Union[EntryMeta, _Mapping]] = ..., journal: _Optional[_Union[JournalRef, _Mapping]] = ...) -> None: ...
 
+class SetAllocationInstructionParams(_message.Message):
+    __slots__ = ("order_id", "allocation_instruction", "reason", "acting_for")
+    ORDER_ID_FIELD_NUMBER: _ClassVar[int]
+    ALLOCATION_INSTRUCTION_FIELD_NUMBER: _ClassVar[int]
+    REASON_FIELD_NUMBER: _ClassVar[int]
+    ACTING_FOR_FIELD_NUMBER: _ClassVar[int]
+    order_id: str
+    allocation_instruction: AllocationInstruction
+    reason: str
+    acting_for: _sidecar_pb2.CallerAssertion
+    def __init__(self, order_id: _Optional[str] = ..., allocation_instruction: _Optional[_Union[AllocationInstruction, _Mapping]] = ..., reason: _Optional[str] = ..., acting_for: _Optional[_Union[_sidecar_pb2.CallerAssertion, _Mapping]] = ...) -> None: ...
+
+class SetAllocationInstructionResult(_message.Message):
+    __slots__ = ("order", "entry", "journal", "change_request_id")
+    ORDER_FIELD_NUMBER: _ClassVar[int]
+    ENTRY_FIELD_NUMBER: _ClassVar[int]
+    JOURNAL_FIELD_NUMBER: _ClassVar[int]
+    CHANGE_REQUEST_ID_FIELD_NUMBER: _ClassVar[int]
+    order: Order
+    entry: EntryMeta
+    journal: JournalRef
+    change_request_id: str
+    def __init__(self, order: _Optional[_Union[Order, _Mapping]] = ..., entry: _Optional[_Union[EntryMeta, _Mapping]] = ..., journal: _Optional[_Union[JournalRef, _Mapping]] = ..., change_request_id: _Optional[str] = ...) -> None: ...
+
+class BookOrderParams(_message.Message):
+    __slots__ = ("order_id", "execution_ids", "allocations", "hand_off", "acting_for")
+    ORDER_ID_FIELD_NUMBER: _ClassVar[int]
+    EXECUTION_IDS_FIELD_NUMBER: _ClassVar[int]
+    ALLOCATIONS_FIELD_NUMBER: _ClassVar[int]
+    HAND_OFF_FIELD_NUMBER: _ClassVar[int]
+    ACTING_FOR_FIELD_NUMBER: _ClassVar[int]
+    order_id: str
+    execution_ids: _containers.RepeatedScalarFieldContainer[str]
+    allocations: _containers.RepeatedCompositeFieldContainer[Allocation]
+    hand_off: bool
+    acting_for: _sidecar_pb2.CallerAssertion
+    def __init__(self, order_id: _Optional[str] = ..., execution_ids: _Optional[_Iterable[str]] = ..., allocations: _Optional[_Iterable[_Union[Allocation, _Mapping]]] = ..., hand_off: bool = ..., acting_for: _Optional[_Union[_sidecar_pb2.CallerAssertion, _Mapping]] = ...) -> None: ...
+
+class BookOrderResult(_message.Message):
+    __slots__ = ("booking", "entry", "journal")
+    BOOKING_FIELD_NUMBER: _ClassVar[int]
+    ENTRY_FIELD_NUMBER: _ClassVar[int]
+    JOURNAL_FIELD_NUMBER: _ClassVar[int]
+    booking: Booking
+    entry: EntryMeta
+    journal: JournalRef
+    def __init__(self, booking: _Optional[_Union[Booking, _Mapping]] = ..., entry: _Optional[_Union[EntryMeta, _Mapping]] = ..., journal: _Optional[_Union[JournalRef, _Mapping]] = ...) -> None: ...
+
+class HandOffBookingParams(_message.Message):
+    __slots__ = ("booking_id", "close", "acting_for")
+    BOOKING_ID_FIELD_NUMBER: _ClassVar[int]
+    CLOSE_FIELD_NUMBER: _ClassVar[int]
+    ACTING_FOR_FIELD_NUMBER: _ClassVar[int]
+    booking_id: str
+    close: bool
+    acting_for: _sidecar_pb2.CallerAssertion
+    def __init__(self, booking_id: _Optional[str] = ..., close: bool = ..., acting_for: _Optional[_Union[_sidecar_pb2.CallerAssertion, _Mapping]] = ...) -> None: ...
+
+class HandOffBookingResult(_message.Message):
+    __slots__ = ("booking", "entry", "journal")
+    BOOKING_FIELD_NUMBER: _ClassVar[int]
+    ENTRY_FIELD_NUMBER: _ClassVar[int]
+    JOURNAL_FIELD_NUMBER: _ClassVar[int]
+    booking: Booking
+    entry: EntryMeta
+    journal: JournalRef
+    def __init__(self, booking: _Optional[_Union[Booking, _Mapping]] = ..., entry: _Optional[_Union[EntryMeta, _Mapping]] = ..., journal: _Optional[_Union[JournalRef, _Mapping]] = ...) -> None: ...
+
+class CorrectBookingParams(_message.Message):
+    __slots__ = ("booking_id", "kind", "allocations", "effective_date", "reason", "acting_for")
+    BOOKING_ID_FIELD_NUMBER: _ClassVar[int]
+    KIND_FIELD_NUMBER: _ClassVar[int]
+    ALLOCATIONS_FIELD_NUMBER: _ClassVar[int]
+    EFFECTIVE_DATE_FIELD_NUMBER: _ClassVar[int]
+    REASON_FIELD_NUMBER: _ClassVar[int]
+    ACTING_FOR_FIELD_NUMBER: _ClassVar[int]
+    booking_id: str
+    kind: BookingCorrectionKind
+    allocations: _containers.RepeatedCompositeFieldContainer[Allocation]
+    effective_date: str
+    reason: str
+    acting_for: _sidecar_pb2.CallerAssertion
+    def __init__(self, booking_id: _Optional[str] = ..., kind: _Optional[_Union[BookingCorrectionKind, str]] = ..., allocations: _Optional[_Iterable[_Union[Allocation, _Mapping]]] = ..., effective_date: _Optional[str] = ..., reason: _Optional[str] = ..., acting_for: _Optional[_Union[_sidecar_pb2.CallerAssertion, _Mapping]] = ...) -> None: ...
+
+class CorrectBookingResult(_message.Message):
+    __slots__ = ("booking", "entry", "journal")
+    BOOKING_FIELD_NUMBER: _ClassVar[int]
+    ENTRY_FIELD_NUMBER: _ClassVar[int]
+    JOURNAL_FIELD_NUMBER: _ClassVar[int]
+    booking: Booking
+    entry: EntryMeta
+    journal: JournalRef
+    def __init__(self, booking: _Optional[_Union[Booking, _Mapping]] = ..., entry: _Optional[_Union[EntryMeta, _Mapping]] = ..., journal: _Optional[_Union[JournalRef, _Mapping]] = ...) -> None: ...
+
+class ListBookingsParams(_message.Message):
+    __slots__ = ("account_id", "since", "state", "page_size", "cursor")
+    ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
+    SINCE_FIELD_NUMBER: _ClassVar[int]
+    STATE_FIELD_NUMBER: _ClassVar[int]
+    PAGE_SIZE_FIELD_NUMBER: _ClassVar[int]
+    CURSOR_FIELD_NUMBER: _ClassVar[int]
+    account_id: str
+    since: Watermark
+    state: BookingState
+    page_size: int
+    cursor: str
+    def __init__(self, account_id: _Optional[str] = ..., since: _Optional[_Union[Watermark, _Mapping]] = ..., state: _Optional[_Union[BookingState, str]] = ..., page_size: _Optional[int] = ..., cursor: _Optional[str] = ...) -> None: ...
+
+class ListBookingsResult(_message.Message):
+    __slots__ = ("bookings", "as_of", "next_cursor")
+    BOOKINGS_FIELD_NUMBER: _ClassVar[int]
+    AS_OF_FIELD_NUMBER: _ClassVar[int]
+    NEXT_CURSOR_FIELD_NUMBER: _ClassVar[int]
+    bookings: _containers.RepeatedCompositeFieldContainer[Booking]
+    as_of: Watermark
+    next_cursor: str
+    def __init__(self, bookings: _Optional[_Iterable[_Union[Booking, _Mapping]]] = ..., as_of: _Optional[_Union[Watermark, _Mapping]] = ..., next_cursor: _Optional[str] = ...) -> None: ...
+
+class ReportGiveUpParams(_message.Message):
+    __slots__ = ("execution_id", "allocation_id", "answer", "prime_reference", "reason", "raw_record", "acting_for")
+    EXECUTION_ID_FIELD_NUMBER: _ClassVar[int]
+    ALLOCATION_ID_FIELD_NUMBER: _ClassVar[int]
+    ANSWER_FIELD_NUMBER: _ClassVar[int]
+    PRIME_REFERENCE_FIELD_NUMBER: _ClassVar[int]
+    REASON_FIELD_NUMBER: _ClassVar[int]
+    RAW_RECORD_FIELD_NUMBER: _ClassVar[int]
+    ACTING_FOR_FIELD_NUMBER: _ClassVar[int]
+    execution_id: str
+    allocation_id: str
+    answer: GiveUpAnswer
+    prime_reference: str
+    reason: str
+    raw_record: RawRecordRef
+    acting_for: _sidecar_pb2.CallerAssertion
+    def __init__(self, execution_id: _Optional[str] = ..., allocation_id: _Optional[str] = ..., answer: _Optional[_Union[GiveUpAnswer, str]] = ..., prime_reference: _Optional[str] = ..., reason: _Optional[str] = ..., raw_record: _Optional[_Union[RawRecordRef, _Mapping]] = ..., acting_for: _Optional[_Union[_sidecar_pb2.CallerAssertion, _Mapping]] = ...) -> None: ...
+
+class ReportGiveUpResult(_message.Message):
+    __slots__ = ("placement", "execution", "order", "charge", "unplaced", "entry", "journal")
+    PLACEMENT_FIELD_NUMBER: _ClassVar[int]
+    EXECUTION_FIELD_NUMBER: _ClassVar[int]
+    ORDER_FIELD_NUMBER: _ClassVar[int]
+    CHARGE_FIELD_NUMBER: _ClassVar[int]
+    UNPLACED_FIELD_NUMBER: _ClassVar[int]
+    ENTRY_FIELD_NUMBER: _ClassVar[int]
+    JOURNAL_FIELD_NUMBER: _ClassVar[int]
+    placement: Placement
+    execution: Execution
+    order: Order
+    charge: Charge
+    unplaced: UnplacedFact
+    entry: EntryMeta
+    journal: JournalRef
+    def __init__(self, placement: _Optional[_Union[Placement, _Mapping]] = ..., execution: _Optional[_Union[Execution, _Mapping]] = ..., order: _Optional[_Union[Order, _Mapping]] = ..., charge: _Optional[_Union[Charge, _Mapping]] = ..., unplaced: _Optional[_Union[UnplacedFact, _Mapping]] = ..., entry: _Optional[_Union[EntryMeta, _Mapping]] = ..., journal: _Optional[_Union[JournalRef, _Mapping]] = ...) -> None: ...
+
+class RecordSleeveCrossParams(_message.Message):
+    __slots__ = ("sleeve_cross", "acting_for")
+    SLEEVE_CROSS_FIELD_NUMBER: _ClassVar[int]
+    ACTING_FOR_FIELD_NUMBER: _ClassVar[int]
+    sleeve_cross: SleeveCross
+    acting_for: _sidecar_pb2.CallerAssertion
+    def __init__(self, sleeve_cross: _Optional[_Union[SleeveCross, _Mapping]] = ..., acting_for: _Optional[_Union[_sidecar_pb2.CallerAssertion, _Mapping]] = ...) -> None: ...
+
+class RecordSleeveCrossResult(_message.Message):
+    __slots__ = ("sleeve_cross", "journal")
+    SLEEVE_CROSS_FIELD_NUMBER: _ClassVar[int]
+    JOURNAL_FIELD_NUMBER: _ClassVar[int]
+    sleeve_cross: SleeveCross
+    journal: JournalRef
+    def __init__(self, sleeve_cross: _Optional[_Union[SleeveCross, _Mapping]] = ..., journal: _Optional[_Union[JournalRef, _Mapping]] = ...) -> None: ...
+
+class RaiseAlertParams(_message.Message):
+    __slots__ = ("account_id", "kind", "reason", "subject", "acting_for")
+    ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
+    KIND_FIELD_NUMBER: _ClassVar[int]
+    REASON_FIELD_NUMBER: _ClassVar[int]
+    SUBJECT_FIELD_NUMBER: _ClassVar[int]
+    ACTING_FOR_FIELD_NUMBER: _ClassVar[int]
+    account_id: str
+    kind: AlertKind
+    reason: str
+    subject: AlertSubject
+    acting_for: _sidecar_pb2.CallerAssertion
+    def __init__(self, account_id: _Optional[str] = ..., kind: _Optional[_Union[AlertKind, str]] = ..., reason: _Optional[str] = ..., subject: _Optional[_Union[AlertSubject, _Mapping]] = ..., acting_for: _Optional[_Union[_sidecar_pb2.CallerAssertion, _Mapping]] = ...) -> None: ...
+
+class RaiseAlertResult(_message.Message):
+    __slots__ = ("alert", "journal")
+    ALERT_FIELD_NUMBER: _ClassVar[int]
+    JOURNAL_FIELD_NUMBER: _ClassVar[int]
+    alert: Alert
+    journal: JournalRef
+    def __init__(self, alert: _Optional[_Union[Alert, _Mapping]] = ..., journal: _Optional[_Union[JournalRef, _Mapping]] = ...) -> None: ...
+
+class AcknowledgeAlertParams(_message.Message):
+    __slots__ = ("alert_id", "reason", "acting_for")
+    ALERT_ID_FIELD_NUMBER: _ClassVar[int]
+    REASON_FIELD_NUMBER: _ClassVar[int]
+    ACTING_FOR_FIELD_NUMBER: _ClassVar[int]
+    alert_id: str
+    reason: str
+    acting_for: _sidecar_pb2.CallerAssertion
+    def __init__(self, alert_id: _Optional[str] = ..., reason: _Optional[str] = ..., acting_for: _Optional[_Union[_sidecar_pb2.CallerAssertion, _Mapping]] = ...) -> None: ...
+
+class AcknowledgeAlertResult(_message.Message):
+    __slots__ = ("alert", "journal")
+    ALERT_FIELD_NUMBER: _ClassVar[int]
+    JOURNAL_FIELD_NUMBER: _ClassVar[int]
+    alert: Alert
+    journal: JournalRef
+    def __init__(self, alert: _Optional[_Union[Alert, _Mapping]] = ..., journal: _Optional[_Union[JournalRef, _Mapping]] = ...) -> None: ...
+
+class ListAlertsParams(_message.Message):
+    __slots__ = ("account_id", "state", "since", "page_size", "cursor", "kind")
+    ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
+    STATE_FIELD_NUMBER: _ClassVar[int]
+    SINCE_FIELD_NUMBER: _ClassVar[int]
+    PAGE_SIZE_FIELD_NUMBER: _ClassVar[int]
+    CURSOR_FIELD_NUMBER: _ClassVar[int]
+    KIND_FIELD_NUMBER: _ClassVar[int]
+    account_id: str
+    state: AlertState
+    since: Watermark
+    page_size: int
+    cursor: str
+    kind: AlertKind
+    def __init__(self, account_id: _Optional[str] = ..., state: _Optional[_Union[AlertState, str]] = ..., since: _Optional[_Union[Watermark, _Mapping]] = ..., page_size: _Optional[int] = ..., cursor: _Optional[str] = ..., kind: _Optional[_Union[AlertKind, str]] = ...) -> None: ...
+
+class ListAlertsResult(_message.Message):
+    __slots__ = ("alerts", "as_of", "next_cursor")
+    ALERTS_FIELD_NUMBER: _ClassVar[int]
+    AS_OF_FIELD_NUMBER: _ClassVar[int]
+    NEXT_CURSOR_FIELD_NUMBER: _ClassVar[int]
+    alerts: _containers.RepeatedCompositeFieldContainer[Alert]
+    as_of: Watermark
+    next_cursor: str
+    def __init__(self, alerts: _Optional[_Iterable[_Union[Alert, _Mapping]]] = ..., as_of: _Optional[_Union[Watermark, _Mapping]] = ..., next_cursor: _Optional[str] = ...) -> None: ...
+
+class ReadLocalRecordOrdersParams(_message.Message):
+    __slots__ = ()
+    def __init__(self) -> None: ...
+
+class ReadLocalRecordOrdersResult(_message.Message):
+    __slots__ = ("allows_local_record_orders", "open_order_count")
+    ALLOWS_LOCAL_RECORD_ORDERS_FIELD_NUMBER: _ClassVar[int]
+    OPEN_ORDER_COUNT_FIELD_NUMBER: _ClassVar[int]
+    allows_local_record_orders: bool
+    open_order_count: int
+    def __init__(self, allows_local_record_orders: bool = ..., open_order_count: _Optional[int] = ...) -> None: ...
+
 class ResolveVenueParams(_message.Message):
     __slots__ = ("identifiers", "as_of_ns")
     IDENTIFIERS_FIELD_NUMBER: _ClassVar[int]
@@ -2852,6 +3187,66 @@ class ComputeDateResult(_message.Message):
     basis: DateBasis
     business_day: bool
     def __init__(self, date: _Optional[str] = ..., outcome: _Optional[_Union[DateOutcome, str]] = ..., basis: _Optional[_Union[DateBasis, _Mapping]] = ..., business_day: bool = ...) -> None: ...
+
+class ListReplacementsParams(_message.Message):
+    __slots__ = ("after_sequence",)
+    AFTER_SEQUENCE_FIELD_NUMBER: _ClassVar[int]
+    after_sequence: int
+    def __init__(self, after_sequence: _Optional[int] = ...) -> None: ...
+
+class ListReplacementsResult(_message.Message):
+    __slots__ = ("replacements", "sequence")
+    REPLACEMENTS_FIELD_NUMBER: _ClassVar[int]
+    SEQUENCE_FIELD_NUMBER: _ClassVar[int]
+    replacements: _containers.RepeatedCompositeFieldContainer[InstrumentReplacedEvent]
+    sequence: int
+    def __init__(self, replacements: _Optional[_Iterable[_Union[InstrumentReplacedEvent, _Mapping]]] = ..., sequence: _Optional[int] = ...) -> None: ...
+
+class OfferTemplateFieldsParams(_message.Message):
+    __slots__ = ("instrument_id", "template_id", "template_version", "fields", "acting_for")
+    INSTRUMENT_ID_FIELD_NUMBER: _ClassVar[int]
+    TEMPLATE_ID_FIELD_NUMBER: _ClassVar[int]
+    TEMPLATE_VERSION_FIELD_NUMBER: _ClassVar[int]
+    FIELDS_FIELD_NUMBER: _ClassVar[int]
+    ACTING_FOR_FIELD_NUMBER: _ClassVar[int]
+    instrument_id: str
+    template_id: str
+    template_version: str
+    fields: _containers.RepeatedCompositeFieldContainer[TemplateFieldValue]
+    acting_for: _sidecar_pb2.CallerAssertion
+    def __init__(self, instrument_id: _Optional[str] = ..., template_id: _Optional[str] = ..., template_version: _Optional[str] = ..., fields: _Optional[_Iterable[_Union[TemplateFieldValue, _Mapping]]] = ..., acting_for: _Optional[_Union[_sidecar_pb2.CallerAssertion, _Mapping]] = ...) -> None: ...
+
+class OfferTemplateFieldsResult(_message.Message):
+    __slots__ = ("instrument",)
+    INSTRUMENT_FIELD_NUMBER: _ClassVar[int]
+    instrument: InstrumentRecord
+    def __init__(self, instrument: _Optional[_Union[InstrumentRecord, _Mapping]] = ...) -> None: ...
+
+class ListTemplatesParams(_message.Message):
+    __slots__ = ("asset_class",)
+    ASSET_CLASS_FIELD_NUMBER: _ClassVar[int]
+    asset_class: AssetClass
+    def __init__(self, asset_class: _Optional[_Union[AssetClass, str]] = ...) -> None: ...
+
+class ListTemplatesResult(_message.Message):
+    __slots__ = ("templates",)
+    TEMPLATES_FIELD_NUMBER: _ClassVar[int]
+    templates: _containers.RepeatedCompositeFieldContainer[SecurityTemplate]
+    def __init__(self, templates: _Optional[_Iterable[_Union[SecurityTemplate, _Mapping]]] = ...) -> None: ...
+
+class ReadTemplateParams(_message.Message):
+    __slots__ = ("template_id", "template_version")
+    TEMPLATE_ID_FIELD_NUMBER: _ClassVar[int]
+    TEMPLATE_VERSION_FIELD_NUMBER: _ClassVar[int]
+    template_id: str
+    template_version: str
+    def __init__(self, template_id: _Optional[str] = ..., template_version: _Optional[str] = ...) -> None: ...
+
+class ReadTemplateResult(_message.Message):
+    __slots__ = ("template",)
+    TEMPLATE_FIELD_NUMBER: _ClassVar[int]
+    template: SecurityTemplate
+    def __init__(self, template: _Optional[_Union[SecurityTemplate, _Mapping]] = ...) -> None: ...
 
 class RecordPricesParams(_message.Message):
     __slots__ = ("prices", "want_id", "acting_for")
@@ -3164,7 +3559,7 @@ class ReceiveRequest(_message.Message):
     def __init__(self, rows: _Optional[_Iterable[str]] = ..., subjects: _Optional[_Iterable[str]] = ...) -> None: ...
 
 class Delivery(_message.Message):
-    __slots__ = ("meta", "lost", "statement_recorded", "custodial_position_updated", "position_changed", "break_changed", "account_figures_recorded", "account_attribute_changed", "activity_recorded", "sync_status_recorded", "activity_re_resolved", "prices_recorded", "bars_recorded", "observations_wanted", "want_withdrawn", "trades_recorded", "quotes_recorded", "order_updated", "placement_updated", "execution_recorded", "unplaced_fact_recorded", "trading_instruction_changed", "locate_updated", "report_venue_catalogue", "outcomes_recorded")
+    __slots__ = ("meta", "lost", "statement_recorded", "custodial_position_updated", "position_changed", "break_changed", "account_figures_recorded", "account_attribute_changed", "activity_recorded", "sync_status_recorded", "activity_re_resolved", "prices_recorded", "bars_recorded", "observations_wanted", "want_withdrawn", "trades_recorded", "quotes_recorded", "order_updated", "placement_updated", "execution_recorded", "unplaced_fact_recorded", "trading_instruction_changed", "locate_updated", "report_venue_catalogue", "outcomes_recorded", "replace_merged_instrument", "booking_updated", "alert_changed")
     META_FIELD_NUMBER: _ClassVar[int]
     LOST_FIELD_NUMBER: _ClassVar[int]
     STATEMENT_RECORDED_FIELD_NUMBER: _ClassVar[int]
@@ -3190,6 +3585,9 @@ class Delivery(_message.Message):
     LOCATE_UPDATED_FIELD_NUMBER: _ClassVar[int]
     REPORT_VENUE_CATALOGUE_FIELD_NUMBER: _ClassVar[int]
     OUTCOMES_RECORDED_FIELD_NUMBER: _ClassVar[int]
+    REPLACE_MERGED_INSTRUMENT_FIELD_NUMBER: _ClassVar[int]
+    BOOKING_UPDATED_FIELD_NUMBER: _ClassVar[int]
+    ALERT_CHANGED_FIELD_NUMBER: _ClassVar[int]
     meta: DeliveryMeta
     lost: Lost
     statement_recorded: StatementRecordedEvent
@@ -3215,7 +3613,10 @@ class Delivery(_message.Message):
     locate_updated: LocateUpdatedEvent
     report_venue_catalogue: VenueCatalogueEvent
     outcomes_recorded: OutcomesRecordedEvent
-    def __init__(self, meta: _Optional[_Union[DeliveryMeta, _Mapping]] = ..., lost: _Optional[_Union[Lost, _Mapping]] = ..., statement_recorded: _Optional[_Union[StatementRecordedEvent, _Mapping]] = ..., custodial_position_updated: _Optional[_Union[CustodialPositionUpdatedEvent, _Mapping]] = ..., position_changed: _Optional[_Union[PositionChangedEvent, _Mapping]] = ..., break_changed: _Optional[_Union[BreakChangedEvent, _Mapping]] = ..., account_figures_recorded: _Optional[_Union[AccountFiguresRecordedEvent, _Mapping]] = ..., account_attribute_changed: _Optional[_Union[AccountAttributeChangedEvent, _Mapping]] = ..., activity_recorded: _Optional[_Union[ActivityRecordedEvent, _Mapping]] = ..., sync_status_recorded: _Optional[_Union[SyncStatusRecordedEvent, _Mapping]] = ..., activity_re_resolved: _Optional[_Union[ActivityReResolvedEvent, _Mapping]] = ..., prices_recorded: _Optional[_Union[PricesRecordedEvent, _Mapping]] = ..., bars_recorded: _Optional[_Union[BarsRecordedEvent, _Mapping]] = ..., observations_wanted: _Optional[_Union[ObservationsWantedEvent, _Mapping]] = ..., want_withdrawn: _Optional[_Union[WantWithdrawnEvent, _Mapping]] = ..., trades_recorded: _Optional[_Union[TradesRecordedEvent, _Mapping]] = ..., quotes_recorded: _Optional[_Union[QuotesRecordedEvent, _Mapping]] = ..., order_updated: _Optional[_Union[OrderUpdatedEvent, _Mapping]] = ..., placement_updated: _Optional[_Union[PlacementUpdatedEvent, _Mapping]] = ..., execution_recorded: _Optional[_Union[ExecutionRecordedEvent, _Mapping]] = ..., unplaced_fact_recorded: _Optional[_Union[UnplacedFactRecordedEvent, _Mapping]] = ..., trading_instruction_changed: _Optional[_Union[TradingInstructionChangedEvent, _Mapping]] = ..., locate_updated: _Optional[_Union[LocateUpdatedEvent, _Mapping]] = ..., report_venue_catalogue: _Optional[_Union[VenueCatalogueEvent, _Mapping]] = ..., outcomes_recorded: _Optional[_Union[OutcomesRecordedEvent, _Mapping]] = ...) -> None: ...
+    replace_merged_instrument: InstrumentReplacedEvent
+    booking_updated: BookingUpdatedEvent
+    alert_changed: AlertChangedEvent
+    def __init__(self, meta: _Optional[_Union[DeliveryMeta, _Mapping]] = ..., lost: _Optional[_Union[Lost, _Mapping]] = ..., statement_recorded: _Optional[_Union[StatementRecordedEvent, _Mapping]] = ..., custodial_position_updated: _Optional[_Union[CustodialPositionUpdatedEvent, _Mapping]] = ..., position_changed: _Optional[_Union[PositionChangedEvent, _Mapping]] = ..., break_changed: _Optional[_Union[BreakChangedEvent, _Mapping]] = ..., account_figures_recorded: _Optional[_Union[AccountFiguresRecordedEvent, _Mapping]] = ..., account_attribute_changed: _Optional[_Union[AccountAttributeChangedEvent, _Mapping]] = ..., activity_recorded: _Optional[_Union[ActivityRecordedEvent, _Mapping]] = ..., sync_status_recorded: _Optional[_Union[SyncStatusRecordedEvent, _Mapping]] = ..., activity_re_resolved: _Optional[_Union[ActivityReResolvedEvent, _Mapping]] = ..., prices_recorded: _Optional[_Union[PricesRecordedEvent, _Mapping]] = ..., bars_recorded: _Optional[_Union[BarsRecordedEvent, _Mapping]] = ..., observations_wanted: _Optional[_Union[ObservationsWantedEvent, _Mapping]] = ..., want_withdrawn: _Optional[_Union[WantWithdrawnEvent, _Mapping]] = ..., trades_recorded: _Optional[_Union[TradesRecordedEvent, _Mapping]] = ..., quotes_recorded: _Optional[_Union[QuotesRecordedEvent, _Mapping]] = ..., order_updated: _Optional[_Union[OrderUpdatedEvent, _Mapping]] = ..., placement_updated: _Optional[_Union[PlacementUpdatedEvent, _Mapping]] = ..., execution_recorded: _Optional[_Union[ExecutionRecordedEvent, _Mapping]] = ..., unplaced_fact_recorded: _Optional[_Union[UnplacedFactRecordedEvent, _Mapping]] = ..., trading_instruction_changed: _Optional[_Union[TradingInstructionChangedEvent, _Mapping]] = ..., locate_updated: _Optional[_Union[LocateUpdatedEvent, _Mapping]] = ..., report_venue_catalogue: _Optional[_Union[VenueCatalogueEvent, _Mapping]] = ..., outcomes_recorded: _Optional[_Union[OutcomesRecordedEvent, _Mapping]] = ..., replace_merged_instrument: _Optional[_Union[InstrumentReplacedEvent, _Mapping]] = ..., booking_updated: _Optional[_Union[BookingUpdatedEvent, _Mapping]] = ..., alert_changed: _Optional[_Union[AlertChangedEvent, _Mapping]] = ...) -> None: ...
 
 class DeliveryMeta(_message.Message):
     __slots__ = ("message_id", "correlation_id", "causation_id", "published_at_ns", "row", "journal", "cause", "own")
@@ -3698,7 +4099,7 @@ class SyncStatusEvent(_message.Message):
     def __init__(self, source: _Optional[str] = ..., account_id: _Optional[str] = ..., last_synced_at_ns: _Optional[int] = ..., connection_healthy: bool = ..., status_detail: _Optional[str] = ..., observed_at_ns: _Optional[int] = ..., external_account_id: _Optional[str] = ..., state: _Optional[_Union[SyncState, str]] = ..., holdings_as_of_ns: _Optional[int] = ..., history_as_of_ns: _Optional[int] = ..., history_from: _Optional[str] = ...) -> None: ...
 
 class InstrumentRecord(_message.Message):
-    __slots__ = ("instrument_id", "identifiers", "asset_class", "currency", "exchange_mic", "description", "lifecycle_state", "version", "valid_from_ns", "record_time_ns", "sources", "offers", "instrument_type", "money_market_fund", "listing_venue_id", "binary_event_contract")
+    __slots__ = ("instrument_id", "identifiers", "asset_class", "currency", "exchange_mic", "description", "lifecycle_state", "version", "valid_from_ns", "record_time_ns", "sources", "offers", "instrument_type", "money_market_fund", "listing_venue_id", "binary_event_contract", "provisional", "template_id", "template_version", "missing_fields")
     INSTRUMENT_ID_FIELD_NUMBER: _ClassVar[int]
     IDENTIFIERS_FIELD_NUMBER: _ClassVar[int]
     ASSET_CLASS_FIELD_NUMBER: _ClassVar[int]
@@ -3715,6 +4116,10 @@ class InstrumentRecord(_message.Message):
     MONEY_MARKET_FUND_FIELD_NUMBER: _ClassVar[int]
     LISTING_VENUE_ID_FIELD_NUMBER: _ClassVar[int]
     BINARY_EVENT_CONTRACT_FIELD_NUMBER: _ClassVar[int]
+    PROVISIONAL_FIELD_NUMBER: _ClassVar[int]
+    TEMPLATE_ID_FIELD_NUMBER: _ClassVar[int]
+    TEMPLATE_VERSION_FIELD_NUMBER: _ClassVar[int]
+    MISSING_FIELDS_FIELD_NUMBER: _ClassVar[int]
     instrument_id: str
     identifiers: _containers.RepeatedCompositeFieldContainer[Identifier]
     asset_class: AssetClass
@@ -3731,7 +4136,11 @@ class InstrumentRecord(_message.Message):
     money_market_fund: MoneyMarketFund
     listing_venue_id: str
     binary_event_contract: BinaryEventContract
-    def __init__(self, instrument_id: _Optional[str] = ..., identifiers: _Optional[_Iterable[_Union[Identifier, _Mapping]]] = ..., asset_class: _Optional[_Union[AssetClass, str]] = ..., currency: _Optional[str] = ..., exchange_mic: _Optional[str] = ..., description: _Optional[str] = ..., lifecycle_state: _Optional[_Union[InstrumentLifecycleState, str]] = ..., version: _Optional[int] = ..., valid_from_ns: _Optional[int] = ..., record_time_ns: _Optional[int] = ..., sources: _Optional[_Iterable[_Union[InstrumentValueSource, _Mapping]]] = ..., offers: _Optional[_Iterable[_Union[OfferedValue, _Mapping]]] = ..., instrument_type: _Optional[_Union[InstrumentType, str]] = ..., money_market_fund: _Optional[_Union[MoneyMarketFund, _Mapping]] = ..., listing_venue_id: _Optional[str] = ..., binary_event_contract: _Optional[_Union[BinaryEventContract, _Mapping]] = ...) -> None: ...
+    provisional: bool
+    template_id: str
+    template_version: str
+    missing_fields: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, instrument_id: _Optional[str] = ..., identifiers: _Optional[_Iterable[_Union[Identifier, _Mapping]]] = ..., asset_class: _Optional[_Union[AssetClass, str]] = ..., currency: _Optional[str] = ..., exchange_mic: _Optional[str] = ..., description: _Optional[str] = ..., lifecycle_state: _Optional[_Union[InstrumentLifecycleState, str]] = ..., version: _Optional[int] = ..., valid_from_ns: _Optional[int] = ..., record_time_ns: _Optional[int] = ..., sources: _Optional[_Iterable[_Union[InstrumentValueSource, _Mapping]]] = ..., offers: _Optional[_Iterable[_Union[OfferedValue, _Mapping]]] = ..., instrument_type: _Optional[_Union[InstrumentType, str]] = ..., money_market_fund: _Optional[_Union[MoneyMarketFund, _Mapping]] = ..., listing_venue_id: _Optional[str] = ..., binary_event_contract: _Optional[_Union[BinaryEventContract, _Mapping]] = ..., provisional: bool = ..., template_id: _Optional[str] = ..., template_version: _Optional[str] = ..., missing_fields: _Optional[_Iterable[str]] = ...) -> None: ...
 
 class InstrumentValueSource(_message.Message):
     __slots__ = ("field", "identifier", "source", "person", "instance_id", "recorded_at_ns", "note", "acting_through_delegation", "client_name", "prepared_call_id")
@@ -4274,20 +4683,24 @@ class ReportedPositionValue(_message.Message):
     def __init__(self, instrument_id: _Optional[str] = ..., side: _Optional[_Union[HoldingSide, str]] = ..., market_value: _Optional[_Union[Money, _Mapping]] = ..., margin_requirement: _Optional[_Union[Money, _Mapping]] = ...) -> None: ...
 
 class AccountAttributes(_message.Message):
-    __slots__ = ("account_id", "base_currency_code", "lot_relief_default", "last_change", "opening_balance", "waits_for_compliance")
+    __slots__ = ("account_id", "base_currency_code", "lot_relief_default", "last_change", "opening_balance", "waits_for_compliance", "error_account", "allocation_account")
     ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
     BASE_CURRENCY_CODE_FIELD_NUMBER: _ClassVar[int]
     LOT_RELIEF_DEFAULT_FIELD_NUMBER: _ClassVar[int]
     LAST_CHANGE_FIELD_NUMBER: _ClassVar[int]
     OPENING_BALANCE_FIELD_NUMBER: _ClassVar[int]
     WAITS_FOR_COMPLIANCE_FIELD_NUMBER: _ClassVar[int]
+    ERROR_ACCOUNT_FIELD_NUMBER: _ClassVar[int]
+    ALLOCATION_ACCOUNT_FIELD_NUMBER: _ClassVar[int]
     account_id: str
     base_currency_code: str
     lot_relief_default: LotReliefMethod
     last_change: JournalRef
     opening_balance: OpeningBalance
     waits_for_compliance: bool
-    def __init__(self, account_id: _Optional[str] = ..., base_currency_code: _Optional[str] = ..., lot_relief_default: _Optional[_Union[LotReliefMethod, str]] = ..., last_change: _Optional[_Union[JournalRef, _Mapping]] = ..., opening_balance: _Optional[_Union[OpeningBalance, _Mapping]] = ..., waits_for_compliance: bool = ...) -> None: ...
+    error_account: bool
+    allocation_account: bool
+    def __init__(self, account_id: _Optional[str] = ..., base_currency_code: _Optional[str] = ..., lot_relief_default: _Optional[_Union[LotReliefMethod, str]] = ..., last_change: _Optional[_Union[JournalRef, _Mapping]] = ..., opening_balance: _Optional[_Union[OpeningBalance, _Mapping]] = ..., waits_for_compliance: bool = ..., error_account: bool = ..., allocation_account: bool = ...) -> None: ...
 
 class OpeningBalance(_message.Message):
     __slots__ = ("entry_id", "as_of_date", "sources", "recorded_by", "journal", "reason")
@@ -4454,7 +4867,7 @@ class OrderLink(_message.Message):
     def __init__(self, kind: _Optional[_Union[OrderLinkKind, str]] = ..., parent_order_id: _Optional[str] = ...) -> None: ...
 
 class Order(_message.Message):
-    __slots__ = ("order_id", "account_id", "instrument_id", "sleeve", "side", "locate_id", "quantity", "cash_quantity", "order_type", "limit_price", "stop_price", "dealt_currency", "quote_currency", "legs", "allocation_instruction", "time_in_force", "expire_date", "expire_time_ns", "execution_instructions", "lot_relief_method", "relieve_lot_ids", "capacity", "direction", "parties", "person_roles", "customer_id", "firm_designated_id", "handling_instructions", "received_at_ns", "received_precision", "quote_at_receipt", "represents_order_ids", "axe_source", "axe_counterparty_id", "link", "origin", "venue_order_id", "status", "checks", "change_requests", "placements", "executions", "charges", "last_change")
+    __slots__ = ("order_id", "account_id", "instrument_id", "sleeve", "side", "locate_id", "quantity", "cash_quantity", "order_type", "limit_price", "stop_price", "dealt_currency", "quote_currency", "legs", "allocation_instruction", "time_in_force", "expire_date", "expire_time_ns", "execution_instructions", "lot_relief_method", "relieve_lot_ids", "capacity", "direction", "parties", "person_roles", "customer_id", "firm_designated_id", "handling_instructions", "received_at_ns", "received_precision", "quote_at_receipt", "represents_order_ids", "axe_source", "axe_counterparty_id", "link", "origin", "venue_order_id", "status", "checks", "change_requests", "placements", "executions", "charges", "last_change", "block_member_order_ids", "sleeve_cross_ids")
     ORDER_ID_FIELD_NUMBER: _ClassVar[int]
     ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
     INSTRUMENT_ID_FIELD_NUMBER: _ClassVar[int]
@@ -4499,6 +4912,8 @@ class Order(_message.Message):
     EXECUTIONS_FIELD_NUMBER: _ClassVar[int]
     CHARGES_FIELD_NUMBER: _ClassVar[int]
     LAST_CHANGE_FIELD_NUMBER: _ClassVar[int]
+    BLOCK_MEMBER_ORDER_IDS_FIELD_NUMBER: _ClassVar[int]
+    SLEEVE_CROSS_IDS_FIELD_NUMBER: _ClassVar[int]
     order_id: str
     account_id: str
     instrument_id: str
@@ -4543,7 +4958,9 @@ class Order(_message.Message):
     executions: _containers.RepeatedCompositeFieldContainer[Execution]
     charges: _containers.RepeatedCompositeFieldContainer[Charge]
     last_change: JournalRef
-    def __init__(self, order_id: _Optional[str] = ..., account_id: _Optional[str] = ..., instrument_id: _Optional[str] = ..., sleeve: _Optional[str] = ..., side: _Optional[_Union[Side, str]] = ..., locate_id: _Optional[str] = ..., quantity: _Optional[_Union[Decimal, _Mapping]] = ..., cash_quantity: _Optional[_Union[Money, _Mapping]] = ..., order_type: _Optional[_Union[OrderType, str]] = ..., limit_price: _Optional[_Union[Money, _Mapping]] = ..., stop_price: _Optional[_Union[Money, _Mapping]] = ..., dealt_currency: _Optional[str] = ..., quote_currency: _Optional[str] = ..., legs: _Optional[_Iterable[_Union[Leg, _Mapping]]] = ..., allocation_instruction: _Optional[_Union[AllocationInstruction, _Mapping]] = ..., time_in_force: _Optional[_Union[TimeInForce, str]] = ..., expire_date: _Optional[str] = ..., expire_time_ns: _Optional[int] = ..., execution_instructions: _Optional[_Iterable[_Union[ExecutionInstruction, str]]] = ..., lot_relief_method: _Optional[_Union[LotReliefMethod, str]] = ..., relieve_lot_ids: _Optional[_Iterable[str]] = ..., capacity: _Optional[_Union[Capacity, str]] = ..., direction: _Optional[_Union[OrderDirection, str]] = ..., parties: _Optional[_Iterable[_Union[Party, _Mapping]]] = ..., person_roles: _Optional[_Union[PersonRoles, _Mapping]] = ..., customer_id: _Optional[str] = ..., firm_designated_id: _Optional[str] = ..., handling_instructions: _Optional[_Iterable[str]] = ..., received_at_ns: _Optional[int] = ..., received_precision: _Optional[_Union[TimePrecision, str]] = ..., quote_at_receipt: _Optional[_Union[ReceiptQuote, _Mapping]] = ..., represents_order_ids: _Optional[_Iterable[str]] = ..., axe_source: _Optional[str] = ..., axe_counterparty_id: _Optional[str] = ..., link: _Optional[_Union[OrderLink, _Mapping]] = ..., origin: _Optional[_Union[OrderOrigin, str]] = ..., venue_order_id: _Optional[str] = ..., status: _Optional[_Union[OrderStatus, _Mapping]] = ..., checks: _Optional[_Iterable[_Union[Check, _Mapping]]] = ..., change_requests: _Optional[_Iterable[_Union[ChangeRequest, _Mapping]]] = ..., placements: _Optional[_Iterable[_Union[Placement, _Mapping]]] = ..., executions: _Optional[_Iterable[_Union[Execution, _Mapping]]] = ..., charges: _Optional[_Iterable[_Union[Charge, _Mapping]]] = ..., last_change: _Optional[_Union[JournalRef, _Mapping]] = ...) -> None: ...
+    block_member_order_ids: _containers.RepeatedScalarFieldContainer[str]
+    sleeve_cross_ids: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, order_id: _Optional[str] = ..., account_id: _Optional[str] = ..., instrument_id: _Optional[str] = ..., sleeve: _Optional[str] = ..., side: _Optional[_Union[Side, str]] = ..., locate_id: _Optional[str] = ..., quantity: _Optional[_Union[Decimal, _Mapping]] = ..., cash_quantity: _Optional[_Union[Money, _Mapping]] = ..., order_type: _Optional[_Union[OrderType, str]] = ..., limit_price: _Optional[_Union[Money, _Mapping]] = ..., stop_price: _Optional[_Union[Money, _Mapping]] = ..., dealt_currency: _Optional[str] = ..., quote_currency: _Optional[str] = ..., legs: _Optional[_Iterable[_Union[Leg, _Mapping]]] = ..., allocation_instruction: _Optional[_Union[AllocationInstruction, _Mapping]] = ..., time_in_force: _Optional[_Union[TimeInForce, str]] = ..., expire_date: _Optional[str] = ..., expire_time_ns: _Optional[int] = ..., execution_instructions: _Optional[_Iterable[_Union[ExecutionInstruction, str]]] = ..., lot_relief_method: _Optional[_Union[LotReliefMethod, str]] = ..., relieve_lot_ids: _Optional[_Iterable[str]] = ..., capacity: _Optional[_Union[Capacity, str]] = ..., direction: _Optional[_Union[OrderDirection, str]] = ..., parties: _Optional[_Iterable[_Union[Party, _Mapping]]] = ..., person_roles: _Optional[_Union[PersonRoles, _Mapping]] = ..., customer_id: _Optional[str] = ..., firm_designated_id: _Optional[str] = ..., handling_instructions: _Optional[_Iterable[str]] = ..., received_at_ns: _Optional[int] = ..., received_precision: _Optional[_Union[TimePrecision, str]] = ..., quote_at_receipt: _Optional[_Union[ReceiptQuote, _Mapping]] = ..., represents_order_ids: _Optional[_Iterable[str]] = ..., axe_source: _Optional[str] = ..., axe_counterparty_id: _Optional[str] = ..., link: _Optional[_Union[OrderLink, _Mapping]] = ..., origin: _Optional[_Union[OrderOrigin, str]] = ..., venue_order_id: _Optional[str] = ..., status: _Optional[_Union[OrderStatus, _Mapping]] = ..., checks: _Optional[_Iterable[_Union[Check, _Mapping]]] = ..., change_requests: _Optional[_Iterable[_Union[ChangeRequest, _Mapping]]] = ..., placements: _Optional[_Iterable[_Union[Placement, _Mapping]]] = ..., executions: _Optional[_Iterable[_Union[Execution, _Mapping]]] = ..., charges: _Optional[_Iterable[_Union[Charge, _Mapping]]] = ..., last_change: _Optional[_Union[JournalRef, _Mapping]] = ..., block_member_order_ids: _Optional[_Iterable[str]] = ..., sleeve_cross_ids: _Optional[_Iterable[str]] = ...) -> None: ...
 
 class PersonRoles(_message.Message):
     __slots__ = ("entered_by", "executed_by", "decided_by")
@@ -4770,7 +5187,7 @@ class StandingPlacementCondition(_message.Message):
     def __init__(self, condition: _Optional[_Union[PlacementCondition, str]] = ..., reason: _Optional[str] = ..., actor: _Optional[_Union[Actor, _Mapping]] = ..., unknown_reason: _Optional[_Union[UnknownReason, str]] = ..., status_as_reported: _Optional[_Union[AsReported, _Mapping]] = ...) -> None: ...
 
 class Execution(_message.Message):
-    __slots__ = ("execution_id", "order_id", "placement_id", "account_id", "instrument_id", "sleeve", "side", "quantity", "price", "trade_time_ns", "trade_date", "venue_execution_id", "kind", "source", "finality", "fees", "settlement_date", "computed_settlement_date", "settlement_date_basis", "supersedes", "venue_id", "uti", "prior_uti", "upi", "given_up_to", "trade_chain_reference", "settlement_counterparty", "person_roles", "raw_record", "last_change", "effective_date", "counterparty", "liquidity_indicator", "uti_generated_by", "state", "venue_order_id", "dk_reason", "dk_text", "venue_client_order_id")
+    __slots__ = ("execution_id", "order_id", "placement_id", "account_id", "instrument_id", "sleeve", "side", "quantity", "price", "trade_time_ns", "trade_date", "venue_execution_id", "kind", "source", "finality", "fees", "settlement_date", "computed_settlement_date", "settlement_date_basis", "supersedes", "venue_id", "uti", "prior_uti", "upi", "given_up_to", "trade_chain_reference", "settlement_counterparty", "person_roles", "raw_record", "last_change", "effective_date", "counterparty", "liquidity_indicator", "uti_generated_by", "state", "venue_order_id", "dk_reason", "dk_text", "venue_client_order_id", "give_up_answers")
     EXECUTION_ID_FIELD_NUMBER: _ClassVar[int]
     ORDER_ID_FIELD_NUMBER: _ClassVar[int]
     PLACEMENT_ID_FIELD_NUMBER: _ClassVar[int]
@@ -4810,6 +5227,7 @@ class Execution(_message.Message):
     DK_REASON_FIELD_NUMBER: _ClassVar[int]
     DK_TEXT_FIELD_NUMBER: _ClassVar[int]
     VENUE_CLIENT_ORDER_ID_FIELD_NUMBER: _ClassVar[int]
+    GIVE_UP_ANSWERS_FIELD_NUMBER: _ClassVar[int]
     execution_id: str
     order_id: str
     placement_id: str
@@ -4849,7 +5267,8 @@ class Execution(_message.Message):
     dk_reason: DkReason
     dk_text: str
     venue_client_order_id: str
-    def __init__(self, execution_id: _Optional[str] = ..., order_id: _Optional[str] = ..., placement_id: _Optional[str] = ..., account_id: _Optional[str] = ..., instrument_id: _Optional[str] = ..., sleeve: _Optional[str] = ..., side: _Optional[_Union[Side, str]] = ..., quantity: _Optional[_Union[Decimal, _Mapping]] = ..., price: _Optional[_Union[Money, _Mapping]] = ..., trade_time_ns: _Optional[int] = ..., trade_date: _Optional[str] = ..., venue_execution_id: _Optional[str] = ..., kind: _Optional[_Union[ExecutionKind, str]] = ..., source: _Optional[_Union[ExecutionSource, str]] = ..., finality: _Optional[_Union[Finality, _Mapping]] = ..., fees: _Optional[_Iterable[_Union[Fee, _Mapping]]] = ..., settlement_date: _Optional[str] = ..., computed_settlement_date: _Optional[str] = ..., settlement_date_basis: _Optional[_Union[DateBasis, _Mapping]] = ..., supersedes: _Optional[str] = ..., venue_id: _Optional[str] = ..., uti: _Optional[str] = ..., prior_uti: _Optional[str] = ..., upi: _Optional[str] = ..., given_up_to: _Optional[str] = ..., trade_chain_reference: _Optional[str] = ..., settlement_counterparty: _Optional[str] = ..., person_roles: _Optional[_Union[PersonRoles, _Mapping]] = ..., raw_record: _Optional[_Union[RawRecordRef, _Mapping]] = ..., last_change: _Optional[_Union[JournalRef, _Mapping]] = ..., effective_date: _Optional[str] = ..., counterparty: _Optional[_Union[Party, _Mapping]] = ..., liquidity_indicator: _Optional[_Union[LiquidityIndicator, str]] = ..., uti_generated_by: _Optional[str] = ..., state: _Optional[_Union[ExecutionState, str]] = ..., venue_order_id: _Optional[str] = ..., dk_reason: _Optional[_Union[DkReason, str]] = ..., dk_text: _Optional[str] = ..., venue_client_order_id: _Optional[str] = ...) -> None: ...
+    give_up_answers: _containers.RepeatedCompositeFieldContainer[GiveUpRecord]
+    def __init__(self, execution_id: _Optional[str] = ..., order_id: _Optional[str] = ..., placement_id: _Optional[str] = ..., account_id: _Optional[str] = ..., instrument_id: _Optional[str] = ..., sleeve: _Optional[str] = ..., side: _Optional[_Union[Side, str]] = ..., quantity: _Optional[_Union[Decimal, _Mapping]] = ..., price: _Optional[_Union[Money, _Mapping]] = ..., trade_time_ns: _Optional[int] = ..., trade_date: _Optional[str] = ..., venue_execution_id: _Optional[str] = ..., kind: _Optional[_Union[ExecutionKind, str]] = ..., source: _Optional[_Union[ExecutionSource, str]] = ..., finality: _Optional[_Union[Finality, _Mapping]] = ..., fees: _Optional[_Iterable[_Union[Fee, _Mapping]]] = ..., settlement_date: _Optional[str] = ..., computed_settlement_date: _Optional[str] = ..., settlement_date_basis: _Optional[_Union[DateBasis, _Mapping]] = ..., supersedes: _Optional[str] = ..., venue_id: _Optional[str] = ..., uti: _Optional[str] = ..., prior_uti: _Optional[str] = ..., upi: _Optional[str] = ..., given_up_to: _Optional[str] = ..., trade_chain_reference: _Optional[str] = ..., settlement_counterparty: _Optional[str] = ..., person_roles: _Optional[_Union[PersonRoles, _Mapping]] = ..., raw_record: _Optional[_Union[RawRecordRef, _Mapping]] = ..., last_change: _Optional[_Union[JournalRef, _Mapping]] = ..., effective_date: _Optional[str] = ..., counterparty: _Optional[_Union[Party, _Mapping]] = ..., liquidity_indicator: _Optional[_Union[LiquidityIndicator, str]] = ..., uti_generated_by: _Optional[str] = ..., state: _Optional[_Union[ExecutionState, str]] = ..., venue_order_id: _Optional[str] = ..., dk_reason: _Optional[_Union[DkReason, str]] = ..., dk_text: _Optional[str] = ..., venue_client_order_id: _Optional[str] = ..., give_up_answers: _Optional[_Iterable[_Union[GiveUpRecord, _Mapping]]] = ...) -> None: ...
 
 class Finality(_message.Message):
     __slots__ = ("level", "at_ns")
@@ -4860,12 +5279,26 @@ class Finality(_message.Message):
     def __init__(self, level: _Optional[_Union[FinalityLevel, str]] = ..., at_ns: _Optional[int] = ...) -> None: ...
 
 class Fee(_message.Message):
-    __slots__ = ("kind", "amount")
+    __slots__ = ("kind", "amount", "capitalised")
     KIND_FIELD_NUMBER: _ClassVar[int]
     AMOUNT_FIELD_NUMBER: _ClassVar[int]
+    CAPITALISED_FIELD_NUMBER: _ClassVar[int]
     kind: FeeKind
     amount: Money
-    def __init__(self, kind: _Optional[_Union[FeeKind, str]] = ..., amount: _Optional[_Union[Money, _Mapping]] = ...) -> None: ...
+    capitalised: bool
+    def __init__(self, kind: _Optional[_Union[FeeKind, str]] = ..., amount: _Optional[_Union[Money, _Mapping]] = ..., capitalised: bool = ...) -> None: ...
+
+class GiveUpRecord(_message.Message):
+    __slots__ = ("answer", "prime_reference", "reason", "entry")
+    ANSWER_FIELD_NUMBER: _ClassVar[int]
+    PRIME_REFERENCE_FIELD_NUMBER: _ClassVar[int]
+    REASON_FIELD_NUMBER: _ClassVar[int]
+    ENTRY_FIELD_NUMBER: _ClassVar[int]
+    answer: GiveUpAnswer
+    prime_reference: str
+    reason: str
+    entry: EntryMeta
+    def __init__(self, answer: _Optional[_Union[GiveUpAnswer, str]] = ..., prime_reference: _Optional[str] = ..., reason: _Optional[str] = ..., entry: _Optional[_Union[EntryMeta, _Mapping]] = ...) -> None: ...
 
 class Charge(_message.Message):
     __slots__ = ("charge_id", "placement_id", "order_id", "account_id", "fee", "trade_date", "settlement_date", "raw_record")
@@ -5247,6 +5680,116 @@ class NewOrderFromExecutions(_message.Message):
     note: str
     def __init__(self, sleeve: _Optional[str] = ..., note: _Optional[str] = ...) -> None: ...
 
+class Allocation(_message.Message):
+    __slots__ = ("allocation_id", "account_id", "sleeve", "quantity", "average_price", "gross_amount", "fees", "net_amount", "intended_settlement_date", "average_priced", "relieve_lot_ids", "reason", "error_cause", "error_text", "give_up_answers")
+    ALLOCATION_ID_FIELD_NUMBER: _ClassVar[int]
+    ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
+    SLEEVE_FIELD_NUMBER: _ClassVar[int]
+    QUANTITY_FIELD_NUMBER: _ClassVar[int]
+    AVERAGE_PRICE_FIELD_NUMBER: _ClassVar[int]
+    GROSS_AMOUNT_FIELD_NUMBER: _ClassVar[int]
+    FEES_FIELD_NUMBER: _ClassVar[int]
+    NET_AMOUNT_FIELD_NUMBER: _ClassVar[int]
+    INTENDED_SETTLEMENT_DATE_FIELD_NUMBER: _ClassVar[int]
+    AVERAGE_PRICED_FIELD_NUMBER: _ClassVar[int]
+    RELIEVE_LOT_IDS_FIELD_NUMBER: _ClassVar[int]
+    REASON_FIELD_NUMBER: _ClassVar[int]
+    ERROR_CAUSE_FIELD_NUMBER: _ClassVar[int]
+    ERROR_TEXT_FIELD_NUMBER: _ClassVar[int]
+    GIVE_UP_ANSWERS_FIELD_NUMBER: _ClassVar[int]
+    allocation_id: str
+    account_id: str
+    sleeve: str
+    quantity: Decimal
+    average_price: Money
+    gross_amount: Money
+    fees: _containers.RepeatedCompositeFieldContainer[Fee]
+    net_amount: Money
+    intended_settlement_date: str
+    average_priced: bool
+    relieve_lot_ids: _containers.RepeatedScalarFieldContainer[str]
+    reason: str
+    error_cause: ErrorCause
+    error_text: str
+    give_up_answers: _containers.RepeatedCompositeFieldContainer[GiveUpRecord]
+    def __init__(self, allocation_id: _Optional[str] = ..., account_id: _Optional[str] = ..., sleeve: _Optional[str] = ..., quantity: _Optional[_Union[Decimal, _Mapping]] = ..., average_price: _Optional[_Union[Money, _Mapping]] = ..., gross_amount: _Optional[_Union[Money, _Mapping]] = ..., fees: _Optional[_Iterable[_Union[Fee, _Mapping]]] = ..., net_amount: _Optional[_Union[Money, _Mapping]] = ..., intended_settlement_date: _Optional[str] = ..., average_priced: bool = ..., relieve_lot_ids: _Optional[_Iterable[str]] = ..., reason: _Optional[str] = ..., error_cause: _Optional[_Union[ErrorCause, str]] = ..., error_text: _Optional[str] = ..., give_up_answers: _Optional[_Iterable[_Union[GiveUpRecord, _Mapping]]] = ...) -> None: ...
+
+class Booking(_message.Message):
+    __slots__ = ("booking_id", "order_id", "account_id", "execution_ids", "allocations", "state", "held_reason", "last_change")
+    BOOKING_ID_FIELD_NUMBER: _ClassVar[int]
+    ORDER_ID_FIELD_NUMBER: _ClassVar[int]
+    ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
+    EXECUTION_IDS_FIELD_NUMBER: _ClassVar[int]
+    ALLOCATIONS_FIELD_NUMBER: _ClassVar[int]
+    STATE_FIELD_NUMBER: _ClassVar[int]
+    HELD_REASON_FIELD_NUMBER: _ClassVar[int]
+    LAST_CHANGE_FIELD_NUMBER: _ClassVar[int]
+    booking_id: str
+    order_id: str
+    account_id: str
+    execution_ids: _containers.RepeatedScalarFieldContainer[str]
+    allocations: _containers.RepeatedCompositeFieldContainer[Allocation]
+    state: BookingState
+    held_reason: str
+    last_change: JournalRef
+    def __init__(self, booking_id: _Optional[str] = ..., order_id: _Optional[str] = ..., account_id: _Optional[str] = ..., execution_ids: _Optional[_Iterable[str]] = ..., allocations: _Optional[_Iterable[_Union[Allocation, _Mapping]]] = ..., state: _Optional[_Union[BookingState, str]] = ..., held_reason: _Optional[str] = ..., last_change: _Optional[_Union[JournalRef, _Mapping]] = ...) -> None: ...
+
+class SleeveCross(_message.Message):
+    __slots__ = ("sleeve_cross_id", "account_id", "instrument_id", "giving_sleeve", "receiving_sleeve", "quantity", "cross_price", "price_source", "order_ids", "reason")
+    SLEEVE_CROSS_ID_FIELD_NUMBER: _ClassVar[int]
+    ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
+    INSTRUMENT_ID_FIELD_NUMBER: _ClassVar[int]
+    GIVING_SLEEVE_FIELD_NUMBER: _ClassVar[int]
+    RECEIVING_SLEEVE_FIELD_NUMBER: _ClassVar[int]
+    QUANTITY_FIELD_NUMBER: _ClassVar[int]
+    CROSS_PRICE_FIELD_NUMBER: _ClassVar[int]
+    PRICE_SOURCE_FIELD_NUMBER: _ClassVar[int]
+    ORDER_IDS_FIELD_NUMBER: _ClassVar[int]
+    REASON_FIELD_NUMBER: _ClassVar[int]
+    sleeve_cross_id: str
+    account_id: str
+    instrument_id: str
+    giving_sleeve: str
+    receiving_sleeve: str
+    quantity: Decimal
+    cross_price: Money
+    price_source: str
+    order_ids: _containers.RepeatedScalarFieldContainer[str]
+    reason: str
+    def __init__(self, sleeve_cross_id: _Optional[str] = ..., account_id: _Optional[str] = ..., instrument_id: _Optional[str] = ..., giving_sleeve: _Optional[str] = ..., receiving_sleeve: _Optional[str] = ..., quantity: _Optional[_Union[Decimal, _Mapping]] = ..., cross_price: _Optional[_Union[Money, _Mapping]] = ..., price_source: _Optional[str] = ..., order_ids: _Optional[_Iterable[str]] = ..., reason: _Optional[str] = ...) -> None: ...
+
+class AlertSubject(_message.Message):
+    __slots__ = ("order_id", "booking_id", "allocation_id", "position")
+    ORDER_ID_FIELD_NUMBER: _ClassVar[int]
+    BOOKING_ID_FIELD_NUMBER: _ClassVar[int]
+    ALLOCATION_ID_FIELD_NUMBER: _ClassVar[int]
+    POSITION_FIELD_NUMBER: _ClassVar[int]
+    order_id: str
+    booking_id: str
+    allocation_id: str
+    position: PositionKey
+    def __init__(self, order_id: _Optional[str] = ..., booking_id: _Optional[str] = ..., allocation_id: _Optional[str] = ..., position: _Optional[_Union[PositionKey, _Mapping]] = ...) -> None: ...
+
+class Alert(_message.Message):
+    __slots__ = ("alert_id", "account_id", "kind", "state", "reason", "subject", "due_by", "last_change")
+    ALERT_ID_FIELD_NUMBER: _ClassVar[int]
+    ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
+    KIND_FIELD_NUMBER: _ClassVar[int]
+    STATE_FIELD_NUMBER: _ClassVar[int]
+    REASON_FIELD_NUMBER: _ClassVar[int]
+    SUBJECT_FIELD_NUMBER: _ClassVar[int]
+    DUE_BY_FIELD_NUMBER: _ClassVar[int]
+    LAST_CHANGE_FIELD_NUMBER: _ClassVar[int]
+    alert_id: str
+    account_id: str
+    kind: AlertKind
+    state: AlertState
+    reason: str
+    subject: AlertSubject
+    due_by: int
+    last_change: JournalRef
+    def __init__(self, alert_id: _Optional[str] = ..., account_id: _Optional[str] = ..., kind: _Optional[_Union[AlertKind, str]] = ..., state: _Optional[_Union[AlertState, str]] = ..., reason: _Optional[str] = ..., subject: _Optional[_Union[AlertSubject, _Mapping]] = ..., due_by: _Optional[int] = ..., last_change: _Optional[_Union[JournalRef, _Mapping]] = ...) -> None: ...
+
 class VenueRecord(_message.Message):
     __slots__ = ("venue_id", "name", "country_code", "kind", "identifiers", "operating_venue_id", "time_zone", "version", "valid_from_ns", "record_time_ns", "lifecycle_state")
     VENUE_ID_FIELD_NUMBER: _ClassVar[int]
@@ -5366,6 +5909,62 @@ class BusinessDayInputs(_message.Message):
     date: str
     calendars: _containers.RepeatedScalarFieldContainer[str]
     def __init__(self, date: _Optional[str] = ..., calendars: _Optional[_Iterable[str]] = ...) -> None: ...
+
+class InstrumentReplacedEvent(_message.Message):
+    __slots__ = ("replaced_instrument_id", "instrument", "replaced_at_ns", "cause", "sequence")
+    REPLACED_INSTRUMENT_ID_FIELD_NUMBER: _ClassVar[int]
+    INSTRUMENT_FIELD_NUMBER: _ClassVar[int]
+    REPLACED_AT_NS_FIELD_NUMBER: _ClassVar[int]
+    CAUSE_FIELD_NUMBER: _ClassVar[int]
+    SEQUENCE_FIELD_NUMBER: _ClassVar[int]
+    replaced_instrument_id: str
+    instrument: InstrumentRecord
+    replaced_at_ns: int
+    cause: ReplacementCause
+    sequence: int
+    def __init__(self, replaced_instrument_id: _Optional[str] = ..., instrument: _Optional[_Union[InstrumentRecord, _Mapping]] = ..., replaced_at_ns: _Optional[int] = ..., cause: _Optional[_Union[ReplacementCause, str]] = ..., sequence: _Optional[int] = ...) -> None: ...
+
+class TemplateFieldValue(_message.Message):
+    __slots__ = ("path", "value", "provenance")
+    PATH_FIELD_NUMBER: _ClassVar[int]
+    VALUE_FIELD_NUMBER: _ClassVar[int]
+    PROVENANCE_FIELD_NUMBER: _ClassVar[int]
+    path: str
+    value: str
+    provenance: Provenance
+    def __init__(self, path: _Optional[str] = ..., value: _Optional[str] = ..., provenance: _Optional[_Union[Provenance, _Mapping]] = ...) -> None: ...
+
+class SecurityTemplate(_message.Message):
+    __slots__ = ("template_id", "template_version", "name", "asset_class", "instrument_type", "base", "calculation", "fields", "match_rule")
+    TEMPLATE_ID_FIELD_NUMBER: _ClassVar[int]
+    TEMPLATE_VERSION_FIELD_NUMBER: _ClassVar[int]
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    ASSET_CLASS_FIELD_NUMBER: _ClassVar[int]
+    INSTRUMENT_TYPE_FIELD_NUMBER: _ClassVar[int]
+    BASE_FIELD_NUMBER: _ClassVar[int]
+    CALCULATION_FIELD_NUMBER: _ClassVar[int]
+    FIELDS_FIELD_NUMBER: _ClassVar[int]
+    MATCH_RULE_FIELD_NUMBER: _ClassVar[int]
+    template_id: str
+    template_version: str
+    name: str
+    asset_class: AssetClass
+    instrument_type: InstrumentType
+    base: bool
+    calculation: str
+    fields: _containers.RepeatedCompositeFieldContainer[TemplateField]
+    match_rule: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, template_id: _Optional[str] = ..., template_version: _Optional[str] = ..., name: _Optional[str] = ..., asset_class: _Optional[_Union[AssetClass, str]] = ..., instrument_type: _Optional[_Union[InstrumentType, str]] = ..., base: bool = ..., calculation: _Optional[str] = ..., fields: _Optional[_Iterable[_Union[TemplateField, _Mapping]]] = ..., match_rule: _Optional[_Iterable[str]] = ...) -> None: ...
+
+class TemplateField(_message.Message):
+    __slots__ = ("path", "type", "required")
+    PATH_FIELD_NUMBER: _ClassVar[int]
+    TYPE_FIELD_NUMBER: _ClassVar[int]
+    REQUIRED_FIELD_NUMBER: _ClassVar[int]
+    path: str
+    type: str
+    required: bool
+    def __init__(self, path: _Optional[str] = ..., type: _Optional[str] = ..., required: bool = ...) -> None: ...
 
 class Price(_message.Message):
     __slots__ = ("meta", "kind", "price", "basis")
@@ -5876,3 +6475,25 @@ class OutcomesRecordedEvent(_message.Message):
     OUTCOME_FIELD_NUMBER: _ClassVar[int]
     outcome: Outcome
     def __init__(self, outcome: _Optional[_Union[Outcome, _Mapping]] = ...) -> None: ...
+
+class BookingUpdatedEvent(_message.Message):
+    __slots__ = ("booking", "entry", "journal", "cause")
+    BOOKING_FIELD_NUMBER: _ClassVar[int]
+    ENTRY_FIELD_NUMBER: _ClassVar[int]
+    JOURNAL_FIELD_NUMBER: _ClassVar[int]
+    CAUSE_FIELD_NUMBER: _ClassVar[int]
+    booking: Booking
+    entry: EntryMeta
+    journal: JournalRef
+    cause: ChangeCause
+    def __init__(self, booking: _Optional[_Union[Booking, _Mapping]] = ..., entry: _Optional[_Union[EntryMeta, _Mapping]] = ..., journal: _Optional[_Union[JournalRef, _Mapping]] = ..., cause: _Optional[_Union[ChangeCause, _Mapping]] = ...) -> None: ...
+
+class AlertChangedEvent(_message.Message):
+    __slots__ = ("alert", "journal", "cause")
+    ALERT_FIELD_NUMBER: _ClassVar[int]
+    JOURNAL_FIELD_NUMBER: _ClassVar[int]
+    CAUSE_FIELD_NUMBER: _ClassVar[int]
+    alert: Alert
+    journal: JournalRef
+    cause: ChangeCause
+    def __init__(self, alert: _Optional[_Union[Alert, _Mapping]] = ..., journal: _Optional[_Union[JournalRef, _Mapping]] = ..., cause: _Optional[_Union[ChangeCause, _Mapping]] = ...) -> None: ...
