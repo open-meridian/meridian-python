@@ -110,10 +110,7 @@ DESIGN ?= ../meridian-design
 # pinned here by commit as the schema is pinned in pyproject.toml. Core's own
 # interop gate overrides this with its working tree, so a change to both lands
 # without either waiting on the other's push.
-# PLACEHOLDER (SDK 0.28.0): core's local `v24` branch head when this was
-# written, 0d019da, not yet pushed. Re-pinned to core's pushed `v24` commit,
-# brought up to date with main, before this branch is pushed.
-CORE_REV   := 0d019dab5f96f1bd5c80f963a6be87e6aaf6bea9
+CORE_REV   := 6eb688749a49ad0bc1f6e3066dabdcc4b038f6fc
 CORE_PROTO ?= https://github.com/open-meridian/meridian-core.git\#$(CORE_REV):proto
 # And meridian-schema's, which core's import, at the revision vendored here.
 SCHEMA_PROTO ?= https://github.com/open-meridian/meridian-schema.git\#$(SCHEMA_REV):proto
