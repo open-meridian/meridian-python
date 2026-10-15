@@ -1042,7 +1042,7 @@ def producers(**mutations: bool) -> dict[str, object]:
         last = ops.Trade(
             meta=ops.ObservationMeta(
                 row_key="BTC-USD:match:1",
-                subjects=[ops.SubjectRef(entity_id="LCL-suite-1")],
+                subjects=[ops.SubjectRef(entity_id="INS-suite-1")],
                 source=ops.Source(dataset=LIVE, venue_id=COINBASE),
                 valid_from_ns=DAY,
             )
@@ -1085,10 +1085,11 @@ def producers(**mutations: bool) -> dict[str, object]:
     }
 
 
-def test_the_data_suite_is_carried_with_its_twenty_nine_cases() -> None:
+def test_the_data_suite_is_carried_with_its_thirty_one_cases() -> None:
     held = suite("data")
     assert held.since == "v18"
-    assert len(held.cases) == 29
+    # Contract v24 adds the two every role's suite holds, which the SDK answers.
+    assert len(held.cases) == 31
     assert "a-want-recorded-against" in names("data")
     assert "a-subject-another-source-resolved" in names("data")
     # The 1b's eight (contract v19), each about trades or quotes.
@@ -1165,7 +1166,11 @@ V19_DATA_CASES = {
 def test_a_data_plugin_converting_exactly_passes_every_case_of_its_suite() -> None:
     report = run("data", producers(), instance_id="toy-1")
     assert report.passed, report.failures
-    assert len(report.passed_cases) == 29
+    assert len(report.passed_cases) == 31
+    assert report.answered_by_sdk == [
+        "hears-and-reads-a-replacement",
+        "reads-the-template-catalogue",
+    ]
 
 
 def test_a_data_plugin_sending_the_makers_side_as_the_aggressor_fails_the_suite() -> None:
@@ -1187,7 +1192,7 @@ def test_a_case_about_a_kind_the_plugin_never_publishes_may_be_not_presented() -
     report = run("data", mapped, not_presented=never)
     assert report.passed, report.failures
     assert report.not_presented == never
-    assert len(report.passed_cases) == 29 - 9
+    assert len(report.passed_cases) == 31 - 9
 
 
 def test_a_case_about_a_field_the_source_never_states_may_be_not_presented() -> None:
@@ -1323,6 +1328,9 @@ def test_a_reading_role_hears_and_reads_as_its_suite_asks() -> None:
                     "asks-for-a-settlement-date",
                     # An event contract's outcome (contract v23).
                     "hears-and-reads-an-outcome",
+                    # Bookings and alerts (contract v24).
+                    "hears-and-reads-bookings",
+                    "hears-and-reads-alerts",
                 )
             },
         },

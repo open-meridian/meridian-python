@@ -475,9 +475,10 @@ def test_the_ems_suite_is_carried_with_its_six_cases_and_v22s() -> None:
         "reads-the-latest-quotes",
         "hears-a-quote-recorded",
     ]
-    # The order path's and the calendars' (contract v22), and from contract
-    # v23 a venue-originated fill's accept and DK.
-    assert len(held.cases) == 24
+    # The order path's and the calendars' (contract v22), from contract v23 a
+    # venue-originated fill's accept and DK, and from v24 the two every-role
+    # cases and the escape hatch's read.
+    assert len(held.cases) == 27
     assert "places-at-a-linked-connectivity-plugin" in [case.name for case in held.cases]
 
 

@@ -212,6 +212,42 @@ data plugin records an event contract's outcomes in batches of 1 to 500
 reported), and prices' readers and `operations` hear every version
 (`receive(outcomes_recorded=...)`) and read them (`list_outcomes`, as of a
 recorded time or after the watermark last seen).
+
+From contract v24 an execution is booked to its accounts, and every
+instrument is named by the platform master's ID. The `oms` books an
+explicit list of executions on one order (`book_order`, each an
+`Allocation`: its account, quantity, average price, gross and net amounts,
+fees and intended settlement date, a block's at one average price, an
+overfill to the error account with its `ErrorCause`), hands a booking off
+to `operations` (`hand_off_booking`), cancels or replaces it before then
+(`correct_booking`, a `BookingCorrectionKind`) and records a cross between
+two sleeves (`record_sleeve_cross`, a `SleeveCross`); `operations` and
+`portfolio` amend an order's allocation instruction
+(`set_allocation_instruction`) and `operations` corrects a booking handed
+off; `connectivity` and `confirmation` report a prime's answer to a give-up
+(`report_give_up`, a `GiveUpAnswer`). The readers hear and read bookings
+(`receive(booking_updated=...)`, `list_bookings`, each in its
+`BookingState`, whose transitions the table carries beside the order's) and
+alerts (`receive(alert_changed=...)`, `list_alerts`; `compliance` raises its
+own, `raise_alert`, and acknowledges one for a person,
+`acknowledge_alert`). Cash follows option (c): the account's base currency
+is a balance, every other currency opens lots with base-currency cost, and
+every currency does until a base currency is set.
+
+An instrument's record may be the deployment's provisional `LCL-` record
+(`InstrumentRecord.provisional`, `ResolveIdentifierResult.provisional`),
+held to the platform's template it names (`template_id`,
+`template_version`) and resolved later to the platform's `INS-` record:
+read the mark, never the ID's prefix. Every role hears a replacement
+(`receive(replace_merged_instrument=...)`, its `ReplacementCause` and
+`sequence`) and catches up by sequence (`list_replacements`); the SDK
+follows each ID to the record it became (`CurrentIdMap`) and reads the
+template catalogue (`list_templates`, `read_template`,
+`TemplateCatalogue`). A `reference` plugin offers a record's template fields
+(`offer_template_fields`, each a `TemplateFieldValue` with its provenance).
+Whether orders may name a provisional record is the deployment admin's
+setting, read by the roles that propose, place or check them
+(`read_local_record_orders`).
 """
 
 # Each role's common part (contract v20, spec/plugin-pages-follow-their-role).
@@ -276,6 +312,8 @@ from .figures import Figure, FigureState
 from .operations import (
     Adjustment,
     AgreementFigures,
+    AlertSubject,
+    Allocation,
     AllocationInstruction,
     AllocationLine,
     Bar,
@@ -292,6 +330,7 @@ from .operations import (
     ExternalAccount,
     Fee,
     Finality,
+    GiveUpRecord,
     Leg,
     LocateAnswer,
     LocateUse,
@@ -321,10 +360,12 @@ from .operations import (
     ReportedPending,
     ReportedPositionValue,
     RollInputs,
+    SleeveCross,
     SourceTime,
     StatementFigures,
     StrategyInstruction,
     StrategyParameter,
+    TemplateFieldValue,
     Tenor,
     TenorDateInputs,
     Trade,
@@ -345,9 +386,13 @@ from .plugin.v1.operations_pb2 import (
     ActivityRef,
     Actor,
     Aggressor,
+    AlertKind,
+    AlertState,
     AsReported,
     AssetClass,
     Backfill,
+    BookingCorrectionKind,
+    BookingState,
     BreakCategory,
     BreakCauseCategory,
     BreakHandling,
@@ -356,7 +401,9 @@ from .plugin.v1.operations_pb2 import (
     CollateralDirection,
     DatasetRef,
     Eligible,
+    ErrorCause,
     FigureKey,
+    GiveUpAnswer,
     HoldingSide,
     Identifier,
     InstrumentType,
@@ -374,8 +421,10 @@ from .plugin.v1.operations_pb2 import (
     ProvenanceKind,
     QuoteCharacteristic,
     RawRecordRef,
+    ReplacementCause,
     ResolvedByEntries,
     Reversal,
+    SecurityTemplate,
     SettlementBucket,
     SettlementDateInputs,
     Source,
@@ -386,6 +435,7 @@ from .plugin.v1.operations_pb2 import (
     StreetRecordRef,
     SubjectRef,
     SyncState,
+    TemplateField,
     TradeCharacteristic,
     Unanswered,
     UnansweredReason,
@@ -393,6 +443,7 @@ from .plugin.v1.operations_pb2 import (
     VenueRecord,
 )
 from .receive import Heard
+from .replacements import CurrentIdMap, TemplateCatalogue
 
 # What a plugin at the edge says its storage holds of each kind (contract v16),
 # and how a dataset's rows can arrive (contract v18).
@@ -563,6 +614,22 @@ __all__ = [
     "BusinessDayInputs",
     "SettlementDateInputs",
     "SpotDateInputs",
+    "AlertKind",
+    "AlertState",
+    "AlertSubject",
+    "Allocation",
+    "BookingCorrectionKind",
+    "BookingState",
+    "CurrentIdMap",
+    "ErrorCause",
+    "GiveUpAnswer",
+    "GiveUpRecord",
+    "ReplacementCause",
+    "SecurityTemplate",
+    "SleeveCross",
+    "TemplateCatalogue",
+    "TemplateField",
+    "TemplateFieldValue",
     "account_currency",
     "environment",
     "roles",
