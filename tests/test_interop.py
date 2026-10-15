@@ -113,7 +113,9 @@ async def test_a_set_nothing_matches_is_answered_with_a_minted_record(plugin) ->
     deployment's own record for the set (W3.7, contract v10: its LCL- ID is its
     key for life, not a placeholder), saying so; asked again, the same record
     matches and nothing is minted. What the source states is offered, never in
-    force, so a resolve stating it is answered the same way.
+    force, so a resolve stating it is answered the same way. From contract v24
+    the record is provisional, the platform not reached within the bounded
+    ask (there is none here), and says so (W3.1, W3.7).
     """
     asked = {
         "identifiers": [meridian.Identifier(scheme="isin", value="US0000000000")],
@@ -123,7 +125,7 @@ async def test_a_set_nothing_matches_is_answered_with_a_minted_record(plugin) ->
     }
     reply = await plugin.resolve_identifier(**asked)
     assert reply.found
-    assert reply.instrument_id.startswith("LCL-")
+    assert reply.provisional and reply.instrument_id.startswith("LCL-")
     again = await plugin.resolve_identifier(**asked)
     assert again.instrument_id == reply.instrument_id
     assert not again.minted

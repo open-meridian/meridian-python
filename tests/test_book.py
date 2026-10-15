@@ -10,6 +10,11 @@ the instrument records the deployment admin completed, e2e/book/instruments.sql'
 
 What it holds, in one narrative, since each step reads what the last wrote:
 
+Cash follows option (c) (contract v24): the account's base currency is a
+balance and every other currency opens lots, and until a base currency is
+set -- e2e/book's accounts set none -- every currency does, USD included, so
+the opening balance gives the cash its lot at its own amount.
+
 day 1, a custody plugin records an account's statement; an operations plugin
 sends an opening balance missing what downstream needs, refused naming each
 field (contract v9), then composes the complete one from the street and
@@ -243,11 +248,28 @@ async def until(what: str, check: Any, seconds: float = 20) -> Any:
 # ── What the operations plugin composes (W9.1) ───────────────────────────────
 
 
-def opening_from(street: list[Any]) -> list[meridian.OpeningPosition]:
+def cash_lot(quantity: Decimal, code: str, as_of: str) -> meridian.OpeningLot:
+    """Cash's lot while the account has no base currency (contract v24,
+    option (c), item 23): its whole quantity, at a cost of its own amount in
+    its own currency, acquired on the statement's date. Derived, not made
+    up: a currency's cost in itself is the amount."""
+    return meridian.OpeningLot(
+        quantity=quantity,
+        terms=meridian.LotTerms(
+            cost=Money(quantity, code), acquired_date=as_of, source="opening_balance"
+        ),
+    )
+
+
+def opening_from(
+    street: list[Any], as_of: str, cash: dict[str, str]
+) -> list[meridian.OpeningPosition]:
     """An opening balance as the sample operations plugin composes one, once
     complete: each custodial position as reported, its settled quantity, its
     lots as the custodian lists them with their cost and acquisition date;
-    cash, no lots. Nothing here makes up what the street lacks."""
+    cash (`cash`, each instrument's ISO 4217 code), which the custodian lists
+    without lots, its one lot at its own amount while the account has no base
+    currency (option (c)). Nothing here makes up what the street lacks."""
     positions = []
     for held in street:
         quantity = meridian.as_decimal(held.quantity)
@@ -262,6 +284,8 @@ def opening_from(street: list[Any]) -> list[meridian.OpeningPosition]:
             )
             for lot in held.lots
         ]
+        if not lots and held.instrument_id in cash:
+            lots = [cash_lot(quantity, cash[held.instrument_id], as_of)]
         positions.append(
             meridian.OpeningPosition(
                 instrument_id=held.instrument_id,
@@ -379,6 +403,7 @@ async def test_the_book_of_record_end_to_end() -> None:
                         side="long",
                         trade_date_quantity=Decimal("1000.00"),
                         settled_quantity=Decimal("1000.00"),
+                        lots=[cash_lot(Decimal("1000.00"), "USD", "2026-09-08")],
                     ),
                 ],
                 reason="Opening balance from the statement of 2026-09-08, unfinished",
@@ -397,7 +422,7 @@ async def test_the_book_of_record_end_to_end() -> None:
             account_id=BROKERAGE,
             as_of_date="2026-09-08",
             sources=[source],
-            positions=opening_from(list(street.positions)),
+            positions=opening_from(list(street.positions), "2026-09-08", {usd: "USD"}),
             reason="Opening balance from the statement of 2026-09-08, confirmed",
             idempotency_key=key,
             acting_for=person(
@@ -419,7 +444,7 @@ async def test_the_book_of_record_end_to_end() -> None:
             account_id=BROKERAGE,
             as_of_date="2026-09-08",
             sources=[source],
-            positions=opening_from(list(street.positions)),
+            positions=opening_from(list(street.positions), "2026-09-08", {usd: "USD"}),
             reason="Opening balance from the statement of 2026-09-08, confirmed",
             idempotency_key=key,
             acting_for=person([BROKERAGE, FUTURES]),
@@ -486,7 +511,10 @@ async def test_the_book_of_record_end_to_end() -> None:
         assert [meridian.as_decimal(lot.open_quantity) for lot in held[aapl].lots] == [
             Decimal("12.5")
         ]
-        assert len(held[usd].lots) == 0, "cash has no lots"
+        # Option (c) with no base currency set: the cash opens its lot too.
+        assert [meridian.as_decimal(lot.open_quantity) for lot in held[usd].lots] == [
+            Decimal("1000.00")
+        ]
         day_one_mark = read.as_of
         attributes = await reporting.list_account_attributes(account_id=BROKERAGE)
         (standing,) = attributes.attributes
@@ -692,7 +720,8 @@ async def test_the_book_of_record_end_to_end() -> None:
                             cost=Money(Decimal("567.50"), "USD"), acquired_date="2026-09-09"
                         ),
                     ),
-                    # Cash paid for it: no lot.
+                    # Cash paid for it, relieving its lot by the account's
+                    # relief default (option (c), no base currency set).
                     meridian.MovementLine(
                         instrument_id=usd,
                         side="long",
