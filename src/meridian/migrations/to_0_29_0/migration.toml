@@ -37,7 +37,11 @@ hatch (await plugin.read_local_record_orders()) and its test's mapping of
 the dropped case. Moving connect's interface, settings and
 reads_external_accounts into the declaration, naming the declaration in
 pyproject.toml, and writing docs/ are left by hand; `meridian plugin check`
-then checks the documentation.
+then checks the documentation. So is a Dockerfile that copies no docs/ into
+the image -- one installing only the package, from a mount, say: the
+declaration reads its sections in the built image, so meridian-declaration
+and the upload fail without them. Copy it (COPY docs/ docs/), or the whole
+context, as the templates do (COPY . .).
 """
 breaking = true
 rewrite = "rewrite.py"
@@ -84,3 +88,14 @@ instead = """add declaration = "<module>:DECLARATION" under [tool.meridian], nam
 meridian.Declaration carrying the settings, the interface and \
 documentation="docs", and write docs/overview.md and docs/setup.md (troubleshooting.md \
 and terms.md are prompted, pages.md optional); meridian plugin check checks them"""
+
+[[by_hand]]
+rule = "docs-not-in-image"
+what = """the Dockerfile's last stage copies no documentation directory into the \
+image -- the one the declaration names (documentation="..."), or docs when none \
+names one yet: from contract v25 the declaration reads its sections where it runs, \
+in the built image, so meridian-declaration, and the upload with it, fail without \
+them, as in an image installing only the package from a mount"""
+instead = """copy the directory into the image beside the package, in the last stage \
+-- COPY docs/ docs/ under WORKDIR /plugin -- or the whole build context, as the \
+templates do (COPY . .)"""

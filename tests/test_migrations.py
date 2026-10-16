@@ -32,11 +32,16 @@ SDK = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]["version"]
 
 
 def plugin_files(root: Path) -> dict[str, str]:
-    """What `meridian plugin migrate` sends: the Python and pyproject.toml."""
+    """What `meridian plugin migrate` sends: the Python, pyproject.toml and
+    the Dockerfile."""
     return {
         path.relative_to(root).as_posix(): path.read_text()
         for path in sorted(root.rglob("*"))
-        if path.is_file() and (path.suffix == ".py" or path.name == "pyproject.toml")
+        if path.is_file()
+        and (
+            path.suffix == ".py"
+            or path.relative_to(root).as_posix() in ("pyproject.toml", "Dockerfile")
+        )
     }
 
 
@@ -186,7 +191,8 @@ def test_snaptrade_passes_its_own_tests_once_migrated(tmp_path: Path) -> None:
         # desk opens an empty statement naming no external account, which a
         # sidecar at v7 refuses (0.11.0 to 0.12.0). From 0.29.0 (contract
         # v25) a version's declaration carries its interface, and each must
-        # name one in pyproject.toml.
+        # name one in pyproject.toml; snaptrade's image, installing only the
+        # package from a mount, holds no docs/ for its declaration to read.
         (
             "desk-0.7.0",
             [
@@ -195,7 +201,13 @@ def test_snaptrade_passes_its_own_tests_once_migrated(tmp_path: Path) -> None:
                 ("connect-names-the-declaration", "src/desk/__main__.py", 22),
             ],
         ),
-        ("snaptrade-0.7.0", [("declaration-not-named", "pyproject.toml", 24)]),
+        (
+            "snaptrade-0.7.0",
+            [
+                ("docs-not-in-image", "Dockerfile", 5),
+                ("declaration-not-named", "pyproject.toml", 24),
+            ],
+        ),
     ],
 )
 def test_the_recorded_plugins_are_as_the_later_steps_leave_them(
@@ -1028,3 +1040,63 @@ def test_what_connect_names_beside_the_declaration_is_left_by_hand() -> None:
     ]
     (step,) = result.steps
     assert step.migration.breaking
+
+
+MOUNTED = """\
+ARG BASE=ghcr.io/open-meridian/plugin-python:0.29.0
+FROM ${BASE}
+WORKDIR /plugin
+# Installed from a mount rather than copied.
+RUN --mount=type=bind,target=/tmp/src,rw pip install --no-cache-dir /tmp/src
+USER 65532
+CMD ["venue"]
+"""
+
+
+def _declared(documentation: str | None) -> str:
+    named = f", documentation={documentation!r}" if documentation is not None else ""
+    return f"import meridian\n\nDECLARATION = meridian.Declaration(settings=None{named})\n"
+
+
+@pytest.mark.parametrize(
+    ("dockerfile", "documentation", "left"),
+    [
+        # The plugin agent's finding (2026-10-16): all 13 first-party plugins
+        # installed only the package, so their images held no docs/.
+        (MOUNTED, "docs", True),
+        (MOUNTED, None, True),
+        (MOUNTED.replace("USER", "COPY docs/ docs/\nUSER"), "docs", False),
+        (MOUNTED.replace("USER", "COPY ./docs ./docs\nUSER"), "./docs/", False),
+        (MOUNTED.replace("USER", 'COPY ["docs", "docs/"]\nUSER'), None, False),
+        (MOUNTED.replace("USER", "COPY --chown=65532 . .\nUSER"), "docs", False),
+        (MOUNTED.replace("USER", "COPY src \\\n     docs/ ./\nUSER"), "docs", False),
+        (MOUNTED.replace("USER", "COPY docs/ docs/\nUSER"), "manual", True),
+        (MOUNTED.replace("USER", "COPY manual/ manual/\nUSER"), "manual", False),
+        (MOUNTED.replace("USER", "COPY share/ share/\nUSER"), "share/docs", False),
+        # A copy in an earlier stage is not the image's.
+        ("FROM python AS build\nCOPY . .\n" + MOUNTED, "docs", True),
+        # A copy from another stage may carry it; what that stage holds is
+        # not read here.
+        (MOUNTED.replace("USER", "COPY --from=build /plugin /plugin\nUSER"), "docs", False),
+    ],
+)
+def test_a_dockerfile_copying_no_documentation_is_left_by_hand(
+    dockerfile: str, documentation: str | None, left: bool
+) -> None:
+    files = {
+        "pyproject.toml": CONNECTIVITY,
+        "Dockerfile": dockerfile,
+        "src/venue/declaration.py": _declared(documentation),
+    }
+    result = migrate(files, "0.28.0", "0.29.0")
+    assert result.files == {}
+    stage = dockerfile.splitlines().index("FROM ${BASE}") + 1
+    assert left_by_hand(result) == (
+        [("docs-not-in-image", "Dockerfile", stage)] if left else []
+    )
+
+
+def test_a_plugin_sending_no_dockerfile_is_not_held_to_one() -> None:
+    # A meridian before 0.1.46 sends the Python and pyproject.toml alone.
+    files = {"pyproject.toml": CONNECTIVITY, "src/venue/declaration.py": _declared("docs")}
+    assert left_by_hand(migrate(files, "0.28.0", "0.29.0")) == []

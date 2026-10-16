@@ -15,15 +15,23 @@ oms, portfolio), two rewrites, each only in a file that uses the SDK:
 Any other read of it in such a plugin -- its answer kept, or the call inside
 another expression -- is left by hand.
 
-For every plugin, two things the migration cannot move are left by hand:
+For every plugin, three things the migration cannot move are left by hand:
 `connect` given an interface, settings or `reads_external_accounts`, which
 from v25 belong in the version's declaration, since registration is held to
-the declaration uploaded; and a pyproject.toml whose `[tool.meridian]` names
-no declaration. migration.toml, beside this, records the rules.
+the declaration uploaded; a pyproject.toml whose `[tool.meridian]` names
+no declaration; and a Dockerfile that copies no documentation directory into
+the image -- the one the declaration names (`documentation="..."`), `docs`
+when none names one yet -- since the declaration reads its sections where it
+runs, in the built image, and `meridian-declaration` and the upload fail
+without them (the plugin agent's finding, 2026-10-16: an image installing
+only the package from a mount holds no docs/). migration.toml, beside this,
+records the rules.
 """
 
 from __future__ import annotations
 
+import json
+import re
 import tomllib
 
 import libcst as cst
@@ -39,15 +47,22 @@ KEEP = frozenset({"compliance", "ems", "oms", "portfolio"})
 #: What connect may name that, from v25, the declaration carries.
 DECLARED = ("interface", "settings", "reads_external_accounts")
 
+#: The documentation directory a declaration names when it names none yet:
+#: the templates', and the by-hand rules' instead.
+DOCS = "docs"
+
 #: Whether the plugin being migrated holds connectivity and no role keeping
 #: the read, from its pyproject.toml (`given`).
 _dropped = False
+#: The documentation directories the plugin's declarations name (`given`),
+#: DOCS when none names one.
+_documented: tuple[str, ...] = (DOCS,)
 
 
 def given(files: dict[str, str]) -> None:
     """The plugin's roles, read once from its pyproject.toml before any file
     is rewritten."""
-    global _dropped
+    global _dropped, _documented
     roles: list[str] = []
     text = files.get("pyproject.toml")
     if text is not None:
@@ -60,6 +75,47 @@ def given(files: dict[str, str]) -> None:
             [role for role in named if isinstance(role, str)] if isinstance(named, list) else []
         )
     _dropped = "connectivity" in roles and not KEEP.intersection(roles)
+    directories: set[str] = set()
+    for path, held in files.items():
+        if path.endswith(".py") and "documentation" in held:
+            directories.update(_documentation_named(held))
+    _documented = tuple(sorted(directories)) or (DOCS,)
+
+
+def _documentation_named(text: str) -> set[str]:
+    """Each directory a `Declaration(documentation="...")` in `text` names,
+    as a literal."""
+    try:
+        module = cst.parse_module(text)
+    except cst.ParserSyntaxError:
+        return set()
+    imports = imports_of(module)
+    found = _Documented(imports)
+    module.visit(found)
+    return found.named
+
+
+class _Documented(cst.CSTVisitor):
+    def __init__(self, imports: Imports) -> None:
+        super().__init__()
+        self.imports = imports
+        self.named: set[str] = set()
+
+    def visit_Call(self, node: cst.Call) -> None:
+        if not is_sdk(node.func, "Declaration", self.imports):
+            return
+        for arg in node.args:
+            if arg.keyword is not None and arg.keyword.value == "documentation":
+                value = literal(arg.value)
+                if value and "\0" not in value:
+                    self.named.add(_bare(value))
+
+
+def _bare(path: str) -> str:
+    """A directory as the build context holds it: `./docs/` is `docs`."""
+    while path.startswith("./"):
+        path = path[2:]
+    return path.rstrip("/") or "."
 
 
 def _uses_sdk(module: cst.Module) -> bool:
@@ -93,6 +149,8 @@ def rewrite(path: str, text: str) -> Rewritten:
 def left(path: str, text: str) -> list[Finding]:
     if path == "pyproject.toml":
         return _undeclared(text)
+    if path == "Dockerfile":
+        return _docs_not_copied(text)
     if not path.endswith(".py"):
         return []
     module = cst.parse_module(text)
@@ -124,6 +182,92 @@ def _undeclared(text: str) -> list[Finding]:
             "declaration-not-named", "pyproject.toml", line, line_of(text, line) if line else ""
         )
     ]
+
+
+def _instructions(text: str) -> list[tuple[int, str, str]]:
+    """The Dockerfile's instructions: the line each starts on, its keyword in
+    upper case and the rest, continuation lines joined and comments dropped."""
+    out: list[tuple[int, str, str]] = []
+    held: list[str] = []
+    start = 0
+    for n, line in enumerate(text.splitlines(), 1):
+        stripped = line.strip()
+        if not held and (not stripped or stripped.startswith("#")):
+            continue
+        if held and stripped.startswith("#"):
+            continue
+        if not held:
+            start = n
+        if stripped.endswith("\\"):
+            held.append(stripped[:-1])
+            continue
+        held.append(stripped)
+        keyword, _, rest = " ".join(held).partition(" ")
+        out.append((start, keyword.upper(), rest.strip()))
+        held = []
+    return out
+
+
+#: A COPY's or an ADD's flags (`--chown=...`, `--from=...`, `--link`).
+FLAG = re.compile(r"^--[a-z-]+(?:=\S*)?$")
+
+
+def _sources(rest: str) -> tuple[list[str], bool] | None:
+    """A COPY's or an ADD's sources, as the build context names them, and
+    whether it copies from another stage or image (`--from`); None when it is
+    not one that can be read."""
+    words = rest.split()
+    flags = [word for word in words if FLAG.match(word)]
+    rest = " ".join(word for word in words if not FLAG.match(word))
+    if rest.startswith("["):
+        try:
+            named = json.loads(rest)
+        except json.JSONDecodeError:
+            return None
+        if not isinstance(named, list) or not all(isinstance(word, str) for word in named):
+            return None
+    else:
+        named = rest.split()
+    if len(named) < 2:
+        return None
+    return [_bare(source) for source in named[:-1]], any(
+        flag.startswith("--from") for flag in flags
+    )
+
+
+def _docs_not_copied(text: str) -> list[Finding]:
+    """The Dockerfile, where its last stage copies none of the documentation
+    directories the declaration names -- the whole context (`COPY . .`), the
+    directory, or what holds it. A copy from another stage is taken to carry
+    it, since what that stage holds is not read here."""
+    instructions = _instructions(text)
+    stages = [n for n, (_, keyword, _) in enumerate(instructions) if keyword == "FROM"]
+    if not stages:
+        return []
+    begun = stages[-1]
+    copied: list[str] = []
+    for _, keyword, rest in instructions[begun:]:
+        if keyword not in ("COPY", "ADD"):
+            continue
+        read = _sources(rest)
+        if read is None:
+            return []
+        sources, staged = read
+        if staged:
+            return []
+        copied += sources
+    missing = [
+        directory
+        for directory in _documented
+        if not any(
+            source in (".", "*") or directory == source or directory.startswith(source + "/")
+            for source in copied
+        )
+    ]
+    if not missing:
+        return []
+    line = instructions[begun][0]
+    return [Finding("docs-not-in-image", "Dockerfile", line, line_of(text, line))]
 
 
 class _Dropped(cst.CSTTransformer):
