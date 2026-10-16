@@ -112,6 +112,7 @@ from decimal import Decimal
 import grpc
 import pytest
 import pytest_asyncio
+from google.protobuf.message import Message
 
 from meridian.plugin.v1 import operations_pb2, operations_pb2_grpc
 from meridian.v1 import sidecar_pb2, sidecar_pb2_grpc
@@ -1238,6 +1239,11 @@ class FakeSidecar(sidecar_pb2_grpc.SidecarServiceServicer):
     # The algorithms the registered version declared (contract v22), which a
     # call as a service account is held to, as core's sidecar holds it.
     algorithms: tuple[str, ...] = ()
+    # The declaration the version was uploaded with (contract v25), which a
+    # plugin declaring v25 registers exactly, as the launch's configuration
+    # carries it to core's sidecar (PluginConfiguration.declaration); None
+    # holds the registration to its own declaration only.
+    uploaded: sidecar_pb2.PluginDeclaration | None = None
     # Told of each heartbeat as it is heard, so a test waits for the beats it
     # asserts on instead of sleeping and counting what happened to arrive.
     beat: asyncio.Condition = field(default_factory=asyncio.Condition, repr=False)
@@ -1248,7 +1254,7 @@ class FakeSidecar(sidecar_pb2_grpc.SidecarServiceServicer):
         self.registered.append(request)
         if not self.admitted:
             return sidecar_pb2.RegisterReply(admitted=False, refusal_reason=self.refusal_reason)
-        refused = self._roles_refused(request)
+        refused = self._declaration_refused(request) or self._roles_refused(request)
         if refused:
             return sidecar_pb2.RegisterReply(admitted=False, refusal_reason=refused)
         if request.declaration.HasField("catalogue"):
@@ -1268,6 +1274,48 @@ class FakeSidecar(sidecar_pb2_grpc.SidecarServiceServicer):
             publish_grants=list(self.publish_grants),
             subscribe_grants=list(self.subscribe_grants),
         )
+
+    def _declaration_refused(self, request: sidecar_pb2.RegisterRequest) -> str:
+        """Registration held to the version (W4.1, contract v25): a plugin
+        declaring v25 or later registers the declaration its version was
+        uploaded with, its settings, interface, tools and whether it reads
+        external accounts equal to those the request carries -- the settings
+        the SDK declares for each kind of raw record aside, which follow from
+        its storage -- or is refused in words naming the first difference.
+        A plugin declaring an earlier version is admitted unchecked."""
+        if int(request.schema_version.removeprefix("v") or 0) < 25:
+            return ""
+        declared = request.declaration
+        if self.uploaded is not None:
+            difference = _first_difference(self.uploaded, declared, "declaration")
+            if difference:
+                return (
+                    f"{difference}: a plugin declaring {request.schema_version} registers the "
+                    "declaration its version was uploaded with"
+                )
+        kinds = {kind.name for kind in declared.storage.record_kinds}
+        windows = {
+            f"{kind}{part}" for kind in kinds for part in ("_window_days", "_past_window")
+        }
+        registered = sidecar_pb2.RegisterRequest(
+            settings=[held for held in request.settings if held.name not in windows],
+            interface=request.interface if request.HasField("interface") else None,
+            tools=list(request.tools),
+            reads_external_accounts=request.reads_external_accounts,
+        )
+        carried = sidecar_pb2.RegisterRequest(
+            settings=list(declared.settings),
+            interface=declared.interface if declared.HasField("interface") else None,
+            tools=list(declared.tools),
+            reads_external_accounts=declared.reads_external_accounts,
+        )
+        difference = _first_difference(carried, registered, "declaration")
+        if difference:
+            return (
+                f"{difference}: what a plugin declaring {request.schema_version} registers is "
+                "what its declaration says"
+            )
+        return ""
 
     def _roles_refused(self, request: sidecar_pb2.RegisterRequest) -> str:
         """Each page and setting held to the roles this sidecar was launched
@@ -1657,6 +1705,32 @@ class FakeSidecar(sidecar_pb2_grpc.SidecarServiceServicer):
                 )
             )
         return reply
+
+
+def _first_difference(declared: Message, registered: Message, at: str) -> str:
+    """The first field where two messages differ, by its path from `at`, with
+    what each side holds: as core's sidecar names a registration that is not
+    its version's declaration. Empty where they are the same."""
+    if declared == registered:
+        return ""
+    for held in declared.DESCRIPTOR.fields:
+        mine, theirs = getattr(declared, held.name), getattr(registered, held.name)
+        where = f"{at}.{held.name}"
+        if mine == theirs:
+            continue
+        if not isinstance(mine, (Message, str, bytes)) and hasattr(mine, "__len__"):
+            if len(mine) != len(theirs):
+                return f"{where}: {len(mine)} declared, {len(theirs)} registered"
+            for i, (one, other) in enumerate(zip(mine, theirs, strict=True)):
+                if one == other:
+                    continue
+                if held.message_type is not None:
+                    return _first_difference(one, other, f"{where}[{i}]")
+                return f"{where}[{i}]: {one!r} declared, {other!r} registered"
+        if held.message_type is not None:
+            return _first_difference(mine, theirs, where)
+        return f"{where}: {mine!r} declared, {theirs!r} registered"
+    return f"{at}: differs"
 
 
 def _caller(context: grpc.aio.ServicerContext) -> str:

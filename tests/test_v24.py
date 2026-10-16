@@ -42,8 +42,8 @@ def replaced(old: str, new: str, sequence: int, cause: int = ops.REPLACEMENT_CAU
     )
 
 
-def test_the_sdk_declares_contract_v24() -> None:
-    assert meridian.SCHEMA_VERSION == "v24"
+def test_the_sdk_declares_contract_v24_or_later() -> None:
+    assert int(meridian.SCHEMA_VERSION.removeprefix("v")) >= 24
     for name in ("CurrentIdMap", "TemplateCatalogue", "Allocation", "BookingState"):
         assert name in meridian.__all__ and getattr(meridian, name) is not None
 

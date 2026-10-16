@@ -7,6 +7,7 @@ enforces the hold."""
 from __future__ import annotations
 
 import base64
+import dataclasses
 import hashlib
 import json
 from pathlib import Path
@@ -786,14 +787,17 @@ async def test_connect_declares_the_restore_route_for_a_plugin_declaring_kinds(
     async def home(request: meridian.Request) -> str:
         return ""
 
-    plugin = await meridian.connect(
-        address,
-        heartbeat=False,
-        declaration=DECLARATION,
-        interface=meridian.Interface(port=8000, title="Raw", pages=pages),
+    declared = dataclasses.replace(
+        DECLARATION, interface=meridian.Interface(port=8000, title="Raw", pages=pages)
     )
+    # The upload reads the declaration before any connect (contract v25): the
+    # restore route is in its tools already, so the registration is the same.
+    service.uploaded = declared.to_wire()
+    assert "restore_unit" in [t.name for t in service.uploaded.tools]
+    plugin = await meridian.connect(address, heartbeat=False, declaration=declared)
     await plugin.leave()
     assert "restore_unit" in [t.name for t in service.registered[0].tools]
+    assert service.registered[0].declaration == service.uploaded
 
 
 # ── The archive's two backends ──────────────────────────────────────────────
