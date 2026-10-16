@@ -20,6 +20,10 @@ relative to the plugin and its text:
 - `left(path, text) -> list[Finding]`: what is still to do by hand in the
   file after every step has run.
 
+It may also have `given(files) -> None`, called with every file of the
+plugin before its step rewrites any, for a rewrite that depends on the
+plugin as a whole -- the roles its pyproject.toml declares, say (0.29.0's).
+
 Every rule either names must be in its record: what a migration does is what
 its record says, and nothing else.
 
@@ -237,6 +241,9 @@ def migrate(files: dict[str, str], source: str, target: str) -> Result:
         code = migration.module()
         if code is None:
             continue
+        given = getattr(code, "given", None)
+        if given is not None:
+            given(dict(now))
         rewrite = cast(Any, code).rewrite
         for path in sorted(now):
             try:
@@ -265,6 +272,9 @@ def migrate(files: dict[str, str], source: str, target: str) -> Result:
         code = migration.module()
         if code is None:
             continue
+        given = getattr(code, "given", None)
+        if given is not None:
+            given(dict(now))
         left = cast(Any, code).left
         for path in sorted(now):
             if (migration.directory.name, path) in unreadable:
