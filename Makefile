@@ -65,10 +65,6 @@ contract-diff:
 # PyPI depends on nothing by URL (PyPI refuses that) and a plugin installs one
 # thing. `make vendor-schema` moves the copy to SCHEMA_REV; `check-vendored`
 # fails when the two disagree, as core's check-codegen does for its bindings.
-# PLACEHOLDER (SDK 0.29.0): meridian-schema's local `v25` head when this was
-# written, 3983435, not yet pushed; what is vendored here is that commit's
-# gen/ and boundaries/. Re-pinned to the schema's pushed `v25` commit, then
-# `make check-vendored`, before this branch is pushed.
 SCHEMA_REV := 3983435ba7672df58a61a57644fd59ee070de474
 SCHEMA_REPO := https://github.com/open-meridian/meridian-schema.git
 SCRATCH     := .schema-scratch
