@@ -1723,7 +1723,7 @@ class RecordOpeningBalanceResult(_message.Message):
     def __init__(self, entry: _Optional[_Union[EntryMeta, _Mapping]] = ..., journal: _Optional[_Union[JournalRef, _Mapping]] = ..., positions: _Optional[_Iterable[_Union[BookPosition, _Mapping]]] = ..., breaks: _Optional[_Iterable[_Union[Break, _Mapping]]] = ..., figures: _Optional[_Iterable[_Union[AccountFigures, _Mapping]]] = ..., attributes: _Optional[_Union[AccountAttributes, _Mapping]] = ...) -> None: ...
 
 class RecordBreakParams(_message.Message):
-    __slots__ = ("account_id", "break_id", "position", "figure", "category", "differences", "book_watermark", "street", "business_date", "candidate_causes", "idempotency_key", "acting_for")
+    __slots__ = ("account_id", "break_id", "position", "figure", "category", "differences", "book_watermark", "street", "business_date", "candidate_causes", "idempotency_key", "unresolved_identifiers", "acting_for")
     ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
     BREAK_ID_FIELD_NUMBER: _ClassVar[int]
     POSITION_FIELD_NUMBER: _ClassVar[int]
@@ -1735,6 +1735,7 @@ class RecordBreakParams(_message.Message):
     BUSINESS_DATE_FIELD_NUMBER: _ClassVar[int]
     CANDIDATE_CAUSES_FIELD_NUMBER: _ClassVar[int]
     IDEMPOTENCY_KEY_FIELD_NUMBER: _ClassVar[int]
+    UNRESOLVED_IDENTIFIERS_FIELD_NUMBER: _ClassVar[int]
     ACTING_FOR_FIELD_NUMBER: _ClassVar[int]
     account_id: str
     break_id: str
@@ -1747,8 +1748,9 @@ class RecordBreakParams(_message.Message):
     business_date: str
     candidate_causes: _containers.RepeatedCompositeFieldContainer[BreakCause]
     idempotency_key: str
+    unresolved_identifiers: _containers.RepeatedCompositeFieldContainer[Identifier]
     acting_for: _sidecar_pb2.CallerAssertion
-    def __init__(self, account_id: _Optional[str] = ..., break_id: _Optional[str] = ..., position: _Optional[_Union[PositionKey, _Mapping]] = ..., figure: _Optional[_Union[FigureKey, _Mapping]] = ..., category: _Optional[_Union[BreakCategory, str]] = ..., differences: _Optional[_Iterable[_Union[BreakDifference, _Mapping]]] = ..., book_watermark: _Optional[_Union[Watermark, _Mapping]] = ..., street: _Optional[_Union[StreetRecordRef, _Mapping]] = ..., business_date: _Optional[str] = ..., candidate_causes: _Optional[_Iterable[_Union[BreakCause, _Mapping]]] = ..., idempotency_key: _Optional[str] = ..., acting_for: _Optional[_Union[_sidecar_pb2.CallerAssertion, _Mapping]] = ...) -> None: ...
+    def __init__(self, account_id: _Optional[str] = ..., break_id: _Optional[str] = ..., position: _Optional[_Union[PositionKey, _Mapping]] = ..., figure: _Optional[_Union[FigureKey, _Mapping]] = ..., category: _Optional[_Union[BreakCategory, str]] = ..., differences: _Optional[_Iterable[_Union[BreakDifference, _Mapping]]] = ..., book_watermark: _Optional[_Union[Watermark, _Mapping]] = ..., street: _Optional[_Union[StreetRecordRef, _Mapping]] = ..., business_date: _Optional[str] = ..., candidate_causes: _Optional[_Iterable[_Union[BreakCause, _Mapping]]] = ..., idempotency_key: _Optional[str] = ..., unresolved_identifiers: _Optional[_Iterable[_Union[Identifier, _Mapping]]] = ..., acting_for: _Optional[_Union[_sidecar_pb2.CallerAssertion, _Mapping]] = ...) -> None: ...
 
 class RecordBreakResult(_message.Message):
     __slots__ = ("entry", "journal", "positions", "breaks", "figures", "attributes")
@@ -3099,12 +3101,14 @@ class ReadLocalRecordOrdersResult(_message.Message):
     def __init__(self, allows_local_record_orders: bool = ..., open_order_count: _Optional[int] = ...) -> None: ...
 
 class ResolveVenueParams(_message.Message):
-    __slots__ = ("identifiers", "as_of_ns")
+    __slots__ = ("identifiers", "as_of_ns", "venue_id")
     IDENTIFIERS_FIELD_NUMBER: _ClassVar[int]
     AS_OF_NS_FIELD_NUMBER: _ClassVar[int]
+    VENUE_ID_FIELD_NUMBER: _ClassVar[int]
     identifiers: _containers.RepeatedCompositeFieldContainer[Identifier]
     as_of_ns: int
-    def __init__(self, identifiers: _Optional[_Iterable[_Union[Identifier, _Mapping]]] = ..., as_of_ns: _Optional[int] = ...) -> None: ...
+    venue_id: str
+    def __init__(self, identifiers: _Optional[_Iterable[_Union[Identifier, _Mapping]]] = ..., as_of_ns: _Optional[int] = ..., venue_id: _Optional[str] = ...) -> None: ...
 
 class ResolveVenueResult(_message.Message):
     __slots__ = ("found", "venue", "miss_reason")
@@ -3733,18 +3737,20 @@ class ReportedCollateral(_message.Message):
     def __init__(self, direction: _Optional[_Union[CollateralDirection, str]] = ..., instrument_id: _Optional[str] = ..., unresolved_identifiers: _Optional[_Iterable[_Union[Identifier, _Mapping]]] = ..., quantity: _Optional[_Union[Decimal, _Mapping]] = ..., value: _Optional[_Union[Money, _Mapping]] = ..., haircut: _Optional[_Union[Decimal, _Mapping]] = ..., value_after_haircut: _Optional[_Union[Money, _Mapping]] = ..., held_at: _Optional[str] = ..., reusable: bool = ...) -> None: ...
 
 class Identifier(_message.Message):
-    __slots__ = ("scheme", "value", "source", "valid_from_ns", "valid_until_ns")
+    __slots__ = ("scheme", "value", "source", "valid_from_ns", "valid_until_ns", "trading_currency")
     SCHEME_FIELD_NUMBER: _ClassVar[int]
     VALUE_FIELD_NUMBER: _ClassVar[int]
     SOURCE_FIELD_NUMBER: _ClassVar[int]
     VALID_FROM_NS_FIELD_NUMBER: _ClassVar[int]
     VALID_UNTIL_NS_FIELD_NUMBER: _ClassVar[int]
+    TRADING_CURRENCY_FIELD_NUMBER: _ClassVar[int]
     scheme: str
     value: str
     source: str
     valid_from_ns: int
     valid_until_ns: int
-    def __init__(self, scheme: _Optional[str] = ..., value: _Optional[str] = ..., source: _Optional[str] = ..., valid_from_ns: _Optional[int] = ..., valid_until_ns: _Optional[int] = ...) -> None: ...
+    trading_currency: str
+    def __init__(self, scheme: _Optional[str] = ..., value: _Optional[str] = ..., source: _Optional[str] = ..., valid_from_ns: _Optional[int] = ..., valid_until_ns: _Optional[int] = ..., trading_currency: _Optional[str] = ...) -> None: ...
 
 class RawRecordRef(_message.Message):
     __slots__ = ("instance_id", "key")
@@ -4499,7 +4505,7 @@ class StatementSegmentRef(_message.Message):
     def __init__(self, external_account_id: _Optional[str] = ..., segment: _Optional[str] = ..., counterparty: _Optional[str] = ...) -> None: ...
 
 class Break(_message.Message):
-    __slots__ = ("break_id", "account_id", "position", "figure", "category", "differences", "book_watermark", "street", "first_seen_date", "last_seen_date", "state", "candidate_causes", "confirmed_cause", "handling", "resolution", "recorded_by", "last_change")
+    __slots__ = ("break_id", "account_id", "position", "figure", "category", "differences", "book_watermark", "street", "first_seen_date", "last_seen_date", "state", "candidate_causes", "confirmed_cause", "handling", "resolution", "recorded_by", "last_change", "unresolved_identifiers")
     BREAK_ID_FIELD_NUMBER: _ClassVar[int]
     ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
     POSITION_FIELD_NUMBER: _ClassVar[int]
@@ -4517,6 +4523,7 @@ class Break(_message.Message):
     RESOLUTION_FIELD_NUMBER: _ClassVar[int]
     RECORDED_BY_FIELD_NUMBER: _ClassVar[int]
     LAST_CHANGE_FIELD_NUMBER: _ClassVar[int]
+    UNRESOLVED_IDENTIFIERS_FIELD_NUMBER: _ClassVar[int]
     break_id: str
     account_id: str
     position: PositionKey
@@ -4534,7 +4541,8 @@ class Break(_message.Message):
     resolution: BreakResolution
     recorded_by: Actor
     last_change: JournalRef
-    def __init__(self, break_id: _Optional[str] = ..., account_id: _Optional[str] = ..., position: _Optional[_Union[PositionKey, _Mapping]] = ..., figure: _Optional[_Union[FigureKey, _Mapping]] = ..., category: _Optional[_Union[BreakCategory, str]] = ..., differences: _Optional[_Iterable[_Union[BreakDifference, _Mapping]]] = ..., book_watermark: _Optional[_Union[Watermark, _Mapping]] = ..., street: _Optional[_Union[StreetRecordRef, _Mapping]] = ..., first_seen_date: _Optional[str] = ..., last_seen_date: _Optional[str] = ..., state: _Optional[_Union[BreakState, str]] = ..., candidate_causes: _Optional[_Iterable[_Union[BreakCause, _Mapping]]] = ..., confirmed_cause: _Optional[_Union[BreakCause, _Mapping]] = ..., handling: _Optional[_Union[BreakHandling, _Mapping]] = ..., resolution: _Optional[_Union[BreakResolution, _Mapping]] = ..., recorded_by: _Optional[_Union[Actor, _Mapping]] = ..., last_change: _Optional[_Union[JournalRef, _Mapping]] = ...) -> None: ...
+    unresolved_identifiers: _containers.RepeatedCompositeFieldContainer[Identifier]
+    def __init__(self, break_id: _Optional[str] = ..., account_id: _Optional[str] = ..., position: _Optional[_Union[PositionKey, _Mapping]] = ..., figure: _Optional[_Union[FigureKey, _Mapping]] = ..., category: _Optional[_Union[BreakCategory, str]] = ..., differences: _Optional[_Iterable[_Union[BreakDifference, _Mapping]]] = ..., book_watermark: _Optional[_Union[Watermark, _Mapping]] = ..., street: _Optional[_Union[StreetRecordRef, _Mapping]] = ..., first_seen_date: _Optional[str] = ..., last_seen_date: _Optional[str] = ..., state: _Optional[_Union[BreakState, str]] = ..., candidate_causes: _Optional[_Iterable[_Union[BreakCause, _Mapping]]] = ..., confirmed_cause: _Optional[_Union[BreakCause, _Mapping]] = ..., handling: _Optional[_Union[BreakHandling, _Mapping]] = ..., resolution: _Optional[_Union[BreakResolution, _Mapping]] = ..., recorded_by: _Optional[_Union[Actor, _Mapping]] = ..., last_change: _Optional[_Union[JournalRef, _Mapping]] = ..., unresolved_identifiers: _Optional[_Iterable[_Union[Identifier, _Mapping]]] = ...) -> None: ...
 
 class PositionKey(_message.Message):
     __slots__ = ("instrument_id", "side")
@@ -5321,7 +5329,7 @@ class Charge(_message.Message):
     def __init__(self, charge_id: _Optional[str] = ..., placement_id: _Optional[str] = ..., order_id: _Optional[str] = ..., account_id: _Optional[str] = ..., fee: _Optional[_Union[Fee, _Mapping]] = ..., trade_date: _Optional[str] = ..., settlement_date: _Optional[str] = ..., raw_record: _Optional[_Union[RawRecordRef, _Mapping]] = ...) -> None: ...
 
 class UnplacedFact(_message.Message):
-    __slots__ = ("unplaced_id", "account_id", "fact_kind", "reason", "raw_record", "venue_account_code", "execution", "placement", "charge", "locate", "value_date_roll", "placed_by", "last_change")
+    __slots__ = ("unplaced_id", "account_id", "fact_kind", "reason", "raw_record", "venue_account_code", "execution", "placement", "charge", "locate", "value_date_roll", "give_up", "placed_by", "last_change")
     UNPLACED_ID_FIELD_NUMBER: _ClassVar[int]
     ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
     FACT_KIND_FIELD_NUMBER: _ClassVar[int]
@@ -5333,6 +5341,7 @@ class UnplacedFact(_message.Message):
     CHARGE_FIELD_NUMBER: _ClassVar[int]
     LOCATE_FIELD_NUMBER: _ClassVar[int]
     VALUE_DATE_ROLL_FIELD_NUMBER: _ClassVar[int]
+    GIVE_UP_FIELD_NUMBER: _ClassVar[int]
     PLACED_BY_FIELD_NUMBER: _ClassVar[int]
     LAST_CHANGE_FIELD_NUMBER: _ClassVar[int]
     unplaced_id: str
@@ -5346,9 +5355,10 @@ class UnplacedFact(_message.Message):
     charge: ReportChargeRequest
     locate: RecordLocateRequest
     value_date_roll: ReportValueDateRollRequest
+    give_up: ReportGiveUpRequest
     placed_by: JournalRef
     last_change: JournalRef
-    def __init__(self, unplaced_id: _Optional[str] = ..., account_id: _Optional[str] = ..., fact_kind: _Optional[str] = ..., reason: _Optional[_Union[UnplacedReason, str]] = ..., raw_record: _Optional[_Union[RawRecordRef, _Mapping]] = ..., venue_account_code: _Optional[str] = ..., execution: _Optional[_Union[ReportExecutionRequest, _Mapping]] = ..., placement: _Optional[_Union[ReportPlacementRequest, _Mapping]] = ..., charge: _Optional[_Union[ReportChargeRequest, _Mapping]] = ..., locate: _Optional[_Union[RecordLocateRequest, _Mapping]] = ..., value_date_roll: _Optional[_Union[ReportValueDateRollRequest, _Mapping]] = ..., placed_by: _Optional[_Union[JournalRef, _Mapping]] = ..., last_change: _Optional[_Union[JournalRef, _Mapping]] = ...) -> None: ...
+    def __init__(self, unplaced_id: _Optional[str] = ..., account_id: _Optional[str] = ..., fact_kind: _Optional[str] = ..., reason: _Optional[_Union[UnplacedReason, str]] = ..., raw_record: _Optional[_Union[RawRecordRef, _Mapping]] = ..., venue_account_code: _Optional[str] = ..., execution: _Optional[_Union[ReportExecutionRequest, _Mapping]] = ..., placement: _Optional[_Union[ReportPlacementRequest, _Mapping]] = ..., charge: _Optional[_Union[ReportChargeRequest, _Mapping]] = ..., locate: _Optional[_Union[RecordLocateRequest, _Mapping]] = ..., value_date_roll: _Optional[_Union[ReportValueDateRollRequest, _Mapping]] = ..., give_up: _Optional[_Union[ReportGiveUpRequest, _Mapping]] = ..., placed_by: _Optional[_Union[JournalRef, _Mapping]] = ..., last_change: _Optional[_Union[JournalRef, _Mapping]] = ...) -> None: ...
 
 class ReportExecutionRequest(_message.Message):
     __slots__ = ("placement_id", "order_id", "account_id", "venue_account_code", "venue_execution_id", "kind", "source", "quantity", "price", "trade_time_ns", "trade_date", "finality", "settlement_date", "computed_settlement_date", "settlement_date_basis", "fees", "supersedes", "venue_id", "uti", "prior_uti", "upi", "given_up_to", "trade_chain_reference", "settlement_counterparty", "raw_record", "idempotency_key", "effective_date", "counterparty", "liquidity_indicator", "uti_generated_by", "instrument_id", "side", "venue_order_id", "venue_client_order_id")
@@ -5521,6 +5531,22 @@ class ReportValueDateRollRequest(_message.Message):
     raw_record: RawRecordRef
     idempotency_key: str
     def __init__(self, account_id: _Optional[str] = ..., venue_account_code: _Optional[str] = ..., pair: _Optional[_Iterable[str]] = ..., from_value_date: _Optional[str] = ..., to_value_date: _Optional[str] = ..., value_date_basis: _Optional[_Union[DateBasis, _Mapping]] = ..., rolled_at_ns: _Optional[int] = ..., charge_ids: _Optional[_Iterable[str]] = ..., raw_record: _Optional[_Union[RawRecordRef, _Mapping]] = ..., idempotency_key: _Optional[str] = ...) -> None: ...
+
+class ReportGiveUpRequest(_message.Message):
+    __slots__ = ("execution_id", "allocation_id", "answer", "prime_reference", "reason", "raw_record")
+    EXECUTION_ID_FIELD_NUMBER: _ClassVar[int]
+    ALLOCATION_ID_FIELD_NUMBER: _ClassVar[int]
+    ANSWER_FIELD_NUMBER: _ClassVar[int]
+    PRIME_REFERENCE_FIELD_NUMBER: _ClassVar[int]
+    REASON_FIELD_NUMBER: _ClassVar[int]
+    RAW_RECORD_FIELD_NUMBER: _ClassVar[int]
+    execution_id: str
+    allocation_id: str
+    answer: GiveUpAnswer
+    prime_reference: str
+    reason: str
+    raw_record: RawRecordRef
+    def __init__(self, execution_id: _Optional[str] = ..., allocation_id: _Optional[str] = ..., answer: _Optional[_Union[GiveUpAnswer, str]] = ..., prime_reference: _Optional[str] = ..., reason: _Optional[str] = ..., raw_record: _Optional[_Union[RawRecordRef, _Mapping]] = ...) -> None: ...
 
 class TradingInstruction(_message.Message):
     __slots__ = ("target", "value", "setter_level", "covers", "reason", "entry", "last_change")

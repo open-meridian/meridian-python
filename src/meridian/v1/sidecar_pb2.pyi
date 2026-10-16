@@ -305,18 +305,40 @@ class ToolDeclaration(_message.Message):
     def __init__(self, name: _Optional[str] = ..., title: _Optional[str] = ..., description: _Optional[str] = ..., method: _Optional[str] = ..., path: _Optional[str] = ..., levels: _Optional[_Iterable[_Union[AccessLevel, str]]] = ..., reads: bool = ..., input_schema: _Optional[str] = ..., output_schema: _Optional[str] = ..., roles: _Optional[_Iterable[str]] = ..., checked_by: _Optional[str] = ..., accounts: _Optional[_Iterable[str]] = ..., made_on: _Optional[str] = ...) -> None: ...
 
 class PluginDeclaration(_message.Message):
-    __slots__ = ("secret_settings", "not_carried", "storage", "catalogue", "algorithms")
+    __slots__ = ("secret_settings", "not_carried", "storage", "catalogue", "algorithms", "settings", "interface", "tools", "reads_external_accounts", "documentation", "affirmation_deadline")
     SECRET_SETTINGS_FIELD_NUMBER: _ClassVar[int]
     NOT_CARRIED_FIELD_NUMBER: _ClassVar[int]
     STORAGE_FIELD_NUMBER: _ClassVar[int]
     CATALOGUE_FIELD_NUMBER: _ClassVar[int]
     ALGORITHMS_FIELD_NUMBER: _ClassVar[int]
+    SETTINGS_FIELD_NUMBER: _ClassVar[int]
+    INTERFACE_FIELD_NUMBER: _ClassVar[int]
+    TOOLS_FIELD_NUMBER: _ClassVar[int]
+    READS_EXTERNAL_ACCOUNTS_FIELD_NUMBER: _ClassVar[int]
+    DOCUMENTATION_FIELD_NUMBER: _ClassVar[int]
+    AFFIRMATION_DEADLINE_FIELD_NUMBER: _ClassVar[int]
     secret_settings: _containers.RepeatedScalarFieldContainer[str]
     not_carried: _containers.RepeatedCompositeFieldContainer[NotCarried]
     storage: StorageDeclaration
     catalogue: Catalogue
     algorithms: _containers.RepeatedCompositeFieldContainer[AlgorithmDeclaration]
-    def __init__(self, secret_settings: _Optional[_Iterable[str]] = ..., not_carried: _Optional[_Iterable[_Union[NotCarried, _Mapping]]] = ..., storage: _Optional[_Union[StorageDeclaration, _Mapping]] = ..., catalogue: _Optional[_Union[Catalogue, _Mapping]] = ..., algorithms: _Optional[_Iterable[_Union[AlgorithmDeclaration, _Mapping]]] = ...) -> None: ...
+    settings: _containers.RepeatedCompositeFieldContainer[SettingDeclaration]
+    interface: InterfaceDeclaration
+    tools: _containers.RepeatedCompositeFieldContainer[ToolDeclaration]
+    reads_external_accounts: bool
+    documentation: _containers.RepeatedCompositeFieldContainer[DocumentationSection]
+    affirmation_deadline: int
+    def __init__(self, secret_settings: _Optional[_Iterable[str]] = ..., not_carried: _Optional[_Iterable[_Union[NotCarried, _Mapping]]] = ..., storage: _Optional[_Union[StorageDeclaration, _Mapping]] = ..., catalogue: _Optional[_Union[Catalogue, _Mapping]] = ..., algorithms: _Optional[_Iterable[_Union[AlgorithmDeclaration, _Mapping]]] = ..., settings: _Optional[_Iterable[_Union[SettingDeclaration, _Mapping]]] = ..., interface: _Optional[_Union[InterfaceDeclaration, _Mapping]] = ..., tools: _Optional[_Iterable[_Union[ToolDeclaration, _Mapping]]] = ..., reads_external_accounts: bool = ..., documentation: _Optional[_Iterable[_Union[DocumentationSection, _Mapping]]] = ..., affirmation_deadline: _Optional[int] = ...) -> None: ...
+
+class DocumentationSection(_message.Message):
+    __slots__ = ("name", "digest", "bytes")
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    DIGEST_FIELD_NUMBER: _ClassVar[int]
+    BYTES_FIELD_NUMBER: _ClassVar[int]
+    name: str
+    digest: str
+    bytes: int
+    def __init__(self, name: _Optional[str] = ..., digest: _Optional[str] = ..., bytes: _Optional[int] = ...) -> None: ...
 
 class AlgorithmDeclaration(_message.Message):
     __slots__ = ("algorithm_id", "description")
