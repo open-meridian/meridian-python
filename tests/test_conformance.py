@@ -576,9 +576,16 @@ async def test_the_v16_declaration_and_heartbeat_cases_are_what_the_sdk_sends(
 
     (sent,) = service.registered
     assert sent.schema_version == meridian.SCHEMA_VERSION
-    assert sent.declaration.SerializeToString(deterministic=True) == expected.SerializeToString(
+    # From contract v25 the declaration also carries what registration sends
+    # (its settings among them); the v16 case is the rest of it, byte for byte.
+    v16_part = sidecar_pb2.PluginDeclaration()
+    v16_part.CopyFrom(sent.declaration)
+    for v25 in ("settings", "interface", "tools", "reads_external_accounts", "documentation"):
+        v16_part.ClearField(v25)
+    assert v16_part.SerializeToString(deterministic=True) == expected.SerializeToString(
         deterministic=True
     )
+    assert [held.name for held in sent.declaration.settings] == given["secret_settings"]
     names = [s.name for s in sent.settings if not s.secret]
     assert names == [
         "activity_window_days",
