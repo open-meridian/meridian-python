@@ -356,3 +356,50 @@ def test_a_declaration_replaced_keeps_nothing_read_from_another_folder(tmp_path:
     assert (
         dataclasses.replace(declared, documentation=second)._sections()[0].markdown == "# Two\n"
     )
+
+
+# ── The templates ───────────────────────────────────────────────────────────
+
+ROOT = Path(__file__).resolve().parents[1]
+_SCRIPT = "import sys; from meridian.declaration import main; sys.exit(main(sys.argv[1:]))"
+TEMPLATES = [ROOT / "template", *sorted((ROOT / "templates").iterdir())]
+
+
+@pytest.mark.parametrize("template", TEMPLATES, ids=lambda path: path.name)
+def test_each_template_declares_its_interface_and_documentation(template: Path) -> None:
+    """As `meridian plugin upload` reads it from the built image: from the
+    plugin's root, the declaration pyproject.toml names, printed with its
+    documentation's digests, and the texts beside it."""
+    import subprocess
+    import sys
+    import tomllib
+
+    named = tomllib.loads((template / "pyproject.toml").read_text())["tool"]["meridian"][
+        "declaration"
+    ]
+    sdk = Path(meridian.__file__).resolve().parents[1]
+    env = {"PYTHONPATH": f"{template / 'src'}:{sdk}", "PYTHONDONTWRITEBYTECODE": "1"}
+
+    def printed(*args: str) -> Any:
+        ran = subprocess.run(
+            # As the `meridian-declaration` script runs it.
+            [sys.executable, "-c", _SCRIPT, *args, named],
+            cwd=template,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert ran.returncode == 0, ran.stderr
+        return json.loads(ran.stdout)
+
+    declared = printed()
+    texts = printed("--documentation")
+    assert [held["name"] for held in declared["documentation"]] == list(_SECTIONS)
+    for text, held in zip(texts, declared["documentation"], strict=True):
+        data = text["markdown"].encode()
+        assert held["digest"] == f"sha256:{hashlib.sha256(data).hexdigest()}"
+    assert declared["interface"]["loopback_port"] == 8000
+    main_py = (template / "src" / "reference_plugin" / "__main__.py").read_text()
+    assert "PAGE_PORT" not in main_py, "the port is the declaration's, never the environment's"
+    assert "connect(declaration=DECLARATION)" in main_py

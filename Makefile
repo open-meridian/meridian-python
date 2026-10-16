@@ -159,7 +159,8 @@ base-image:
 ROLE_TEMPLATES := data reporting custody operations
 SHARED := AGENTS.md CLAUDE.md Dockerfile .dockerignore .gitignore \
           .claude/skills/develop-live/SKILL.md .github/workflows/check.yaml \
-          hooks/pre-push
+          hooks/pre-push docs/overview.md docs/setup.md docs/troubleshooting.md \
+          docs/terms.md docs/pages.md
 
 # What a plugin author gets: the template built on the base, as its Dockerfile
 # says. It must hold the base's SDK rather than a second copy -- what it adds
@@ -200,9 +201,12 @@ check-scaffold: base-image
 		docker run --rm --entrypoint python reference-$$role:check -c "import meridian, reference_plugin.__main__" \
 			|| { echo "check-scaffold FAILED: templates/$$role's image does not import the SDK and itself" >&2; exit 1; }; \
 	done
-	@docker run --rm --entrypoint meridian-declaration reference-data:check reference_plugin.declaration:DECLARATION >/dev/null \
-		|| { echo "check-scaffold FAILED: the data template's declaration does not print from its image" >&2; exit 1; }
-	@echo "check-scaffold OK: the template and each role's ($(ROLE_TEMPLATES)) build on plugin-python:$(SDK_VERSION); the template adds only itself, without the agents' files"
+	@for image in reference-plugin $(addprefix reference-,$(ROLE_TEMPLATES)); do \
+		docker run --rm --entrypoint meridian-declaration $$image:check reference_plugin.declaration:DECLARATION >/dev/null \
+			&& docker run --rm --entrypoint meridian-declaration $$image:check --documentation reference_plugin.declaration:DECLARATION >/dev/null \
+			|| { echo "check-scaffold FAILED: $$image's declaration, or its documentation from /plugin/docs, does not print from its image" >&2; exit 1; }; \
+	done
+	@echo "check-scaffold OK: the template and each role's ($(ROLE_TEMPLATES)) build on plugin-python:$(SDK_VERSION); the template adds only itself, without the agents' files; each declaration and its documentation print from its image"
 
 test:
 	@$(DOCKER) build $(CONTEXTS) -f Dockerfile.python --target test . >/dev/null 2>&1 \

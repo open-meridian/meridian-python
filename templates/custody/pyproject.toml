@@ -32,6 +32,6 @@ reference_plugin = ["templates/*.html"]
 roles = ["custody"]
 # Whether it serves a page through its sidecar.
 interface = true
-# Its declaration: its settings. Upload reads it from the built image with
-# `meridian-declaration`.
+# Its declaration: its settings, pages and tools, and its documentation in
+# docs/. Upload reads it from the built image with `meridian-declaration`.
 declaration = "reference_plugin.declaration:DECLARATION"

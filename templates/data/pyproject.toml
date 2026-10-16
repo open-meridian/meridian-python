@@ -32,6 +32,7 @@ reference_plugin = ["templates/*.html"]
 roles = ["data"]
 # Whether it serves a page through its sidecar.
 interface = true
-# Its declaration: the catalogue of datasets it serves the lake (contract
-# v18). Upload reads it from the built image with `meridian-declaration`.
+# Its declaration: its settings, the catalogue of datasets it serves the lake
+# (contract v18), its pages and tools, and its documentation in docs/.
+# Upload reads it from the built image with `meridian-declaration`.
 declaration = "reference_plugin.declaration:DECLARATION"
