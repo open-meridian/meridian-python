@@ -1216,3 +1216,97 @@ def test_a_plugins_own_modules_of_the_same_names_are_left_alone() -> None:
     }
     result = migrate(files, "0.29.0", "0.30.0")
     assert result.files == {} and left_by_hand(result) == []
+
+
+# ── 0.29.0 to 0.30.0: a trading layer onto meridian.roles.connectivity ───
+
+_TRADING = '''"""The connectivity role, in SnapTrade 0.16.0's shape."""
+from typing import Protocol
+from zoneinfo import ZoneInfo
+
+PRICE_PLACES = 6
+MARKET_ZONE = ZoneInfo("Asia/Tokyo")
+
+
+class Venue(Protocol):
+    def accounts(self): ...
+
+
+class Noted: ...
+
+
+class Watched: ...
+
+
+class Trader: ...
+
+
+def trading_files(base): ...
+'''
+
+
+def _traded() -> dict[str, str]:
+    return {
+        "pyproject.toml": '[project]\nname = "br"\n',
+        "src/br/trading.py": _TRADING,
+        "src/br/records.py": "class TradingRead: ...\nclass AccountTrading: ...\n",
+        "tests/trading_cases.py": "class Rig:\n    def make(self):\n        return Trader(1)\n",
+    }
+
+
+def test_a_trading_layer_becomes_a_re_export_of_the_sdks_connectivity(tmp_path: Path) -> None:
+    files = _traded()
+    result = migrate(files, "0.29.0", "0.30.0")
+    assert set(result.files) == {"src/br/trading.py"}
+    files.update(result.files)
+    (tmp_path / "br").mkdir()
+    (tmp_path / "br" / "trading.py").write_text(files["src/br/trading.py"])
+    sys.path.insert(0, str(tmp_path))
+    try:
+        import importlib
+        from datetime import UTC, datetime
+        from decimal import Decimal
+
+        from meridian.roles import connectivity
+        from meridian.suites import Recorder
+
+        trading = importlib.import_module("br.trading")
+        assert trading.Noted is connectivity.Sent and trading.PRICE_PLACES == 6
+        trader = trading.Trader(Recorder("br"), lambda: None, now=lambda: datetime.now(UTC))
+        assert isinstance(trader, connectivity.Trader)
+        assert str(trader.market_zone) == "Asia/Tokyo" and trader.price_places == 6
+        assert trading.fill_price(Decimal(0), None, Decimal(3), Decimal(1)) == (
+            Decimal(1),
+            False,
+        )
+        at = datetime(2026, 9, 29, 16, tzinfo=UTC)
+        assert str(trading.trade_date_of(at)) == "2026-09-30"
+    finally:
+        sys.path.remove(str(tmp_path))
+        for name in [m for m in sys.modules if m == "br" or m.startswith("br.")]:
+            del sys.modules[name]
+    assert [(rule, file) for rule, file, _ in left_by_hand(result)] == [
+        ("trading-page-onto-sdk", "src/br/records.py"),
+        ("trader-re-export-left", "src/br/trading.py"),
+        ("trading-rig-onto-sdk", "tests/trading_cases.py"),
+    ]
+
+
+def test_a_trading_layer_whose_zone_is_not_a_constant_is_left_by_hand() -> None:
+    files = _traded()
+    files["src/br/trading.py"] = _TRADING.replace(
+        'MARKET_ZONE = ZoneInfo("Asia/Tokyo")', "MARKET_ZONE = zone_of_the_venue()"
+    )
+    result = migrate(files, "0.29.0", "0.30.0")
+    assert result.files == {}
+    assert ("trader-by-hand", "src/br/trading.py", 1) in left_by_hand(result)
+
+
+def test_a_plugins_own_trader_is_left_alone() -> None:
+    files = {
+        "src/own/trading.py": "class Trader: ...\nclass Noted: ...\n",
+        "src/own/records.py": "class TradingRead: ...\n",
+        "tests/cases.py": "class Rig:\n    t = Trader(1)\n",
+    }
+    result = migrate(files, "0.29.0", "0.30.0")
+    assert result.files == {} and left_by_hand(result) == []

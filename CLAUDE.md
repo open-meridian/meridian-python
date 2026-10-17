@@ -13,6 +13,16 @@ is a decision made once per plugin, and wrong in a different way each time.
 Plugins live in their own repositories, so this one stays thin. A connector or a
 dashboard belongs beside its own vendor's code, not here.
 
+What it does hold, from 0.30.0, is each role's common logic for the typed
+operations (sdk-contract/the-sdk-carries-each-roles-common-logic, ruled
+2026-10-13): what every plugin of a role must do the same to fulfil them --
+the data role's wants and its kinds' feeds, connectivity's placements sent
+once, outcomes, fills into the book, cancels and replaces -- written and
+tested once here, generic over the venue, under `meridian.roles`. Transport
+stays out: a venue's API client, its conversion, a stream's session and
+socket, and FIX are the plugin's, so a plugin can change how it reaches its
+venue without touching what it does, and nothing is copied between plugins.
+
 The SDK wraps the envelope machinery in dataclasses so a plugin author does not
 handle metadata by hand. Payloads stay generated message types: typed,
 role-specific operations are generated from the function matrix above this

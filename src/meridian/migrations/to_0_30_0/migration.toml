@@ -28,12 +28,22 @@ holds the lake as a test stands it in, the data suite's producers for each
 kind, and PairsChecks and EventContractsChecks, which a plugin runs against
 its own conversion as one test class. meridian.edge.RawStore keeps raw
 records as files, a unit a UTC day, and tends their window.
-meridian.roles.connectivity holds a placement's bookkeeping: Sent and
-place_once (noted before it is sent, never sent twice), resolve_unanswered
-and report_status_not_mapped (an unknown outcome resolved from the venue's
-orders), execution_id, bust_id, fill_price and filled_in_book. The role's
+meridian.roles.connectivity is a package: a placement's bookkeeping (Sent and
+place_once, noted before it is sent and never sent twice; resolve_unanswered
+and report_status_not_mapped, an unknown outcome resolved from the venue's
+orders; execution_id, bust_id, fill_price and filled_in_book), and the role's
+whole work over a venue's adapter (Trader over its Venue protocol: placements
+heard and sent once, what the venue did reported, fills as stated or inferred
+into the book, busts, cancels and replaces, the firm's pauses and stops, the
+catalogue, and fills of orders placed outside the platform kept by Watched;
+its market zone, price places and default currency the plugin's), its
+Trading page (trading_read, TradingRead, meridian/roles/connectivity/
+trading.html), and meridian.roles.connectivity.testing's Rig, which runs a
+plugin's own adapter over its fake broker. A connectivity role template
+joins the others (templates/connectivity). The role's
 Datasets template pages its Wants with the kit's om-pager. A stream's
-session and socket, a venue's client and FIX stay the plugin's.
+session and socket, a venue's client, its conversion and FIX stay the
+plugin's.
 
 `meridian plugin migrate` rewrites each module a plugin copied from its
 sibling -- one saying "The same module in <one> and <other>" -- into a
@@ -44,7 +54,13 @@ stream.py). Left by hand: importing from the SDK directly and deleting those
 modules; the copied page.py and its templates, replaced by the SDK's
 builders and templates; the copied tests, replaced by one class of the SDK's
 checks; the Makefile's suite-same; and a copied stream.py, which is the
-plugin's own transport now.
+plugin's own transport now. A trading layer in SnapTrade 0.16.0's shape
+(trading.py defining Trader, Noted, Venue, Watched and trading_files) is
+rewritten into a re-export of meridian.roles.connectivity, its Trader the
+SDK's in the module's market zone, Noted the SDK's Sent; left by hand:
+constructing the SDK's Trader with market_zone, Sent for Noted, fill_price
+with its places, the Trading page onto trading_read and the SDK's template,
+and the test rig onto testing.Rig.
 """
 breaking = false
 rewrite = "rewrite.py"
@@ -57,6 +73,15 @@ into a re-export of the SDK's names that replace it -- meridian.roles.data, \
 meridian.roles.data.pairs or .event_contracts, meridian.edge.RawStore -- so every import of \
 it still resolves: from 0.30.0 that middle layer is the SDK's, and nothing is copied \
 between plugins"""
+
+[[rewrites]]
+rule = "copied-trader-onto-sdk"
+what = """a connectivity layer the plugin kept in SnapTrade 0.16.0's shape (a module defining \
+Trader, Noted, Venue(Protocol), Watched and trading_files, with MARKET_ZONE a ZoneInfo) \
+rewritten into a re-export of meridian.roles.connectivity: its Trader the SDK's in the \
+module's market zone and price places, Noted the SDK's Sent, fill_price and trade_date_of \
+as it had them, so every import of it still resolves: from 0.30.0 the role's work is the \
+SDK's, and the plugin keeps its venue's client and its adapter"""
 
 [[by_hand]]
 rule = "re-export-left"
@@ -119,3 +144,41 @@ meridian.roles.data.pairs.Streamer, which names no connect; it runs at runtime, 
 type check refuses it"""
 instead = """retarget the stream instead -- feed.stream.retarget(feed.market.stream_address, \
 replayed, feed.market.subscriptions) -- which every Streamer offers"""
+
+[[by_hand]]
+rule = "trader-re-export-left"
+what = """a trading layer the migration rewrote into a re-export of \
+meridian.roles.connectivity: it keeps the plugin working, and is only a forwarding address"""
+instead = """import from meridian.roles.connectivity where the plugin uses it; construct \
+connectivity.Trader(plugin, venue, now=..., sent=..., enabled=..., watched=..., \
+market_zone=ZoneInfo(...)) with the listing market's zone (price_places and \
+default_currency where they differ from 8 and USD); use Sent for Noted, pass the places to \
+fill_price(before, average_before, after, average_after, places); keep MARKET_ZONE beside \
+the code that reads it; and delete the module"""
+
+[[by_hand]]
+rule = "trader-by-hand"
+what = """a trading layer in SnapTrade 0.16.0's shape the migration could not rewrite: its \
+market zone is not a ZoneInfo constant (MARKET_ZONE = ZoneInfo("..."))"""
+instead = """move it onto meridian.roles.connectivity by hand, as trader-re-export-left says, \
+keeping only the venue's adapter (Venue) and its client in the plugin"""
+
+[[by_hand]]
+rule = "trading-page-onto-sdk"
+what = """the Trading page's records (TradingRead, AccountTrading) and its template \
+(templates/trading.html) a trading layer kept: from 0.30.0 the SDK builds them"""
+instead = """answer connectivity.trading_read(trader, [data.Credential(...)], environment, \
+updates) drawn by "meridian/roles/connectivity/trading.html", passing venue= (and \
+updates_label=, updates_none= where updates are streamed); take TradingAsked and \
+TradingEnabled from meridian.roles.connectivity; delete the records, templates/trading.html \
+and its package-data, and extend the SDK's template only for the venue's own notices \
+(blocks vendor_notices, vendor_sections)"""
+
+[[by_hand]]
+rule = "trading-rig-onto-sdk"
+what = """a test rig a trading layer kept (a class Rig constructing the Trader over the \
+suites' recorder): from 0.30.0 the SDK holds it"""
+instead = """subclass meridian.roles.connectivity.testing.Rig, naming instance, code and \
+source and building the plugin's own adapter over its fake broker in connect(broker) (and \
+after_poll where updates are streamed); take placement, asking, order_of, scope, clock and \
+the book's constants from the same module. Fakes only: never a real broker, never a token"""

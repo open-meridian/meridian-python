@@ -222,12 +222,15 @@ and subscribe to comes from the roles `pyproject.toml` declares under
   window. A venue listing pairs, or binary event contracts, takes its whole
   work from `meridian.roles.data.pairs` or `.event_contracts`, and runs
   `meridian.roles.data.testing`'s checks against its own conversion. A
-  connectivity plugin places at most once and resolves an unknown outcome
-  with `meridian.roles.connectivity`. How the plugin reaches its vendor -- its
-  client, its stream, FIX -- stays its own.
+  connectivity plugin takes its whole work from
+  `meridian.roles.connectivity.Trader` -- placements sent once, outcomes,
+  fills into the book, cancels and replaces, pauses and stops -- handing it
+  an adapter over its venue (`Venue`), and tests that adapter on
+  `meridian.roles.connectivity.testing.Rig` over a fake broker. How the
+  plugin reaches its vendor -- its client, its stream, FIX -- stays its own.
 - **Follow the role's common part.** A person who knows a role knows any
   plugin of it: `meridian.roles.<role>` (`data`, `custody`, `operations`,
-  `reporting`) gives each common page's record (`<Page>Read`, the page's
+  `reporting`, `connectivity`) gives each common page's record (`<Page>Read`, the page's
   `answers=`, under the role's tool name), the role's figures in its order
   (`figures(...)`, then the plugin's own), its common settings in their order
   (`meridian.environment()` first where the vendor has more than one, then

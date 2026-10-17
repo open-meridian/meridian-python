@@ -17,11 +17,20 @@ plugin's own tests still pass:
 - dgm.py: its `Dgm` the kind's `Feed` -- a pairs plugin's streaming through
   its own stream.py -- beside the names other modules import from it.
 
-What is recognised is the marker and the module's own definitions, never a
+The connectivity layer Alpaca's and Tradier's plugins each kept (their
+trading.py, in SnapTrade 0.16.0's shape) is recognised by its definitions
+alone -- `class Trader`, `class Noted`, `class Venue(Protocol)`, `class
+Watched` and `def trading_files` in one module -- and rewritten into a
+re-export of `meridian.roles.connectivity`, its market zone and price places
+kept: its `Trader` the SDK's in that zone, `Noted` the SDK's `Sent`, and
+`fill_price` and `trade_date_of` as it had them.
+
+What is recognised is the marker or the module's own definitions, never a
 name alone, so a plugin's own module that shares a file name is left as it
 is. Everything else -- importing from the SDK directly, the copied pages and
-tests, the Makefile's suite-same and a copied stream.py -- is left by hand.
-migration.toml, beside this, records the rules.
+tests, the Makefile's suite-same, a copied stream.py, and the Trading page
+and test rig a trading layer kept -- is left by hand. migration.toml, beside
+this, records the rules.
 """
 
 from __future__ import annotations
@@ -38,14 +47,23 @@ _TEST = re.compile(r"^tests/(test_suite|test_dgm|test_page|test_raw|conftest)\.p
 
 #: What a module this migration rewrote says first.
 _MOVED = "Moved into the SDK (open-meridian 0.30.0)"
+#: What a trading layer this migration rewrote says first.
+_TRADER_MOVED = "Moved into the SDK (open-meridian 0.30.0): the connectivity role's work"
 #: Whether the plugin copied a middle layer, read once from all its files.
 _copied = False
+#: Whether the plugin kept a trading layer, or had it rewritten.
+_traded = False
 
 
 def given(files: dict[str, str]) -> None:
-    global _copied
+    global _copied, _traded
     _copied = any(
-        _SRC.match(path) and (MARKER.search(text) or _MOVED in text)
+        _SRC.match(path)
+        and (MARKER.search(text) or (_MOVED in text and _TRADER_MOVED not in text))
+        for path, text in files.items()
+    )
+    _traded = any(
+        _SRC.match(path) and (_is_trader(text) or _TRADER_MOVED in text)
         for path, text in files.items()
     )
 
@@ -59,12 +77,12 @@ def _constant(text: str, name: str, otherwise: str) -> str:
     return found.group(1).strip() if found else otherwise
 
 
-def _head(what: str) -> str:
+def _head(what: str, rule: str = "re-export-left") -> str:
     """A rewritten module's docstring: where its names went, and what to do."""
     said = (
         f"Moved into the SDK (open-meridian 0.30.0): {what}. This module only forwards to "
         "it, so every import of it still resolves; import from the SDK where it is used, "
-        "then delete this module (`meridian plugin migrate`, re-export-left)."
+        f"then delete this module (`meridian plugin migrate`, {rule})."
     )
     return '"""' + textwrap.fill(said, width=76) + '"""\n\n'
 
@@ -228,11 +246,83 @@ def _map(text: str) -> str | None:
     return None
 
 
+def _is_trader(text: str) -> bool:
+    """A trading layer in SnapTrade 0.16.0's shape, by its own definitions."""
+    return _defines(text, "Trader", "Noted", "Watched", "trading_files") and bool(
+        re.search(r"^class Venue\(Protocol\):", text, re.M)
+    )
+
+
+_ZONE = re.compile(r'^MARKET_ZONE = ZoneInfo\("([^"]+)"\)$', re.M)
+_CONNECTIVITY = (
+    "CANCELLED", "DONE_FOR_DAY", "EXPIRED", "FILLED", "REJECTED", "REPLACED", "SUSPENDED",
+    "WORKING", "Asked", "Catalogue", "Change", "Fill", "Originated", "Sent", "Shown", "Venue",
+    "VenueOrder", "VenueRefused", "VenueUnanswered", "Watched", "Worked", "basis_of", "bust_id",
+    "execution_id", "filled_in_book", "moment", "number", "symbol_of", "trading_files",
+)  # fmt: skip
+
+
+def _trader(text: str) -> str | None:
+    zone = _ZONE.search(text)
+    if zone is None or not _is_trader(text):
+        return None
+    places = _constant(text, "PRICE_PLACES", "8")
+    head = _head(
+        "the connectivity role's work is meridian.roles.connectivity's, its Trader in "
+        "this plugin's market zone",
+        "trader-re-export-left",
+    )
+    return (
+        head
+        + """from __future__ import annotations
+
+from datetime import date, datetime
+from decimal import Decimal
+from typing import Any
+from zoneinfo import ZoneInfo
+
+from meridian.roles import connectivity as _connectivity
+"""
+        + _names("meridian.roles.connectivity", _CONNECTIVITY)
+        + f'''
+#: The places a fill's price worked out from two averages is rounded to.
+PRICE_PLACES = {places}
+#: The listing market's day a fill's trade date is in.
+MARKET_ZONE = ZoneInfo("{zone.group(1)}")
+
+Noted = Sent
+
+
+def fill_price(
+    before: Decimal, average_before: Decimal | None, after: Decimal, average_after: Decimal
+) -> tuple[Decimal, bool]:
+    return _connectivity.fill_price(before, average_before, after, average_after, PRICE_PLACES)
+
+
+def trade_date_of(at: datetime) -> date:
+    return at.astimezone(MARKET_ZONE).date()
+
+
+class Trader(_connectivity.Trader):
+    """meridian.roles.connectivity.Trader, in this plugin's market zone."""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        kwargs.setdefault("market_zone", MARKET_ZONE)
+        kwargs.setdefault("price_places", PRICE_PLACES)
+        super().__init__(*args, **kwargs)
+'''
+    )
+
+
 _REWRITERS = {"market": _market, "raw": _raw, "dgm": _dgm, "products": _map, "contracts": _map}
 
 
 def rewrite(path: str, text: str) -> Rewritten:
     matched = _SRC.match(path)
+    if matched is not None and not MARKER.search(text):
+        traded = _trader(text)
+        if traded is not None:
+            return Rewritten(traded, ("copied-trader-onto-sdk",))
     if matched is None or not MARKER.search(text):
         return Rewritten(text)
     rewriter = _REWRITERS.get(matched.group(1))
@@ -253,10 +343,33 @@ def left(path: str, text: str) -> list[Finding]:
         for number, line in enumerate(text.splitlines(), 1):
             if _CONNECT.search(line):
                 found.append(Finding("stream-connect-assigned", path, number, line.strip()))
-    return found + _copies(path, text)
+    return found + _copies(path, text) + _trading(path, text)
+
+
+#: A trading layer's page records, and the test rig it kept.
+_TRADING_READ = re.compile(r"^class (TradingRead|AccountTrading)\b", re.M)
+_RIG = re.compile(r"^class Rig\b", re.M)
+
+
+def _trading(path: str, text: str) -> list[Finding]:
+    if not _traded or not path.endswith(".py") or _TRADER_MOVED in text:
+        return []
+    if _SRC.match(path) and _is_trader(text):
+        return [Finding("trader-by-hand", path, 1, text.splitlines()[0])]
+    found = _TRADING_READ.search(text)
+    if _SRC.match(path) and found is not None:
+        line = text[: found.start()].count("\n") + 1
+        return [Finding("trading-page-onto-sdk", path, line, text.splitlines()[line - 1])]
+    rig = _RIG.search(text)
+    if path.startswith("tests/") and rig is not None and "Trader(" in text:
+        line = text[: rig.start()].count("\n") + 1
+        return [Finding("trading-rig-onto-sdk", path, line, text.splitlines()[line - 1])]
+    return []
 
 
 def _copies(path: str, text: str) -> list[Finding]:
+    if _TRADER_MOVED in text and path.endswith(".py"):
+        return [Finding("trader-re-export-left", path, 1, text.splitlines()[0])]
     if _MOVED in text and path.endswith(".py"):
         return [Finding("re-export-left", path, 1, text.splitlines()[0])]
     found = MARKER.search(text)

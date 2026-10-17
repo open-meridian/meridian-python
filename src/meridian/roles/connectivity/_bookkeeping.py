@@ -52,8 +52,8 @@ from decimal import ROUND_HALF_EVEN, Decimal
 from pathlib import Path
 from typing import Any, TypeVar
 
-from ..operations import as_decimal
-from ..plugin.v1 import operations_pb2 as ops
+from ...operations import as_decimal
+from ...plugin.v1 import operations_pb2 as ops
 
 __all__ = [
     "Placed",
@@ -171,7 +171,7 @@ async def place_once(
                 code=(refused.code or "?")[:128],
                 text=(refused.text or "the venue refused the order")[:256],
             ),
-            raw_record=plugin.raw_record(refused.raw_key),
+            raw_record=plugin.raw_record(refused.raw_key or "unkept"),
         )
         return Placed("rejected", raw_key=refused.raw_key)
     except VenueUnanswered as lost:
@@ -179,7 +179,7 @@ async def place_once(
             placement_id=placement_id,
             event=ops.PLACEMENT_EVENT_OUTCOME_UNKNOWN,
             unknown_reason=ops.UNKNOWN_REASON_REQUEST_UNANSWERED,
-            raw_record=plugin.raw_record(lost.raw_key),
+            raw_record=plugin.raw_record(lost.raw_key or "unkept"),
         )
         return Placed("unknown", raw_key=lost.raw_key)
     return Placed("placed", answer, raw_key)
@@ -210,7 +210,7 @@ async def report_status_not_mapped(
             code=status[:128] or "?",
             text=status[:256] or "?",
         ),  # fmt: skip
-        raw_record=plugin.raw_record(raw_key),
+        raw_record=plugin.raw_record(raw_key or "unkept"),
     )
 
 

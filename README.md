@@ -1715,14 +1715,40 @@ await plugin.receive(observations_wanted=lambda heard: wants.hear(heard, answer)
   kept before anything is read from them, a unit a UTC day, a live answer a
   line added only when it changed, and the units past the kind's window
   archived, kept or deleted (`store.tend(plugin, window_days, past, today)`).
-- **Connectivity** (`meridian.roles.connectivity`): a placement noted in
-  storage before it is sent and never sent twice (`Sent`, `place_once`, a
-  venue's refusal reported rejected and a send never answered outcome
-  unknown); an unknown outcome resolved from the venue's orders by the tag it
-  was sent with (`resolve_unanswered`), a status not mapped said as reported
-  (`report_status_not_mapped`); a fill's derived ID (`execution_id`,
-  `bust_id`), its price from two averages (`fill_price`) and what the book
-  holds filled (`filled_in_book`).
+- **Connectivity** (`meridian.roles.connectivity`): the role's whole work
+  over a venue's adapter. `Trader` hears each placement naming its instance
+  and places it in the account its `ems` mapped, noted in storage before it
+  is sent and never sent twice (`Sent`, `place_once`); reports what the venue
+  did -- a refusal rejected, a send never answered outcome unknown and
+  resolved from the venue's orders by the tag it was sent with
+  (`resolve_unanswered`), a status not mapped said as reported
+  (`report_status_not_mapped`); reports each fill into the book as the venue
+  stated it or inferred from two averages (`fill_price`, `execution_id`,
+  `filled_in_book`), and a bust (`bust_id`); works cancels and replaces;
+  keeps the firm's pauses and stops; publishes the venue's catalogue; and
+  reports fills of orders placed outside the platform (`Watched`). The
+  plugin hands it a `Venue` -- its client's answers read into `VenueOrder`,
+  a send raising `VenueRefused` or `VenueUnanswered`, each exchange kept as
+  a raw record -- and the listing market's zone (`market_zone=`; price
+  places and the default currency where they differ). Its Trading page is
+  `trading_read`, drawn by `meridian/roles/connectivity/trading.html`, with
+  `TradingAsked` and `TradingEnabled` for "Enable trading".
+  `meridian.roles.connectivity.testing.Rig` runs a plugin's own adapter over
+  its fake broker against the suites' recorder: fakes only, never a real
+  broker or a token.
+
+  ```python
+  trader = connectivity.Trader(
+      plugin, lambda: venue, now=lambda: datetime.now(UTC),
+      sent=connectivity.Sent(sent), enabled=connectivity.Sent(enabled),
+      watched=connectivity.Watched(originated),
+      market_zone=ZoneInfo("America/New_York"),
+  )
+  await trader.run(poll_seconds=lambda: 5.0)
+  ```
+
+- A role template for connectivity (`templates/connectivity`) joins the
+  others: the Trader over a stand-in venue held in memory.
 - The role's Datasets template pages its Wants with the kit's `om-pager`.
 
 ## Moving a plugin to a new release
@@ -1792,7 +1818,7 @@ carries libcst.
 | 0.26.0 to 0.27.0: the SDK declares contract v23, venue-originated fills and the lake's outcomes: a connectivity plugin's fill on no placement (`report_execution`'s `instrument_id`, `side`, `venue_order_id`, `venue_client_order_id`), waiting unmatched (`Execution.state`, `ExecutionState`); the ems's accept and DK (`accept_execution`, `NewOrderFromExecutions`, `dont_know_execution`, `DkReason`) and their refusal codes; a connectivity plugin hearing the executions it reported (`receive(execution_recorded=)`); `VenueCatalogue.execution_acknowledgement`; `list_orders(execution_state=)`; an event contract's outcomes (`record_outcomes`, `Outcome`, `receive(outcomes_recorded=)`, `list_outcomes`); the closed-day flag (`ObservationMeta.closed_day`) and a dataset's closed-day counts; the suites' v23 cases | only the pins move | none |
 | 0.27.0 to 0.28.0: the SDK declares contract v24, an execution booked to its accounts and one ID for every instrument: booking (`book_order`, `Allocation`, `hand_off_booking`, `correct_booking`, `BookingCorrectionKind`, `list_bookings`, `receive(booking_updated=)`, `BookingState`, `ErrorCause`), the allocation instruction amended (`set_allocation_instruction`), the give-up (`report_give_up`, `GiveUpAnswer`), the sleeve cross (`record_sleeve_cross`, `SleeveCross`), the alert (`raise_alert`, `acknowledge_alert`, `list_alerts`, `receive(alert_changed=)`, `AlertKind`, `AlertState`); cash under option (c); a provisional record (`InstrumentRecord.provisional`, `ResolveIdentifierResult.provisional`, `template_id`, `template_version`), the replacement heard by every role and caught up by sequence (`receive(replace_merged_instrument=)`, `list_replacements`, `ReplacementCause`) and followed by `meridian.CurrentIdMap`; the template catalogue (`list_templates`, `read_template`, `meridian.TemplateCatalogue`); `offer_template_fields` and the `reference` suite, in preview; `read_local_record_orders`; every suite's two cases the SDK answers; the suites' resolves answering `INS-suite-n`, and `LCL-suite-n` on `Recorder(provisional=True)`; `DatasetDeclaration.calendar_id`; `meridian.environment()` defaulting to `sandbox` | a record's `instrument_id.startswith("LCL-")` into its `provisional`; the platform's ID read from the `open_meridian` identifier into the record's `instrument_id` (the read's default where the record is provisional); a test's `LCL-suite-n` into `INS-suite-n` | an ID tested for the prefix `LCL-` with no record at hand: read the record's `provisional`; `open_meridian` read or written any other way; a plugin whose environment was Live by default: say `environment(default="live")` only where Live is meant, otherwise its admin chooses |
 | 0.28.0 to 0.29.0: the SDK declares contract v25, plugins shared through registries and carrying their own documentation: the whole declaration (`Declaration(interface=, reads_external_accounts=, documentation=, affirmation_deadline=)`, its settings, interface, tools and documentation by digest), `meridian-declaration --documentation`, registration held to the version uploaded, `connect` refusing an interface its declaration does not name; `record_break(unresolved_identifiers=)`, `resolve_venue(venue_id=)`; the give-up cases marked `about: give-ups`. Breaking: a plugin whose declaration does not carry its interface is refused at registration until it does | a connectivity plugin's `await plugin.read_local_record_orders()` removed, and its test's mapping of `reads-whether-orders-may-name-local-records` | `connect` given an interface, settings or `reads_external_accounts`: declare them in the `Declaration`, the port fixed, and pass `connect(declaration=DECLARATION)`; a `[tool.meridian]` naming no `declaration`: name one, and write `docs/overview.md` and `docs/setup.md`; a Dockerfile whose last stage copies no documentation directory (one installing only the package from a mount): `COPY docs/ docs/`, or the whole context as the templates do (`COPY . .`), since the declaration reads its sections in the built image; a connectivity plugin's read of the escape hatch whose answer it uses: remove it and what depends on it |
-| 0.29.0 to 0.30.0: each role's common logic in the SDK, contract v25 unchanged: `meridian.roles.data` a package -- `Wants` (wants heard and declined by reason, standing wants, rows recorded in the lake's batches and counted, licences, a restart's gap read back once), `Venue`, `unconverted`, `asked`, the venue's reading (`number`, `json_decimal`, `Unread`, `Session`, `Health`, `Limits`, `Endpoint`), `served`, `want_rows`, `WantHeard`, `VenueConnection`; `meridian.roles.data.pairs` and `.event_contracts`, a venue's whole work by what it lists (`Feed`, `ProductMap`, `ContractMap`, their pages and templates); `meridian.roles.data.testing` (`Lake`, the suite's producers, `PairsChecks`, `EventContractsChecks`); `meridian.edge.RawStore`; `meridian.roles.connectivity` (`Sent`, `place_once`, `resolve_unanswered`, `report_status_not_mapped`, `execution_id`, `bust_id`, `fill_price`, `filled_in_book`); the role's Wants paged | a module copied from a sibling plugin (`market.py`, `products.py`, `contracts.py`, `raw.py`, `dgm.py`, saying "The same module in ... and ...") into a re-export of the SDK's names | import from the SDK and delete the re-exports; the copied `page.py` and templates: the kind's builders and templates; the copied tests: one class of the SDK's checks; a copied `stream.py`: the plugin's own transport, handed to the feed; an assignment of a stream's `connect`: `retarget` it; the Makefile's suite-same: removed |
+| 0.29.0 to 0.30.0: each role's common logic in the SDK, contract v25 unchanged: `meridian.roles.data` a package -- `Wants` (wants heard and declined by reason, standing wants, rows recorded in the lake's batches and counted, licences, a restart's gap read back once), `Venue`, `unconverted`, `asked`, the venue's reading (`number`, `json_decimal`, `Unread`, `Session`, `Health`, `Limits`, `Endpoint`), `served`, `want_rows`, `WantHeard`, `VenueConnection`; `meridian.roles.data.pairs` and `.event_contracts`, a venue's whole work by what it lists (`Feed`, `ProductMap`, `ContractMap`, their pages and templates); `meridian.roles.data.testing` (`Lake`, the suite's producers, `PairsChecks`, `EventContractsChecks`); `meridian.edge.RawStore`; `meridian.roles.connectivity` (`Sent`, `place_once`, `resolve_unanswered`, `report_status_not_mapped`, `execution_id`, `bust_id`, `fill_price`, `filled_in_book`, and the role's work: `Trader` over a `Venue`, `Watched`, `trading_read` and its template, `testing.Rig`); a connectivity role template; the role's Wants paged | a module copied from a sibling plugin (`market.py`, `products.py`, `contracts.py`, `raw.py`, `dgm.py`, saying "The same module in ... and ...") into a re-export of the SDK's names; a trading layer in SnapTrade 0.16.0's shape (`trading.py` defining `Trader`, `Noted`, `Venue`, `Watched`, `trading_files`) into a re-export of `meridian.roles.connectivity`, its `Trader` in the module's market zone | import from the SDK and delete the re-exports, constructing `Trader` with `market_zone=` and `Sent` for `Noted`; the Trading page: `trading_read` and the SDK's template; the trading test rig: a subclass of `testing.Rig`; the copied `page.py` and templates: the kind's builders and templates; the copied tests: one class of the SDK's checks; a copied `stream.py`: the plugin's own transport, handed to the feed; an assignment of a stream's `connect`: `retarget` it; the Makefile's suite-same: removed |
 
 `tests/migrations/` holds the plugins the migrations are recorded for, as
 written and as their migration leaves them, and `make check-migrations` holds
