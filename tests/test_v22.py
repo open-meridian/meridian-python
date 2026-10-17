@@ -568,8 +568,9 @@ def test_the_suites_carry_the_rows_v22_adds() -> None:
     }
     # Contract v23 adds connectivity's three venue-originated fills, and the
     # OANDA batch's value-date roll; v24 the two every-role cases, the
-    # give-up and the escape hatch's read, and the oms's booking.
-    assert len(held["connectivity"].cases) == 35
+    # give-up and the escape hatch's read, and the oms's booking; v25 drops
+    # connectivity's escape-hatch read (decision 12, item 118).
+    assert len(held["connectivity"].cases) == 34
     assert len(held["oms"].cases) == 32
     every = {case.name for each in held.values() for case in each.cases}
     assert set(_V22_NAMES) <= every, "each producer answers a published case"

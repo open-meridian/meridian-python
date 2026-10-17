@@ -387,12 +387,19 @@ async def test_the_scaffold_registers_with_a_real_sidecar() -> None:
     first plugin anybody makes is this one. It is installed from the SDK's
     wheel beside it, started as its console script, and must register, say the
     roles and grants the sidecar launched it with, and stop cleanly when told.
+    It runs from the template's own directory, as its image runs it from
+    /plugin: its declaration names its documentation relative to where it
+    runs (`documentation="docs"`), and docs/ is there.
     """
     import asyncio
     import signal
+    from pathlib import Path
 
+    template = Path(__file__).resolve().parents[1] / "template"
+    assert (template / "docs" / "overview.md").is_file(), template
     started = await asyncio.create_subprocess_exec(
         "reference-plugin",
+        cwd=template,
         env={**os.environ, "MERIDIAN_SIDECAR_ADDRESS": address()},
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.STDOUT,

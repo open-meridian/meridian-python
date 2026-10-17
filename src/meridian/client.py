@@ -113,9 +113,13 @@ if TYPE_CHECKING:
 #: its accounts (bookings, the alert, the give-up and the sleeve cross), an
 #: instrument's replacement heard by every role and caught up by sequence,
 #: the template catalogue, a record's provisional mark and the escape
-#: hatch's setting -- and a newer sidecar still admits it. Raised with every
-#: contract revision that adds something a plugin can depend on.
-SCHEMA_VERSION = "v24"
+#: hatch's setting, and from v25 the whole declaration -- its settings,
+#: interface, tools and documentation by digest, held at registration to the
+#: version uploaded -- a break naming the identifiers that did not resolve, a
+#: venue resolved by its ID, and an operations plugin's affirmation deadline
+#: -- and a newer sidecar still admits it. Raised with every contract
+#: revision that adds something a plugin can depend on.
+SCHEMA_VERSION = "v25"
 
 #: Where a sidecar listens. Loopback, always: a sidecar reachable from another
 #: host is a way around the boundary it exists to enforce.
@@ -1812,6 +1816,17 @@ async def connect(
     `settings` may be a class decorated `@meridian.settings`, whose fields
     are then the declaration; `plugin.settings(Config)` delivers instances of
     it.
+
+    From contract v25 the declaration is the whole of what the version says
+    about itself: its interface and whether it reads external accounts too,
+    and a plugin declaring v25 registers exactly the declaration its version
+    was uploaded with, or is refused naming the first difference (W4.1). A
+    declaration's own interface is the one registered where `interface`
+    names none; naming both, they must be the same, pages and tools alike;
+    likewise `reads_external_accounts`. What `connect` names and the
+    declaration does not is registered all the same, and warned of: the
+    upload, which reads the declaration alone, does not carry it, so the
+    sidecar would refuse the difference.
     """
     from ._settings import declared_by
     from .declaration import Declaration as _Declaration
@@ -1819,19 +1834,16 @@ async def connect(
     settings = declared_by(settings)
 
     if declaration is None:
-        declaration = _Declaration(settings=tuple(settings))
-    elif not settings:
-        settings = declared_by(declaration.settings)
-    elif declaration.settings and declared_by(declaration.settings) != tuple(settings):
-        raise ValueError("connect's settings and its declaration's settings differ")
-    else:
         declaration = _Declaration(
             settings=tuple(settings),
-            not_carried=declaration.not_carried,
-            storage=declaration.storage,
-            catalogue=declaration.catalogue,
-            algorithms=declaration.algorithms,
+            interface=interface,
+            reads_external_accounts=reads_external_accounts,
         )
+    else:
+        declaration = _held_to(declaration, settings, interface, reads_external_accounts)
+        settings = declared_by(declaration.settings)
+        interface = declaration.interface
+        reads_external_accounts = declaration.reads_external_accounts
     # From contract v16, the two settings per kind of raw record, which the
     # SDK declares for every edge plugin alike (W4.1, W6.11), and the restore
     # route on its host (the names' choice b).
@@ -2113,6 +2125,68 @@ def _own(
         elif setting.default is not None:
             out[setting.name] = setting.default
     return out
+
+
+def _held_to(
+    declaration: Declaration,
+    settings: Sequence[Setting],
+    interface: Interface | None,
+    reads_external_accounts: bool,
+) -> Declaration:
+    """The declaration `connect` registers: the version's own, with what
+    `connect` names beside it. Refused where the two name different settings
+    or a different interface; warned where `connect` adds what the
+    declaration does not name (contract v25), since the upload carried the
+    declaration alone."""
+    import dataclasses
+    import warnings
+
+    from ._settings import declared_by
+
+    own = declared_by(declaration.settings)
+    if settings and own and own != tuple(settings):
+        raise ValueError("connect's settings and its declaration's settings differ")
+    if (
+        interface is not None
+        and declaration.interface is not None
+        and interface is not declaration.interface
+        and (
+            interface._declared() != declaration.interface._declared()
+            or interface._tools() != declaration.interface._tools()
+        )
+    ):
+        raise ValueError(
+            "connect's interface and its declaration's interface differ: name it once, "
+            "in Declaration(interface=...)"
+        )
+    added = [
+        what
+        for what, adds in (
+            ("settings", bool(settings) and not own),
+            ("interface", interface is not None and declaration.interface is None),
+            (
+                "reads_external_accounts",
+                reads_external_accounts and not declaration.reads_external_accounts,
+            ),
+        )
+        if adds
+    ]
+    if not added:
+        return declaration
+    warnings.warn(
+        f"connect names {', '.join(added)}, which the declaration does not: from contract "
+        "v25 a version registers exactly the declaration it was uploaded with, and the upload "
+        "reads the declaration alone, so the sidecar refuses the difference. Declare them in "
+        "Declaration(...)",
+        UserWarning,
+        stacklevel=3,
+    )
+    return dataclasses.replace(
+        declaration,
+        settings=tuple(settings) if settings and not own else own,
+        interface=declaration.interface if declaration.interface is not None else interface,
+        reads_external_accounts=declaration.reads_external_accounts or reads_external_accounts,
+    )
 
 
 def _edge_roles(settings: Sequence[Setting], interface: Interface | None) -> tuple[str, ...]:

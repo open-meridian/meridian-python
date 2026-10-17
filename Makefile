@@ -65,7 +65,7 @@ contract-diff:
 # PyPI depends on nothing by URL (PyPI refuses that) and a plugin installs one
 # thing. `make vendor-schema` moves the copy to SCHEMA_REV; `check-vendored`
 # fails when the two disagree, as core's check-codegen does for its bindings.
-SCHEMA_REV := a6a0af70a38eae19a12bc551d5aeb8514eb587b4
+SCHEMA_REV := 3983435ba7672df58a61a57644fd59ee070de474
 SCHEMA_REPO := https://github.com/open-meridian/meridian-schema.git
 SCRATCH     := .schema-scratch
 
@@ -110,7 +110,8 @@ DESIGN ?= ../meridian-design
 # pinned here by commit as the schema is pinned in pyproject.toml. Core's own
 # interop gate overrides this with its working tree, so a change to both lands
 # without either waiting on the other's push.
-CORE_REV   := 6eb688749a49ad0bc1f6e3066dabdcc4b038f6fc
+# Core's pushed `v25` (contract v25; open-meridian/meridian-core#46).
+CORE_REV   := 3366e604352eb9b93c03651f493f4f9b29c12c26
 CORE_PROTO ?= https://github.com/open-meridian/meridian-core.git\#$(CORE_REV):proto
 # And meridian-schema's, which core's import, at the revision vendored here.
 SCHEMA_PROTO ?= https://github.com/open-meridian/meridian-schema.git\#$(SCHEMA_REV):proto
@@ -151,7 +152,8 @@ base-image:
 ROLE_TEMPLATES := data reporting custody operations
 SHARED := AGENTS.md CLAUDE.md Dockerfile .dockerignore .gitignore \
           .claude/skills/develop-live/SKILL.md .github/workflows/check.yaml \
-          hooks/pre-push
+          hooks/pre-push docs/overview.md docs/setup.md docs/troubleshooting.md \
+          docs/terms.md docs/pages.md
 
 # What a plugin author gets: the template built on the base, as its Dockerfile
 # says. It must hold the base's SDK rather than a second copy -- what it adds
@@ -192,9 +194,12 @@ check-scaffold: base-image
 		docker run --rm --entrypoint python reference-$$role:check -c "import meridian, reference_plugin.__main__" \
 			|| { echo "check-scaffold FAILED: templates/$$role's image does not import the SDK and itself" >&2; exit 1; }; \
 	done
-	@docker run --rm --entrypoint meridian-declaration reference-data:check reference_plugin.declaration:DECLARATION >/dev/null \
-		|| { echo "check-scaffold FAILED: the data template's declaration does not print from its image" >&2; exit 1; }
-	@echo "check-scaffold OK: the template and each role's ($(ROLE_TEMPLATES)) build on plugin-python:$(SDK_VERSION); the template adds only itself, without the agents' files"
+	@for image in reference-plugin $(addprefix reference-,$(ROLE_TEMPLATES)); do \
+		docker run --rm --entrypoint meridian-declaration $$image:check reference_plugin.declaration:DECLARATION >/dev/null \
+			&& docker run --rm --entrypoint meridian-declaration $$image:check --documentation reference_plugin.declaration:DECLARATION >/dev/null \
+			|| { echo "check-scaffold FAILED: $$image's declaration, or its documentation from /plugin/docs, does not print from its image" >&2; exit 1; }; \
+	done
+	@echo "check-scaffold OK: the template and each role's ($(ROLE_TEMPLATES)) build on plugin-python:$(SDK_VERSION); the template adds only itself, without the agents' files; each declaration and its documentation print from its image"
 
 test:
 	@$(DOCKER) build $(CONTEXTS) -f Dockerfile.python --target test . >/dev/null 2>&1 \

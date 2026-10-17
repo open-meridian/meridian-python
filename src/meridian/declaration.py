@@ -80,17 +80,60 @@ plugin's page:
 `meridian.runs_as(role, algorithm_id="twap-v1")` then names one on every
 call its block makes; one the version does not declare is refused. A
 version declaring none names none.
+
+From contract v25 the declaration is the whole of what a version says about
+itself (W4.1, W8.1; plans/a-plugin-carries-its-own-documentation): beside
+the above, its `interface` -- its pages and the tools their typed routes
+make -- whether it `reads_external_accounts`, and the vendor's
+`documentation`, the plugin's `docs/` folder, each fixed section named by
+its digest and size. An operations plugin also declares its
+`affirmation_deadline`, minutes after midnight in the deployment's time zone
+(W11.34). The upload carries all of it, the texts beside it, and a plugin
+declaring v25 registers exactly the declaration its version was uploaded
+with, or its sidecar refuses it naming the first difference:
+
+    INTERFACE = meridian.Interface(port=8000, title=TITLE, pages=pages)
+    DECLARATION = Declaration(
+        settings=Config,
+        interface=INTERFACE,
+        reads_external_accounts=True,
+        documentation="docs",
+    )
+
+`connect(declaration=DECLARATION)` then registers its interface; one given
+to `connect` as well must be the same. The interface's port is fixed here,
+never read from the environment, since the upload and the registration must
+agree on it; the module naming the declaration imports every module
+declaring a page or a route, so the tools it carries are all of them.
+
+`documentation` names the folder, relative to where the plugin runs: in its
+image, `/plugin`, so `docs` is `/plugin/docs`. Each section is
+`docs/<section>.md` -- `overview`, `setup`, `troubleshooting`, `terms` and
+`pages` -- UTF-8, 1 to 65,536 bytes, the five at most 256 KiB; any other
+file there is the repository's own and is not uploaded. The SDK reads and
+digests them and parses no Markdown: `meridian plugin check` checks them and
+the dashboard renders them. `meridian-declaration --documentation
+module:attribute` prints the texts, which `meridian plugin upload` sends.
+
+The settings the SDK declares for each kind of raw record
+(`<kind>_window_days`, `<kind>_past_window`) are not in the declaration's
+settings: they follow from its storage's kinds, and the past window's
+default from whether the deployment gives the instance an archive, which is
+known only where it runs.
 """
 
 from __future__ import annotations
 
+import hashlib
 import importlib
 import json
+import os
 import re
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from .bounds import (
     ALGORITHM_DECLARATION_DESCRIPTION_LENGTH,
@@ -104,9 +147,11 @@ from .bounds import (
     DATASET_DECLARATION_VENDOR_LENGTH,
     DATASET_LICENCE_DEFAULT_FIELDS_COUNT,
     DATASET_LICENCE_RETENTION_DAYS_RANGE,
+    DOCUMENTATION_SECTION_BYTES_RANGE,
     NOT_CARRIED_NAME_LENGTH,
     NOT_CARRIED_ROLE_LENGTH,
     NOT_CARRIED_SCHEME_LENGTH,
+    PLUGIN_DECLARATION_AFFIRMATION_DEADLINE_RANGE,
     PLUGIN_DECLARATION_NOT_CARRIED_COUNT,
     RAW_RECORD_KIND_LABEL_LENGTH,
     RAW_RECORD_KIND_NAME_LENGTH,
@@ -115,6 +160,9 @@ from .bounds import (
     STORAGE_DECLARATION_RETENTION_DAYS_RANGE,
 )
 from .v1 import sidecar_pb2
+
+if TYPE_CHECKING:
+    from .client import Interface, Setting
 
 #: The roles at the edge, which alone may own storage for their raw records
 #: (decisions/028).
@@ -534,25 +582,136 @@ class AlgorithmDeclaration:
         )
 
 
+#: The vendor's documentation's sections, each `docs/<name>.md`, in the order
+#: a version's declaration names them (W8.1, contract v25): `overview` and
+#: `setup`, which `meridian plugin check` requires; `troubleshooting` and
+#: `terms`, which it prompts for; and `pages`, optional.
+_SECTIONS = ("overview", "setup", "troubleshooting", "terms", "pages")
+
+#: The most bytes the sections hold together (W8.1): the conductor refuses an
+#: upload past it, naming it.
+_DOCUMENTATION_BUNDLE_BYTES = 262_144
+
+
+@dataclass(frozen=True)
+class _Section:
+    """One section of the vendor's documentation, as the version ships it:
+    its fixed name, its text exactly as the file holds it, and the digest and
+    size the declaration names it by."""
+
+    name: str
+    markdown: str
+    digest: str
+    bytes: int
+
+
+def _read_documentation(folder: str | os.PathLike[str]) -> tuple[_Section, ...]:
+    """The sections in `folder`, each file `<section>.md` that is there, in
+    the declaration's order: read and digested, never parsed. Refused,
+    naming the file, where one is not UTF-8 or is empty or past 64 KiB, and
+    where together they pass 256 KiB; a folder that is not there is refused
+    too, naming where it was looked for. Any other file is the repository's
+    own and is left out."""
+    root = Path(folder)
+    if not root.is_dir():
+        raise ValueError(
+            f"documentation names {str(folder)!r}, and there is no folder at "
+            f"{root.absolute()}: it is relative to where the plugin runs (in its image, "
+            "/plugin), the folder holding overview.md, setup.md and the rest"
+        )
+    found: list[_Section] = []
+    total = 0
+    bound = DOCUMENTATION_SECTION_BYTES_RANGE
+    for name in _SECTIONS:
+        path = root / f"{name}.md"
+        if not path.is_file():
+            continue
+        data = path.read_bytes()
+        if not bound.admits(len(data)):
+            raise ValueError(
+                f"{path}: a section is {bound.least:,} to {bound.most:,} bytes, and this is "
+                f"{len(data):,}"
+            )
+        try:
+            text = data.decode("utf-8")
+        except UnicodeDecodeError as failed:
+            raise ValueError(f"{path} is not UTF-8 text: {failed.reason}") from None
+        total += len(data)
+        found.append(
+            _Section(
+                name=name,
+                markdown=text,
+                digest=f"sha256:{hashlib.sha256(data).hexdigest()}",
+                bytes=len(data),
+            )
+        )
+    if total > _DOCUMENTATION_BUNDLE_BYTES:
+        raise ValueError(
+            f"{root}: the sections hold {total:,} bytes together, and the most is "
+            f"{_DOCUMENTATION_BUNDLE_BYTES:,}"
+        )
+    return tuple(found)
+
+
+def _as_json(message: Any) -> dict[str, Any]:
+    """A declaration's message as the upload carries it: protobuf's JSON, the
+    fields by their proto names and each enum by its value's name, as the
+    dashboard reads them (`SETTING_TYPE_CHOICE`, `ACCESS_LEVEL_ADMIN`)."""
+    from google.protobuf import json_format
+
+    return json_format.MessageToDict(message, preserving_proto_field_name=True)
+
+
 @dataclass(frozen=True)
 class Declaration:
     """A version's declaration. `settings` are the ones it declares at
-    registration (`meridian.Setting`), whose secret ones' names it carries,
-    or a class decorated `@meridian.settings` declaring them.
+    registration (`meridian.Setting`), or a class decorated
+    `@meridian.settings` declaring them.
     From contract v18 a data plugin's `catalogue`: the datasets it serves the lake.
     From contract v22 the `algorithms` its autonomous work may name, each
-    identifier once."""
+    identifier once.
+    From contract v25 its `interface` (`meridian.Interface`), whether it
+    `reads_external_accounts`, its `documentation` folder, and an
+    operations plugin's `affirmation_deadline` in minutes after midnight
+    (1 to 1440; 0 declares none)."""
 
     settings: Sequence[Any] | type[Any] = ()
     not_carried: Sequence[NotCarried] = field(default=())
     storage: Storage | None = None
     catalogue: Sequence[DatasetDeclaration] = ()
     algorithms: Sequence[AlgorithmDeclaration] = ()
+    interface: Interface | None = None
+    reads_external_accounts: bool = False
+    documentation: str | os.PathLike[str] | None = None
+    affirmation_deadline: int = 0
+    _read: dict[str, tuple[_Section, ...]] = field(
+        default_factory=dict, init=False, repr=False, compare=False
+    )
 
     def __post_init__(self) -> None:
         from ._settings import declared_by
 
         object.__setattr__(self, "settings", declared_by(self.settings))
+        if self.interface is not None:
+            from .client import Interface as _Interface
+
+            if not isinstance(self.interface, _Interface):
+                raise TypeError(
+                    f"interface is a {type(self.interface).__name__}, not a meridian.Interface"
+                )
+        if not isinstance(self.reads_external_accounts, bool):
+            raise TypeError("reads_external_accounts is True or False")
+        deadline = self.affirmation_deadline
+        bound = PLUGIN_DECLARATION_AFFIRMATION_DEADLINE_RANGE
+        if (
+            isinstance(deadline, bool)
+            or not isinstance(deadline, int)
+            or not bound.admits(deadline)
+        ):
+            raise ValueError(
+                "affirmation_deadline is minutes after midnight in the deployment's time "
+                f"zone, 1 to {bound.most}, or 0 for none; not {deadline!r}"
+            )
         if len(self.not_carried) > PLUGIN_DECLARATION_NOT_CARRIED_COUNT.most:
             raise ValueError(
                 f"at most {PLUGIN_DECLARATION_NOT_CARRIED_COUNT.most} names not carried"
@@ -654,10 +813,52 @@ class Declaration:
                 "a catalogue is declared by a plugin not holding data; "
                 "only a data plugin serves the lake"
             )
+        if self.affirmation_deadline and "operations" not in roles:
+            return (
+                "an affirmation deadline is declared by a plugin not holding operations; "
+                "only an operations plugin affirms its trades (W11.34)"
+            )
         return None
 
+    def _sections(self) -> tuple[_Section, ...]:
+        """The vendor's documentation this version ships (contract v25), read
+        from `documentation` once, where the plugin runs: none where it names
+        no folder."""
+        if self.documentation is None:
+            return ()
+        key = os.fspath(self.documentation)
+        if key not in self._read:
+            self._read[key] = _read_documentation(key)
+        return self._read[key]
+
+    def _interface_wire(self) -> tuple[sidecar_pb2.InterfaceDeclaration | None, list[Any]]:
+        """Its interface and the tools its typed routes make, as registration
+        sends them. The restore route the SDK serves for a kind of raw record
+        (contract v16) is declared on the pages first, as `connect` declares
+        it, so both name the same tools."""
+        if self.interface is None:
+            return None, []
+        from .client import _edge_roles
+        from .pages import Pages as _Pages
+
+        if (
+            self.storage is not None
+            and self.storage.kinds
+            and isinstance(self.interface.pages, _Pages)
+        ):
+            from .edge import _restore_route
+
+            _restore_route(
+                self.interface.pages,
+                _edge_roles(cast("tuple[Setting, ...]", self.settings), self.interface),
+            )
+        return self.interface._declared(), self.interface._tools()
+
     def to_wire(self) -> sidecar_pb2.PluginDeclaration:
-        """As registration carries it."""
+        """As registration carries it: from contract v25 with its settings,
+        interface, tools, whether it reads external accounts, and its
+        documentation's sections by digest."""
+        interface, tools = self._interface_wire()
         return sidecar_pb2.PluginDeclaration(
             secret_settings=self.secret_settings,
             not_carried=[
@@ -691,13 +892,30 @@ class Declaration:
                 else None
             ),
             algorithms=[held._wire() for held in self.algorithms],
+            settings=[setting._declared() for setting in self.settings],
+            interface=interface,
+            tools=tools,
+            reads_external_accounts=self.reads_external_accounts,
+            documentation=[
+                sidecar_pb2.DocumentationSection(
+                    name=section.name, digest=section.digest, bytes=section.bytes
+                )
+                for section in self._sections()
+            ],
+            affirmation_deadline=self.affirmation_deadline,
         )
 
     def to_json(self) -> dict[str, Any]:
         """As an upload carries it, which the dashboard reads (W8.1): a
         catalogue only where one is declared, so a version declaring none
         uploads what it did before v18; and its algorithms only where it
-        declares any (contract v22), likewise."""
+        declares any (contract v22), likewise. From contract v25 its
+        settings, its interface and tools where it declares one, whether it
+        reads external accounts, and each section of its documentation by
+        name, digest and size -- the settings, interface and tools as
+        protobuf's JSON of what registration sends -- and an affirmation
+        deadline where it declares one."""
+        interface, tools = self._interface_wire()
         out: dict[str, Any] = {
             "secret_settings": self.secret_settings,
             "not_carried": [
@@ -718,7 +936,28 @@ class Declaration:
                 {"algorithm_id": held.algorithm_id, "description": held.description}
                 for held in self.algorithms
             ]
+        out["settings"] = [_as_json(setting._declared()) for setting in self.settings]
+        if interface is not None:
+            out["interface"] = _as_json(interface)
+            out["tools"] = [_as_json(tool) for tool in tools]
+        out["reads_external_accounts"] = self.reads_external_accounts
+        out["documentation"] = [
+            {"name": section.name, "digest": section.digest, "bytes": section.bytes}
+            for section in self._sections()
+        ]
+        if self.affirmation_deadline:
+            out["affirmation_deadline"] = self.affirmation_deadline
         return out
+
+    def _texts(self) -> list[dict[str, str]]:
+        """The documentation's texts as the upload carries them beside the
+        declaration (`RecordPluginUploadRequest.documentation`, each a
+        `DocumentationText`): each section's name and its Markdown, exactly as
+        the file holds it, so its digest is the declaration's."""
+        return [
+            {"section": section.name, "markdown": section.markdown}
+            for section in self._sections()
+        ]
 
 
 def load(named: str) -> Declaration:
@@ -734,17 +973,25 @@ def load(named: str) -> Declaration:
 
 def main(argv: Sequence[str] | None = None) -> int:
     """`meridian-declaration module:attribute`: the declaration as JSON, on
-    standard output, for `meridian plugin upload` to send (W8.1)."""
+    standard output, for `meridian plugin upload` to send (W8.1).
+
+    `meridian-declaration --documentation module:attribute` (contract v25):
+    the documentation's texts instead, as JSON, a list of each section's
+    `section` and `markdown`, which the upload sends beside the declaration.
+    Both read the same files, so what is uploaded is what the image holds."""
     args = list(sys.argv[1:] if argv is None else argv)
-    if len(args) != 1:
-        print("usage: meridian-declaration module:attribute", file=sys.stderr)
+    texts = "--documentation" in args
+    named = [arg for arg in args if arg != "--documentation"]
+    if len(named) != 1 or named[0].startswith("-"):
+        print("usage: meridian-declaration [--documentation] module:attribute", file=sys.stderr)
         return 2
     try:
-        declared = load(args[0])
+        declared = load(named[0])
+        printed: Any = declared._texts() if texts else declared.to_json()
     except (ImportError, AttributeError, TypeError, ValueError) as failed:
         print(f"meridian-declaration: {failed}", file=sys.stderr)
         return 1
-    print(json.dumps(declared.to_json(), sort_keys=True))
+    print(json.dumps(printed, sort_keys=True))
     return 0
 
 

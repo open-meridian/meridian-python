@@ -895,26 +895,40 @@
     {
       "name": "meridian.v1.MovementLine.lot_id",
       "type": "text",
-      "empty": "empty on a line opening a lot, whose identifier the book mints, and on cash",
+      "empty": "empty on a line opening a lot, whose identifier the book mints, and on the account's base currency",
       "intent": "identifies a lot",
       "meaning": "minted by the book when a line opens the lot; kept when a merge's move carries it",
       "not_meaning": "a custodian's tax-lot number",
       "filled": "minted",
       "filled_by": "bor",
       "since": "v8",
+      "changes": [
+        {
+          "version": "v25",
+          "kind": "clarified",
+          "what": "empty on the account's base currency, not on cash: from v24 every other currency opens lots with base-currency basis (option (c), W11.13)"
+        }
+      ],
       "stability": "stable",
       "store": "bor"
     },
     {
       "name": "meridian.v1.MovementLine.opens_lot",
       "type": "message LotTerms",
-      "empty": "unset on a line that adds to or relieves a lot, or on cash",
+      "empty": "unset on a line that adds to or relieves a lot, or on the account's base currency",
       "intent": "opens a lot",
       "meaning": "the lot's terms; set on the line that opens it and only there",
       "not_meaning": "a basis adjustment",
       "filled": "as-reported",
       "filled_by": "operations",
       "since": "v8",
+      "changes": [
+        {
+          "version": "v25",
+          "kind": "clarified",
+          "what": "empty on the account's base currency, not on cash: from v24 every other currency opens lots with base-currency basis (option (c), W11.13)"
+        }
+      ],
       "stability": "stable",
       "store": "bor"
     },
@@ -3339,6 +3353,19 @@
       "store": "bor"
     },
     {
+      "name": "meridian.v1.Break.unresolved_identifiers",
+      "type": "repeated message Identifier",
+      "empty": "empty on every break but an unrecognized security's",
+      "intent": "carries an unrecognized security's identifiers on its break (W9.3)",
+      "meaning": "the street row's unresolved_identifiers, scheme and value; an open break of the category is matched on them in any order, with its category and account (contract v25)",
+      "not_meaning": "an instrument the book holds: such a break names none",
+      "filled": "as-reported",
+      "filled_by": "operations",
+      "since": "v25",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
       "name": "meridian.v1.RecordBreakRequest.account_id",
       "type": "identifier account",
       "empty": "never empty on a command or a record; empty on a read is every account in the reader's scope",
@@ -3561,6 +3588,19 @@
       "filled_by": "operations",
       "since": "v8",
       "stability": "stable",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.RecordBreakRequest.unresolved_identifiers",
+      "type": "repeated message Identifier",
+      "empty": "empty on every category but BREAK_CATEGORY_UNRECOGNIZED_SECURITY, where at least one is required",
+      "intent": "names the unrecognized security a break is about (W9.3)",
+      "meaning": "the street row's unresolved_identifiers, as the street recorded them; refused on any other category (contract v25). Until v25 they rode as the break's street-only differences",
+      "not_meaning": "identifiers to resolve: the book resolves nothing here",
+      "filled": "as-reported",
+      "filled_by": "operations",
+      "since": "v25",
+      "stability": "preview",
       "store": "bor"
     },
     {
@@ -9587,6 +9627,19 @@
       "filled": "as-reported",
       "filled_by": "connectivity",
       "since": "v23",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.UnplacedFact.give_up",
+      "type": "message ReportGiveUpRequest",
+      "empty": "unset unless fact_kind is give-up",
+      "intent": "carries a give-up's answer as it arrived (W11.32)",
+      "meaning": "the report whole, naming no execution or allocation the book holds; claimed by the record that later names it (contract v25)",
+      "not_meaning": "an answer the book recorded on an execution, which give_up_answers holds",
+      "filled": "as-reported",
+      "filled_by": "connectivity",
+      "since": "v25",
       "stability": "preview",
       "store": "bor"
     },
@@ -19765,6 +19818,19 @@
       "store": "instrument"
     },
     {
+      "name": "meridian.v1.Identifier.trading_currency",
+      "type": "text",
+      "empty": "empty on every identifier but a listing's, and where the platform's master holds none; empty from a plugin",
+      "intent": "says the currency a listing trades in (W3.1)",
+      "meaning": "on an exchange-level or composite FIGI on a security's record, the ISO 4217 code the listing trades in, as the platform's master holds it per listing (contract v25)",
+      "not_meaning": "the security's currency, which InstrumentRecord.currency says; or a price's currency, which a lake row carries",
+      "filled": "decided",
+      "filled_by": "instrument",
+      "since": "v25",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
       "name": "meridian.v1.InstrumentRecord.instrument_id",
       "type": "identifier instrument",
       "empty": "never empty",
@@ -20845,6 +20911,11 @@
           "version": "v24",
           "kind": "clarified",
           "what": "the record created may be the platform's INS- record (the one-ID spec's requirement 15); minted keeps its meaning, this resolve created the deployment's record"
+        },
+        {
+          "version": "v25",
+          "kind": "clarified",
+          "what": "false for a currency the store pulled from the platform's master: found and not minted (W3.1), as answered since v20"
         }
       ],
       "stability": "stable",
@@ -21301,6 +21372,19 @@
       "filled": "as-reported",
       "filled_by": "data",
       "since": "v18",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.ResolveVenueRequest.venue_id",
+      "type": "identifier venue",
+      "empty": "empty: resolved by identifiers",
+      "intent": "asks for a held venue by its ID (W3.14; D9)",
+      "meaning": "the venue master's VEN- ID, set instead of identifiers; answered with the held venue's record, or a miss where none is held. A request carrying both is refused naming venue_id",
+      "not_meaning": "a MIC, which identifiers carry",
+      "filled": "as-reported",
+      "filled_by": "data",
+      "since": "v25",
       "stability": "preview",
       "store": "instrument"
     },
@@ -32995,6 +33079,165 @@
       "filled": "as-reported",
       "filled_by": "plugin",
       "since": "v22",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.PluginDeclaration.settings",
+      "type": "repeated message SettingDeclaration",
+      "empty": "empty from a version built before v25, or one needing no setting",
+      "intent": "carries every setting the version declares, as registration sends them (W4.1, W8.1)",
+      "meaning": "the same settings RegisterRequest.settings carries; from v25 a plugin's registration must equal them, and the Documentation tab's Reference draws them before launch",
+      "not_meaning": "a value, which the settings stream delivers",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v25",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.PluginDeclaration.interface",
+      "type": "message InterfaceDeclaration",
+      "empty": "unset from a version built before v25, or one serving no interface",
+      "intent": "carries the interface the version declares, as registration sends it (W4.1, W8.1)",
+      "meaning": "the same interface RegisterRequest.interface carries, its pages with their levels and roles; registration from v25 must equal it",
+      "not_meaning": "who may see it, which access levels and grants decide",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v25",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.PluginDeclaration.tools",
+      "type": "repeated message ToolDeclaration",
+      "empty": "empty from a version built before v25, or one declaring no tool",
+      "intent": "carries the tools the version declares, as registration sends them (W4.1, W8.1)",
+      "meaning": "the same tools RegisterRequest.tools carries; registration from v25 must equal them, and the Reference lists each with its levels and roles",
+      "not_meaning": "the tools the sidecar admitted, which its report names",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v25",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.PluginDeclaration.reads_external_accounts",
+      "type": "boolean",
+      "empty": "false from a version built before v25, or one naming no external account",
+      "intent": "says the version names accounts by an external source's identifiers (W4.1, W8.1)",
+      "meaning": "the same as RegisterRequest.reads_external_accounts, which registration from v25 must equal",
+      "not_meaning": "a role: what the plugin may publish is its roles'",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v25",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.PluginDeclaration.documentation",
+      "type": "repeated message DocumentationSection",
+      "bounds": {
+        "count": [
+          0,
+          5
+        ]
+      },
+      "empty": "empty: the vendor wrote no documentation for this version",
+      "intent": "names the vendor's documentation the version ships, each section by its digest (W8.1)",
+      "meaning": "one entry per section in the plugin's docs/, each name once; the texts travel with the upload and the conductor keeps them, refusing an upload whose texts do not match",
+      "not_meaning": "the text itself, which never travels on registration or a heartbeat",
+      "filled": "derived",
+      "filled_by": "plugin",
+      "since": "v25",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.PluginDeclaration.affirmation_deadline",
+      "type": "integer",
+      "unit": "minutes after midnight in the deployment's time zone",
+      "bounds": {
+        "range": {
+          "least": "0",
+          "most": "1440"
+        }
+      },
+      "empty": "0 declares none: a held booking's due_by reads zero",
+      "intent": "declares an operations plugin's affirmation deadline (W11.28, W11.34)",
+      "meaning": "the time of day by which the firm allocates, confirms and affirms its trades, 1 to 1440, 1440 the day's end; a held booking's alert carries the moment it next falls as due_by. Refused on a version not holding operations",
+      "not_meaning": "a settlement date, or a deadline the book enforces: overdue is a reader's comparison against the one clock",
+      "filled": "as-reported",
+      "filled_by": "operations",
+      "since": "v25",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.DocumentationSection.name",
+      "type": "text",
+      "allowed": [
+        {
+          "value": "overview",
+          "meaning": "what the plugin does and for whom; required by meridian plugin check"
+        },
+        {
+          "value": "setup",
+          "meaning": "how to set it up; required by meridian plugin check"
+        },
+        {
+          "value": "troubleshooting",
+          "meaning": "what to do when it goes wrong; prompted"
+        },
+        {
+          "value": "terms",
+          "meaning": "the vendor's terms, or for a plugin calling no vendor the open sample, no warranty and the firm's due diligence; prompted"
+        },
+        {
+          "value": "pages",
+          "meaning": "a sentence per page; optional"
+        }
+      ],
+      "empty": "never empty",
+      "intent": "names one section of the version's documentation",
+      "meaning": "its fixed name, its file docs/<name>.md",
+      "not_meaning": "a heading within the section",
+      "filled": "derived",
+      "filled_by": "plugin",
+      "since": "v25",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.DocumentationSection.digest",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "fixes the section's text to the version by digest",
+      "meaning": "sha256: and the hex digest of the text's UTF-8 bytes, as an image digest is written; the conductor refuses an upload whose text does not match",
+      "not_meaning": "a version of the section: a correction is a new version of the plugin",
+      "filled": "derived",
+      "filled_by": "plugin",
+      "since": "v25",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.DocumentationSection.bytes",
+      "type": "integer",
+      "unit": "bytes",
+      "bounds": {
+        "range": {
+          "least": "1",
+          "most": "65536"
+        }
+      },
+      "empty": "never 0",
+      "intent": "says the section's size",
+      "meaning": "the text's size in UTF-8 bytes, at most 64 KiB, the bundle at most 256 KiB in all",
+      "not_meaning": "a count of characters or words",
+      "filled": "derived",
+      "filled_by": "plugin",
+      "since": "v25",
       "stability": "preview",
       "store": "sidecar"
     },

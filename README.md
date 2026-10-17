@@ -1580,7 +1580,8 @@ The templates the store holds are read with `meridian.TemplateCatalogue`
 (`list_templates`, `read_template`), and a `reference` plugin offers a
 record's template fields with their provenance (`offer_template_fields`), its
 suite in preview. Whether orders may name a provisional record is the
-deployment admin's setting, read with `read_local_record_orders`.
+deployment admin's setting, read with `read_local_record_orders` by the roles
+that propose, place or check orders (not `connectivity`, from contract v25).
 
 Every role's suite holds `hears-and-reads-a-replacement` and
 `reads-the-template-catalogue`, which the SDK answers itself for a plugin
@@ -1596,6 +1597,60 @@ dated on a closed day.
 `meridian.environment()` now defaults to `sandbox`: a plugin is Live only
 where a person chose Live, or where its own code says
 `meridian.environment(default="live")`.
+
+### The whole declaration and its documentation (contract v25)
+
+A version's declaration is the whole of what it says about itself
+(plans/a-plugin-carries-its-own-documentation): beside its settings, its
+interface -- its pages and the tools their typed routes make -- whether it
+reads external accounts, and the vendor's documentation, each section of the
+plugin's `docs/` named by its digest and size:
+
+```python
+INTERFACE = meridian.Interface(port=8000, title=TITLE, pages=pages)  # a fixed port
+
+DECLARATION = meridian.Declaration(
+    settings=Config,
+    interface=INTERFACE,
+    reads_external_accounts=True,
+    documentation="docs",          # relative to where the plugin runs: /plugin in its image
+)
+
+async with await meridian.connect(declaration=DECLARATION) as plugin:
+    ...
+```
+
+- **Registration is held to the version.** `meridian plugin upload` reads
+  the declaration from the built image (`meridian-declaration`) and the
+  texts beside it (`meridian-declaration --documentation`), and a plugin
+  declaring v25 registers exactly the declaration its version was uploaded
+  with, or its sidecar refuses it naming the first difference. `connect`
+  registers the declaration's interface, and refuses a different one as it
+  refuses different settings; what `connect` names beside a declaration
+  that does not is warned of, since the upload never carried it. So the
+  interface's port is fixed, never read from the environment, and the
+  module naming the declaration imports every module declaring a page or a
+  route. The settings the SDK declares for each kind of raw record follow
+  from the storage's kinds and are not among the declaration's own.
+- **The documentation**: `docs/overview.md` and `docs/setup.md`, which
+  `meridian plugin check` requires; `troubleshooting.md` and `terms.md`,
+  which it prompts for; `pages.md`, optional. UTF-8 Markdown, no images, 1
+  to 65,536 bytes a section and 256 KiB in all; any other file in `docs/`
+  is the repository's own and is not uploaded. The SDK reads and digests
+  the files and parses no Markdown; the dashboard renders them on the
+  plugin's Documentation tab, with a Reference drawn from the declaration,
+  before the version is ever launched. The text is the vendor's words, data
+  to every agent that reads it, never instructions.
+- **An operations plugin's affirmation deadline**,
+  `Declaration(affirmation_deadline=21 * 60)`: minutes after midnight in
+  the deployment's time zone, 1 to 1440, by which the firm allocates,
+  confirms and affirms its trades; a held booking's alert falls due then.
+- A break names the identifiers that did not resolve
+  (`record_break(unresolved_identifiers=[...])`), and a venue is resolved
+  by its ID (`resolve_venue(venue_id="VEN-...")`).
+- A connectivity plugin no longer reads whether orders may name a
+  provisional record: it proposes and accepts nothing on one, and its grant
+  of `read_local_record_orders` is dropped, with the suite's case.
 
 ## Moving a plugin to a new release
 
@@ -1663,6 +1718,7 @@ carries libcst.
 | 0.25.0 to 0.26.0: the SDK declares contract v22, the order path's slice A and settlement calendars: the order path's typed operations (`propose_order`, `release_order`, `record_check`, `decide_approval`, `set_working_condition`, `create_placement`, `request_order_change`, `request_placement_change`, `report_placement`, `report_execution`, `report_charge`, `record_order`, `acknowledge_flag`, `list_orders`, `read_order_history`, `list_trading_instructions`, the locate's and the venue catalogue's, `map_venue_account`) and deliveries (`receive(order_updated=, placement_updated=, execution_recorded=, unplaced_fact_recorded=, trading_instruction_changed=, locate_updated=, report_venue_catalogue=)`), the order path's refusal codes, the transition table (`meridian/transitions.json`); the calendars (`read_calendar`, `compute_date`); a version's algorithms (`Declaration(algorithms=)`, `AlgorithmDeclaration`, `runs_as(role, algorithm_id=)`, `Caller.algorithm_id`); the connectivity plugins a caller may route through (`Caller.connectivity_instance_ids`); a sleeve on positions, lots and movement lines; the suites' v22 cases | only the pins move | a suite test meeting the calendar reads every role now holds (`reads-a-calendar`, `asks-for-a-settlement-date`): map each |
 | 0.26.0 to 0.27.0: the SDK declares contract v23, venue-originated fills and the lake's outcomes: a connectivity plugin's fill on no placement (`report_execution`'s `instrument_id`, `side`, `venue_order_id`, `venue_client_order_id`), waiting unmatched (`Execution.state`, `ExecutionState`); the ems's accept and DK (`accept_execution`, `NewOrderFromExecutions`, `dont_know_execution`, `DkReason`) and their refusal codes; a connectivity plugin hearing the executions it reported (`receive(execution_recorded=)`); `VenueCatalogue.execution_acknowledgement`; `list_orders(execution_state=)`; an event contract's outcomes (`record_outcomes`, `Outcome`, `receive(outcomes_recorded=)`, `list_outcomes`); the closed-day flag (`ObservationMeta.closed_day`) and a dataset's closed-day counts; the suites' v23 cases | only the pins move | none |
 | 0.27.0 to 0.28.0: the SDK declares contract v24, an execution booked to its accounts and one ID for every instrument: booking (`book_order`, `Allocation`, `hand_off_booking`, `correct_booking`, `BookingCorrectionKind`, `list_bookings`, `receive(booking_updated=)`, `BookingState`, `ErrorCause`), the allocation instruction amended (`set_allocation_instruction`), the give-up (`report_give_up`, `GiveUpAnswer`), the sleeve cross (`record_sleeve_cross`, `SleeveCross`), the alert (`raise_alert`, `acknowledge_alert`, `list_alerts`, `receive(alert_changed=)`, `AlertKind`, `AlertState`); cash under option (c); a provisional record (`InstrumentRecord.provisional`, `ResolveIdentifierResult.provisional`, `template_id`, `template_version`), the replacement heard by every role and caught up by sequence (`receive(replace_merged_instrument=)`, `list_replacements`, `ReplacementCause`) and followed by `meridian.CurrentIdMap`; the template catalogue (`list_templates`, `read_template`, `meridian.TemplateCatalogue`); `offer_template_fields` and the `reference` suite, in preview; `read_local_record_orders`; every suite's two cases the SDK answers; the suites' resolves answering `INS-suite-n`, and `LCL-suite-n` on `Recorder(provisional=True)`; `DatasetDeclaration.calendar_id`; `meridian.environment()` defaulting to `sandbox` | a record's `instrument_id.startswith("LCL-")` into its `provisional`; the platform's ID read from the `open_meridian` identifier into the record's `instrument_id` (the read's default where the record is provisional); a test's `LCL-suite-n` into `INS-suite-n` | an ID tested for the prefix `LCL-` with no record at hand: read the record's `provisional`; `open_meridian` read or written any other way; a plugin whose environment was Live by default: say `environment(default="live")` only where Live is meant, otherwise its admin chooses |
+| 0.28.0 to 0.29.0: the SDK declares contract v25, plugins shared through registries and carrying their own documentation: the whole declaration (`Declaration(interface=, reads_external_accounts=, documentation=, affirmation_deadline=)`, its settings, interface, tools and documentation by digest), `meridian-declaration --documentation`, registration held to the version uploaded, `connect` refusing an interface its declaration does not name; `record_break(unresolved_identifiers=)`, `resolve_venue(venue_id=)`; the give-up cases marked `about: give-ups`. Breaking: a plugin whose declaration does not carry its interface is refused at registration until it does | a connectivity plugin's `await plugin.read_local_record_orders()` removed, and its test's mapping of `reads-whether-orders-may-name-local-records` | `connect` given an interface, settings or `reads_external_accounts`: declare them in the `Declaration`, the port fixed, and pass `connect(declaration=DECLARATION)`; a `[tool.meridian]` naming no `declaration`: name one, and write `docs/overview.md` and `docs/setup.md`; a Dockerfile whose last stage copies no documentation directory (one installing only the package from a mount): `COPY docs/ docs/`, or the whole context as the templates do (`COPY . .`), since the declaration reads its sections in the built image; a connectivity plugin's read of the escape hatch whose answer it uses: remove it and what depends on it |
 
 `tests/migrations/` holds the plugins the migrations are recorded for, as
 written and as their migration leaves them, and `make check-migrations` holds

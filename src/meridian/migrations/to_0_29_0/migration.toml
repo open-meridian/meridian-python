@@ -1,0 +1,101 @@
+# open-meridian 0.28.0 to 0.29.0: the SDK declares contract v25, plugins are
+# shared through registries and carry their own documentation
+# (sdk-contract/plugins-are-shared-and-documented-contract;
+# plans/a-plugin-carries-its-own-documentation, its names approved
+# 2026-10-10). Registration is held to the version uploaded, so a plugin
+# whose declaration does not carry its interface is refused until it does:
+# breaking, and left by hand where the migration cannot move it. Ruling 118
+# (2026-10-16) dropped connectivity's grant of ReadLocalRecordOrders: the
+# migration removes the read from a plugin holding connectivity and no role
+# that keeps it.
+from = "0.28.0"
+to = "0.29.0"
+summary = """
+The SDK declares contract v25 (meridian.SCHEMA_VERSION). A version's
+declaration is the whole of what it says about itself: beside its settings
+it carries its interface -- its pages and the tools their typed routes make
+-- whether it reads external accounts, and the vendor's documentation, the
+plugin's docs/ folder, each section (overview, setup, troubleshooting, terms,
+pages) named by its digest and size: Declaration(interface=...,
+reads_external_accounts=..., documentation="docs"). The upload carries the
+declaration and the texts (meridian-declaration --documentation), and a
+plugin declaring v25 registers exactly the declaration its version was
+uploaded with, or its sidecar refuses it naming the first difference; connect
+registers the declaration's interface, and refuses a different one. An
+operations plugin declares its affirmation deadline on it
+(Declaration(affirmation_deadline=...), minutes after midnight). A break
+names the identifiers that did not resolve (record_break's
+unresolved_identifiers), and a venue is resolved by its ID
+(resolve_venue(venue_id=...)).
+
+A connectivity plugin no longer reads whether orders may name a local
+record: it proposes and accepts nothing on one, and its grant of the read is
+dropped, with the suite's case.
+
+`meridian plugin migrate` removes a connectivity plugin's read of the escape
+hatch (await plugin.read_local_record_orders()) and its test's mapping of
+the dropped case. Moving connect's interface, settings and
+reads_external_accounts into the declaration, naming the declaration in
+pyproject.toml, and writing docs/ are left by hand; `meridian plugin check`
+then checks the documentation. So is a Dockerfile that copies no docs/ into
+the image -- one installing only the package, from a mount, say: the
+declaration reads its sections in the built image, so meridian-declaration
+and the upload fail without them. Copy it (COPY docs/ docs/), or the whole
+context, as the templates do (COPY . .).
+"""
+breaking = true
+rewrite = "rewrite.py"
+
+[[rewrites]]
+rule = "escape-hatch-read-dropped"
+what = """a connectivity plugin's read of the escape hatch \
+(await plugin.read_local_record_orders()) removed: from contract v25 \
+connectivity's grant of ReadLocalRecordOrders is dropped (ruling 118), since a \
+connectivity plugin proposes and accepts nothing on a record"""
+
+[[rewrites]]
+rule = "escape-hatch-case-dropped"
+what = """a connectivity plugin's test mapping the suite's case \
+reads-whether-orders-may-name-local-records removed: from contract v25 the \
+connectivity suite no longer has it, and the runner refuses a case it does not hold"""
+
+[[by_hand]]
+rule = "escape-hatch-read-kept"
+what = """a connectivity plugin's read of the escape hatch the migration cannot remove \
+alone: its answer used, or the read made inside another expression"""
+instead = """remove the read and what depends on its answer: from contract v25 a \
+connectivity plugin is not granted ReadLocalRecordOrders, and an order on a provisional \
+record is the oms's and the ems's to weigh, never the venue's"""
+
+[[by_hand]]
+rule = "connect-names-the-declaration"
+what = """connect given an interface, settings or reads_external_accounts: from \
+contract v25 a version registers exactly the declaration it was uploaded with, and the \
+upload reads the declaration alone, so what connect names beside it is a difference its \
+sidecar refuses"""
+instead = """name them in the version's declaration -- \
+Declaration(settings=Config, interface=meridian.Interface(port=8000, title=..., \
+pages=pages), reads_external_accounts=True, documentation="docs") -- with the \
+interface's port fixed rather than read from the environment, in a module importing \
+every module that declares a page or a route, and pass connect(declaration=DECLARATION)"""
+
+[[by_hand]]
+rule = "declaration-not-named"
+what = """pyproject.toml's [tool.meridian] names no declaration: from contract v25 \
+the upload carries the version's whole declaration and its documentation, read from \
+the built image, and registration is held to it"""
+instead = """add declaration = "<module>:DECLARATION" under [tool.meridian], naming a \
+meridian.Declaration carrying the settings, the interface and \
+documentation="docs", and write docs/overview.md and docs/setup.md (troubleshooting.md \
+and terms.md are prompted, pages.md optional); meridian plugin check checks them"""
+
+[[by_hand]]
+rule = "docs-not-in-image"
+what = """the Dockerfile's last stage copies no documentation directory into the \
+image -- the one the declaration names (documentation="..."), or docs when none \
+names one yet: from contract v25 the declaration reads its sections where it runs, \
+in the built image, so meridian-declaration, and the upload with it, fail without \
+them, as in an image installing only the package from a mount"""
+instead = """copy the directory into the image beside the package, in the last stage \
+-- COPY docs/ docs/ under WORKDIR /plugin -- or the whole build context, as the \
+templates do (COPY . .)"""

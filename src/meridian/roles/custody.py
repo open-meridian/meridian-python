@@ -111,11 +111,14 @@ class ConnectionsRead:
 @dataclass(frozen=True)
 class ExternalAccountRead:
     """One external account the plugin reports, as the kit's account map
-    takes it."""
+    takes it: from SDK 0.29.0 with the source's own type for it
+    (`account_type`), as the custodian names it -- "Margin", "Roth IRA" --
+    which the map shows beside its name, so a person links the right one."""
 
     external_account_id: str
     name: str = ""
     detail: str = ""
+    account_type: str = ""
 
 
 @dataclass(frozen=True)

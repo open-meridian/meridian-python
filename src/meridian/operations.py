@@ -2422,6 +2422,7 @@ class Operations:
         business_date: date | str = "",
         candidate_causes: Sequence[BreakCause] = (),
         idempotency_key: str = "",
+        unresolved_identifiers: Sequence[ops.Identifier] = (),
         acting_for: str | None = None,
     ) -> ops.RecordBreakResult:
         """W9.4: W9.4. A new break, or an open one brought up to date (stable)."""
@@ -2436,6 +2437,7 @@ class Operations:
             business_date=_date(business_date, "business_date"),
             candidate_causes=[_break_cause(each, f"candidate_causes[{i}]") for i, each in enumerate(candidate_causes)],
             idempotency_key=idempotency_key,
+            unresolved_identifiers=list(unresolved_identifiers),
             acting_for=_assertion(acting_for),
         )
         return await self._operate(self._operations().RecordBreak, params)
@@ -3473,11 +3475,13 @@ class Operations:
         *,
         identifiers: Sequence[ops.Identifier] = (),
         as_of_ns: int = 0,
+        venue_id: str = "",
     ) -> ops.ResolveVenueResult:
         """W3.14: W3.14: which venue a set of identifiers names on a date, in the venues the (preview)."""
         params = ops.ResolveVenueParams(
             identifiers=list(identifiers),
             as_of_ns=as_of_ns,
+            venue_id=venue_id,
         )
         return await self._operate(self._operations().ResolveVenue, params)
 

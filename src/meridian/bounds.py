@@ -567,6 +567,17 @@ CALL_AS_SERVICE_ACCOUNT_REPLY_ANSWER_JSON_LENGTH = Length(least=0, most=1048576)
 """meridian.v1.CallAsServiceAccountReply.answer_json: carries the act's own
 answer"""
 
+PLUGIN_DECLARATION_DOCUMENTATION_COUNT = Count(least=0, most=5)
+"""meridian.v1.PluginDeclaration.documentation: names the vendor's
+documentation the version ships, each section by its digest (W8.1)"""
+
+PLUGIN_DECLARATION_AFFIRMATION_DEADLINE_RANGE = Range(least=0, most=1440, capped=False)
+"""meridian.v1.PluginDeclaration.affirmation_deadline: declares an operations
+plugin's affirmation deadline (W11.28, W11.34)"""
+
+DOCUMENTATION_SECTION_BYTES_RANGE = Range(least=1, most=65536, capped=False)
+"""meridian.v1.DocumentationSection.bytes: says the section's size"""
+
 ALGORITHM_DECLARATION_DESCRIPTION_LENGTH = Length(least=1, most=1024)
 """meridian.v1.AlgorithmDeclaration.description: says what the algorithm is,
 for a person reading the plugin's page"""

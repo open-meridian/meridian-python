@@ -40,7 +40,7 @@
 <table class="one-line"><thead><tr><th>External account</th><th>Linked to</th></tr></thead><tbody>
 {% for account in data.external_accounts %}
 {% set link = data.links|selectattr("external_account_id", "equalto", account.external_account_id)|first %}
-<tr><td><strong>{{ account.name or account.external_account_id }}</strong>{% if account.detail %} <span class="hint">{{ account.detail }}</span>{% endif %}</td><td>{{ link.account_name if link else "Not linked" }}</td></tr>
+<tr><td><strong>{{ account.name or account.external_account_id }}</strong>{% if account.detail or account.account_type %} <span class="hint">{{ [account.detail, account.account_type]|select|join(", ") }}</span>{% endif %}</td><td>{{ link.account_name if link else "Not linked" }}</td></tr>
 {% endfor %}
 </tbody></table>
 {% endblock %}

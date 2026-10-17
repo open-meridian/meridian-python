@@ -247,7 +247,15 @@ template catalogue (`list_templates`, `read_template`,
 (`offer_template_fields`, each a `TemplateFieldValue` with its provenance).
 Whether orders may name a provisional record is the deployment admin's
 setting, read by the roles that propose, place or check them
-(`read_local_record_orders`).
+(`read_local_record_orders`; not `connectivity`, from contract v25).
+
+From contract v25 a version's declaration is the whole of what it says
+about itself: its settings, its interface and tools, whether it reads
+external accounts, and the vendor's documentation by digest
+(`Declaration(interface=..., reads_external_accounts=...,
+documentation="docs")`); a plugin registers exactly the declaration its
+version was uploaded with. An operations plugin declares its affirmation
+deadline (`Declaration(affirmation_deadline=...)`).
 
 `meridian.environment()` defaults to the vendor's sandbox: Live is a
 plugin's only when its code says so (`environment(default="live")`), and

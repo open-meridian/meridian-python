@@ -96,6 +96,21 @@ def test_the_declaration_prints_as_json_for_the_upload(
         "not_carried": [],
         "secret_settings": ["consumer_key"],
         "storage": {"retention_days": 30},
+        # From contract v25 the whole declaration (W8.1): every setting as
+        # protobuf's JSON of what registration sends, whether it reads
+        # external accounts, and its documentation's sections (none here).
+        "settings": [
+            {
+                "name": "consumer_key",
+                "type": "SETTING_TYPE_STRING",
+                "required": True,
+                "secret": True,
+                "label": "Consumer key",
+            },
+            {"name": "region", "type": "SETTING_TYPE_STRING", "label": "Region"},
+        ],
+        "reads_external_accounts": False,
+        "documentation": [],
     }
     assert main(["tests.test_edge:SETTINGS"]) == 1
     assert main([]) == 2

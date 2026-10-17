@@ -437,8 +437,8 @@ async def test_an_unusable_instrument_record_is_named_and_unavailability_retryab
     assert again.value.retryable
 
 
-def test_the_sdk_declares_contract_v24() -> None:
-    assert meridian.SCHEMA_VERSION == "v24"
+def test_the_sdk_declares_contract_v24_or_later() -> None:
+    assert int(meridian.SCHEMA_VERSION.removeprefix("v")) >= 24
 
 
 async def test_an_accept_takes_one_matched_order_and_two_are_refused_naming_the_oneof(

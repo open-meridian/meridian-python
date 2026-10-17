@@ -32,11 +32,16 @@ SDK = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]["version"]
 
 
 def plugin_files(root: Path) -> dict[str, str]:
-    """What `meridian plugin migrate` sends: the Python and pyproject.toml."""
+    """What `meridian plugin migrate` sends: the Python, pyproject.toml and
+    the Dockerfile."""
     return {
         path.relative_to(root).as_posix(): path.read_text()
         for path in sorted(root.rglob("*"))
-        if path.is_file() and (path.suffix == ".py" or path.name == "pyproject.toml")
+        if path.is_file()
+        and (
+            path.suffix == ".py"
+            or path.relative_to(root).as_posix() in ("pyproject.toml", "Dockerfile")
+        )
     }
 
 
@@ -95,7 +100,7 @@ def test_every_release_since_the_first_recorded_has_its_step() -> None:
         ("0.6.0", "0.6.1"),
         ("0.6.1", "0.7.0"),
     ]
-    assert (steps[-1].source, steps[-1].target) == ("0.27.0", "0.28.0")
+    assert (steps[-1].source, steps[-1].target) == ("0.28.0", "0.29.0")
     # A release that moves the version records its step, if only the pins.
     assert steps[-1].target == SDK
 
@@ -184,9 +189,25 @@ def test_snaptrade_passes_its_own_tests_once_migrated(tmp_path: Path) -> None:
     ("fixture", "by_hand"),
     [
         # desk opens an empty statement naming no external account, which a
-        # sidecar at v7 refuses (0.11.0 to 0.12.0).
-        ("desk-0.7.0", [("statement-external-account", "src/desk/page.py", 77)]),
-        ("snaptrade-0.7.0", []),
+        # sidecar at v7 refuses (0.11.0 to 0.12.0). From 0.29.0 (contract
+        # v25) a version's declaration carries its interface, and each must
+        # name one in pyproject.toml; snaptrade's image, installing only the
+        # package from a mount, holds no docs/ for its declaration to read.
+        (
+            "desk-0.7.0",
+            [
+                ("statement-external-account", "src/desk/page.py", 77),
+                ("declaration-not-named", "pyproject.toml", 18),
+                ("connect-names-the-declaration", "src/desk/__main__.py", 22),
+            ],
+        ),
+        (
+            "snaptrade-0.7.0",
+            [
+                ("docs-not-in-image", "Dockerfile", 5),
+                ("declaration-not-named", "pyproject.toml", 24),
+            ],
+        ),
     ],
 )
 def test_the_recorded_plugins_are_as_the_later_steps_leave_them(
@@ -892,3 +913,190 @@ def test_a_file_not_using_the_sdk_keeps_its_prefix_tests() -> None:
     result = one(text, "0.27.0", "0.28.0")
     assert result.files == {}
     assert left_by_hand(result) == []
+
+
+# ── 0.28.0 to 0.29.0: the whole declaration; connectivity's read dropped ──
+
+CONNECTIVITY = """\
+[project]
+name = "venue"
+dependencies = ["open-meridian==0.28.0"]
+
+[tool.meridian]
+roles = ["connectivity"]
+interface = true
+declaration = "venue.declaration:DECLARATION"
+"""
+
+
+def test_a_connectivity_plugins_escape_hatch_read_and_case_are_removed() -> None:
+    files = {
+        "pyproject.toml": CONNECTIVITY,
+        "src/venue/route.py": textwrap.dedent(
+            """\
+            import meridian
+
+            async def before_placing(plugin: meridian.Plugin) -> None:
+                await plugin.read_local_record_orders()
+
+            async def on_start(plugin: meridian.Plugin) -> None:
+                await plugin.read_local_record_orders()
+                await plugin.report(healthy=True, detail="started")
+            """
+        ),
+        "tests/test_suite.py": textwrap.dedent(
+            """\
+            from meridian.suites import run
+
+            async def reads(recorder):
+                await recorder.read_local_record_orders()
+
+            def test_suite():
+                assert run(
+                    "connectivity",
+                    {
+                        "acknowledges-a-placement-naming-it": reads,
+                        "reads-whether-orders-may-name-local-records": reads,
+                    },
+                ).passed
+            """
+        ),
+    }
+    result = migrate(files, "0.28.0", "0.29.0")
+    route = result.files["src/venue/route.py"]
+    assert "read_local_record_orders" not in route
+    assert "async def before_placing(plugin: meridian.Plugin) -> None:\n    pass\n" in route
+    assert 'await plugin.report(healthy=True, detail="started")' in route
+    test = result.files["tests/test_suite.py"]
+    assert "reads-whether-orders-may-name-local-records" not in test
+    assert '"acknowledges-a-placement-naming-it": reads,' in test
+    (step,) = result.steps
+    assert step.rewrote == {
+        "src/venue/route.py": {"escape-hatch-read-dropped": 2},
+        "tests/test_suite.py": {"escape-hatch-read-dropped": 1, "escape-hatch-case-dropped": 1},
+    }
+    assert left_by_hand(result) == []
+    compile(route, "route.py", "exec")
+    compile(test, "test_suite.py", "exec")
+
+
+def test_a_read_whose_answer_is_used_is_left_by_hand() -> None:
+    files = {
+        "pyproject.toml": CONNECTIVITY,
+        "src/venue/route.py": textwrap.dedent(
+            """\
+            import meridian
+
+            async def allowed(plugin: meridian.Plugin) -> bool:
+                held = await plugin.read_local_record_orders()
+                return held.allowed
+            """
+        ),
+    }
+    result = migrate(files, "0.28.0", "0.29.0")
+    assert result.files == {}
+    assert left_by_hand(result) == [("escape-hatch-read-kept", "src/venue/route.py", 4)]
+
+
+def test_a_role_that_keeps_the_read_keeps_it() -> None:
+    for roles in ('["oms"]', '["connectivity", "ems"]', "[]"):
+        files = {
+            "pyproject.toml": CONNECTIVITY.replace('["connectivity"]', roles),
+            "src/venue/route.py": "import meridian\n\n\nasync def f(plugin):\n"
+            "    await plugin.read_local_record_orders()\n",
+        }
+        result = migrate(files, "0.28.0", "0.29.0")
+        assert result.files == {}, roles
+        assert left_by_hand(result) == [], roles
+
+
+def test_what_connect_names_beside_the_declaration_is_left_by_hand() -> None:
+    files = {
+        "pyproject.toml": CONNECTIVITY.replace(
+            'declaration = "venue.declaration:DECLARATION"\n', ""
+        ),
+        "src/venue/__main__.py": textwrap.dedent(
+            """\
+            import meridian
+
+            async def run() -> None:
+                async with await meridian.connect(
+                    interface=meridian.Interface(port=8000, title="Venue"),
+                    reads_external_accounts=True,
+                ) as plugin:
+                    pass
+
+            async def again() -> None:
+                async with await meridian.connect(declaration=None) as plugin:
+                    pass
+            """
+        ),
+    }
+    result = migrate(files, "0.28.0", "0.29.0")
+    assert result.files == {}
+    assert left_by_hand(result) == [
+        ("declaration-not-named", "pyproject.toml", 5),
+        ("connect-names-the-declaration", "src/venue/__main__.py", 4),
+    ]
+    (step,) = result.steps
+    assert step.migration.breaking
+
+
+MOUNTED = """\
+ARG BASE=ghcr.io/open-meridian/plugin-python:0.29.0
+FROM ${BASE}
+WORKDIR /plugin
+# Installed from a mount rather than copied.
+RUN --mount=type=bind,target=/tmp/src,rw pip install --no-cache-dir /tmp/src
+USER 65532
+CMD ["venue"]
+"""
+
+
+def _declared(documentation: str | None) -> str:
+    named = f", documentation={documentation!r}" if documentation is not None else ""
+    return f"import meridian\n\nDECLARATION = meridian.Declaration(settings=None{named})\n"
+
+
+@pytest.mark.parametrize(
+    ("dockerfile", "documentation", "left"),
+    [
+        # The plugin agent's finding (2026-10-16): all 13 first-party plugins
+        # installed only the package, so their images held no docs/.
+        (MOUNTED, "docs", True),
+        (MOUNTED, None, True),
+        (MOUNTED.replace("USER", "COPY docs/ docs/\nUSER"), "docs", False),
+        (MOUNTED.replace("USER", "COPY ./docs ./docs\nUSER"), "./docs/", False),
+        (MOUNTED.replace("USER", 'COPY ["docs", "docs/"]\nUSER'), None, False),
+        (MOUNTED.replace("USER", "COPY --chown=65532 . .\nUSER"), "docs", False),
+        (MOUNTED.replace("USER", "COPY src \\\n     docs/ ./\nUSER"), "docs", False),
+        (MOUNTED.replace("USER", "COPY docs/ docs/\nUSER"), "manual", True),
+        (MOUNTED.replace("USER", "COPY manual/ manual/\nUSER"), "manual", False),
+        (MOUNTED.replace("USER", "COPY share/ share/\nUSER"), "share/docs", False),
+        # A copy in an earlier stage is not the image's.
+        ("FROM python AS build\nCOPY . .\n" + MOUNTED, "docs", True),
+        # A copy from another stage may carry it; what that stage holds is
+        # not read here.
+        (MOUNTED.replace("USER", "COPY --from=build /plugin /plugin\nUSER"), "docs", False),
+    ],
+)
+def test_a_dockerfile_copying_no_documentation_is_left_by_hand(
+    dockerfile: str, documentation: str | None, left: bool
+) -> None:
+    files = {
+        "pyproject.toml": CONNECTIVITY,
+        "Dockerfile": dockerfile,
+        "src/venue/declaration.py": _declared(documentation),
+    }
+    result = migrate(files, "0.28.0", "0.29.0")
+    assert result.files == {}
+    stage = dockerfile.splitlines().index("FROM ${BASE}") + 1
+    assert left_by_hand(result) == (
+        [("docs-not-in-image", "Dockerfile", stage)] if left else []
+    )
+
+
+def test_a_plugin_sending_no_dockerfile_is_not_held_to_one() -> None:
+    # A meridian before 0.1.46 sends the Python and pyproject.toml alone.
+    files = {"pyproject.toml": CONNECTIVITY, "src/venue/declaration.py": _declared("docs")}
+    assert left_by_hand(migrate(files, "0.28.0", "0.29.0")) == []
