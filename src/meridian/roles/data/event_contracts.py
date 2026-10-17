@@ -84,7 +84,8 @@ from ...plugin.v1 import operations_pb2 as ops
 from . import figures as role_figures
 from ._pages import connection_fields, connection_figure, served, want_rows
 from ._reading import NANOS_PER_SECOND, Session, Unread, iso_time, utc_day
-from ._records import DatasetsRead, VenueConnection
+from ._records import DatasetsRead as RoleDatasetsRead
+from ._records import VenueConnection
 from ._wants import Counts, Heard, Standing, Venue, Wants, asked, same, unconverted
 
 __all__ = [
@@ -98,10 +99,10 @@ __all__ = [
     "PAYOUT_DIFFERS",
     "PROPOSED",
     "Cash",
-    "Connection",
+    "ConnectionRead",
     "Contract",
     "ContractMap",
-    "Datasets",
+    "DatasetsRead",
     "Feed",
     "Mapped",
     "Market",
@@ -1079,7 +1080,7 @@ def _grouped(wants: Iterable[Standing]) -> list[tuple[str, tuple[int, ...], list
 
 
 @dataclass(frozen=True)
-class Connection(VenueConnection):
+class ConnectionRead(VenueConnection):
     """The role's Connection for an event-contract venue: the venue's part
     (`VenueConnection`). It reads each contract when it is wanted and keeps
     no stream open, so "Stream" says "Does not stream"."""
@@ -1094,7 +1095,7 @@ class NotServed:
 
 
 @dataclass(frozen=True)
-class Datasets(DatasetsRead):
+class DatasetsRead(RoleDatasetsRead):
     """The role's Datasets for an event-contract venue, and the venue's
     contract map, cash and payouts: wants kept current, contracts read and
     mapped, subjects named and not served by why, the cash and the record
@@ -1119,12 +1120,16 @@ class Datasets(DatasetsRead):
     not_read: int = 0
 
 
-def connection_read(feed: Feed | None, venue_name: str, entitled_at_vendor: str) -> Connection:
+def connection_read(
+    feed: Feed | None, venue_name: str, entitled_at_vendor: str
+) -> ConnectionRead:
     """Connection's record (`read_connection`), drawn by the template
     `meridian/roles/data/event_contracts/connection.html`."""
     if feed is None:
-        return Connection(mode="Live", entitled_at_vendor=entitled_at_vendor, venue=venue_name)
-    return Connection(
+        return ConnectionRead(
+            mode="Live", entitled_at_vendor=entitled_at_vendor, venue=venue_name
+        )
+    return ConnectionRead(
         **connection_fields(
             feed.market.session, feed.market.name, feed.venue, entitled_at_vendor
         ),
@@ -1139,13 +1144,13 @@ def datasets_read(
     instance: str,
     entitled_at_vendor: str,
     vendor_note: str = "",
-) -> Datasets:
+) -> DatasetsRead:
     """Datasets' record (`read_datasets`), drawn by the template
     `meridian/roles/data/event_contracts/datasets.html`; `instance` names the
     datasets before the plugin has started, and `vendor_note` says in the
     venue's words how its sides make a contract."""
     if feed is None:
-        return Datasets(
+        return DatasetsRead(
             served=served(catalogue, instance, None, entitled_at_vendor),
             vendor_note=vendor_note,
         )
@@ -1157,7 +1162,7 @@ def datasets_read(
     payouts = sorted(
         {f"{m.contract.payout} {cash.code}" for m in mapped if m.contract.payout is not None}
     )
-    return Datasets(
+    return DatasetsRead(
         served=served(
             catalogue, feed.plugin.identity.instance_id, feed.wants, entitled_at_vendor
         ),

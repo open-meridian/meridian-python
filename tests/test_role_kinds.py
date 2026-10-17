@@ -202,7 +202,7 @@ def _pairs_pages(feed: pairs.Feed | None) -> meridian.Pages:
     pages = meridian.Pages("Fake Exchange", kit="0.12.0")
 
     @pages.page(
-        "/", "Connection", levels="admin", answers=pairs.Connection, name="read_connection"
+        "/", "Connection", levels="admin", answers=pairs.ConnectionRead, name="read_connection"
     )
     def connection(request: meridian.Request) -> meridian.Response:
         return pages.answer(
@@ -211,7 +211,11 @@ def _pairs_pages(feed: pairs.Feed | None) -> meridian.Pages:
         )
 
     @pages.page(
-        "/datasets", "Datasets", levels="admin", answers=pairs.Datasets, name="read_datasets"
+        "/datasets",
+        "Datasets",
+        levels="admin",
+        answers=pairs.DatasetsRead,
+        name="read_datasets",
     )
     def datasets(request: meridian.Request) -> meridian.Response:
         read = pairs.datasets_read(feed, CATALOGUE, "fakex", "Public")

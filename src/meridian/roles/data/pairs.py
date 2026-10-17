@@ -116,7 +116,8 @@ from ._reading import (
     iso_time,
     utc_day,
 )
-from ._records import DatasetsRead, VenueConnection
+from ._records import DatasetsRead as RoleDatasetsRead
+from ._records import VenueConnection
 from ._wants import BATCH, Counts, Heard, Standing, Venue, Wants, asked, same, unconverted
 
 __all__ = [
@@ -127,8 +128,8 @@ __all__ = [
     "TRADES",
     "Asset",
     "Candle",
-    "Connection",
-    "Datasets",
+    "ConnectionRead",
+    "DatasetsRead",
     "Feed",
     "Listed",
     "Mapped",
@@ -1475,7 +1476,7 @@ def _grouped(wants: Iterable[Standing]) -> list[tuple[list[str], tuple[int, ...]
 
 
 @dataclass(frozen=True)
-class Connection(VenueConnection):
+class ConnectionRead(VenueConnection):
     """The role's Connection for a pairs venue: the venue's part
     (`VenueConnection`), and its stream's session -- "off" while nothing
     stands to stream, "connecting", "open", or "waiting" to open again after
@@ -1492,7 +1493,7 @@ class Connection(VenueConnection):
 
 
 @dataclass(frozen=True)
-class Datasets(DatasetsRead):
+class DatasetsRead(RoleDatasetsRead):
     """The role's Datasets for a pairs venue, and the venue's product map and
     counts: wants kept current, products listed and mapped, subjects named,
     assets not resolved, when the listing was read, and rows restated,
@@ -1509,15 +1510,17 @@ class Datasets(DatasetsRead):
     not_read: int = 0
 
 
-def connection_read(feed: Feed | None, venue_name: str, entitled_at_vendor: str) -> Connection:
+def connection_read(
+    feed: Feed | None, venue_name: str, entitled_at_vendor: str
+) -> ConnectionRead:
     """Connection's record (`read_connection`), drawn by the template
     `meridian/roles/data/pairs/connection.html`."""
     if feed is None:
-        return Connection(
+        return ConnectionRead(
             mode="Live", entitled_at_vendor=entitled_at_vendor, sessions=0, venue=venue_name
         )
     stream = feed.stream.health
-    return Connection(
+    return ConnectionRead(
         **connection_fields(
             feed.market.session, feed.market.name, feed.venue, entitled_at_vendor
         ),
@@ -1534,14 +1537,14 @@ def connection_read(feed: Feed | None, venue_name: str, entitled_at_vendor: str)
 
 def datasets_read(
     feed: Feed | None, catalogue: Sequence[Any], instance: str, entitled_at_vendor: str
-) -> Datasets:
+) -> DatasetsRead:
     """Datasets' record (`read_datasets`), drawn by the template
     `meridian/roles/data/pairs/datasets.html`; `instance` names the datasets
     before the plugin has started."""
     if feed is None:
-        return Datasets(served=served(catalogue, instance, None, entitled_at_vendor))
+        return DatasetsRead(served=served(catalogue, instance, None, entitled_at_vendor))
     named = feed.plugin.identity.instance_id
-    return Datasets(
+    return DatasetsRead(
         served=served(catalogue, named, feed.wants, entitled_at_vendor),
         wants=list(want_rows(feed.wants)),
         reads_instruments=feed.reads_instruments,
