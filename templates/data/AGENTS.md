@@ -212,6 +212,19 @@ and subscribe to comes from the roles `pyproject.toml` declares under
   subject, `list_trades(..., latest_recorded=True)`, then the venue's history
   after it), and reads which of its datasets are licensed
   (`plugin.list_datasets()`, its `licences`).
+- **Use the role's common logic; never copy it from another plugin.** What
+  every plugin of a role does the same is the SDK's (0.30.0):
+  `meridian.roles.data.Wants` hears what the lake wants, answers it with the
+  plugin's own conversion, declines by reason, keeps standing wants, records
+  in the lake's batches and counts it, reads the licences and backfills a
+  restart's gap; `meridian.roles.data.Venue` resolves a venue once;
+  `meridian.edge.RawStore` keeps raw records a unit a UTC day and tends their
+  window. A venue listing pairs, or binary event contracts, takes its whole
+  work from `meridian.roles.data.pairs` or `.event_contracts`, and runs
+  `meridian.roles.data.testing`'s checks against its own conversion. A
+  connectivity plugin places at most once and resolves an unknown outcome
+  with `meridian.roles.connectivity`. How the plugin reaches its vendor -- its
+  client, its stream, FIX -- stays its own.
 - **Follow the role's common part.** A person who knows a role knows any
   plugin of it: `meridian.roles.<role>` (`data`, `custody`, `operations`,
   `reporting`) gives each common page's record (`<Page>Read`, the page's
