@@ -100,7 +100,7 @@ def test_every_release_since_the_first_recorded_has_its_step() -> None:
         ("0.6.0", "0.6.1"),
         ("0.6.1", "0.7.0"),
     ]
-    assert (steps[-1].source, steps[-1].target) == ("0.28.0", "0.29.0")
+    assert (steps[-1].source, steps[-1].target) == ("0.29.0", "0.30.0")
     # A release that moves the version records its step, if only the pins.
     assert steps[-1].target == SDK
 
@@ -1100,3 +1100,119 @@ def test_a_plugin_sending_no_dockerfile_is_not_held_to_one() -> None:
     # A meridian before 0.1.46 sends the Python and pyproject.toml alone.
     files = {"pyproject.toml": CONNECTIVITY, "src/venue/declaration.py": _declared("docs")}
     assert left_by_hand(migrate(files, "0.28.0", "0.29.0")) == []
+
+
+# ── 0.29.0 to 0.30.0: the copied middle layer onto the SDK's helpers ─────
+
+PAIRS = "The same module in plugin-one and plugin-two.\n"
+CONTRACTS_PAIR = "The same module in plugin-ka and plugin-pm.\n"
+
+
+def _copied_pairs() -> dict[str, str]:
+    """A pairs plugin's copied layer, in the few lines that make each what it
+    is: its marker and its own definitions."""
+    return {
+        "pyproject.toml": '[project]\nname = "one"\ndependencies = ["open-meridian==0.29.0"]\n',
+        "src/one/__init__.py": "",
+        "src/one/market.py": f'"""Values. {PAIRS}"""\nclass Listed: ...\nclass Candle: ...\n',
+        "src/one/products.py": f'"""The map. {PAIRS}"""\nclass ProductMap: ...\n',
+        "src/one/raw.py": (
+            f'"""Raw. {PAIRS}"""\nKIND = "answers"\nLABEL = "Raw answers"\nWINDOW_DAYS = 9\n'
+            "class RawStore: ...\n"
+        ),
+        "src/one/dgm.py": (
+            f'"""Work. {PAIRS}"""\nfrom .products import ProductMap\n'
+            "from .stream import Stream\nclass Dgm: ...\n"
+        ),
+        "src/one/page.py": f'"""Pages. {PAIRS}"""\n',
+        "src/one/stream.py": (
+            f'"""A stream. {PAIRS}"""\nfrom fake_venues import Keeper as Stream  # noqa: F401\n'
+        ),
+        "src/one/preview.py": "def go(feed):\n    feed.stream.connect = None\n",
+        "src/one/convert.py": '"""Its own: The same words, not a copy."""\nclass Listed: ...\n',
+        "tests/test_suite.py": '"""The same file in plugin-one and plugin-two (held)."""\n',
+    }
+
+
+def test_a_pairs_plugins_copied_modules_become_re_exports_of_the_sdk() -> None:
+    files = _copied_pairs()
+    result = migrate(files, "0.29.0", "0.30.0")
+    assert set(result.files) == {
+        "src/one/market.py", "src/one/products.py", "src/one/raw.py", "src/one/dgm.py",
+    }  # fmt: skip
+    assert all(t.startswith('"""Moved into the SDK (open-meridian 0.30.0)') for t in
+               result.files.values())  # fmt: skip
+    assert "WINDOW_DAYS = 9" in result.files["src/one/raw.py"]
+    assert 'KIND = "answers"' in result.files["src/one/raw.py"]
+    assert "stream_factory: StreamFactory | None = Stream" in result.files["src/one/dgm.py"]
+    assert left_by_hand(result) == [
+        ("suite-same-retired", "pyproject.toml", 0),
+        ("re-export-left", "src/one/dgm.py", 1),
+        ("re-export-left", "src/one/market.py", 1),
+        ("copied-page", "src/one/page.py", 1),
+        ("stream-connect-assigned", "src/one/preview.py", 2),
+        ("re-export-left", "src/one/products.py", 1),
+        ("re-export-left", "src/one/raw.py", 1),
+        ("stream-is-the-plugins", "src/one/stream.py", 1),
+        ("copied-tests", "tests/test_suite.py", 1),
+    ]
+    for text in result.files.values():
+        compile(text, "<re-export>", "exec")
+
+
+def test_the_re_exports_run_as_the_modules_they_replace(tmp_path: Path) -> None:
+    files = _copied_pairs()
+    files.update(migrate(files, "0.29.0", "0.30.0").files)
+    for path, text in files.items():
+        if path.startswith("src/"):
+            (tmp_path / path).parent.mkdir(parents=True, exist_ok=True)
+            (tmp_path / path).write_text(text)
+    sys.path.insert(0, str(tmp_path / "src"))
+    try:
+        import importlib
+
+        dgm = importlib.import_module("one.dgm")
+        raw = importlib.import_module("one.raw")
+        products = importlib.import_module("one.products")
+        from fake_venues import pairs_venue
+        from meridian.roles.data import pairs
+        from meridian.suites import Recorder
+
+        work = dgm.Dgm(Recorder("one"), pairs_venue.market(), products.ProductMap())
+        assert isinstance(work, pairs.Feed) and work.stream_factory is not None
+        store = raw.RawStore(tmp_path / "storage")
+        assert store.kind == "answers" and raw.WINDOW_DAYS == 9
+    finally:
+        sys.path.remove(str(tmp_path / "src"))
+        for name in [m for m in sys.modules if m == "one" or m.startswith("one.")]:
+            del sys.modules[name]
+
+
+def test_an_event_contract_plugins_copied_modules_become_re_exports() -> None:
+    files = {
+        "src/ka/market.py": f'"""{CONTRACTS_PAIR}"""\nclass Contract: ...\nclass Cash: ...\n',
+        "src/ka/contracts.py": f'"""{CONTRACTS_PAIR}"""\nclass ContractMap: ...\n',
+        "src/ka/dgm.py": (
+            f'"""{CONTRACTS_PAIR}"""\nfrom .contracts import ContractMap\nclass Dgm: ...\n'
+        ),
+    }
+    result = migrate(files, "0.29.0", "0.30.0")
+    assert set(result.files) == set(files)
+    assert "Dgm = Feed" in result.files["src/ka/dgm.py"]
+    assert (
+        "event_contracts import ContractMap as ContractMap"
+        in result.files["src/ka/contracts.py"]
+    )
+    assert "event_contracts import Cash as Cash" in result.files["src/ka/market.py"]
+
+
+def test_a_plugins_own_modules_of_the_same_names_are_left_alone() -> None:
+    files = {
+        "pyproject.toml": '[project]\nname = "own"\n',
+        "src/own/market.py": '"""Its own market."""\nclass Listed: ...\nclass Candle: ...\n',
+        "src/own/raw.py": "class RawStore: ...\n",
+        "src/own/dgm.py": "from .products import ProductMap\nclass Dgm: ...\n",
+        "src/own/preview.py": "def go(feed):\n    feed.stream.connect = None\n",
+    }
+    result = migrate(files, "0.29.0", "0.30.0")
+    assert result.files == {} and left_by_hand(result) == []

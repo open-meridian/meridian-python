@@ -1,0 +1,121 @@
+# open-meridian 0.29.0 to 0.30.0: each role's common logic in the SDK
+# (sdk-contract/the-sdk-carries-each-roles-common-logic, ruled 2026-10-13;
+# committed v26 scope by ruling 202, 2026-10-17). The middle layer two pairs
+# of data plugins kept byte for byte between them -- Coinbase and Kraken,
+# Kalshi and the international Polymarket, held by each one's suite-same --
+# is the SDK's now. No contract change: the helpers are SDK-side, and the SDK
+# still declares contract v25.
+from = "0.29.0"
+to = "0.30.0"
+summary = """
+The SDK carries each role's common logic, generic over the venue, the plugin
+supplying its client, its conversion and its transport. meridian.roles.data
+is a package: Wants (what the lake wants heard, answered by the plugin's own
+conversion and declined by reason; standing wants; rows recorded in the
+lake's batches and counted overall and per dataset; licences read; a
+restart's gap read back once per subject per process), Venue (the venue
+master's ID resolved once, a venue not held reported once), unconverted,
+asked, the venue's reading (number, json_decimal, Unread, Session, Health,
+Limits, Endpoint), and Datasets' rows (served, want_rows, WantHeard) and
+VenueConnection. A venue's whole work by what it lists:
+meridian.roles.data.pairs (base assets priced in quote assets: daily closes
+and bars, live prices, trades and quotes, the stream kept current and its
+gaps read back; Feed, ProductMap, its Market and Streamer protocols, and its
+pages' records and templates, meridian/roles/data/pairs/*.html) and
+meridian.roles.data.event_contracts (binary event contracts, with their
+outcomes; Feed, ContractMap and its pages). meridian.roles.data.testing
+holds the lake as a test stands it in, the data suite's producers for each
+kind, and PairsChecks and EventContractsChecks, which a plugin runs against
+its own conversion as one test class. meridian.edge.RawStore keeps raw
+records as files, a unit a UTC day, and tends their window.
+meridian.roles.connectivity holds a placement's bookkeeping: Sent and
+place_once (noted before it is sent, never sent twice), resolve_unanswered
+and report_status_not_mapped (an unknown outcome resolved from the venue's
+orders), execution_id, bust_id, fill_price and filled_in_book. The role's
+Datasets template pages its Wants with the kit's om-pager. A stream's
+session and socket, a venue's client and FIX stay the plugin's.
+
+`meridian plugin migrate` rewrites each module a plugin copied from its
+sibling -- one saying "The same module in <one> and <other>" -- into a
+re-export of the SDK's names, so the plugin keeps working: market.py,
+products.py and contracts.py; raw.py, its kind's name and window kept;
+dgm.py, its Dgm the SDK's Feed (a pairs plugin's streaming through its own
+stream.py). Left by hand: importing from the SDK directly and deleting those
+modules; the copied page.py and its templates, replaced by the SDK's
+builders and templates; the copied tests, replaced by one class of the SDK's
+checks; the Makefile's suite-same; and a copied stream.py, which is the
+plugin's own transport now.
+"""
+breaking = false
+rewrite = "rewrite.py"
+
+[[rewrites]]
+rule = "copied-module-onto-sdk"
+what = """a module the plugin kept byte for byte with its sibling (market.py, products.py, \
+contracts.py, raw.py or dgm.py, saying "The same module in <one> and <other>") rewritten \
+into a re-export of the SDK's names that replace it -- meridian.roles.data, \
+meridian.roles.data.pairs or .event_contracts, meridian.edge.RawStore -- so every import of \
+it still resolves: from 0.30.0 that middle layer is the SDK's, and nothing is copied \
+between plugins"""
+
+[[by_hand]]
+rule = "re-export-left"
+what = """a module the migration rewrote into a re-export of the SDK's names: it keeps the \
+plugin working, and is only a forwarding address"""
+instead = """import those names from the SDK where the plugin uses them -- meridian.roles.data \
+(number, json_decimal, Unread, Session, Health, Limits, Endpoint, cancelled), \
+meridian.roles.data.pairs or .event_contracts (the venue's values, ProductMap or \
+ContractMap, Feed), meridian.edge (RawStore, storage_root, with RawStore(root, KIND) and \
+store.tend(plugin, window_days, past, today)) -- move the kind's name, label and window \
+into declared.py, and delete the module"""
+
+[[by_hand]]
+rule = "copied-page"
+what = """the data role's pages the plugin kept byte for byte with its sibling (page.py and \
+its templates/connection.html and datasets.html): from 0.30.0 the SDK builds them for a \
+venue of its kind"""
+instead = """keep a page.py of a few lines: pages = meridian.Pages(TITLE, kit=KIT); Connection \
+answering pairs.connection_read(feed, NAME, ENTITLED) (or event_contracts') drawn by \
+"meridian/roles/data/pairs/connection.html"; Datasets answering pairs.datasets_read(feed, \
+CATALOGUE, VENUE, ENTITLED) drawn by "meridian/roles/data/pairs/datasets.html" with \
+venue=NAME (event_contracts' takes the venue's note); figures_now() answering \
+pairs.figures_read(feed, CATALOGUE). Delete templates/connection.html and datasets.html and \
+their package-data, and extend the SDK's templates only for the venue's own nuance"""
+
+[[by_hand]]
+rule = "copied-tests"
+what = """a test the plugin kept byte for byte with its sibling (test_suite.py, test_dgm.py, \
+test_page.py, test_raw.py, conftest.py, saying "The same file in <one> and <other>"): from \
+0.30.0 the SDK holds them, run by each plugin against its own conversion"""
+instead = """write one test class -- class TestPairs(meridian.roles.data.testing.PairsChecks) \
+or EventContractsChecks, with venue = venue_cases -- naming in venue_cases what the checks \
+ask (meridian.roles.data.testing's docstring lists them: for a pairs venue STREAM, replayed, \
+stream_sessions, raw_store, CONVERSION and page beside its exchanges' constants), and \
+delete the copies; raw records are tested in the SDK"""
+
+[[by_hand]]
+rule = "stream-is-the-plugins"
+what = """a stream.py the plugin kept byte for byte with its sibling: a stream's session \
+and its socket are transport, which the SDK never carries (the rule of 2026-10-13: a \
+plugin stays able to use an API, FIX or another protocol)"""
+instead = """keep it as the plugin's own transport, its docstring no longer saying it is \
+shared, and hand it to the feed as its stream factory (pairs.Feed(..., \
+stream_factory=Stream)); it may now differ from the sibling's"""
+
+[[by_hand]]
+rule = "suite-same-retired"
+what = """a plugin that copied its middle layer from a sibling (the Makefile's suite-same, \
+its PAIR and SAME, and the CI comment naming the sibling): nothing is copied between \
+plugins any more"""
+instead = """remove the suite-same target, PAIR and SAME from the Makefile and from \
+ci-local's prerequisites, and the sibling from the docs (README, AGENTS.md) and the CI \
+workflow's comments"""
+
+[[by_hand]]
+rule = "stream-connect-assigned"
+what = """a feed's stream given another connection by assigning its connect \
+(feed.stream.connect = replayed): from 0.30.0 the feed's stream is the plugin's, typed by \
+meridian.roles.data.pairs.Streamer, which names no connect; it runs at runtime, and the \
+type check refuses it"""
+instead = """retarget the stream instead -- feed.stream.retarget(feed.market.stream_address, \
+replayed, feed.market.subscriptions) -- which every Streamer offers"""
