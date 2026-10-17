@@ -438,7 +438,7 @@ def pairs_producers(venue: Any, **mutations: Any) -> dict[str, Producer]:
             async def said(_: str) -> Any:
                 return venue.replayed([message])
 
-            feed.stream.connect = said
+            feed.stream.retarget(feed.market.stream_address, said, feed.market.subscriptions)
             await feed.stream.run(once=True)
             await feed.flush()
 
@@ -1216,7 +1216,7 @@ class PairsChecks(_PageChecks):
             async def said(_: str, messages: list[str] = session) -> Any:
                 return self.venue.replayed(messages)
 
-            feed.stream.connect = said
+            feed.stream.retarget(feed.market.stream_address, said, feed.market.subscriptions)
             await feed.stream.run(once=True)
         await feed.flush()
 
@@ -1410,7 +1410,7 @@ class PairsChecks(_PageChecks):
         async def said(_: str) -> Any:
             return v.replayed(first)
 
-        feed.stream.connect = said
+        feed.stream.retarget(feed.market.stream_address, said, feed.market.subscriptions)
         await feed.stream.run(once=True)
         v.page.hold(feed)
         return feed, lake

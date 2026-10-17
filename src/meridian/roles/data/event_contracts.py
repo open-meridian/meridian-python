@@ -489,6 +489,14 @@ class Feed:
         return self.wants.heard
 
     @property
+    def by_dataset(self) -> dict[str, Counts]:
+        return self.wants.by_dataset
+
+    @property
+    def reads_licences(self) -> bool:
+        return self.wants.reads_licences
+
+    @property
     def licensed(self) -> frozenset[str]:
         return self.wants.licensed
 

@@ -136,6 +136,8 @@ __all__ = [
     "Print",
     "ProductMap",
     "Socket",
+    "StreamFactory",
+    "StreamHealth",
     "Streamer",
     "Tick",
     "Top",
@@ -392,11 +394,11 @@ class StreamHealth(Protocol):
 class Streamer(Protocol):
     """The plugin's own session over its own transport, kept open while
     anything is wanted on it: `heard` given each message, `opened` each time
-    it opens before any message is read. Made by the factory `Feed` is given:
-    `stream(address=, connect=, subscriptions=, heard=, opened=, clock_ns=,
-    silent_seconds=)`."""
+    it opens before any message is read; `retarget` points it at another
+    source (sample data switched, or a test's replay). Made by the factory
+    `Feed` is given: `stream(address=, connect=, subscriptions=, heard=,
+    opened=, clock_ns=, silent_seconds=)`."""
 
-    connect: Callable[[str], Awaitable[Socket]]
     silent_seconds: float
 
     @property
@@ -656,6 +658,14 @@ class Feed:
     @property
     def heard(self) -> deque[Heard]:
         return self.wants.heard
+
+    @property
+    def by_dataset(self) -> dict[str, Counts]:
+        return self.wants.by_dataset
+
+    @property
+    def reads_licences(self) -> bool:
+        return self.wants.reads_licences
 
     @property
     def licensed(self) -> frozenset[str]:
