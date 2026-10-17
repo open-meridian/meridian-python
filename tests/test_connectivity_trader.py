@@ -330,3 +330,31 @@ def test_a_trader_is_told_its_market_zone() -> None:
     rig = Rig(Recorder("broker"))
     assert rig.trader.market_zone == ZoneInfo("America/New_York")
     assert rig.trader.price_places == connectivity.PRICE_PLACES == 8
+
+
+def test_number_is_one_function_for_both_roles() -> None:
+    """Ruling 212: `number` is defined once and both roles re-export it. What
+    a broker sends -- its figures as text, JSON numbers read as Decimals or
+    ints, missing or empty -- reads the same as connectivity's own did; what
+    the contract's Decimal cannot carry (not finite, past 18 places or 38
+    digits) is no number for either role."""
+    from meridian.roles import data
+
+    assert connectivity.number is data.number
+    sent: list[tuple[object, Decimal | None]] = [
+        ("10", Decimal(10)),
+        ("230.50", Decimal("230.50")),
+        (10, Decimal(10)),
+        (Decimal("11.2"), Decimal("11.2")),
+        ("-0.25", Decimal("-0.25")),
+        (None, None),
+        ("", None),
+        ("n/a", None),
+        (True, None),
+        (0.1, None),
+        ([1], None),
+    ]
+    for value, read in sent:
+        assert connectivity.number(value) == read, value
+    for beyond in ("NaN", "Infinity", "1." + "0" * 19, "1" * 39):
+        assert connectivity.number(beyond) is None, beyond

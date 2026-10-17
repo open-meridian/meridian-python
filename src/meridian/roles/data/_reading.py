@@ -9,16 +9,18 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Any
+
+# The contract's Decimal's bounds, and a venue's figure read as one: defined
+# once, in meridian._numbers, and re-exported by each role that reads one.
+from ..._numbers import MOST_DIGITS as MOST_DIGITS
+from ..._numbers import MOST_PLACES as MOST_PLACES
+from ..._numbers import number as number
 
 NANOS_PER_SECOND = 1_000_000_000
 SECONDS_PER_DAY = 86_400
 NANOS_PER_DAY = SECONDS_PER_DAY * NANOS_PER_SECOND
-
-#: The contract's Decimal: at most 18 places and 38 digits (meridian.Money).
-MOST_PLACES = 18
-MOST_DIGITS = 38
 
 
 @dataclass(frozen=True)
@@ -34,26 +36,6 @@ def json_decimal(body: str | bytes) -> Any:
     """A JSON body with every number that is not a whole one a `Decimal` from
     its own text: no float ever exists (one float() loses a satoshi)."""
     return json.loads(body, parse_float=Decimal)
-
-
-def number(value: object) -> Decimal | None:
-    """A venue's figure as the contract's number, from its text: a string or a
-    JSON number read by `json_decimal`. None where it is not a finite number,
-    or holds more places or digits than the contract's Decimal does; never
-    rounded, and never from a float."""
-    if isinstance(value, bool) or value is None or isinstance(value, float):
-        return None
-    try:
-        amount = Decimal(value) if isinstance(value, int | Decimal) else Decimal(str(value))
-    except (InvalidOperation, ValueError):
-        return None
-    if not amount.is_finite():
-        return None
-    _, digits, exponent = amount.as_tuple()
-    places = -exponent if isinstance(exponent, int) and exponent < 0 else 0
-    if places > MOST_PLACES or len(digits) > MOST_DIGITS:
-        return None
-    return amount
 
 
 def utc_day(at_s: int) -> date:

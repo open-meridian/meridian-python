@@ -23,8 +23,9 @@ venue's catalogue published, and fills of orders placed outside the platform
 reported on no placement (`Watched`). The values the adapter speaks in:
 `Asked`, `Change`, `VenueOrder`, `Fill`, the status categories (`WORKING`,
 `FILLED`, `CANCELLED`, `REJECTED`, `EXPIRED`, `SUSPENDED`, `DONE_FOR_DAY`,
-`REPLACED`), `VenueRefused` and `VenueUnanswered`; `number` and `moment`
-read a broker's figures and times.
+`REPLACED`), `VenueRefused` and `VenueUnanswered`; `number` (one function
+with `meridian.roles.data.number`) and `moment` read a broker's figures and
+times.
 
 **The Trading page** (`TradingRead`, `AccountTrading`, `TradingAsked`,
 `TradingEnabled`, `trading_read`, the template
@@ -32,11 +33,12 @@ read a broker's figures and times.
 environment, each account read-only or with trading enabled, and the
 placements working, held back or of unknown outcome; counts and codes only.
 
-**The checks a plugin runs unchanged** (`meridian.roles.connectivity.testing`):
-the connectivity suite's producers over a plugin's own adapter and fake
-broker, and `TraderChecks`, run as one test class.
+**A plugin's tests** (`meridian.roles.connectivity.testing`): `Rig`, the
+Trader over the suites' recorder and the plugin's own adapter on its fake
+broker, and the book's messages as a test builds them. Fakes only.
 """
 
+from ..._numbers import number
 from ._bookkeeping import (
     Placed,
     Sent,
@@ -74,7 +76,6 @@ from ._trader import (
     Worked,
     basis_of,
     moment,
-    number,
     symbol_of,
     trading_files,
 )

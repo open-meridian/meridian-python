@@ -96,10 +96,11 @@ import tempfile
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, tzinfo
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from pathlib import Path
 from typing import Any, Protocol
 
+from ..._numbers import number
 from ...client import AccountScope
 from ...errors import MeridianError
 from ...operations import (
@@ -148,16 +149,6 @@ ENDING = {CANCELLED: "cancelled", REJECTED: "rejected", EXPIRED: "expired", FILL
 
 def _ns(moment: datetime) -> int:
     return int(moment.timestamp()) * 1_000_000_000 + moment.microsecond * 1000
-
-
-def number(value: Any) -> Decimal | None:
-    """A JSON number or numeral read exactly, or None."""
-    if value is None or isinstance(value, bool):
-        return None
-    try:
-        return Decimal(str(value)) if isinstance(value, (int, str, Decimal)) else None
-    except InvalidOperation:
-        return None
 
 
 def moment(value: Any) -> datetime | None:
