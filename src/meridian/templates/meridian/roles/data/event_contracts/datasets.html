@@ -1,0 +1,16 @@
+{#- An event-contract venue's Datasets (meridian.roles.data.
+    event_contracts.Datasets): the data role's
+    (meridian/roles/data/datasets.html), the venue's nuance at its blocks
+    only -- a section under the venue's name (`venue`) with the contract
+    map, the cash its prices and payouts are in, each contract's payout and
+    how the venue's sides make a contract (`vendor_note`), once the lake has
+    asked for a contract. A plugin extends this for its own nuance. -#}
+{% extends "meridian/roles/data/datasets.html" %}
+{% block vendor_sections %}
+{% if data.contracts_read or data.subjects_named or data.not_served %}
+<section class="panel">
+<h2>{{ venue }}</h2>
+<p class="muted">{{ data.contracts_mapped }} {{ "contract" if data.contracts_mapped == 1 else "contracts" }} mapped for {{ data.subjects_named }} {{ "subject" if data.subjects_named == 1 else "subjects" }} the lake asked for{% for n in data.not_served %}; {{ n.subjects }} not served: {{ n.why }}{% endfor %}{% if data.assets_not_resolved %}; not resolved: {{ data.assets_not_resolved|join(", ") }}{% endif %}. Prices and payouts in {{ data.cash }}{% if data.cash_instrument %}, the deployment's <code>{{ data.cash_instrument }}</code>{% else %}, not resolved yet{% endif %}{% if data.payouts %}; each contract pays {{ data.payouts|join(" or ") }}{% endif %}. {{ data.vendor_note }}</p>
+</section>
+{% endif %}
+{% endblock %}

@@ -82,6 +82,12 @@ against the bound. Every edge
 plugin with pages offers `POST /archive/restore`, which the SDK declares on
 its host and the deployment derives as a tool: the kind and the unit, for a
 person at `write`, the person read from the claims.
+
+**Raw records as files** (0.30.0): `RawStore` keeps a vendor's answers in
+storage, one unit a UTC day, before anything is read from them, and moves
+the units past the kind's window (`tend`); `storage_root()` is the granted
+storage, else a temporary directory. A convenience: any layout the plugin
+finds again serves.
 """
 
 from __future__ import annotations
@@ -101,6 +107,9 @@ from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any, Protocol
 
+from ._raw import RawStore as RawStore
+from ._raw import StoredUnit as StoredUnit
+from ._raw import storage_root as storage_root
 from .bounds import (
     AS_REPORTED_CODE_LENGTH,
     AS_REPORTED_SCHEME_LENGTH,

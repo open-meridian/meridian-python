@@ -1,0 +1,14 @@
+{#- A pairs venue's Datasets (meridian.roles.data.pairs.Datasets): the data
+    role's (meridian/roles/data/datasets.html), the venue's nuance at its
+    blocks only -- a section under the venue's name (`venue`) with the
+    product map and the rows restated, unchanged and not read, once the
+    venue's listing has been read. A plugin extends this for its own nuance. -#}
+{% extends "meridian/roles/data/datasets.html" %}
+{% block vendor_sections %}
+{% if data.products_listed %}
+<section class="panel">
+<h2>{{ venue }}</h2>
+<p class="muted">{{ data.products_mapped }} of {{ data.products_listed }} products mapped, for {{ data.subjects_named }} {{ "subject" if data.subjects_named == 1 else "subjects" }} the lake asked for{% if data.assets_not_resolved %}; not resolved: {{ data.assets_not_resolved|join(", ") }}{% endif %}. Rows restated {{ data.restated }}, unchanged {{ data.unchanged }}{% if data.not_read %}; {{ data.not_read }} values that did not read, left unrecorded{% endif %}.</p>
+</section>
+{% endif %}
+{% endblock %}

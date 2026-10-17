@@ -1,5 +1,6 @@
 {#- A data plugin's Datasets (spec/plugin-pages-follow-their-role): notices,
-    then "Served", "Wants" and "Subjects", then the vendor's sections. `data`
+    then "Served", "Wants" (searched and paged by the kit's om-pager, since
+    they grow) and "Subjects", then the vendor's sections. `data`
     is a meridian.roles.data.DatasetsRead, or the plugin's record extending
     it. -#}
 {% extends "meridian/base.html" %}
@@ -34,11 +35,11 @@
 <section class="panel">
 <h2>Wants</h2>
 {% if data.wants %}
-<table class="one-line"><thead><tr><th>Dataset</th><th>Asked</th><th class="num">Subjects</th><th class="num wide-only">Recorded</th><th class="num wide-only">Declined</th><th>State</th></tr></thead><tbody>
+<om-pager search="Search wants"><table class="one-line"><thead><tr><th>Dataset</th><th>Asked</th><th class="num">Subjects</th><th class="num wide-only">Recorded</th><th class="num wide-only">Declined</th><th>State</th></tr></thead><tbody>
 {% for want in data.wants %}
 <tr><td><code>{{ want.dataset }}</code></td><td>{{ want.asked }}</td><td class="num">{{ want.subjects }}</td><td class="num wide-only">{{ want.recorded }}</td><td class="num wide-only">{{ want.declined }}</td><td>{{ want.state }}</td></tr>
 {% endfor %}
-</tbody></table>
+</tbody></table></om-pager>
 {% else %}
 <div class="empty-state"><strong>No wants yet</strong></div>
 {% endif %}
