@@ -158,40 +158,59 @@ def sample_data(
     )
 
 
-#: The values `meridian.environment()` offers, in its order.
+#: The values `meridian.environment()` offers, in its order: live, and the
+#: vendor's demo environment by the word it uses -- a sandbox, or (contract
+#: v26, G1 question 5) paper.
 ENVIRONMENTS = (Choice("live", "Live"), Choice("sandbox", "Sandbox"))
+#: The role-common setting's values (W6.11, contract v26): the demo ones are
+#: `sandbox` and `paper`.
+ENVIRONMENT_VALUES = ("live", "sandbox", "paper")
+DEMO_ENVIRONMENTS = frozenset({"sandbox", "paper"})
 
 
 def environment(
     *,
-    default: str = "sandbox",
+    default: str = "",
     description: str = "",
     roles: Sequence[str] = (),
+    demo: str = "sandbox",
+    demo_label: str = "",
 ) -> Any:
     """The vendor's environment, for a vendor with more than one
     (spec/plugin-pages-follow-their-role, Q12 as amended 2026-10-10): the
     setting `environment`, a required choice, label "Environment", values
-    `live` ("Live") and `sandbox` ("Sandbox"), declared first, before every
+    `live` ("Live") and the vendor's demo environment -- `sandbox`
+    ("Sandbox"), or from 0.31.0 (contract v26) `paper` ("Paper") where the
+    vendor calls it that (`demo="paper"`; Alpaca's paper trading, OANDA's
+    practice with `demo_label="Practice"`) -- declared first, before every
     other setting; a credential differing by environment is gated on it with
     `applies_when=("environment", "sandbox")`.
 
-    It defaults to `sandbox` (SDK 0.28.0, approved by the product owner
-    2026-10-14): a plugin is Live only where a person chose Live, or where
-    its own code says so, `environment(default="live")`, never because an
-    upgrade added the setting or a value went missing. A plugin reading the
-    value treats anything but `live` as the sandbox. The description says
-    which it starts on, unless the plugin gives its own."""
-    offered = {choice.value for choice in ENVIRONMENTS}
-    if default not in offered:
-        raise ValueError(
-            f"environment's default is {default!r}; it is one of {', '.join(sorted(offered))}"
-        )
+    It defaults to the demo environment (SDK 0.28.0, approved by the product
+    owner 2026-10-14): a plugin is Live only where a person chose Live, or
+    where its own code says so, `environment(default="live")`, never because
+    an upgrade added the setting or a value went missing. A plugin reading
+    the value treats anything but `live` as the demo environment. The
+    description says which it starts on, unless the plugin gives its own.
+
+    The value is one key of the agents' demo-only guard (W11.38): a
+    connection is demo only while this setting and the environment its
+    session reports on its venue catalogue (`reached_environment`) both say
+    `sandbox` or `paper`."""
+    if demo not in DEMO_ENVIRONMENTS:
+        raise ValueError(f"environment's demo is sandbox or paper, not {demo!r}")
+    offered = (Choice("live", "Live"), Choice(demo, demo_label or demo.capitalize()))
+    default = default or demo
+    if default not in {choice.value for choice in offered}:
+        raise ValueError(f"environment's default is {default!r}; it is one of live, {demo}")
+    word = (demo_label or demo).lower()
     words = description or (
         "Which of the vendor's environments this plugin reads: its live service, or its "
+        f"{word}. "
         + (
-            "sandbox. Live unless a person chooses Sandbox."
+            f"Live unless a person chooses {demo_label or demo.capitalize()}."
             if default == "live"
-            else "sandbox. Sandbox until a person chooses Live."
+            else f"{(demo_label or demo).capitalize()} until a person chooses Live."
         )
     )
     return Setting(
@@ -201,9 +220,54 @@ def environment(
         default=default,
         label="Environment",
         description=words,
-        choices=ENVIRONMENTS,
+        choices=offered,
         roles=roles,
     )
+
+
+def reached_environment(
+    address: str,
+    *,
+    live: Sequence[str] = (),
+    paper: Sequence[str] = (),
+    sandbox: Sequence[str] = (),
+) -> str:
+    """The environment a connectivity plugin's session actually reached
+    (contract v26, W11.20; G1 question 5), read from the vendor's host --
+    OANDA's `api-fxpractice.oanda.com` against `api-fxtrade.oanda.com`,
+    Alpaca's `paper-api.alpaca.markets`, Tradier's `sandbox.tradier.com` --
+    for `VenueCatalogue.environment`: `live`, `paper` or `sandbox` for a host
+    named under it (exactly, without regard to case), and empty -- no report,
+    which the guard counts live -- for any other. `address` is the URL the
+    session called, or its host."""
+    host = address.strip().lower()
+    if "://" in host:
+        host = host.split("://", 1)[1]
+    host = host.split("/", 1)[0].split("@")[-1].split(":", 1)[0]
+    for value, hosts in (("live", live), ("paper", paper), ("sandbox", sandbox)):
+        if host and host in {h.strip().lower() for h in hosts}:
+            return value
+    return ""
+
+
+def is_demo(setting: str, reported: str) -> bool:
+    """Whether a connection is demo for the agents' guard (contract v26,
+    W11.38): its environment setting and the environment its session
+    reported both `sandbox` or `paper`. No setting, any other value, no
+    report or a disagreement is live, failing closed."""
+    return setting in DEMO_ENVIRONMENTS and reported in DEMO_ENVIRONMENTS
+
+
+def connection_badge(setting: str, reported: str) -> str:
+    """The badge a connection is drawn with (contract v26, W11.8): "Demo"
+    where both keys say demo, "Live" where neither does, and "Live
+    (environment not confirmed)" where the setting and the session
+    disagree."""
+    if is_demo(setting, reported):
+        return "Demo"
+    if (setting in DEMO_ENVIRONMENTS) != (reported in DEMO_ENVIRONMENTS):
+        return "Live (environment not confirmed)"
+    return "Live"
 
 
 #: The account's currency's words, every plugin's (contract v23).

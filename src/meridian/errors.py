@@ -154,6 +154,12 @@ class CommandRefused(CallFailed):
     linked to another `ems`). An `ems`'s venue account mapping naming an
     account the deployment admin has not granted is
     REFUSAL_REASON_ACCOUNT_NOT_LINKABLE, beside FAILED_PRECONDITION.
+
+    From contract v26 an agent's placement, or an agent's accept to a new
+    order, on a connection that is not demo while the agents' guard is on is
+    REFUSAL_REASON_AGENT_LIVE_ORDER, refused and recorded (W11.38); the same
+    act made by a person, or by a person from the agent's prepared change,
+    is not (`Caller.agent_refused` says which before sending).
     """
 
     def __init__(

@@ -40,8 +40,13 @@ most once, an unknown outcome resolved from the venue's orders, fills into
 the book, cancels and replaces, pauses and stops -- and its Trading page.
 How a plugin talks to its venue -- its client, its conversion, FIX, a
 stream's transport -- is never here.
+
+From 0.31.0 (contract v26) `pricing` holds a pricing plugin's work
+(`Pricer`): each batch the analytics component routes to it answered whole,
+the built-in models' own computation for a v26 model id (`reference_model`),
+and the batches still waiting read after a restart.
 """
 
-from . import connectivity, custody, data, operations, reporting
+from . import connectivity, custody, data, operations, pricing, reporting
 
-__all__ = ["connectivity", "custody", "data", "operations", "reporting"]
+__all__ = ["connectivity", "custody", "data", "operations", "pricing", "reporting"]

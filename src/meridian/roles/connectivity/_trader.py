@@ -72,7 +72,11 @@ a refused change by the events `order_replace_rejected` and
 
 **Its catalogue**, per venue account code, published on start and when
 trading is enabled (ReportVenueCatalogue), none for a read-only account; no
-execution acknowledgement; never a strategy.
+execution acknowledgement; never a strategy. From 0.31.0 (contract v26) it
+carries the environment the session reached, where the adapter states one
+(`Venue.environment`, read from the vendor's host with
+`meridian.reached_environment`): the second key of the agents' demo-only
+guard, which counts a connection with no report live.
 
 **Venue-originated fills** (contract v23): an order the venue lists on a
 mapped account that no placement names is never recorded as an order: only
@@ -234,7 +238,13 @@ class Fill:
 
 
 class Venue(Protocol):
-    """What the Trader asks of a venue (venue.py)."""
+    """What the Trader asks of a venue (venue.py).
+
+    An adapter may also say which environment its session reached, as an
+    attribute `environment` (contract v26): `live`, `paper` or `sandbox`,
+    read from the host it called (`meridian.reached_environment`), empty for
+    no report. The Trader reads it where it is, so an adapter written
+    before 0.31.0 reports none."""
 
     #: The venue's statuses by their category; any other is not mapped.
     statuses: dict[str, str]
@@ -467,7 +477,7 @@ class Trader:
         #: said once in the log.
         self.history: set[str] = set()
         self.watermark: ops.Watermark | None = None
-        self.published: dict[str, Catalogue] = {}
+        self.published: dict[str, tuple[Catalogue, str]] = {}
         #: The accounts the key reached when last asked, by their codes.
         self.reached: tuple[str, ...] = ()
         self.shown = Shown()
@@ -1615,13 +1625,17 @@ class Trader:
         if venue is None:
             return
         stated_at = _ns(self._now())
+        environment = str(getattr(venue, "environment", "") or "")
         for code in sorted(await self._reached(venue)):
             offered = self.catalogue_of(venue, code)
-            if code in self.published and self.published[code] == offered:
+            said = (offered, environment)
+            if code in self.published and self.published[code] == said:
                 continue
             await self._plugin.report_venue_catalogue(
                 catalogue=VenueCatalogue(
                     venue_account_code=code,
+                    # The environment the session reached (contract v26).
+                    environment=environment,
                     # The venue takes no execution acknowledgement, BN or Q
                     # (contract v23): a DK's ems is told the venue is not.
                     execution_acknowledgement=ops.EXECUTION_ACKNOWLEDGEMENT_NONE,
@@ -1635,7 +1649,7 @@ class Trader:
                     ],
                 )
             )
-            self.published[code] = offered
+            self.published[code] = said
 
     # ── Running ─────────────────────────────────────────────────────────
 

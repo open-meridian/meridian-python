@@ -260,11 +260,41 @@ deadline (`Declaration(affirmation_deadline=...)`).
 `meridian.environment()` defaults to the vendor's sandbox: Live is a
 plugin's only when its code says so (`environment(default="live")`), and
 otherwise a person's choice.
+
+From 0.31.0 (contract v26) a `reporting`, `portfolio`, `compliance` or
+`signal` plugin asks the analytics component through `meridian.analytics`:
+typed builders for a job (`analytics.job`, `analytics.measure`,
+`analytics.what_if`), its answer read (`analytics.Answer`) and one answered
+later waited for (`analytics.Jobs`); the reference computations v26's engine
+equals exactly are `meridian.analytics.reference`. A `pricing` plugin
+answers the component's batches with `meridian.roles.pricing.Pricer`.
+Every role reads event groups and hears each new version through
+`meridian.EventGroups`; a venue's data plugin reports them with
+`meridian.roles.data.event_contracts.Feed.report_event`. `meridian.environment()`
+offers `paper` beside `live` and `sandbox`, and a connectivity plugin reports
+the environment its session reached on its venue catalogue
+(`meridian.reached_environment`), the second key of the agents' demo-only
+guard. A plugin calling a model counts its tokens on its heartbeat
+(`plugin.count_model_tokens`), and asks the lake one bounded query
+(`plugin.query_lake`).
 """
 
 # Each role's common part (contract v20, spec/plugin-pages-follow-their-role).
-from . import roles  # noqa: E402  (after what it imports)
-from ._settings import account_currency, environment, sample_data, setting, settings
+# The analytics component's API (contract v26).
+from . import (
+    analytics,  # noqa: E402
+    roles,  # noqa: E402  (after what it imports)
+)
+from ._settings import (
+    account_currency,
+    connection_badge,
+    environment,
+    is_demo,
+    reached_environment,
+    sample_data,
+    setting,
+    settings,
+)
 from .asgi import CallerMiddleware
 from .client import (
     _RETIRED_BY_026,
@@ -321,6 +351,7 @@ from .figures import Figure, FigureState
 # An amount of currency as a typed operation takes one, the two readers of a
 # number off the wire, and the nested messages a typed operation takes with
 # numbers in them, generated with the operations (decisions/023).
+# The analytics component's job and a pricing plugin's answer (contract v26).
 from .operations import (
     Adjustment,
     AgreementFigures,
@@ -343,6 +374,7 @@ from .operations import (
     Fee,
     Finality,
     GiveUpRecord,
+    Job,
     Leg,
     LocateAnswer,
     LocateUse,
@@ -363,6 +395,7 @@ from .operations import (
     PositionEncumbrances,
     PositionKey,
     Price,
+    PricedUnit,
     Provenance,
     Quote,
     ReceiptQuote,
@@ -372,6 +405,8 @@ from .operations import (
     ReportedPending,
     ReportedPositionValue,
     RollInputs,
+    ScenarioKey,
+    Sensitivity,
     SleeveCross,
     SourceTime,
     StatementFigures,
@@ -386,6 +421,8 @@ from .operations import (
     VenueEligibility,
     VenueOrderType,
     VenueStrategy,
+    WhatIf,
+    WhatIfTrade,
     as_decimal,
     as_money,
 )
@@ -411,9 +448,12 @@ from .plugin.v1.operations_pb2 import (
     BreakState,
     BusinessDayInputs,
     CollateralDirection,
+    ComputedAs,
     DatasetRef,
     Eligible,
     ErrorCause,
+    EventGroup,
+    EventGroupFlag,
     FigureKey,
     GiveUpAnswer,
     HoldingSide,
@@ -423,6 +463,7 @@ from .plugin.v1.operations_pb2 import (
     LotSource,
     MarginAgreementRef,
     MissReason,
+    NotEvaluatedReason,
     OpeningSourceKind,
     OutcomeDetermination,
     OutcomeStage,
@@ -436,6 +477,7 @@ from .plugin.v1.operations_pb2 import (
     ReplacementCause,
     ResolvedByEntries,
     Reversal,
+    ScenarioKind,
     SecurityTemplate,
     SettlementBucket,
     SettlementDateInputs,
@@ -456,6 +498,7 @@ from .plugin.v1.operations_pb2 import (
 )
 from .receive import Heard
 from .replacements import CurrentIdMap, TemplateCatalogue
+from .roles.data._groups import EventGroups
 
 # What a plugin at the edge says its storage holds of each kind (contract v16),
 # and how a dataset's rows can arrive (contract v18).
@@ -642,8 +685,24 @@ __all__ = [
     "TemplateCatalogue",
     "TemplateField",
     "TemplateFieldValue",
+    "ComputedAs",
+    "EventGroup",
+    "EventGroupFlag",
+    "EventGroups",
+    "Job",
+    "NotEvaluatedReason",
+    "PricedUnit",
+    "ScenarioKey",
+    "ScenarioKind",
+    "Sensitivity",
+    "WhatIf",
+    "WhatIfTrade",
     "account_currency",
+    "analytics",
+    "connection_badge",
+    "is_demo",
     "environment",
+    "reached_environment",
     "roles",
     "runs_as",
     "sample_data",

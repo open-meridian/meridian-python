@@ -314,6 +314,8 @@ pairs_venue = SimpleNamespace(
         "records-an-outcome": "it lists no event contract",
         "restates-a-disputed-outcome": "it lists no event contract",
         "records-a-partial-payout": "it lists no event contract",
+        "reports-an-event-group": "it lists no event contract",
+        "reports-a-flag-the-venue-does-not-state": "it lists no event contract",
     },
     market=lambda now_ns=NOW_NS, forming=None: PairsMarket(now_ns, forming),
     STREAM=Keeper,
@@ -438,4 +440,21 @@ contracts_venue = SimpleNamespace(
         "asks-for-a-settlement-date": "an event contract settles on its outcome",
     },
     market=lambda now_ns=NOW_NS, directory=None: ContractsMarket(now_ns, directory),
+    # Contract v26: the venue's events, as its conversion reads them.
+    EVENT=ec.Event(
+        ref="FAKEV-EVENT-1",
+        title="Which of two",
+        members=("BASE-1", "EXACT-1"),
+        mutually_exclusive=True,
+        exhaustive=True,
+        raw_key="responses/2026-10-10/event/FAKEV-EVENT-1.jsonl#0",
+    ),
+    EVENT_PLACEHOLDERS=ec.Event(
+        ref="FAKEV-EVENT-2",
+        title="Which of two, and others named later",
+        members=("BASE-1", "EXACT-1"),
+        mutually_exclusive=True,
+        exhaustive=None,
+        raw_key="responses/2026-10-10/event/FAKEV-EVENT-2.jsonl#0",
+    ),
 )

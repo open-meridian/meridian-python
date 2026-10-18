@@ -121,6 +121,17 @@ ask is the SDK's work rather than the plugin's: `hears-and-reads-a-replacement`
 one read, through its `TemplateCatalogue`). A plugin mapping neither passes
 both, each named in `Report.answered_by_sdk`; one with its own way of doing
 either maps the case to its own producer, which is run instead.
+
+From contract v26 every role's suite holds a third such case,
+`hears-and-reads-an-event-group` (an event group's new version heard, and
+the groups holding an instrument read, through the SDK's `EventGroups`),
+answered alike; the data suite's event groups reported
+(`reports-an-event-group`, `reports-a-flag-the-venue-does-not-state`, both
+about `outcomes`); the reading roles' jobs run and caught up, the agents'
+guard read, and the lake's bounded query; the `ems`'s five cases of the
+agents' demo-only guard; the `pricing` suite; and custody's thin holding
+about `securities`, not presented by a custodian holding only cash and
+currencies.
 """
 
 from __future__ import annotations
@@ -575,11 +586,49 @@ async def reads_the_template_catalogue(recorder: Recorder) -> None:
         await catalogue.template(recorder, template.template_id, template.template_version)
 
 
+_GROUP = "EVG-01JSUITE0000000000000000001"
+_MEMBERS = ("INS-01JSUITE0000000000000000011", "INS-01JSUITE0000000000000000012")
+
+
+async def hears_and_reads_an_event_group(recorder: Recorder) -> None:
+    """`hears-and-reads-an-event-group` (contract v26), as the SDK does it for
+    every plugin: a group's new version heard, and the groups holding one of
+    its members read in force now, through an `EventGroups`, whose version
+    in force is the one heard."""
+    from .roles.data._groups import EventGroups
+
+    def version(n: int) -> ops.EventGroup:
+        return ops.EventGroup(
+            event_group_id=_GROUP,
+            member_instrument_ids=list(_MEMBERS),
+            mutually_exclusive=ops.EVENT_GROUP_FLAG_TRUE,
+            exhaustive=ops.EVENT_GROUP_FLAG_NOT_STATED,
+            version=n,
+            valid_from_ns=n * 1_000,
+            sequence=n,
+        )
+
+    recorder.answer("EventGroupChanged", lambda _: version(2))
+    recorder.answer(
+        "ListEventGroups",
+        lambda _: ops.ListEventGroupsResult(event_groups=[version(1), version(2)], sequence=2),
+    )
+    groups = EventGroups()
+    await recorder.receive(event_group_changed=groups.heard)
+    await groups.read(recorder, instrument_ids=[_MEMBERS[0]])
+    held = groups.holding(_MEMBERS[0])
+    if not held or held[0].version != 2:
+        raise AssertionError(
+            f"the group in force holding {_MEMBERS[0]} is not version 2: {held}"
+        )
+
+
 #: The cases every role's suite holds that the SDK answers for a plugin that
-#: maps neither (contract v24).
+#: maps none of them (contract v24; the event group's from v26).
 ANSWERED_BY_SDK: Mapping[str, Producer] = {
     "hears-and-reads-a-replacement": follows_a_replacement,
     "reads-the-template-catalogue": reads_the_template_catalogue,
+    "hears-and-reads-an-event-group": hears_and_reads_an_event_group,
 }
 
 

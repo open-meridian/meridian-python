@@ -39,7 +39,18 @@ float may reach; and `page`, its page module (`pages`, `hold`,
 `RESOLVED_STAGE`, `WORD`, `RESOLVED_LOSER`, `PARTIAL`, `PARTIAL_VALUE`,
 `PENDING`, `LATER`, `DETERMINED`, `DISPUTED`; `NOT_PRESENTED`;
 `market(now_ns, directory=None)`; `calls(market)`, the URLs asked; and
-`page` as above, with `datasets_now`.
+`page` as above, with `datasets_now`. From 0.31.0 (contract v26) also
+`EVENT` and `EVENT_PLACEHOLDERS`, two of the venue's events as its
+conversion reads them (`event_contracts.Event`): one whose members the
+venue states mutually exclusive and exhaustive, and one adding outcomes
+named later, which states no exhaustiveness. A venue whose module names
+neither leaves `reports-an-event-group` and
+`reports-a-flag-the-venue-does-not-state` to its own producers or to
+`NOT_PRESENTED`, with why.
+
+Every data plugin's suite holds `queries-the-lake-within-bounds` from
+contract v26: one bounded query of a kind its role reads
+(`lake_query(subject)` is the producer both venues' checks use).
 """
 
 from __future__ import annotations
@@ -73,6 +84,7 @@ __all__ = [
     "PairsChecks",
     "event_contract_producers",
     "held",
+    "lake_query",
     "hear",
     "pairs_producers",
     "payout",
@@ -334,6 +346,22 @@ def _mutated(feed: Any, mutations: dict[str, Any]) -> Any:
 # ── The data suite's producers ──────────────────────────────────────────
 
 
+def lake_query(subject: str, kind: str = "prices") -> Producer:
+    """`queries-the-lake-within-bounds` (contract v26, W10.10): one bounded
+    query of a kind the role reads, naming the field it wants by its
+    dictionary entry and a row limit."""
+
+    async def produce(recorder: Recorder) -> None:
+        await recorder.query_lake(
+            kind=kind,
+            subjects=[ops.SubjectRef(entity_id=subject)],
+            fields=["meridian.v1.Price.price"],
+            row_limit=100,
+        )
+
+    return produce
+
+
 def pairs_producers(venue: Any, **mutations: Any) -> dict[str, Producer]:
     """Each data-suite case's producer for a pairs venue: the plugin's own
     steps on its own exchange; `mutations` replace a `Feed` method, to prove
@@ -492,6 +520,7 @@ def pairs_producers(venue: Any, **mutations: Any) -> dict[str, Producer]:
         "a-one-sided-quote": one_sided,
         "a-restarts-gap-backfilled": restarted,
         "reads-its-datasets-licences": licences,
+        "queries-the-lake-within-bounds": lake_query("INS-suite-1"),
     }
     if venue.FX_BASE:
         made["an-fx-rate"] = daily(venue.FX_BASE, PRICE)
@@ -599,7 +628,32 @@ def event_contract_producers(venue: Any, **mutations: Any) -> dict[str, Producer
         "a-quote-recorded": live(venue.BASE, QUOTE),
         "a-one-sided-quote": live(venue.ONE_SIDED, QUOTE),
         "reads-its-datasets-licences": licences,
+        "queries-the-lake-within-bounds": lake_query("INS-suite-1"),
     }
+
+    def grouped(event: Any) -> Producer | None:
+        # Contract v26 (W3.29): the venue's event, as its conversion read
+        # it, its members resolved and the grouping reported as stated.
+        if event is None:
+            return None
+
+        async def produce(recorder: Recorder) -> None:
+            feed, store = made_on(recorder, mutate=True)
+            for code in event.members:
+                await held(store, feed, code)
+            answer = await feed.report_event(event)
+            if answer is None:
+                raise AssertionError(f"the event {event.ref} was held back")
+
+        return produce
+
+    groups = {
+        "reports-an-event-group": grouped(getattr(venue, "EVENT", None)),
+        "reports-a-flag-the-venue-does-not-state": grouped(
+            getattr(venue, "EVENT_PLACEHOLDERS", None)
+        ),
+    }
+    made.update({name: each for name, each in groups.items() if each is not None})
     outcomes = {
         "records-an-outcome": outcome(venue.DETERMINED),
         "restates-a-disputed-outcome": outcome(*venue.DISPUTED) if venue.DISPUTED else None,
