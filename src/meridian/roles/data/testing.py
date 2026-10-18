@@ -1362,7 +1362,7 @@ class PairsChecks(_PageChecks):
         lake = self.lake()
 
         def refused(_: Any) -> Any:
-            raise NotGranted("platform.lake.query.trades", "not granted")
+            raise NotGranted("platform.lake.query.list-trades", "not granted")
 
         lake.answer("ListTrades", refused)
         feed, _ = await self._streaming(lake)
@@ -1373,7 +1373,7 @@ class PairsChecks(_PageChecks):
         lake = self.lake()
 
         def refused(_: Any) -> Any:
-            raise NotGranted("platform.lake.query.datasets", "not granted")
+            raise NotGranted("platform.lake.query.list-datasets", "not granted")
 
         lake.answer("ListDatasets", refused)
         feed = self.feed(lake)
@@ -1899,7 +1899,7 @@ class EventContractsChecks(_PageChecks):
         lake = self.lake()
 
         def refused(_: Any) -> Any:
-            raise NotGranted("platform.lake.query.datasets", "not granted")
+            raise NotGranted("platform.lake.query.list-datasets", "not granted")
 
         lake.answer("ListDatasets", refused)
         feed = self.feed(lake)
