@@ -20,7 +20,9 @@ held under a pause or a stop and cancelled under a stop, rejected
 cancels and replaces, the venue's statuses reported in the contract's
 meanings, fills and busts into the book with their settlement dates, the
 venue's catalogue published, and fills of orders placed outside the platform
-reported on no placement (`Watched`). The values the adapter speaks in:
+reported on no placement (`Watched`), and from 0.31.0 the charges a venue
+states apart from its orders (`VenueCharge`, `charged_file`) and a fill's
+settlement date it states. The values the adapter speaks in:
 `Asked`, `Change`, `VenueOrder`, `Fill`, the status categories (`WORKING`,
 `FILLED`, `CANCELLED`, `REJECTED`, `EXPIRED`, `SUSPENDED`, `DONE_FOR_DAY`,
 `REPLACED`), `VenueRefused` and `VenueUnanswered`; `number` (one function
@@ -71,10 +73,12 @@ from ._trader import (
     Shown,
     Trader,
     Venue,
+    VenueCharge,
     VenueOrder,
     Watched,
     Worked,
     basis_of,
+    charged_file,
     moment,
     symbol_of,
     trading_files,
@@ -105,6 +109,7 @@ __all__ = [
     "Shown",
     "Trader",
     "Venue",
+    "VenueCharge",
     "VenueOrder",
     "VenueRefused",
     "VenueUnanswered",
@@ -112,6 +117,7 @@ __all__ = [
     "Worked",
     "basis_of",
     "bust_id",
+    "charged_file",
     "execution_id",
     "fill_price",
     "filled_in_book",

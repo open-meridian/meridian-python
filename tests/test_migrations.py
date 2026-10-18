@@ -1396,3 +1396,12 @@ def test_a_listings_layer_a_plugin_keeps_itself_is_left_to_move_onto_the_sdk() -
     )
     result = migrate({"src/br/lake.py": copied}, "0.30.0", "0.31.0")
     assert left_by_hand(result) == [("lake-onto-sdk", "src/br/lake.py", 5)]
+
+
+def test_a_trader_in_snaptrades_shape_is_left_to_move_onto_the_sdk() -> None:
+    copied = (
+        "class Charged:\n    pass\n\n\nclass Worked:\n    pass\n\n\nclass Trader:\n"
+        "    async def _charges(self, venue): ...\n"
+    )
+    result = migrate({"src/st/trading.py": copied}, "0.30.0", "0.31.0")
+    assert left_by_hand(result) == [("trading-onto-sdk", "src/st/trading.py", 9)]

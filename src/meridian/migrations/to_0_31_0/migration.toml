@@ -118,3 +118,18 @@ broker's: attributes(stated) from its trade conditions, withdrawn_unrecorded(sta
 (stated) and sequence_of(stated); re-export DAILY, LIVE, TRADES, PRICE, QUOTE, TRADE, \
 LIVE_KINDS, LIVE_CADENCE_SECONDS, Standing and the rest from the SDK, and Products as \
 listings.Listings; the source reads its trade history only where it defines trades()"""
+
+[[by_hand]]
+rule = "trading-onto-sdk"
+what = """a connectivity plugin's own trader in SnapTrade 0.18.0's shape -- a \
+trading.py defining Trader, Charged and Worked, its charges read from the account's \
+activities -- which is meridian.roles.connectivity's from 0.31.0 (ruling 213), the \
+Trader now reporting charges a venue states apart from its orders and a fill's stated \
+settlement date"""
+instead = """keep only the adapter (a class with statuses, sides, sides_said, source, \
+accounts, catalogue, place, orders, cancel, replace, not_replaceable and keep, and \
+optionally charges and stated_settlement, its calls blocking or async), reading the \
+venue's records into VenueOrder (with market_zone where the venue states the listing's \
+zone) and VenueCharge; construct connectivity.Trader over it (charged=Sent(...), \
+market_zone=...); in the tests, set trader.started as the SDK's testing.Rig does, and \
+read a Worked's venue_order_id"""

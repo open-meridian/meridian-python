@@ -6,9 +6,10 @@ BASE=ghcr.io/open-meridian/plugin-python:<v>@sha256:<hex>`) is moved to
 read the new release's digest; `meridian plugin migrate` (CLI 0.1.47) has
 moved the tag and the digest before this runs, and then there is nothing to
 do. Left by hand: pinning the digest again; a role's suite test that v26's
-cases are new to; and a connectivity adapter saying no environment its
-session reached; and custody's pages and a broker's listings layer a plugin
-keeps itself, which are the SDK's (ruling 213). migration.toml, beside this, records the rules.
+cases are new to; a connectivity adapter saying no environment its session
+reached; and custody's pages, a broker's listings layer and a trader in
+SnapTrade's shape a plugin keeps itself, which are the SDK's (ruling 213).
+migration.toml, beside this, records the rules.
 """
 
 from __future__ import annotations
@@ -59,6 +60,15 @@ def left(path: str, text: str) -> list[Finding]:
         and re.search(r"^async def link_account\(", text, re.M)
     ):
         found.append(Finding("custody-pages-onto-sdk", path, 1, line_of(text, 1)))
+    trader = re.search(r"^class Trader\b", text, re.M)
+    if (
+        not is_test(path)
+        and trader is not None
+        and all(re.search(rf"^class {name}\b", text, re.M) for name in ("Charged", "Worked"))
+        and re.search(r"^    async def _charges\(", text, re.M)
+    ):
+        line = text[: trader.start()].count("\n") + 1
+        found.append(Finding("trading-onto-sdk", path, line, line_of(text, line)))
     lake = re.search(r"^class Lake\b", text, re.M)
     if (
         not is_test(path)
