@@ -1,0 +1,92 @@
+# open-meridian 0.30.0 to 0.31.0: contract v26
+# (sdk-contract/the-analytics-component-contract; the lake's bounded query,
+# sdk-contract/the-lake-has-a-bounded-query-tool; names approved 2026-10-18,
+# 283 to 298). The SDK declares contract v26; nothing a plugin called is
+# removed, but every role's suite holds new cases a plugin's own suite test
+# must map, so a plugin is not verified until it does: breaking.
+from = "0.30.0"
+to = "0.31.0"
+summary = """
+The SDK declares contract v26 (meridian.SCHEMA_VERSION). A reporting,
+portfolio, compliance or signal plugin asks the analytics component through
+meridian.analytics: typed builders for a job (job, measure, what_if, trade),
+its answer read with computed_as and scenario_key handled in every value
+(Answer, JobFigure), and a job answered later waited for and caught up by
+sequence (Jobs); the reference computations v26's engine equals exactly,
+hashes included, are meridian.analytics.reference. A pricing plugin answers
+the component's batches with meridian.roles.pricing.Pricer, and `meridian
+plugin new --role pricing` writes one. Every role reads event groups and
+hears each new version (meridian.EventGroups); a venue's data plugin reports
+its venue's groups (event_contracts.Feed.report_event). meridian.environment()
+offers paper beside sandbox (demo="paper"); a connectivity plugin's adapter
+says which environment its session reached (Venue.environment, read with
+meridian.reached_environment), which the Trader publishes on its catalogue:
+the second key of the agents' demo-only guard, shown with
+meridian.connection_badge and checked before sending with
+Caller.agent_refused. A plugin calling a model counts its tokens on its
+heartbeat (plugin.count_model_tokens), and asks the lake one bounded query
+(plugin.query_lake).
+
+The suites: every role's holds hears-and-reads-an-event-group, which the
+SDK answers for a plugin that maps it not; a reading role's hold
+runs-a-job-and-reads-its-answer, catches-up-finished-jobs and
+queries-the-lake-within-bounds; the data suite's reports-an-event-group and
+reports-a-flag-the-venue-does-not-state (about outcomes) and
+queries-the-lake-within-bounds; the ems's, the oms's, portfolio's and
+compliance's reads-the-agents-guard, and the ems's five cases of the guard;
+custody's thin holding is about securities, which a custodian holding only
+cash and currencies marks not presented. A plugin's suite test maps each new
+case, or marks one it may not present with why: left by hand.
+
+`meridian plugin migrate` (CLI 0.1.47 and later) moves a base pinned by
+digest with its tag, the new release's digest read from its registry, or
+drops the digest where it cannot be read. Run without it, this step does
+the same offline: a base pinned by digest at an older release is moved to
+0.31.0 and its digest dropped, left by hand to pin again; an old digest is
+never kept under a new tag.
+"""
+breaking = true
+rewrite = "rewrite.py"
+
+[[rewrites]]
+rule = "base-digest-dropped"
+what = """the Dockerfile's base, pinned by digest at an older release of \
+plugin-python, moved to 0.31.0 with its digest dropped: the migration runs with no \
+network, so it cannot read 0.31.0's digest, and an old digest under a new tag would \
+build the old release while saying the new one"""
+
+[[by_hand]]
+rule = "base-digest"
+what = """the Dockerfile's base was pinned by digest, and the digest was dropped \
+when its tag moved"""
+instead = """pin it again: `ghcr.io/open-meridian/plugin-python:0.31.0@sha256:<digest>`, \
+the digest `docker buildx imagetools inspect ghcr.io/open-meridian/plugin-python:0.31.0` \
+names"""
+
+[[by_hand]]
+rule = "suite-cases-v26"
+what = """a test running a role's suite that contract v26 adds cases to: \
+runs-a-job-and-reads-its-answer, catches-up-finished-jobs and \
+queries-the-lake-within-bounds (reporting, portfolio, compliance, signal); \
+reads-the-agents-guard (oms, portfolio, compliance, ems); the ems's five guard \
+cases; queries-the-lake-within-bounds (data, ems, operations); and the data suite's \
+reports-an-event-group and reports-a-flag-the-venue-does-not-state"""
+instead = """map each new case to the plugin's own producer -- a job built with \
+meridian.analytics and run with analytics.Jobs, the guard read with \
+read_agent_orders_demo_only, one bounded plugin.query_lake, an event group \
+reported with event_contracts.Feed.report_event -- or, for a case about \
+something the plugin's source never presents (`about`: outcomes, securities), name \
+it in not_presented with why; hears-and-reads-an-event-group is answered by the SDK \
+unless the plugin maps it"""
+
+[[by_hand]]
+rule = "venue-reports-no-environment"
+what = """a connectivity plugin's venue adapter (a class defining catalogue and \
+place) that says no environment its session reached: from contract v26 the \
+catalogue carries it, and a connection with no report counts live, so an agent's \
+placement on it is refused while the agents' guard is on"""
+instead = """give the adapter an `environment` attribute, read from the host its \
+session called: environment = meridian.reached_environment(base_url, \
+live=("api.example.com",), paper=("paper-api.example.com",)); and offer the vendor's \
+demo by its word in the setting, meridian.environment(demo="paper") where it is \
+paper trading"""
