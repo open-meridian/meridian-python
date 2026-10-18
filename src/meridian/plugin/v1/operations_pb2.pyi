@@ -548,6 +548,7 @@ class UnplacedReason(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     UNPLACED_REASON_UNKNOWN_PLACEMENT: _ClassVar[UnplacedReason]
     UNPLACED_REASON_UNMAPPED_VENUE_ACCOUNT: _ClassVar[UnplacedReason]
     UNPLACED_REASON_NOTHING_PENDING: _ClassVar[UnplacedReason]
+    UNPLACED_REASON_UNKNOWN_EXECUTION: _ClassVar[UnplacedReason]
 
 class TradingInstructionValue(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
@@ -789,6 +790,41 @@ class ObservationMode(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     OBSERVATION_MODE_PULL: _ClassVar[ObservationMode]
     OBSERVATION_MODE_PUSH: _ClassVar[ObservationMode]
     OBSERVATION_MODE_STREAM: _ClassVar[ObservationMode]
+
+class ScenarioKind(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    SCENARIO_KIND_UNSPECIFIED: _ClassVar[ScenarioKind]
+    SCENARIO_KIND_BASE: _ClassVar[ScenarioKind]
+    SCENARIO_KIND_WHAT_IF: _ClassVar[ScenarioKind]
+    SCENARIO_KIND_HISTORICAL_DAY: _ClassVar[ScenarioKind]
+    SCENARIO_KIND_OUTCOME: _ClassVar[ScenarioKind]
+    SCENARIO_KIND_NONE_OF_THE_NAMED: _ClassVar[ScenarioKind]
+
+class ComputedAs(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    COMPUTED_AS_UNSPECIFIED: _ClassVar[ComputedAs]
+    COMPUTED_AS_EXACT: _ClassVar[ComputedAs]
+    COMPUTED_AS_MODEL: _ClassVar[ComputedAs]
+
+class NotEvaluatedReason(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    NOT_EVALUATED_REASON_UNSPECIFIED: _ClassVar[NotEvaluatedReason]
+    NOT_EVALUATED_REASON_PRICE_MISSING: _ClassVar[NotEvaluatedReason]
+    NOT_EVALUATED_REASON_PRICE_STALE: _ClassVar[NotEvaluatedReason]
+    NOT_EVALUATED_REASON_CONVERSION_MISSING: _ClassVar[NotEvaluatedReason]
+    NOT_EVALUATED_REASON_NOT_ENTITLED: _ClassVar[NotEvaluatedReason]
+    NOT_EVALUATED_REASON_LOCAL_RECORD: _ClassVar[NotEvaluatedReason]
+    NOT_EVALUATED_REASON_IMPLEMENTATION_UNAVAILABLE: _ClassVar[NotEvaluatedReason]
+    NOT_EVALUATED_REASON_SCHEME_NOT_HELD: _ClassVar[NotEvaluatedReason]
+    NOT_EVALUATED_REASON_GROUP_NOT_EXHAUSTIVE: _ClassVar[NotEvaluatedReason]
+    NOT_EVALUATED_REASON_HISTORY_INSUFFICIENT: _ClassVar[NotEvaluatedReason]
+
+class EventGroupFlag(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    EVENT_GROUP_FLAG_UNSPECIFIED: _ClassVar[EventGroupFlag]
+    EVENT_GROUP_FLAG_TRUE: _ClassVar[EventGroupFlag]
+    EVENT_GROUP_FLAG_FALSE: _ClassVar[EventGroupFlag]
+    EVENT_GROUP_FLAG_NOT_STATED: _ClassVar[EventGroupFlag]
 ACCOUNT_KIND_UNSPECIFIED: AccountKind
 ACCOUNT_KIND_CASH: AccountKind
 ACCOUNT_KIND_MARGIN: AccountKind
@@ -1133,6 +1169,7 @@ UNPLACED_REASON_UNSPECIFIED: UnplacedReason
 UNPLACED_REASON_UNKNOWN_PLACEMENT: UnplacedReason
 UNPLACED_REASON_UNMAPPED_VENUE_ACCOUNT: UnplacedReason
 UNPLACED_REASON_NOTHING_PENDING: UnplacedReason
+UNPLACED_REASON_UNKNOWN_EXECUTION: UnplacedReason
 TRADING_INSTRUCTION_VALUE_UNSPECIFIED: TradingInstructionValue
 TRADING_INSTRUCTION_VALUE_ACTIVE: TradingInstructionValue
 TRADING_INSTRUCTION_VALUE_PAUSE: TradingInstructionValue
@@ -1287,6 +1324,29 @@ OBSERVATION_MODE_UNSPECIFIED: ObservationMode
 OBSERVATION_MODE_PULL: ObservationMode
 OBSERVATION_MODE_PUSH: ObservationMode
 OBSERVATION_MODE_STREAM: ObservationMode
+SCENARIO_KIND_UNSPECIFIED: ScenarioKind
+SCENARIO_KIND_BASE: ScenarioKind
+SCENARIO_KIND_WHAT_IF: ScenarioKind
+SCENARIO_KIND_HISTORICAL_DAY: ScenarioKind
+SCENARIO_KIND_OUTCOME: ScenarioKind
+SCENARIO_KIND_NONE_OF_THE_NAMED: ScenarioKind
+COMPUTED_AS_UNSPECIFIED: ComputedAs
+COMPUTED_AS_EXACT: ComputedAs
+COMPUTED_AS_MODEL: ComputedAs
+NOT_EVALUATED_REASON_UNSPECIFIED: NotEvaluatedReason
+NOT_EVALUATED_REASON_PRICE_MISSING: NotEvaluatedReason
+NOT_EVALUATED_REASON_PRICE_STALE: NotEvaluatedReason
+NOT_EVALUATED_REASON_CONVERSION_MISSING: NotEvaluatedReason
+NOT_EVALUATED_REASON_NOT_ENTITLED: NotEvaluatedReason
+NOT_EVALUATED_REASON_LOCAL_RECORD: NotEvaluatedReason
+NOT_EVALUATED_REASON_IMPLEMENTATION_UNAVAILABLE: NotEvaluatedReason
+NOT_EVALUATED_REASON_SCHEME_NOT_HELD: NotEvaluatedReason
+NOT_EVALUATED_REASON_GROUP_NOT_EXHAUSTIVE: NotEvaluatedReason
+NOT_EVALUATED_REASON_HISTORY_INSUFFICIENT: NotEvaluatedReason
+EVENT_GROUP_FLAG_UNSPECIFIED: EventGroupFlag
+EVENT_GROUP_FLAG_TRUE: EventGroupFlag
+EVENT_GROUP_FLAG_FALSE: EventGroupFlag
+EVENT_GROUP_FLAG_NOT_STATED: EventGroupFlag
 
 class Published(_message.Message):
     __slots__ = ("message_id",)
@@ -3554,6 +3614,210 @@ class ListDatasetsResult(_message.Message):
     entitlements: _containers.RepeatedCompositeFieldContainer[DatasetEntitlement]
     def __init__(self, datasets: _Optional[_Iterable[_Union[DatasetRef, _Mapping]]] = ..., licences: _Optional[_Iterable[_Union[DatasetLicence, _Mapping]]] = ..., entitlements: _Optional[_Iterable[_Union[DatasetEntitlement, _Mapping]]] = ...) -> None: ...
 
+class RunJobParams(_message.Message):
+    __slots__ = ("job",)
+    JOB_FIELD_NUMBER: _ClassVar[int]
+    job: Job
+    def __init__(self, job: _Optional[_Union[Job, _Mapping]] = ...) -> None: ...
+
+class RunJobResult(_message.Message):
+    __slots__ = ("answered_inline", "job_id", "answer")
+    ANSWERED_INLINE_FIELD_NUMBER: _ClassVar[int]
+    JOB_ID_FIELD_NUMBER: _ClassVar[int]
+    ANSWER_FIELD_NUMBER: _ClassVar[int]
+    answered_inline: bool
+    job_id: str
+    answer: JobAnswer
+    def __init__(self, answered_inline: bool = ..., job_id: _Optional[str] = ..., answer: _Optional[_Union[JobAnswer, _Mapping]] = ...) -> None: ...
+
+class ListMeasureDefinitionsParams(_message.Message):
+    __slots__ = ()
+    def __init__(self) -> None: ...
+
+class ListMeasureDefinitionsResult(_message.Message):
+    __slots__ = ("definitions",)
+    DEFINITIONS_FIELD_NUMBER: _ClassVar[int]
+    definitions: _containers.RepeatedCompositeFieldContainer[MeasureDefinition]
+    def __init__(self, definitions: _Optional[_Iterable[_Union[MeasureDefinition, _Mapping]]] = ...) -> None: ...
+
+class ListPriceBatchesParams(_message.Message):
+    __slots__ = ("after_sequence",)
+    AFTER_SEQUENCE_FIELD_NUMBER: _ClassVar[int]
+    after_sequence: int
+    def __init__(self, after_sequence: _Optional[int] = ...) -> None: ...
+
+class ListPriceBatchesResult(_message.Message):
+    __slots__ = ("batches", "sequence")
+    BATCHES_FIELD_NUMBER: _ClassVar[int]
+    SEQUENCE_FIELD_NUMBER: _ClassVar[int]
+    batches: _containers.RepeatedCompositeFieldContainer[PriceBatchRequest]
+    sequence: int
+    def __init__(self, batches: _Optional[_Iterable[_Union[PriceBatchRequest, _Mapping]]] = ..., sequence: _Optional[int] = ...) -> None: ...
+
+class AnswerPriceBatchParams(_message.Message):
+    __slots__ = ("batch_id", "values", "sensitivities", "acting_for")
+    BATCH_ID_FIELD_NUMBER: _ClassVar[int]
+    VALUES_FIELD_NUMBER: _ClassVar[int]
+    SENSITIVITIES_FIELD_NUMBER: _ClassVar[int]
+    ACTING_FOR_FIELD_NUMBER: _ClassVar[int]
+    batch_id: str
+    values: _containers.RepeatedCompositeFieldContainer[PricedUnit]
+    sensitivities: _containers.RepeatedCompositeFieldContainer[Sensitivity]
+    acting_for: _sidecar_pb2.CallerAssertion
+    def __init__(self, batch_id: _Optional[str] = ..., values: _Optional[_Iterable[_Union[PricedUnit, _Mapping]]] = ..., sensitivities: _Optional[_Iterable[_Union[Sensitivity, _Mapping]]] = ..., acting_for: _Optional[_Union[_sidecar_pb2.CallerAssertion, _Mapping]] = ...) -> None: ...
+
+class AnswerPriceBatchResult(_message.Message):
+    __slots__ = ("batch_id",)
+    BATCH_ID_FIELD_NUMBER: _ClassVar[int]
+    batch_id: str
+    def __init__(self, batch_id: _Optional[str] = ...) -> None: ...
+
+class ListFinishedJobsParams(_message.Message):
+    __slots__ = ("after_sequence",)
+    AFTER_SEQUENCE_FIELD_NUMBER: _ClassVar[int]
+    after_sequence: int
+    def __init__(self, after_sequence: _Optional[int] = ...) -> None: ...
+
+class ListFinishedJobsResult(_message.Message):
+    __slots__ = ("finished", "sequence")
+    FINISHED_FIELD_NUMBER: _ClassVar[int]
+    SEQUENCE_FIELD_NUMBER: _ClassVar[int]
+    finished: _containers.RepeatedCompositeFieldContainer[JobFinishedEvent]
+    sequence: int
+    def __init__(self, finished: _Optional[_Iterable[_Union[JobFinishedEvent, _Mapping]]] = ..., sequence: _Optional[int] = ...) -> None: ...
+
+class ReadJobAnswerParams(_message.Message):
+    __slots__ = ("job_id",)
+    JOB_ID_FIELD_NUMBER: _ClassVar[int]
+    job_id: str
+    def __init__(self, job_id: _Optional[str] = ...) -> None: ...
+
+class ReadJobAnswerResult(_message.Message):
+    __slots__ = ("job_id", "figures", "not_evaluated", "provenance")
+    JOB_ID_FIELD_NUMBER: _ClassVar[int]
+    FIGURES_FIELD_NUMBER: _ClassVar[int]
+    NOT_EVALUATED_FIELD_NUMBER: _ClassVar[int]
+    PROVENANCE_FIELD_NUMBER: _ClassVar[int]
+    job_id: str
+    figures: _containers.RepeatedCompositeFieldContainer[Figure]
+    not_evaluated: _containers.RepeatedCompositeFieldContainer[NotEvaluated]
+    provenance: AnswerProvenance
+    def __init__(self, job_id: _Optional[str] = ..., figures: _Optional[_Iterable[_Union[Figure, _Mapping]]] = ..., not_evaluated: _Optional[_Iterable[_Union[NotEvaluated, _Mapping]]] = ..., provenance: _Optional[_Union[AnswerProvenance, _Mapping]] = ...) -> None: ...
+
+class ReportEventGroupParams(_message.Message):
+    __slots__ = ("venue_id", "venue_event_ref", "title", "member_instrument_ids", "mutually_exclusive", "exhaustive", "series_id", "valid_from_ns", "raw_record", "acting_for")
+    VENUE_ID_FIELD_NUMBER: _ClassVar[int]
+    VENUE_EVENT_REF_FIELD_NUMBER: _ClassVar[int]
+    TITLE_FIELD_NUMBER: _ClassVar[int]
+    MEMBER_INSTRUMENT_IDS_FIELD_NUMBER: _ClassVar[int]
+    MUTUALLY_EXCLUSIVE_FIELD_NUMBER: _ClassVar[int]
+    EXHAUSTIVE_FIELD_NUMBER: _ClassVar[int]
+    SERIES_ID_FIELD_NUMBER: _ClassVar[int]
+    VALID_FROM_NS_FIELD_NUMBER: _ClassVar[int]
+    RAW_RECORD_FIELD_NUMBER: _ClassVar[int]
+    ACTING_FOR_FIELD_NUMBER: _ClassVar[int]
+    venue_id: str
+    venue_event_ref: str
+    title: str
+    member_instrument_ids: _containers.RepeatedScalarFieldContainer[str]
+    mutually_exclusive: EventGroupFlag
+    exhaustive: EventGroupFlag
+    series_id: str
+    valid_from_ns: int
+    raw_record: RawRecordRef
+    acting_for: _sidecar_pb2.CallerAssertion
+    def __init__(self, venue_id: _Optional[str] = ..., venue_event_ref: _Optional[str] = ..., title: _Optional[str] = ..., member_instrument_ids: _Optional[_Iterable[str]] = ..., mutually_exclusive: _Optional[_Union[EventGroupFlag, str]] = ..., exhaustive: _Optional[_Union[EventGroupFlag, str]] = ..., series_id: _Optional[str] = ..., valid_from_ns: _Optional[int] = ..., raw_record: _Optional[_Union[RawRecordRef, _Mapping]] = ..., acting_for: _Optional[_Union[_sidecar_pb2.CallerAssertion, _Mapping]] = ...) -> None: ...
+
+class ReportEventGroupResult(_message.Message):
+    __slots__ = ("event_group", "pending_review")
+    EVENT_GROUP_FIELD_NUMBER: _ClassVar[int]
+    PENDING_REVIEW_FIELD_NUMBER: _ClassVar[int]
+    event_group: EventGroup
+    pending_review: bool
+    def __init__(self, event_group: _Optional[_Union[EventGroup, _Mapping]] = ..., pending_review: bool = ...) -> None: ...
+
+class ListEventGroupsParams(_message.Message):
+    __slots__ = ("instrument_ids", "event_group_ids", "as_of_ns", "after_sequence", "page_size", "cursor")
+    INSTRUMENT_IDS_FIELD_NUMBER: _ClassVar[int]
+    EVENT_GROUP_IDS_FIELD_NUMBER: _ClassVar[int]
+    AS_OF_NS_FIELD_NUMBER: _ClassVar[int]
+    AFTER_SEQUENCE_FIELD_NUMBER: _ClassVar[int]
+    PAGE_SIZE_FIELD_NUMBER: _ClassVar[int]
+    CURSOR_FIELD_NUMBER: _ClassVar[int]
+    instrument_ids: _containers.RepeatedScalarFieldContainer[str]
+    event_group_ids: _containers.RepeatedScalarFieldContainer[str]
+    as_of_ns: int
+    after_sequence: int
+    page_size: int
+    cursor: str
+    def __init__(self, instrument_ids: _Optional[_Iterable[str]] = ..., event_group_ids: _Optional[_Iterable[str]] = ..., as_of_ns: _Optional[int] = ..., after_sequence: _Optional[int] = ..., page_size: _Optional[int] = ..., cursor: _Optional[str] = ...) -> None: ...
+
+class ListEventGroupsResult(_message.Message):
+    __slots__ = ("event_groups", "sequence", "next_cursor")
+    EVENT_GROUPS_FIELD_NUMBER: _ClassVar[int]
+    SEQUENCE_FIELD_NUMBER: _ClassVar[int]
+    NEXT_CURSOR_FIELD_NUMBER: _ClassVar[int]
+    event_groups: _containers.RepeatedCompositeFieldContainer[EventGroup]
+    sequence: int
+    next_cursor: str
+    def __init__(self, event_groups: _Optional[_Iterable[_Union[EventGroup, _Mapping]]] = ..., sequence: _Optional[int] = ..., next_cursor: _Optional[str] = ...) -> None: ...
+
+class ReadAgentOrdersDemoOnlyParams(_message.Message):
+    __slots__ = ()
+    def __init__(self) -> None: ...
+
+class ReadAgentOrdersDemoOnlyResult(_message.Message):
+    __slots__ = ("agent_orders_demo_only",)
+    AGENT_ORDERS_DEMO_ONLY_FIELD_NUMBER: _ClassVar[int]
+    agent_orders_demo_only: bool
+    def __init__(self, agent_orders_demo_only: bool = ...) -> None: ...
+
+class QueryLakeParams(_message.Message):
+    __slots__ = ("kind", "subjects", "sources", "valid_from_ns", "valid_until_ns", "from_date", "to_date", "as_of_ns", "fields", "row_limit")
+    KIND_FIELD_NUMBER: _ClassVar[int]
+    SUBJECTS_FIELD_NUMBER: _ClassVar[int]
+    SOURCES_FIELD_NUMBER: _ClassVar[int]
+    VALID_FROM_NS_FIELD_NUMBER: _ClassVar[int]
+    VALID_UNTIL_NS_FIELD_NUMBER: _ClassVar[int]
+    FROM_DATE_FIELD_NUMBER: _ClassVar[int]
+    TO_DATE_FIELD_NUMBER: _ClassVar[int]
+    AS_OF_NS_FIELD_NUMBER: _ClassVar[int]
+    FIELDS_FIELD_NUMBER: _ClassVar[int]
+    ROW_LIMIT_FIELD_NUMBER: _ClassVar[int]
+    kind: str
+    subjects: _containers.RepeatedCompositeFieldContainer[SubjectRef]
+    sources: SourceChoice
+    valid_from_ns: int
+    valid_until_ns: int
+    from_date: str
+    to_date: str
+    as_of_ns: int
+    fields: _containers.RepeatedScalarFieldContainer[str]
+    row_limit: int
+    def __init__(self, kind: _Optional[str] = ..., subjects: _Optional[_Iterable[_Union[SubjectRef, _Mapping]]] = ..., sources: _Optional[_Union[SourceChoice, _Mapping]] = ..., valid_from_ns: _Optional[int] = ..., valid_until_ns: _Optional[int] = ..., from_date: _Optional[str] = ..., to_date: _Optional[str] = ..., as_of_ns: _Optional[int] = ..., fields: _Optional[_Iterable[str]] = ..., row_limit: _Optional[int] = ...) -> None: ...
+
+class QueryLakeResult(_message.Message):
+    __slots__ = ("prices", "bars", "trades", "quotes", "outcomes", "unanswered", "datasets", "watermark", "truncated")
+    PRICES_FIELD_NUMBER: _ClassVar[int]
+    BARS_FIELD_NUMBER: _ClassVar[int]
+    TRADES_FIELD_NUMBER: _ClassVar[int]
+    QUOTES_FIELD_NUMBER: _ClassVar[int]
+    OUTCOMES_FIELD_NUMBER: _ClassVar[int]
+    UNANSWERED_FIELD_NUMBER: _ClassVar[int]
+    DATASETS_FIELD_NUMBER: _ClassVar[int]
+    WATERMARK_FIELD_NUMBER: _ClassVar[int]
+    TRUNCATED_FIELD_NUMBER: _ClassVar[int]
+    prices: _containers.RepeatedCompositeFieldContainer[Price]
+    bars: _containers.RepeatedCompositeFieldContainer[Bar]
+    trades: _containers.RepeatedCompositeFieldContainer[Trade]
+    quotes: _containers.RepeatedCompositeFieldContainer[Quote]
+    outcomes: _containers.RepeatedCompositeFieldContainer[Outcome]
+    unanswered: _containers.RepeatedCompositeFieldContainer[Unanswered]
+    datasets: _containers.RepeatedCompositeFieldContainer[DatasetRef]
+    watermark: Watermark
+    truncated: bool
+    def __init__(self, prices: _Optional[_Iterable[_Union[Price, _Mapping]]] = ..., bars: _Optional[_Iterable[_Union[Bar, _Mapping]]] = ..., trades: _Optional[_Iterable[_Union[Trade, _Mapping]]] = ..., quotes: _Optional[_Iterable[_Union[Quote, _Mapping]]] = ..., outcomes: _Optional[_Iterable[_Union[Outcome, _Mapping]]] = ..., unanswered: _Optional[_Iterable[_Union[Unanswered, _Mapping]]] = ..., datasets: _Optional[_Iterable[_Union[DatasetRef, _Mapping]]] = ..., watermark: _Optional[_Union[Watermark, _Mapping]] = ..., truncated: bool = ...) -> None: ...
+
 class ReceiveRequest(_message.Message):
     __slots__ = ("rows", "subjects")
     ROWS_FIELD_NUMBER: _ClassVar[int]
@@ -3563,7 +3827,7 @@ class ReceiveRequest(_message.Message):
     def __init__(self, rows: _Optional[_Iterable[str]] = ..., subjects: _Optional[_Iterable[str]] = ...) -> None: ...
 
 class Delivery(_message.Message):
-    __slots__ = ("meta", "lost", "statement_recorded", "custodial_position_updated", "position_changed", "break_changed", "account_figures_recorded", "account_attribute_changed", "activity_recorded", "sync_status_recorded", "activity_re_resolved", "prices_recorded", "bars_recorded", "observations_wanted", "want_withdrawn", "trades_recorded", "quotes_recorded", "order_updated", "placement_updated", "execution_recorded", "unplaced_fact_recorded", "trading_instruction_changed", "locate_updated", "report_venue_catalogue", "outcomes_recorded", "replace_merged_instrument", "booking_updated", "alert_changed")
+    __slots__ = ("meta", "lost", "statement_recorded", "custodial_position_updated", "position_changed", "break_changed", "account_figures_recorded", "account_attribute_changed", "activity_recorded", "sync_status_recorded", "activity_re_resolved", "prices_recorded", "bars_recorded", "observations_wanted", "want_withdrawn", "trades_recorded", "quotes_recorded", "order_updated", "placement_updated", "execution_recorded", "unplaced_fact_recorded", "trading_instruction_changed", "locate_updated", "report_venue_catalogue", "outcomes_recorded", "replace_merged_instrument", "booking_updated", "alert_changed", "price_batch", "job_finished", "event_group_changed")
     META_FIELD_NUMBER: _ClassVar[int]
     LOST_FIELD_NUMBER: _ClassVar[int]
     STATEMENT_RECORDED_FIELD_NUMBER: _ClassVar[int]
@@ -3592,6 +3856,9 @@ class Delivery(_message.Message):
     REPLACE_MERGED_INSTRUMENT_FIELD_NUMBER: _ClassVar[int]
     BOOKING_UPDATED_FIELD_NUMBER: _ClassVar[int]
     ALERT_CHANGED_FIELD_NUMBER: _ClassVar[int]
+    PRICE_BATCH_FIELD_NUMBER: _ClassVar[int]
+    JOB_FINISHED_FIELD_NUMBER: _ClassVar[int]
+    EVENT_GROUP_CHANGED_FIELD_NUMBER: _ClassVar[int]
     meta: DeliveryMeta
     lost: Lost
     statement_recorded: StatementRecordedEvent
@@ -3620,7 +3887,10 @@ class Delivery(_message.Message):
     replace_merged_instrument: InstrumentReplacedEvent
     booking_updated: BookingUpdatedEvent
     alert_changed: AlertChangedEvent
-    def __init__(self, meta: _Optional[_Union[DeliveryMeta, _Mapping]] = ..., lost: _Optional[_Union[Lost, _Mapping]] = ..., statement_recorded: _Optional[_Union[StatementRecordedEvent, _Mapping]] = ..., custodial_position_updated: _Optional[_Union[CustodialPositionUpdatedEvent, _Mapping]] = ..., position_changed: _Optional[_Union[PositionChangedEvent, _Mapping]] = ..., break_changed: _Optional[_Union[BreakChangedEvent, _Mapping]] = ..., account_figures_recorded: _Optional[_Union[AccountFiguresRecordedEvent, _Mapping]] = ..., account_attribute_changed: _Optional[_Union[AccountAttributeChangedEvent, _Mapping]] = ..., activity_recorded: _Optional[_Union[ActivityRecordedEvent, _Mapping]] = ..., sync_status_recorded: _Optional[_Union[SyncStatusRecordedEvent, _Mapping]] = ..., activity_re_resolved: _Optional[_Union[ActivityReResolvedEvent, _Mapping]] = ..., prices_recorded: _Optional[_Union[PricesRecordedEvent, _Mapping]] = ..., bars_recorded: _Optional[_Union[BarsRecordedEvent, _Mapping]] = ..., observations_wanted: _Optional[_Union[ObservationsWantedEvent, _Mapping]] = ..., want_withdrawn: _Optional[_Union[WantWithdrawnEvent, _Mapping]] = ..., trades_recorded: _Optional[_Union[TradesRecordedEvent, _Mapping]] = ..., quotes_recorded: _Optional[_Union[QuotesRecordedEvent, _Mapping]] = ..., order_updated: _Optional[_Union[OrderUpdatedEvent, _Mapping]] = ..., placement_updated: _Optional[_Union[PlacementUpdatedEvent, _Mapping]] = ..., execution_recorded: _Optional[_Union[ExecutionRecordedEvent, _Mapping]] = ..., unplaced_fact_recorded: _Optional[_Union[UnplacedFactRecordedEvent, _Mapping]] = ..., trading_instruction_changed: _Optional[_Union[TradingInstructionChangedEvent, _Mapping]] = ..., locate_updated: _Optional[_Union[LocateUpdatedEvent, _Mapping]] = ..., report_venue_catalogue: _Optional[_Union[VenueCatalogueEvent, _Mapping]] = ..., outcomes_recorded: _Optional[_Union[OutcomesRecordedEvent, _Mapping]] = ..., replace_merged_instrument: _Optional[_Union[InstrumentReplacedEvent, _Mapping]] = ..., booking_updated: _Optional[_Union[BookingUpdatedEvent, _Mapping]] = ..., alert_changed: _Optional[_Union[AlertChangedEvent, _Mapping]] = ...) -> None: ...
+    price_batch: PriceBatchRequest
+    job_finished: JobFinishedEvent
+    event_group_changed: EventGroup
+    def __init__(self, meta: _Optional[_Union[DeliveryMeta, _Mapping]] = ..., lost: _Optional[_Union[Lost, _Mapping]] = ..., statement_recorded: _Optional[_Union[StatementRecordedEvent, _Mapping]] = ..., custodial_position_updated: _Optional[_Union[CustodialPositionUpdatedEvent, _Mapping]] = ..., position_changed: _Optional[_Union[PositionChangedEvent, _Mapping]] = ..., break_changed: _Optional[_Union[BreakChangedEvent, _Mapping]] = ..., account_figures_recorded: _Optional[_Union[AccountFiguresRecordedEvent, _Mapping]] = ..., account_attribute_changed: _Optional[_Union[AccountAttributeChangedEvent, _Mapping]] = ..., activity_recorded: _Optional[_Union[ActivityRecordedEvent, _Mapping]] = ..., sync_status_recorded: _Optional[_Union[SyncStatusRecordedEvent, _Mapping]] = ..., activity_re_resolved: _Optional[_Union[ActivityReResolvedEvent, _Mapping]] = ..., prices_recorded: _Optional[_Union[PricesRecordedEvent, _Mapping]] = ..., bars_recorded: _Optional[_Union[BarsRecordedEvent, _Mapping]] = ..., observations_wanted: _Optional[_Union[ObservationsWantedEvent, _Mapping]] = ..., want_withdrawn: _Optional[_Union[WantWithdrawnEvent, _Mapping]] = ..., trades_recorded: _Optional[_Union[TradesRecordedEvent, _Mapping]] = ..., quotes_recorded: _Optional[_Union[QuotesRecordedEvent, _Mapping]] = ..., order_updated: _Optional[_Union[OrderUpdatedEvent, _Mapping]] = ..., placement_updated: _Optional[_Union[PlacementUpdatedEvent, _Mapping]] = ..., execution_recorded: _Optional[_Union[ExecutionRecordedEvent, _Mapping]] = ..., unplaced_fact_recorded: _Optional[_Union[UnplacedFactRecordedEvent, _Mapping]] = ..., trading_instruction_changed: _Optional[_Union[TradingInstructionChangedEvent, _Mapping]] = ..., locate_updated: _Optional[_Union[LocateUpdatedEvent, _Mapping]] = ..., report_venue_catalogue: _Optional[_Union[VenueCatalogueEvent, _Mapping]] = ..., outcomes_recorded: _Optional[_Union[OutcomesRecordedEvent, _Mapping]] = ..., replace_merged_instrument: _Optional[_Union[InstrumentReplacedEvent, _Mapping]] = ..., booking_updated: _Optional[_Union[BookingUpdatedEvent, _Mapping]] = ..., alert_changed: _Optional[_Union[AlertChangedEvent, _Mapping]] = ..., price_batch: _Optional[_Union[PriceBatchRequest, _Mapping]] = ..., job_finished: _Optional[_Union[JobFinishedEvent, _Mapping]] = ..., event_group_changed: _Optional[_Union[EventGroup, _Mapping]] = ...) -> None: ...
 
 class DeliveryMeta(_message.Message):
     __slots__ = ("message_id", "correlation_id", "causation_id", "published_at_ns", "row", "journal", "cause", "own")
@@ -4215,12 +4485,26 @@ class MoneyMarketFund(_message.Message):
     def __init__(self, category: _Optional[_Union[MoneyMarketFundCategory, str]] = ..., investors: _Optional[_Union[MoneyMarketFundInvestors, str]] = ..., nav: _Optional[_Union[MoneyMarketFundNav, str]] = ..., liquidity_fee: _Optional[_Union[LiquidityFeeRegime, str]] = ...) -> None: ...
 
 class BinaryEventContract(_message.Message):
-    __slots__ = ("payout", "closes_at_ns")
+    __slots__ = ("payout", "closes_at_ns", "floor", "cap", "bound_unit")
     PAYOUT_FIELD_NUMBER: _ClassVar[int]
     CLOSES_AT_NS_FIELD_NUMBER: _ClassVar[int]
+    FLOOR_FIELD_NUMBER: _ClassVar[int]
+    CAP_FIELD_NUMBER: _ClassVar[int]
+    BOUND_UNIT_FIELD_NUMBER: _ClassVar[int]
     payout: Money
     closes_at_ns: int
-    def __init__(self, payout: _Optional[_Union[Money, _Mapping]] = ..., closes_at_ns: _Optional[int] = ...) -> None: ...
+    floor: EventContractBound
+    cap: EventContractBound
+    bound_unit: str
+    def __init__(self, payout: _Optional[_Union[Money, _Mapping]] = ..., closes_at_ns: _Optional[int] = ..., floor: _Optional[_Union[EventContractBound, _Mapping]] = ..., cap: _Optional[_Union[EventContractBound, _Mapping]] = ..., bound_unit: _Optional[str] = ...) -> None: ...
+
+class EventContractBound(_message.Message):
+    __slots__ = ("value", "inclusive")
+    VALUE_FIELD_NUMBER: _ClassVar[int]
+    INCLUSIVE_FIELD_NUMBER: _ClassVar[int]
+    value: Decimal
+    inclusive: bool
+    def __init__(self, value: _Optional[_Union[Decimal, _Mapping]] = ..., inclusive: bool = ...) -> None: ...
 
 class AccountRecord(_message.Message):
     __slots__ = ("account_id", "name", "state", "created_at_ns", "custodian", "account_type", "owner", "note")
@@ -5617,20 +5901,22 @@ class LocateUse(_message.Message):
     def __init__(self, kind: _Optional[_Union[LocateUseKind, str]] = ..., quantity: _Optional[_Union[Decimal, _Mapping]] = ..., order_id: _Optional[str] = ...) -> None: ...
 
 class VenueCatalogue(_message.Message):
-    __slots__ = ("connectivity_instance_id", "venue_account_code", "order_types", "strategies", "eligibility", "execution_acknowledgement")
+    __slots__ = ("connectivity_instance_id", "venue_account_code", "order_types", "strategies", "eligibility", "execution_acknowledgement", "environment")
     CONNECTIVITY_INSTANCE_ID_FIELD_NUMBER: _ClassVar[int]
     VENUE_ACCOUNT_CODE_FIELD_NUMBER: _ClassVar[int]
     ORDER_TYPES_FIELD_NUMBER: _ClassVar[int]
     STRATEGIES_FIELD_NUMBER: _ClassVar[int]
     ELIGIBILITY_FIELD_NUMBER: _ClassVar[int]
     EXECUTION_ACKNOWLEDGEMENT_FIELD_NUMBER: _ClassVar[int]
+    ENVIRONMENT_FIELD_NUMBER: _ClassVar[int]
     connectivity_instance_id: str
     venue_account_code: str
     order_types: _containers.RepeatedCompositeFieldContainer[VenueOrderType]
     strategies: _containers.RepeatedCompositeFieldContainer[VenueStrategy]
     eligibility: _containers.RepeatedCompositeFieldContainer[VenueEligibility]
     execution_acknowledgement: ExecutionAcknowledgement
-    def __init__(self, connectivity_instance_id: _Optional[str] = ..., venue_account_code: _Optional[str] = ..., order_types: _Optional[_Iterable[_Union[VenueOrderType, _Mapping]]] = ..., strategies: _Optional[_Iterable[_Union[VenueStrategy, _Mapping]]] = ..., eligibility: _Optional[_Iterable[_Union[VenueEligibility, _Mapping]]] = ..., execution_acknowledgement: _Optional[_Union[ExecutionAcknowledgement, str]] = ...) -> None: ...
+    environment: str
+    def __init__(self, connectivity_instance_id: _Optional[str] = ..., venue_account_code: _Optional[str] = ..., order_types: _Optional[_Iterable[_Union[VenueOrderType, _Mapping]]] = ..., strategies: _Optional[_Iterable[_Union[VenueStrategy, _Mapping]]] = ..., eligibility: _Optional[_Iterable[_Union[VenueEligibility, _Mapping]]] = ..., execution_acknowledgement: _Optional[_Union[ExecutionAcknowledgement, str]] = ..., environment: _Optional[str] = ...) -> None: ...
 
 class VenueOrderType(_message.Message):
     __slots__ = ("order_type", "times_in_force", "stated_at_ns")
@@ -5961,7 +6247,7 @@ class TemplateFieldValue(_message.Message):
     def __init__(self, path: _Optional[str] = ..., value: _Optional[str] = ..., provenance: _Optional[_Union[Provenance, _Mapping]] = ...) -> None: ...
 
 class SecurityTemplate(_message.Message):
-    __slots__ = ("template_id", "template_version", "name", "asset_class", "instrument_type", "base", "calculation", "fields", "match_rule")
+    __slots__ = ("template_id", "template_version", "name", "asset_class", "instrument_type", "base", "calculation", "fields", "match_rule", "calculation_package")
     TEMPLATE_ID_FIELD_NUMBER: _ClassVar[int]
     TEMPLATE_VERSION_FIELD_NUMBER: _ClassVar[int]
     NAME_FIELD_NUMBER: _ClassVar[int]
@@ -5971,6 +6257,7 @@ class SecurityTemplate(_message.Message):
     CALCULATION_FIELD_NUMBER: _ClassVar[int]
     FIELDS_FIELD_NUMBER: _ClassVar[int]
     MATCH_RULE_FIELD_NUMBER: _ClassVar[int]
+    CALCULATION_PACKAGE_FIELD_NUMBER: _ClassVar[int]
     template_id: str
     template_version: str
     name: str
@@ -5980,7 +6267,8 @@ class SecurityTemplate(_message.Message):
     calculation: str
     fields: _containers.RepeatedCompositeFieldContainer[TemplateField]
     match_rule: _containers.RepeatedScalarFieldContainer[str]
-    def __init__(self, template_id: _Optional[str] = ..., template_version: _Optional[str] = ..., name: _Optional[str] = ..., asset_class: _Optional[_Union[AssetClass, str]] = ..., instrument_type: _Optional[_Union[InstrumentType, str]] = ..., base: bool = ..., calculation: _Optional[str] = ..., fields: _Optional[_Iterable[_Union[TemplateField, _Mapping]]] = ..., match_rule: _Optional[_Iterable[str]] = ...) -> None: ...
+    calculation_package: CalculationPackage
+    def __init__(self, template_id: _Optional[str] = ..., template_version: _Optional[str] = ..., name: _Optional[str] = ..., asset_class: _Optional[_Union[AssetClass, str]] = ..., instrument_type: _Optional[_Union[InstrumentType, str]] = ..., base: bool = ..., calculation: _Optional[str] = ..., fields: _Optional[_Iterable[_Union[TemplateField, _Mapping]]] = ..., match_rule: _Optional[_Iterable[str]] = ..., calculation_package: _Optional[_Union[CalculationPackage, _Mapping]] = ...) -> None: ...
 
 class TemplateField(_message.Message):
     __slots__ = ("path", "type", "required")
@@ -5991,6 +6279,32 @@ class TemplateField(_message.Message):
     type: str
     required: bool
     def __init__(self, path: _Optional[str] = ..., type: _Optional[str] = ..., required: bool = ...) -> None: ...
+
+class CalculationPackage(_message.Message):
+    __slots__ = ("model_id", "model_version", "pricing_inputs", "corporate_action_factors", "calculation_version", "test_cases")
+    MODEL_ID_FIELD_NUMBER: _ClassVar[int]
+    MODEL_VERSION_FIELD_NUMBER: _ClassVar[int]
+    PRICING_INPUTS_FIELD_NUMBER: _ClassVar[int]
+    CORPORATE_ACTION_FACTORS_FIELD_NUMBER: _ClassVar[int]
+    CALCULATION_VERSION_FIELD_NUMBER: _ClassVar[int]
+    TEST_CASES_FIELD_NUMBER: _ClassVar[int]
+    model_id: str
+    model_version: int
+    pricing_inputs: _containers.RepeatedScalarFieldContainer[str]
+    corporate_action_factors: str
+    calculation_version: str
+    test_cases: _containers.RepeatedCompositeFieldContainer[CalculationTestCase]
+    def __init__(self, model_id: _Optional[str] = ..., model_version: _Optional[int] = ..., pricing_inputs: _Optional[_Iterable[str]] = ..., corporate_action_factors: _Optional[str] = ..., calculation_version: _Optional[str] = ..., test_cases: _Optional[_Iterable[_Union[CalculationTestCase, _Mapping]]] = ...) -> None: ...
+
+class CalculationTestCase(_message.Message):
+    __slots__ = ("name", "inputs", "expected")
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    INPUTS_FIELD_NUMBER: _ClassVar[int]
+    EXPECTED_FIELD_NUMBER: _ClassVar[int]
+    name: str
+    inputs: str
+    expected: str
+    def __init__(self, name: _Optional[str] = ..., inputs: _Optional[str] = ..., expected: _Optional[str] = ...) -> None: ...
 
 class Price(_message.Message):
     __slots__ = ("meta", "kind", "price", "basis")
@@ -6281,6 +6595,318 @@ class DatasetEntitlement(_message.Message):
     note: str
     prepared_call_id: str
     def __init__(self, dataset: _Optional[str] = ..., instance: _Optional[str] = ..., allowed: bool = ..., fields: _Optional[_Iterable[str]] = ..., updated_by: _Optional[str] = ..., updated_at_ns: _Optional[int] = ..., acting_through_delegation: _Optional[str] = ..., client_name: _Optional[str] = ..., note: _Optional[str] = ..., prepared_call_id: _Optional[str] = ...) -> None: ...
+
+class Job(_message.Message):
+    __slots__ = ("account_ids", "inputs", "measures", "what_if")
+    ACCOUNT_IDS_FIELD_NUMBER: _ClassVar[int]
+    INPUTS_FIELD_NUMBER: _ClassVar[int]
+    MEASURES_FIELD_NUMBER: _ClassVar[int]
+    WHAT_IF_FIELD_NUMBER: _ClassVar[int]
+    account_ids: _containers.RepeatedScalarFieldContainer[str]
+    inputs: InputRefs
+    measures: _containers.RepeatedCompositeFieldContainer[MeasureRef]
+    what_if: WhatIf
+    def __init__(self, account_ids: _Optional[_Iterable[str]] = ..., inputs: _Optional[_Union[InputRefs, _Mapping]] = ..., measures: _Optional[_Iterable[_Union[MeasureRef, _Mapping]]] = ..., what_if: _Optional[_Union[WhatIf, _Mapping]] = ...) -> None: ...
+
+class InputRefs(_message.Message):
+    __slots__ = ("book_at", "lake_as_of_ns", "sources")
+    BOOK_AT_FIELD_NUMBER: _ClassVar[int]
+    LAKE_AS_OF_NS_FIELD_NUMBER: _ClassVar[int]
+    SOURCES_FIELD_NUMBER: _ClassVar[int]
+    book_at: Watermark
+    lake_as_of_ns: int
+    sources: SourceChoice
+    def __init__(self, book_at: _Optional[_Union[Watermark, _Mapping]] = ..., lake_as_of_ns: _Optional[int] = ..., sources: _Optional[_Union[SourceChoice, _Mapping]] = ...) -> None: ...
+
+class MeasureRef(_message.Message):
+    __slots__ = ("definition", "version", "breakdowns", "event_group_id")
+    DEFINITION_FIELD_NUMBER: _ClassVar[int]
+    VERSION_FIELD_NUMBER: _ClassVar[int]
+    BREAKDOWNS_FIELD_NUMBER: _ClassVar[int]
+    EVENT_GROUP_ID_FIELD_NUMBER: _ClassVar[int]
+    definition: str
+    version: int
+    breakdowns: _containers.RepeatedScalarFieldContainer[str]
+    event_group_id: str
+    def __init__(self, definition: _Optional[str] = ..., version: _Optional[int] = ..., breakdowns: _Optional[_Iterable[str]] = ..., event_group_id: _Optional[str] = ...) -> None: ...
+
+class WhatIf(_message.Message):
+    __slots__ = ("account_id", "trades")
+    ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
+    TRADES_FIELD_NUMBER: _ClassVar[int]
+    account_id: str
+    trades: _containers.RepeatedCompositeFieldContainer[WhatIfTrade]
+    def __init__(self, account_id: _Optional[str] = ..., trades: _Optional[_Iterable[_Union[WhatIfTrade, _Mapping]]] = ...) -> None: ...
+
+class WhatIfTrade(_message.Message):
+    __slots__ = ("instrument_id", "side", "quantity", "price")
+    INSTRUMENT_ID_FIELD_NUMBER: _ClassVar[int]
+    SIDE_FIELD_NUMBER: _ClassVar[int]
+    QUANTITY_FIELD_NUMBER: _ClassVar[int]
+    PRICE_FIELD_NUMBER: _ClassVar[int]
+    instrument_id: str
+    side: Side
+    quantity: Decimal
+    price: Money
+    def __init__(self, instrument_id: _Optional[str] = ..., side: _Optional[_Union[Side, str]] = ..., quantity: _Optional[_Union[Decimal, _Mapping]] = ..., price: _Optional[_Union[Money, _Mapping]] = ...) -> None: ...
+
+class JobAnswer(_message.Message):
+    __slots__ = ("job_id", "figures", "not_evaluated", "provenance")
+    JOB_ID_FIELD_NUMBER: _ClassVar[int]
+    FIGURES_FIELD_NUMBER: _ClassVar[int]
+    NOT_EVALUATED_FIELD_NUMBER: _ClassVar[int]
+    PROVENANCE_FIELD_NUMBER: _ClassVar[int]
+    job_id: str
+    figures: _containers.RepeatedCompositeFieldContainer[Figure]
+    not_evaluated: _containers.RepeatedCompositeFieldContainer[NotEvaluated]
+    provenance: AnswerProvenance
+    def __init__(self, job_id: _Optional[str] = ..., figures: _Optional[_Iterable[_Union[Figure, _Mapping]]] = ..., not_evaluated: _Optional[_Iterable[_Union[NotEvaluated, _Mapping]]] = ..., provenance: _Optional[_Union[AnswerProvenance, _Mapping]] = ...) -> None: ...
+
+class Figure(_message.Message):
+    __slots__ = ("measure", "account_id", "breakdown", "scenario_key", "value", "numerator", "denominator", "currency_instrument_id", "computed_as")
+    MEASURE_FIELD_NUMBER: _ClassVar[int]
+    ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
+    BREAKDOWN_FIELD_NUMBER: _ClassVar[int]
+    SCENARIO_KEY_FIELD_NUMBER: _ClassVar[int]
+    VALUE_FIELD_NUMBER: _ClassVar[int]
+    NUMERATOR_FIELD_NUMBER: _ClassVar[int]
+    DENOMINATOR_FIELD_NUMBER: _ClassVar[int]
+    CURRENCY_INSTRUMENT_ID_FIELD_NUMBER: _ClassVar[int]
+    COMPUTED_AS_FIELD_NUMBER: _ClassVar[int]
+    measure: MeasureRef
+    account_id: str
+    breakdown: _containers.RepeatedCompositeFieldContainer[BreakdownValue]
+    scenario_key: ScenarioKey
+    value: Decimal
+    numerator: Decimal
+    denominator: Decimal
+    currency_instrument_id: str
+    computed_as: ComputedAs
+    def __init__(self, measure: _Optional[_Union[MeasureRef, _Mapping]] = ..., account_id: _Optional[str] = ..., breakdown: _Optional[_Iterable[_Union[BreakdownValue, _Mapping]]] = ..., scenario_key: _Optional[_Union[ScenarioKey, _Mapping]] = ..., value: _Optional[_Union[Decimal, _Mapping]] = ..., numerator: _Optional[_Union[Decimal, _Mapping]] = ..., denominator: _Optional[_Union[Decimal, _Mapping]] = ..., currency_instrument_id: _Optional[str] = ..., computed_as: _Optional[_Union[ComputedAs, str]] = ...) -> None: ...
+
+class BreakdownValue(_message.Message):
+    __slots__ = ("breakdown", "value")
+    BREAKDOWN_FIELD_NUMBER: _ClassVar[int]
+    VALUE_FIELD_NUMBER: _ClassVar[int]
+    breakdown: str
+    value: str
+    def __init__(self, breakdown: _Optional[str] = ..., value: _Optional[str] = ...) -> None: ...
+
+class ScenarioKey(_message.Message):
+    __slots__ = ("kind", "business_date", "outcome_instrument_id")
+    KIND_FIELD_NUMBER: _ClassVar[int]
+    BUSINESS_DATE_FIELD_NUMBER: _ClassVar[int]
+    OUTCOME_INSTRUMENT_ID_FIELD_NUMBER: _ClassVar[int]
+    kind: ScenarioKind
+    business_date: str
+    outcome_instrument_id: str
+    def __init__(self, kind: _Optional[_Union[ScenarioKind, str]] = ..., business_date: _Optional[str] = ..., outcome_instrument_id: _Optional[str] = ...) -> None: ...
+
+class NotEvaluated(_message.Message):
+    __slots__ = ("account_id", "instrument_id", "measure", "reason", "detail")
+    ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
+    INSTRUMENT_ID_FIELD_NUMBER: _ClassVar[int]
+    MEASURE_FIELD_NUMBER: _ClassVar[int]
+    REASON_FIELD_NUMBER: _ClassVar[int]
+    DETAIL_FIELD_NUMBER: _ClassVar[int]
+    account_id: str
+    instrument_id: str
+    measure: MeasureRef
+    reason: NotEvaluatedReason
+    detail: str
+    def __init__(self, account_id: _Optional[str] = ..., instrument_id: _Optional[str] = ..., measure: _Optional[_Union[MeasureRef, _Mapping]] = ..., reason: _Optional[_Union[NotEvaluatedReason, str]] = ..., detail: _Optional[str] = ...) -> None: ...
+
+class AnswerProvenance(_message.Message):
+    __slots__ = ("book_watermark", "lake_as_of_ns", "datasets", "instruments", "models", "measures", "event_groups", "routing_version", "engine_version", "answer_hash")
+    BOOK_WATERMARK_FIELD_NUMBER: _ClassVar[int]
+    LAKE_AS_OF_NS_FIELD_NUMBER: _ClassVar[int]
+    DATASETS_FIELD_NUMBER: _ClassVar[int]
+    INSTRUMENTS_FIELD_NUMBER: _ClassVar[int]
+    MODELS_FIELD_NUMBER: _ClassVar[int]
+    MEASURES_FIELD_NUMBER: _ClassVar[int]
+    EVENT_GROUPS_FIELD_NUMBER: _ClassVar[int]
+    ROUTING_VERSION_FIELD_NUMBER: _ClassVar[int]
+    ENGINE_VERSION_FIELD_NUMBER: _ClassVar[int]
+    ANSWER_HASH_FIELD_NUMBER: _ClassVar[int]
+    book_watermark: Watermark
+    lake_as_of_ns: int
+    datasets: _containers.RepeatedScalarFieldContainer[str]
+    instruments: _containers.RepeatedCompositeFieldContainer[InstrumentInput]
+    models: _containers.RepeatedCompositeFieldContainer[ModelRef]
+    measures: _containers.RepeatedCompositeFieldContainer[MeasureRef]
+    event_groups: _containers.RepeatedCompositeFieldContainer[EventGroupInput]
+    routing_version: int
+    engine_version: str
+    answer_hash: str
+    def __init__(self, book_watermark: _Optional[_Union[Watermark, _Mapping]] = ..., lake_as_of_ns: _Optional[int] = ..., datasets: _Optional[_Iterable[str]] = ..., instruments: _Optional[_Iterable[_Union[InstrumentInput, _Mapping]]] = ..., models: _Optional[_Iterable[_Union[ModelRef, _Mapping]]] = ..., measures: _Optional[_Iterable[_Union[MeasureRef, _Mapping]]] = ..., event_groups: _Optional[_Iterable[_Union[EventGroupInput, _Mapping]]] = ..., routing_version: _Optional[int] = ..., engine_version: _Optional[str] = ..., answer_hash: _Optional[str] = ...) -> None: ...
+
+class InstrumentInput(_message.Message):
+    __slots__ = ("instrument_id", "record_version", "template_id", "template_version", "calculation_version")
+    INSTRUMENT_ID_FIELD_NUMBER: _ClassVar[int]
+    RECORD_VERSION_FIELD_NUMBER: _ClassVar[int]
+    TEMPLATE_ID_FIELD_NUMBER: _ClassVar[int]
+    TEMPLATE_VERSION_FIELD_NUMBER: _ClassVar[int]
+    CALCULATION_VERSION_FIELD_NUMBER: _ClassVar[int]
+    instrument_id: str
+    record_version: int
+    template_id: str
+    template_version: str
+    calculation_version: str
+    def __init__(self, instrument_id: _Optional[str] = ..., record_version: _Optional[int] = ..., template_id: _Optional[str] = ..., template_version: _Optional[str] = ..., calculation_version: _Optional[str] = ...) -> None: ...
+
+class ModelRef(_message.Message):
+    __slots__ = ("model_id", "model_version", "implementation", "implementation_version")
+    MODEL_ID_FIELD_NUMBER: _ClassVar[int]
+    MODEL_VERSION_FIELD_NUMBER: _ClassVar[int]
+    IMPLEMENTATION_FIELD_NUMBER: _ClassVar[int]
+    IMPLEMENTATION_VERSION_FIELD_NUMBER: _ClassVar[int]
+    model_id: str
+    model_version: int
+    implementation: str
+    implementation_version: str
+    def __init__(self, model_id: _Optional[str] = ..., model_version: _Optional[int] = ..., implementation: _Optional[str] = ..., implementation_version: _Optional[str] = ...) -> None: ...
+
+class EventGroupInput(_message.Message):
+    __slots__ = ("event_group_id", "version")
+    EVENT_GROUP_ID_FIELD_NUMBER: _ClassVar[int]
+    VERSION_FIELD_NUMBER: _ClassVar[int]
+    event_group_id: str
+    version: int
+    def __init__(self, event_group_id: _Optional[str] = ..., version: _Optional[int] = ...) -> None: ...
+
+class MeasureDefinition(_message.Message):
+    __slots__ = ("definition", "version", "parameters", "breakdowns", "scale", "description")
+    DEFINITION_FIELD_NUMBER: _ClassVar[int]
+    VERSION_FIELD_NUMBER: _ClassVar[int]
+    PARAMETERS_FIELD_NUMBER: _ClassVar[int]
+    BREAKDOWNS_FIELD_NUMBER: _ClassVar[int]
+    SCALE_FIELD_NUMBER: _ClassVar[int]
+    DESCRIPTION_FIELD_NUMBER: _ClassVar[int]
+    definition: str
+    version: int
+    parameters: _containers.RepeatedCompositeFieldContainer[MeasureParameter]
+    breakdowns: _containers.RepeatedScalarFieldContainer[str]
+    scale: int
+    description: str
+    def __init__(self, definition: _Optional[str] = ..., version: _Optional[int] = ..., parameters: _Optional[_Iterable[_Union[MeasureParameter, _Mapping]]] = ..., breakdowns: _Optional[_Iterable[str]] = ..., scale: _Optional[int] = ..., description: _Optional[str] = ...) -> None: ...
+
+class MeasureParameter(_message.Message):
+    __slots__ = ("name", "value")
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    VALUE_FIELD_NUMBER: _ClassVar[int]
+    name: str
+    value: str
+    def __init__(self, name: _Optional[str] = ..., value: _Optional[str] = ...) -> None: ...
+
+class PriceBatchRequest(_message.Message):
+    __slots__ = ("batch_id", "pricing_instance_id", "model_id", "model_version", "units", "deadline_ns", "batch_hash", "sequence")
+    BATCH_ID_FIELD_NUMBER: _ClassVar[int]
+    PRICING_INSTANCE_ID_FIELD_NUMBER: _ClassVar[int]
+    MODEL_ID_FIELD_NUMBER: _ClassVar[int]
+    MODEL_VERSION_FIELD_NUMBER: _ClassVar[int]
+    UNITS_FIELD_NUMBER: _ClassVar[int]
+    DEADLINE_NS_FIELD_NUMBER: _ClassVar[int]
+    BATCH_HASH_FIELD_NUMBER: _ClassVar[int]
+    SEQUENCE_FIELD_NUMBER: _ClassVar[int]
+    batch_id: str
+    pricing_instance_id: str
+    model_id: str
+    model_version: int
+    units: _containers.RepeatedCompositeFieldContainer[PricingUnit]
+    deadline_ns: int
+    batch_hash: str
+    sequence: int
+    def __init__(self, batch_id: _Optional[str] = ..., pricing_instance_id: _Optional[str] = ..., model_id: _Optional[str] = ..., model_version: _Optional[int] = ..., units: _Optional[_Iterable[_Union[PricingUnit, _Mapping]]] = ..., deadline_ns: _Optional[int] = ..., batch_hash: _Optional[str] = ..., sequence: _Optional[int] = ...) -> None: ...
+
+class PricingUnit(_message.Message):
+    __slots__ = ("instrument_id", "template_version", "scenario_key", "inputs")
+    INSTRUMENT_ID_FIELD_NUMBER: _ClassVar[int]
+    TEMPLATE_VERSION_FIELD_NUMBER: _ClassVar[int]
+    SCENARIO_KEY_FIELD_NUMBER: _ClassVar[int]
+    INPUTS_FIELD_NUMBER: _ClassVar[int]
+    instrument_id: str
+    template_version: str
+    scenario_key: ScenarioKey
+    inputs: _containers.RepeatedCompositeFieldContainer[MarketObjectValue]
+    def __init__(self, instrument_id: _Optional[str] = ..., template_version: _Optional[str] = ..., scenario_key: _Optional[_Union[ScenarioKey, _Mapping]] = ..., inputs: _Optional[_Iterable[_Union[MarketObjectValue, _Mapping]]] = ...) -> None: ...
+
+class MarketObjectValue(_message.Message):
+    __slots__ = ("subject_id", "kind", "value", "dataset")
+    SUBJECT_ID_FIELD_NUMBER: _ClassVar[int]
+    KIND_FIELD_NUMBER: _ClassVar[int]
+    VALUE_FIELD_NUMBER: _ClassVar[int]
+    DATASET_FIELD_NUMBER: _ClassVar[int]
+    subject_id: str
+    kind: str
+    value: Money
+    dataset: str
+    def __init__(self, subject_id: _Optional[str] = ..., kind: _Optional[str] = ..., value: _Optional[_Union[Money, _Mapping]] = ..., dataset: _Optional[str] = ...) -> None: ...
+
+class PricedUnit(_message.Message):
+    __slots__ = ("instrument_id", "scenario_key", "value_per_unit")
+    INSTRUMENT_ID_FIELD_NUMBER: _ClassVar[int]
+    SCENARIO_KEY_FIELD_NUMBER: _ClassVar[int]
+    VALUE_PER_UNIT_FIELD_NUMBER: _ClassVar[int]
+    instrument_id: str
+    scenario_key: ScenarioKey
+    value_per_unit: Money
+    def __init__(self, instrument_id: _Optional[str] = ..., scenario_key: _Optional[_Union[ScenarioKey, _Mapping]] = ..., value_per_unit: _Optional[_Union[Money, _Mapping]] = ...) -> None: ...
+
+class Sensitivity(_message.Message):
+    __slots__ = ("instrument_id", "scenario_key", "name", "value")
+    INSTRUMENT_ID_FIELD_NUMBER: _ClassVar[int]
+    SCENARIO_KEY_FIELD_NUMBER: _ClassVar[int]
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    VALUE_FIELD_NUMBER: _ClassVar[int]
+    instrument_id: str
+    scenario_key: ScenarioKey
+    name: str
+    value: Decimal
+    def __init__(self, instrument_id: _Optional[str] = ..., scenario_key: _Optional[_Union[ScenarioKey, _Mapping]] = ..., name: _Optional[str] = ..., value: _Optional[_Union[Decimal, _Mapping]] = ...) -> None: ...
+
+class JobFinishedEvent(_message.Message):
+    __slots__ = ("job_id", "client_instance_id", "answer_hash", "finished_at_ns", "sequence")
+    JOB_ID_FIELD_NUMBER: _ClassVar[int]
+    CLIENT_INSTANCE_ID_FIELD_NUMBER: _ClassVar[int]
+    ANSWER_HASH_FIELD_NUMBER: _ClassVar[int]
+    FINISHED_AT_NS_FIELD_NUMBER: _ClassVar[int]
+    SEQUENCE_FIELD_NUMBER: _ClassVar[int]
+    job_id: str
+    client_instance_id: str
+    answer_hash: str
+    finished_at_ns: int
+    sequence: int
+    def __init__(self, job_id: _Optional[str] = ..., client_instance_id: _Optional[str] = ..., answer_hash: _Optional[str] = ..., finished_at_ns: _Optional[int] = ..., sequence: _Optional[int] = ...) -> None: ...
+
+class EventGroup(_message.Message):
+    __slots__ = ("event_group_id", "venue_id", "venue_event_ref", "title", "member_instrument_ids", "mutually_exclusive", "exhaustive", "series_id", "version", "valid_from_ns", "record_time_ns", "provisional", "sequence")
+    EVENT_GROUP_ID_FIELD_NUMBER: _ClassVar[int]
+    VENUE_ID_FIELD_NUMBER: _ClassVar[int]
+    VENUE_EVENT_REF_FIELD_NUMBER: _ClassVar[int]
+    TITLE_FIELD_NUMBER: _ClassVar[int]
+    MEMBER_INSTRUMENT_IDS_FIELD_NUMBER: _ClassVar[int]
+    MUTUALLY_EXCLUSIVE_FIELD_NUMBER: _ClassVar[int]
+    EXHAUSTIVE_FIELD_NUMBER: _ClassVar[int]
+    SERIES_ID_FIELD_NUMBER: _ClassVar[int]
+    VERSION_FIELD_NUMBER: _ClassVar[int]
+    VALID_FROM_NS_FIELD_NUMBER: _ClassVar[int]
+    RECORD_TIME_NS_FIELD_NUMBER: _ClassVar[int]
+    PROVISIONAL_FIELD_NUMBER: _ClassVar[int]
+    SEQUENCE_FIELD_NUMBER: _ClassVar[int]
+    event_group_id: str
+    venue_id: str
+    venue_event_ref: str
+    title: str
+    member_instrument_ids: _containers.RepeatedScalarFieldContainer[str]
+    mutually_exclusive: EventGroupFlag
+    exhaustive: EventGroupFlag
+    series_id: str
+    version: int
+    valid_from_ns: int
+    record_time_ns: int
+    provisional: bool
+    sequence: int
+    def __init__(self, event_group_id: _Optional[str] = ..., venue_id: _Optional[str] = ..., venue_event_ref: _Optional[str] = ..., title: _Optional[str] = ..., member_instrument_ids: _Optional[_Iterable[str]] = ..., mutually_exclusive: _Optional[_Union[EventGroupFlag, str]] = ..., exhaustive: _Optional[_Union[EventGroupFlag, str]] = ..., series_id: _Optional[str] = ..., version: _Optional[int] = ..., valid_from_ns: _Optional[int] = ..., record_time_ns: _Optional[int] = ..., provisional: bool = ..., sequence: _Optional[int] = ...) -> None: ...
 
 class CustodialPositionUpdatedEvent(_message.Message):
     __slots__ = ("position", "statement_id", "previous_quantity", "journal", "cause")

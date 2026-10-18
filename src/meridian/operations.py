@@ -1356,6 +1356,7 @@ class VenueCatalogue:
     strategies: Sequence[VenueStrategy] = ()
     eligibility: Sequence[VenueEligibility] = ()
     execution_acknowledgement: ops.ExecutionAcknowledgement | str | None = None
+    environment: str = ""
 
 
 def _venue_catalogue(value: VenueCatalogue, name: str) -> ops.VenueCatalogue:
@@ -1369,6 +1370,7 @@ def _venue_catalogue(value: VenueCatalogue, name: str) -> ops.VenueCatalogue:
         strategies=[_venue_strategy(each, f"{name}.strategies[{i}]") for i, each in enumerate(value.strategies)],
         eligibility=[_venue_eligibility(each, f"{name}.eligibility[{i}]") for i, each in enumerate(value.eligibility)],
         execution_acknowledgement=_enum(ops.ExecutionAcknowledgement, value.execution_acknowledgement, f"{name}.execution_acknowledgement"),
+        environment=value.environment,
     )
 
 
@@ -1999,6 +2001,158 @@ def _outcome(value: Outcome, name: str) -> ops.Outcome:
         settlement_value=_money(value.settlement_value, f"{name}.settlement_value"),
         settled_at_ns=value.settled_at_ns,
         determination_as_reported=value.determination_as_reported,
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class Job:
+    """A job (W12.1): what to compute, over what, against which inputs,
+    named by reference.
+
+    The SDK's form of the wire's Job: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    account_ids: Sequence[str] = ()
+    inputs: ops.InputRefs | None = None
+    measures: Sequence[ops.MeasureRef] = ()
+    what_if: WhatIf | None = None
+
+
+def _job(value: Job, name: str) -> ops.Job:
+    """A Job as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, Job):
+        raise TypeError(f"{name} is a meridian.Job, not {type(value).__name__}")
+    return ops.Job(
+        account_ids=list(value.account_ids),
+        inputs=value.inputs,
+        measures=list(value.measures),
+        what_if=None if value.what_if is None else _what_if(value.what_if, f"{name}.what_if"),
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class WhatIf:
+    """Trades added to one account's positions for a what-if (W12.5): never
+    a book record unless proposed.
+
+    The SDK's form of the wire's WhatIf: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    account_id: str = ""
+    trades: Sequence[WhatIfTrade] = ()
+
+
+def _what_if(value: WhatIf, name: str) -> ops.WhatIf:
+    """A WhatIf as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, WhatIf):
+        raise TypeError(f"{name} is a meridian.WhatIf, not {type(value).__name__}")
+    return ops.WhatIf(
+        account_id=value.account_id,
+        trades=[_what_if_trade(each, f"{name}.trades[{i}]") for i, each in enumerate(value.trades)],
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class WhatIfTrade:
+    """WhatIfTrade.
+
+    The SDK's form of the wire's WhatIfTrade: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    instrument_id: str = ""
+    side: ops.Side | str | None = None
+    quantity: Decimal | int
+    price: Money | None = None
+
+
+def _what_if_trade(value: WhatIfTrade, name: str) -> ops.WhatIfTrade:
+    """A WhatIfTrade as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, WhatIfTrade):
+        raise TypeError(f"{name} is a meridian.WhatIfTrade, not {type(value).__name__}")
+    return ops.WhatIfTrade(
+        instrument_id=value.instrument_id,
+        side=_enum(ops.Side, value.side, f"{name}.side"),
+        quantity=_decimal(value.quantity, f"{name}.quantity"),
+        price=None if value.price is None else _money(value.price, f"{name}.price"),
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class PricedUnit:
+    """PricedUnit.
+
+    The SDK's form of the wire's PricedUnit: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    instrument_id: str = ""
+    scenario_key: ScenarioKey | None = None
+    value_per_unit: Money
+
+
+def _priced_unit(value: PricedUnit, name: str) -> ops.PricedUnit:
+    """A PricedUnit as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, PricedUnit):
+        raise TypeError(f"{name} is a meridian.PricedUnit, not {type(value).__name__}")
+    return ops.PricedUnit(
+        instrument_id=value.instrument_id,
+        scenario_key=None if value.scenario_key is None else _scenario_key(value.scenario_key, f"{name}.scenario_key"),
+        value_per_unit=_money(value.value_per_unit, f"{name}.value_per_unit"),
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class ScenarioKey:
+    """Which scenario a figure is under (the first release's Q13, approved
+    2026-10-14): one shape for what-ifs, VaR's days, resolution payoffs and,
+    from v28, a grid point, which adds a kind and no field.
+
+    The SDK's form of the wire's ScenarioKey: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    kind: ops.ScenarioKind | str | None = None
+    business_date: date | str = ""
+    outcome_instrument_id: str = ""
+
+
+def _scenario_key(value: ScenarioKey, name: str) -> ops.ScenarioKey:
+    """A ScenarioKey as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, ScenarioKey):
+        raise TypeError(f"{name} is a meridian.ScenarioKey, not {type(value).__name__}")
+    return ops.ScenarioKey(
+        kind=_enum(ops.ScenarioKind, value.kind, f"{name}.kind"),
+        business_date=_date(value.business_date, f"{name}.business_date"),
+        outcome_instrument_id=value.outcome_instrument_id,
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class Sensitivity:
+    """A sensitivity a model declares: carried empty in v26.
+
+    The SDK's form of the wire's Sensitivity: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    instrument_id: str = ""
+    scenario_key: ScenarioKey | None = None
+    name: str = ""
+    value: Decimal | int
+
+
+def _sensitivity(value: Sensitivity, name: str) -> ops.Sensitivity:
+    """A Sensitivity as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, Sensitivity):
+        raise TypeError(f"{name} is a meridian.Sensitivity, not {type(value).__name__}")
+    return ops.Sensitivity(
+        instrument_id=value.instrument_id,
+        scenario_key=None if value.scenario_key is None else _scenario_key(value.scenario_key, f"{name}.scenario_key"),
+        name=value.name,
+        value=_decimal(value.value, f"{name}.value"),
     )
 
 
@@ -3820,6 +3974,162 @@ class Operations:
         )
         return await self._operate(self._operations().ListDatasets, params)
 
+    async def run_job(
+        self,
+        *,
+        job: Job | None = None,
+    ) -> ops.RunJobResult:
+        """W12.1: RunJob (preview)."""
+        params = ops.RunJobParams(
+            job=None if job is None else _job(job, "job"),
+        )
+        return await self._operate(self._operations().RunJob, params)
+
+    async def list_measure_definitions(
+        self,
+    ) -> ops.ListMeasureDefinitionsResult:
+        """W12.1: ListMeasureDefinitions (preview)."""
+        params = ops.ListMeasureDefinitionsParams(
+        )
+        return await self._operate(self._operations().ListMeasureDefinitions, params)
+
+    async def list_price_batches(
+        self,
+        *,
+        after_sequence: int = 0,
+    ) -> ops.ListPriceBatchesResult:
+        """W12.3: The batches waiting for the asking instance after a sequence (W12.3) (preview)."""
+        params = ops.ListPriceBatchesParams(
+            after_sequence=after_sequence,
+        )
+        return await self._operate(self._operations().ListPriceBatches, params)
+
+    async def answer_price_batch(
+        self,
+        *,
+        batch_id: str = "",
+        values: Sequence[PricedUnit] = (),
+        sensitivities: Sequence[Sensitivity] = (),
+        acting_for: str | None = None,
+    ) -> ops.AnswerPriceBatchResult:
+        """W12.3: A `pricing` plugin's answer to a batch (W12.3) (preview)."""
+        params = ops.AnswerPriceBatchParams(
+            batch_id=batch_id,
+            values=[_priced_unit(each, f"values[{i}]") for i, each in enumerate(values)],
+            sensitivities=[_sensitivity(each, f"sensitivities[{i}]") for i, each in enumerate(sensitivities)],
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().AnswerPriceBatch, params)
+
+    async def list_finished_jobs(
+        self,
+        *,
+        after_sequence: int = 0,
+    ) -> ops.ListFinishedJobsResult:
+        """W12.4: ListFinishedJobs (preview)."""
+        params = ops.ListFinishedJobsParams(
+            after_sequence=after_sequence,
+        )
+        return await self._operate(self._operations().ListFinishedJobs, params)
+
+    async def read_job_answer(
+        self,
+        *,
+        job_id: str = "",
+    ) -> ops.ReadJobAnswerResult:
+        """W12.4: ReadJobAnswer (preview)."""
+        params = ops.ReadJobAnswerParams(
+            job_id=job_id,
+        )
+        return await self._operate(self._operations().ReadJobAnswer, params)
+
+    async def report_event_group(
+        self,
+        *,
+        venue_id: str = "",
+        venue_event_ref: str = "",
+        title: str = "",
+        member_instrument_ids: Sequence[str] = (),
+        mutually_exclusive: ops.EventGroupFlag | str | None = None,
+        exhaustive: ops.EventGroupFlag | str | None = None,
+        series_id: str = "",
+        valid_from_ns: int = 0,
+        raw_record: ops.RawRecordRef | None = None,
+        acting_for: str | None = None,
+    ) -> ops.ReportEventGroupResult:
+        """W3.29: W3.29: a venue's data plugin reports the grouping its venue states (preview)."""
+        params = ops.ReportEventGroupParams(
+            venue_id=venue_id,
+            venue_event_ref=venue_event_ref,
+            title=title,
+            member_instrument_ids=list(member_instrument_ids),
+            mutually_exclusive=_enum(ops.EventGroupFlag, mutually_exclusive, "mutually_exclusive"),
+            exhaustive=_enum(ops.EventGroupFlag, exhaustive, "exhaustive"),
+            series_id=series_id,
+            valid_from_ns=valid_from_ns,
+            raw_record=raw_record,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().ReportEventGroup, params)
+
+    async def list_event_groups(
+        self,
+        *,
+        instrument_ids: Sequence[str] = (),
+        event_group_ids: Sequence[str] = (),
+        as_of_ns: int = 0,
+        after_sequence: int = 0,
+        page_size: int = 0,
+        cursor: str = "",
+    ) -> ops.ListEventGroupsResult:
+        """W3.30: W3.30: the groups holding given instruments or given groups, as of a (preview)."""
+        params = ops.ListEventGroupsParams(
+            instrument_ids=list(instrument_ids),
+            event_group_ids=list(event_group_ids),
+            as_of_ns=as_of_ns,
+            after_sequence=after_sequence,
+            page_size=page_size,
+            cursor=cursor,
+        )
+        return await self._operate(self._operations().ListEventGroups, params)
+
+    async def read_agent_orders_demo_only(
+        self,
+    ) -> ops.ReadAgentOrdersDemoOnlyResult:
+        """W11.39: W11.39: the guard read (preview)."""
+        params = ops.ReadAgentOrdersDemoOnlyParams(
+        )
+        return await self._operate(self._operations().ReadAgentOrdersDemoOnly, params)
+
+    async def query_lake(
+        self,
+        *,
+        kind: str = "",
+        subjects: Sequence[ops.SubjectRef] = (),
+        sources: ops.SourceChoice | None = None,
+        valid_from_ns: int = 0,
+        valid_until_ns: int = 0,
+        from_date: date | str = "",
+        to_date: date | str = "",
+        as_of_ns: int = 0,
+        fields: Sequence[str] = (),
+        row_limit: int = 0,
+    ) -> ops.QueryLakeResult:
+        """W10.10: One read-only query over one of the lake's kinds, within the asking (preview)."""
+        params = ops.QueryLakeParams(
+            kind=kind,
+            subjects=list(subjects),
+            sources=sources,
+            valid_from_ns=valid_from_ns,
+            valid_until_ns=valid_until_ns,
+            from_date=_date(from_date, "from_date"),
+            to_date=_date(to_date, "to_date"),
+            as_of_ns=as_of_ns,
+            fields=list(fields),
+            row_limit=row_limit,
+        )
+        return await self._operate(self._operations().QueryLake, params)
+
     async def receive(
         self,
         *,
@@ -3841,6 +4151,9 @@ class Operations:
         replace_merged_instrument: Callable[[Heard[ops.InstrumentReplacedEvent]], Awaitable[None]] | None = None,
         booking_updated: Callable[[Heard[ops.BookingUpdatedEvent]], Awaitable[None]] | None = None,
         alert_changed: Callable[[Heard[ops.AlertChangedEvent]], Awaitable[None]] | None = None,
+        price_batch: Callable[[Heard[ops.PriceBatchRequest]], Awaitable[None]] | None = None,
+        job_finished: Callable[[Heard[ops.JobFinishedEvent]], Awaitable[None]] | None = None,
+        event_group_changed: Callable[[Heard[ops.EventGroup]], Awaitable[None]] | None = None,
         prices_recorded: Callable[[Heard[ops.PricesRecordedEvent]], Awaitable[None]] | None = None,
         bars_recorded: Callable[[Heard[ops.BarsRecordedEvent]], Awaitable[None]] | None = None,
         observations_wanted: Callable[[Heard[ops.ObservationsWantedEvent]], Awaitable[None]] | None = None,
@@ -3884,6 +4197,9 @@ class Operations:
             "ReplaceMergedInstrument": replace_merged_instrument,
             "BookingUpdated": booking_updated,
             "AlertChanged": alert_changed,
+            "PriceBatch": price_batch,
+            "JobFinished": job_finished,
+            "EventGroupChanged": event_group_changed,
             "PricesRecorded": prices_recorded,
             "BarsRecorded": bars_recorded,
             "ObservationsWanted": observations_wanted,
@@ -4176,6 +4492,30 @@ SEQUENCED: tuple[SequencedRow, ...] = (
         message=ops.InstrumentReplacedEvent,
         caught_up_by="list_replacements",
         records="replacements",
+    ),
+    SequencedRow(
+        name="PriceBatch",
+        step="W12.3",
+        arm="price_batch",
+        message=ops.PriceBatchRequest,
+        caught_up_by="list_price_batches",
+        records="batches",
+    ),
+    SequencedRow(
+        name="JobFinished",
+        step="W12.4",
+        arm="job_finished",
+        message=ops.JobFinishedEvent,
+        caught_up_by="list_finished_jobs",
+        records="finished",
+    ),
+    SequencedRow(
+        name="EventGroupChanged",
+        step="W3.30",
+        arm="event_group_changed",
+        message=ops.EventGroup,
+        caught_up_by="list_event_groups",
+        records="event_groups",
     ),
 )
 

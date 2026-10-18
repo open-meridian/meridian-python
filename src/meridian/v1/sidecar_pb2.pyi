@@ -143,6 +143,7 @@ class RefusalReason(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     REFUSAL_REASON_BOOKING_UNBALANCED: _ClassVar[RefusalReason]
     REFUSAL_REASON_ACCOUNT_NOT_INSTRUCTED: _ClassVar[RefusalReason]
     REFUSAL_REASON_LOCAL_RECORD_NOT_ALLOWED: _ClassVar[RefusalReason]
+    REFUSAL_REASON_AGENT_LIVE_ORDER: _ClassVar[RefusalReason]
 
 class PreparedCallState(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
@@ -249,6 +250,7 @@ REFUSAL_REASON_EXECUTIONS_DIFFER: RefusalReason
 REFUSAL_REASON_BOOKING_UNBALANCED: RefusalReason
 REFUSAL_REASON_ACCOUNT_NOT_INSTRUCTED: RefusalReason
 REFUSAL_REASON_LOCAL_RECORD_NOT_ALLOWED: RefusalReason
+REFUSAL_REASON_AGENT_LIVE_ORDER: RefusalReason
 PREPARED_CALL_STATE_UNSPECIFIED: PreparedCallState
 PREPARED_CALL_STATE_PREPARED: PreparedCallState
 PREPARED_CALL_STATE_SHARED: PreparedCallState
@@ -553,18 +555,34 @@ class RegisterReply(_message.Message):
     def __init__(self, admitted: bool = ..., deployment_id: _Optional[str] = ..., refusal_reason: _Optional[str] = ..., publish_grants: _Optional[_Iterable[str]] = ..., subscribe_grants: _Optional[_Iterable[str]] = ..., instance_id: _Optional[str] = ..., roles: _Optional[_Iterable[str]] = ...) -> None: ...
 
 class HeartbeatRequest(_message.Message):
-    __slots__ = ("healthy", "detail", "figures", "not_carried_seen", "stored")
+    __slots__ = ("healthy", "detail", "figures", "not_carried_seen", "stored", "model_tokens")
     HEALTHY_FIELD_NUMBER: _ClassVar[int]
     DETAIL_FIELD_NUMBER: _ClassVar[int]
     FIGURES_FIELD_NUMBER: _ClassVar[int]
     NOT_CARRIED_SEEN_FIELD_NUMBER: _ClassVar[int]
     STORED_FIELD_NUMBER: _ClassVar[int]
+    MODEL_TOKENS_FIELD_NUMBER: _ClassVar[int]
     healthy: bool
     detail: str
     figures: _containers.RepeatedCompositeFieldContainer[PluginFigure]
     not_carried_seen: _containers.RepeatedCompositeFieldContainer[NotCarriedSeen]
     stored: _containers.RepeatedCompositeFieldContainer[StoredSpan]
-    def __init__(self, healthy: bool = ..., detail: _Optional[str] = ..., figures: _Optional[_Iterable[_Union[PluginFigure, _Mapping]]] = ..., not_carried_seen: _Optional[_Iterable[_Union[NotCarriedSeen, _Mapping]]] = ..., stored: _Optional[_Iterable[_Union[StoredSpan, _Mapping]]] = ...) -> None: ...
+    model_tokens: _containers.RepeatedCompositeFieldContainer[ModelTokenCount]
+    def __init__(self, healthy: bool = ..., detail: _Optional[str] = ..., figures: _Optional[_Iterable[_Union[PluginFigure, _Mapping]]] = ..., not_carried_seen: _Optional[_Iterable[_Union[NotCarriedSeen, _Mapping]]] = ..., stored: _Optional[_Iterable[_Union[StoredSpan, _Mapping]]] = ..., model_tokens: _Optional[_Iterable[_Union[ModelTokenCount, _Mapping]]] = ...) -> None: ...
+
+class ModelTokenCount(_message.Message):
+    __slots__ = ("endpoint", "subject", "client_name", "input_tokens", "output_tokens")
+    ENDPOINT_FIELD_NUMBER: _ClassVar[int]
+    SUBJECT_FIELD_NUMBER: _ClassVar[int]
+    CLIENT_NAME_FIELD_NUMBER: _ClassVar[int]
+    INPUT_TOKENS_FIELD_NUMBER: _ClassVar[int]
+    OUTPUT_TOKENS_FIELD_NUMBER: _ClassVar[int]
+    endpoint: str
+    subject: str
+    client_name: str
+    input_tokens: int
+    output_tokens: int
+    def __init__(self, endpoint: _Optional[str] = ..., subject: _Optional[str] = ..., client_name: _Optional[str] = ..., input_tokens: _Optional[int] = ..., output_tokens: _Optional[int] = ...) -> None: ...
 
 class StoredSpan(_message.Message):
     __slots__ = ("record_kind", "record_count", "first_received_ns", "last_received_ns", "bytes")
@@ -735,7 +753,7 @@ class CallerAssertion(_message.Message):
     def __init__(self, claims: _Optional[bytes] = ..., signature: _Optional[bytes] = ..., key_id: _Optional[str] = ...) -> None: ...
 
 class CallerClaims(_message.Message):
-    __slots__ = ("subject", "display_name", "audience_instance_id", "level", "read_account_ids", "write_account_ids", "issued_at_ns", "expires_at_ns", "assertion_id", "deployment_admin", "delegation_id", "client_name", "tool_name", "roles", "prepared_call_id", "own_settings", "second_pair_of_eyes", "subject_kind", "owner_subject", "algorithm_id", "connectivity_instance_ids")
+    __slots__ = ("subject", "display_name", "audience_instance_id", "level", "read_account_ids", "write_account_ids", "issued_at_ns", "expires_at_ns", "assertion_id", "deployment_admin", "delegation_id", "client_name", "tool_name", "roles", "prepared_call_id", "own_settings", "second_pair_of_eyes", "subject_kind", "owner_subject", "algorithm_id", "connectivity_instance_ids", "demo_connectivity_instance_ids")
     SUBJECT_FIELD_NUMBER: _ClassVar[int]
     DISPLAY_NAME_FIELD_NUMBER: _ClassVar[int]
     AUDIENCE_INSTANCE_ID_FIELD_NUMBER: _ClassVar[int]
@@ -757,6 +775,7 @@ class CallerClaims(_message.Message):
     OWNER_SUBJECT_FIELD_NUMBER: _ClassVar[int]
     ALGORITHM_ID_FIELD_NUMBER: _ClassVar[int]
     CONNECTIVITY_INSTANCE_IDS_FIELD_NUMBER: _ClassVar[int]
+    DEMO_CONNECTIVITY_INSTANCE_IDS_FIELD_NUMBER: _ClassVar[int]
     subject: str
     display_name: str
     audience_instance_id: str
@@ -778,7 +797,8 @@ class CallerClaims(_message.Message):
     owner_subject: str
     algorithm_id: str
     connectivity_instance_ids: _containers.RepeatedScalarFieldContainer[str]
-    def __init__(self, subject: _Optional[str] = ..., display_name: _Optional[str] = ..., audience_instance_id: _Optional[str] = ..., level: _Optional[_Union[AccessLevel, str]] = ..., read_account_ids: _Optional[_Iterable[str]] = ..., write_account_ids: _Optional[_Iterable[str]] = ..., issued_at_ns: _Optional[int] = ..., expires_at_ns: _Optional[int] = ..., assertion_id: _Optional[str] = ..., deployment_admin: bool = ..., delegation_id: _Optional[str] = ..., client_name: _Optional[str] = ..., tool_name: _Optional[str] = ..., roles: _Optional[_Iterable[_Union[RoleAccess, _Mapping]]] = ..., prepared_call_id: _Optional[str] = ..., own_settings: _Optional[_Iterable[_Union[SettingValue, _Mapping]]] = ..., second_pair_of_eyes: _Optional[_Iterable[str]] = ..., subject_kind: _Optional[_Union[_envelope_pb2.SubjectKind, str]] = ..., owner_subject: _Optional[str] = ..., algorithm_id: _Optional[str] = ..., connectivity_instance_ids: _Optional[_Iterable[str]] = ...) -> None: ...
+    demo_connectivity_instance_ids: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, subject: _Optional[str] = ..., display_name: _Optional[str] = ..., audience_instance_id: _Optional[str] = ..., level: _Optional[_Union[AccessLevel, str]] = ..., read_account_ids: _Optional[_Iterable[str]] = ..., write_account_ids: _Optional[_Iterable[str]] = ..., issued_at_ns: _Optional[int] = ..., expires_at_ns: _Optional[int] = ..., assertion_id: _Optional[str] = ..., deployment_admin: bool = ..., delegation_id: _Optional[str] = ..., client_name: _Optional[str] = ..., tool_name: _Optional[str] = ..., roles: _Optional[_Iterable[_Union[RoleAccess, _Mapping]]] = ..., prepared_call_id: _Optional[str] = ..., own_settings: _Optional[_Iterable[_Union[SettingValue, _Mapping]]] = ..., second_pair_of_eyes: _Optional[_Iterable[str]] = ..., subject_kind: _Optional[_Union[_envelope_pb2.SubjectKind, str]] = ..., owner_subject: _Optional[str] = ..., algorithm_id: _Optional[str] = ..., connectivity_instance_ids: _Optional[_Iterable[str]] = ..., demo_connectivity_instance_ids: _Optional[_Iterable[str]] = ...) -> None: ...
 
 class RoleAccess(_message.Message):
     __slots__ = ("role", "level", "read_positions", "write_positions")

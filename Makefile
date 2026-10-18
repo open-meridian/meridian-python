@@ -65,7 +65,9 @@ contract-diff:
 # PyPI depends on nothing by URL (PyPI refuses that) and a plugin installs one
 # thing. `make vendor-schema` moves the copy to SCHEMA_REV; `check-vendored`
 # fails when the two disagree, as core's check-codegen does for its bindings.
-SCHEMA_REV := 3983435ba7672df58a61a57644fd59ee070de474
+# meridian-schema's pushed `v26` (contract v26; open-meridian/meridian-schema#4),
+# its gen/ and boundaries/ vendored here byte for byte.
+SCHEMA_REV := ab245c94455ba4b5ecc88ef108f03b3225daaf95
 SCHEMA_REPO := https://github.com/open-meridian/meridian-schema.git
 SCRATCH     := .schema-scratch
 
@@ -110,7 +112,13 @@ DESIGN ?= ../meridian-design
 # pinned here by commit as the schema is pinned in pyproject.toml. Core's own
 # interop gate overrides this with its working tree, so a change to both lands
 # without either waiting on the other's push.
-# Core's pushed `v25` (contract v25; open-meridian/meridian-core#46).
+# PLACEHOLDER (SDK 0.31.0): still core's pushed `v25` (meridian-core#46).
+# Contract v26's domain protos (analytics.proto and the fields v26 adds to
+# reference, book, config, first_run, lake, plugins and accounts) are not on
+# any pushed core commit yet: the local gate ran with CORE_PROTO naming
+# origin/main c3ef476 with design's core-v26.patch applied (v26-text
+# 8cf2f7e). Re-pinned to core's pushed `v26` commit, and `make ci-local` run
+# again with no CORE_PROTO, before this branch is pushed.
 CORE_REV   := 3366e604352eb9b93c03651f493f4f9b29c12c26
 CORE_PROTO ?= https://github.com/open-meridian/meridian-core.git\#$(CORE_REV):proto
 # And meridian-schema's, which core's import, at the revision vendored here.
@@ -149,7 +157,7 @@ base-image:
 # The roles' templates, which `meridian plugin new --role <role>` writes:
 # each a whole plugin holding that role, sharing these files with template/
 # byte for byte, so the agents' instructions, the CI and the image are one.
-ROLE_TEMPLATES := data reporting custody operations connectivity
+ROLE_TEMPLATES := data reporting custody operations connectivity pricing
 SHARED := AGENTS.md CLAUDE.md Dockerfile .dockerignore .gitignore \
           .claude/skills/develop-live/SKILL.md .github/workflows/check.yaml \
           hooks/pre-push docs/overview.md docs/setup.md docs/troubleshooting.md \
