@@ -33,7 +33,8 @@ and every 64-bit integer a string, as protobuf's JSON writes one:
   -- `cost` the open lots' cost in the account's base currency (empty where
   the book holds none), `sleeve` empty where the position is in none.
 - `closed_lots`: `[{"account_id", "instrument_id", "quantity", "proceeds",
-  "cost", "sleeve"}]`, each lot the book closed up to its watermark, its
+  "cost", "sleeve"}]`, each lot the book closed up to its watermark (since
+  the account opened), its
   proceeds and cost in the account's base currency.
 - `instruments`: `[{"instrument_id", "record_version", "template_id",
   "template_version", "calculation_version", "model_id", "model_version",
@@ -89,9 +90,10 @@ but `implied_distribution`'s, which is the group's.
   account's -- broken down by instrument.
 - `pnl`: per bucket, two figures under the breakdown `component`:
   `unrealized`, Σ (quantity × value per unit − the open lots' cost), and
-  `realized`, Σ (a closed lot's proceeds − its cost) over the lots the book
-  closed up to its watermark (ruling 301; v26's job names no period, so
-  version 1 fixes it).
+  `realized`, Σ (a closed lot's proceeds − its cost) over every lot the book
+  closed up to its watermark: since the account opened (rulings 301, 303;
+  v26's job names no period, so version 1 fixes it, and wherever it is shown
+  it is labelled "since the account opened", `REALIZED_SINCE`).
 - `historical_var` and `expected_shortfall`: full revaluation over the
   history's last `window_days` relative returns of every market object a
   position reads, each scenario's value quantity × Π(object now × close on
@@ -158,7 +160,10 @@ from ._canonical import answer_hash, canonical, decimal_text
 __all__ = [
     "BUILT_IN",
     "DEFINITIONS",
+    "COMPONENT",
+    "COMPONENTS",
     "MODELS",
+    "REALIZED_SINCE",
     "Answer",
     "AnswerFigure",
     "Definition",
@@ -183,8 +188,11 @@ MODELS = ("cash", "quoted_price", "binary_event")
 #: 2026-10-18): `exposure` answers each bucket's `gross` (Σ |quantity ×
 #: value per unit|) and `net` (long minus short); `pnl` its `unrealized`
 #: (market value less the open lots' cost) and `realized` (closed lots'
-#: proceeds less their cost, to the book's watermark).
+#: proceeds less their cost, every lot closed to the book's watermark: since
+#: the account opened). The vocabulary is ruling 302's, the period 303's.
 COMPONENT = "component"
+#: How realized P&L's period is labelled wherever it is shown (ruling 303).
+REALIZED_SINCE = "since the account opened"
 COMPONENTS: Mapping[str, tuple[str, ...]] = {
     "exposure": ("gross", "net"),
     "pnl": ("unrealized", "realized"),
@@ -266,11 +274,12 @@ DEFINITIONS: Mapping[str, Definition] = {
             1,
             (
                 ("unrealized", "market_value_less_open_lots_cost"),
-                ("realized", "closed_lots_proceeds_less_cost_to_the_watermark"),
+                ("realized", "closed_lots_proceeds_less_cost_since_the_account_opened"),
             ),
             _BY,
             2,
-            "Each bucket's unrealized P&L (open lots) and realized P&L (closed lots)",
+            "Each bucket's unrealized P&L (open lots) and realized P&L since the account "
+            "opened (closed lots)",
         ),
         Definition(
             "historical_var",
