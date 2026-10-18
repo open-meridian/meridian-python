@@ -182,7 +182,7 @@ async def test_licences_are_its_own_datasets_and_a_refusal_is_said_once() -> Non
     assert await wants.read_licences() == frozenset({"data:daily"})
 
     def refused(_: Any) -> Any:
-        raise meridian.NotGranted("platform.lake.query.datasets", "not granted")
+        raise meridian.NotGranted("platform.lake.query.list-datasets", "not granted")
 
     recorder.answer("ListDatasets", refused)
     assert await wants.read_licences() == frozenset({"data:daily"}) and not wants.reads_licences
@@ -222,7 +222,7 @@ async def test_a_restarts_gap_is_read_once_per_subject_and_counted() -> None:
     assert wants.sent_to("trades").recorded == 1 and wants.backfilled == {"INS-1"}
 
     def refused(_: Any) -> Any:
-        raise meridian.NotGranted("platform.lake.query.trades", "not granted")
+        raise meridian.NotGranted("platform.lake.query.list-trades", "not granted")
 
     recorder.answer("ListTrades", refused)
     assert await wants.backfill(["INS-2"], history, "trades") == 0, "said, and it goes on"
