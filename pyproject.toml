@@ -33,6 +33,15 @@ dependencies = [
 migrate = [
   "libcst>=1.4,<2",
 ]
+# The analytics engine's test oracle (spec/the-analytics-engines-first-
+# release, §4 and Q12): QuantLib at one pinned release, a test dependency
+# only, which `make oracle-live` and `make oracle-regenerate` install in an
+# image of their own. Never a dependency of the SDK, a plugin or an image a
+# deployment runs (the product owner, 2026-10-12). tests/oracle/PINNED names
+# the same release.
+oracle = [
+  "QuantLib==1.40",
+]
 dev = [
   "pytest>=8",
   "pytest-asyncio>=0.24",

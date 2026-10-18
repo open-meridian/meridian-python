@@ -1,0 +1,22 @@
+# The QuantLib oracle's scheduled live run (spec/the-analytics-engines-first-
+# release, Q12): every case set's committed answers recomputed by the pinned
+# QuantLib, failing on drift. The ordinary gate reads only the committed
+# answers, so it stays offline and deterministic; this catches what that
+# cannot. The job is named for the make target it runs.
+name: oracle
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  oracle-live:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: make oracle-live
+        run: make oracle-live

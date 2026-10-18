@@ -83,6 +83,8 @@ assert "meridian/migrations/to_0_6_1/migration.toml" in files, "the migrations' 
 assert "meridian/migrations/to_0_7_0/rewrite.py" in files, "the migrations' code is not in the package"
 runtime = [r for r in (dist.requires or []) if "extra ==" not in r]
 assert not [r for r in runtime if r.startswith("libcst")], f"libcst is a runtime dependency: {runtime}"
+# The analytics engine's oracle is a test dependency only (2026-10-12).
+assert not [r for r in runtime if r.lower().startswith("quantlib")], f"QuantLib is a runtime dependency: {runtime}"
 # A plugin's pages are rendered with Jinja2 (meridian.pages), so every plugin
 # has it from the base image.
 assert [r for r in runtime if r.startswith("jinja2")], f"jinja2 is not a runtime dependency: {runtime}"
@@ -122,6 +124,15 @@ RUN test -n "${SDK_VERSION}" || { echo "SDK_VERSION is required" >&2; exit 1; } 
  && rm -rf /tmp/dist \
  && python -c "import importlib.metadata as m, sys; v = m.version('open-meridian'); sys.exit(0 if v == '${SDK_VERSION}' else f'labelled ${SDK_VERSION}, installed {v}')"
 WORKDIR /plugin
+
+# The QuantLib oracle (tests/oracle): the pinned QuantLib from the `oracle`
+# extra, in a stage of its own, never in the base, the package or a plugin's
+# image. `make oracle-live` runs every case set against it, the scheduled
+# drift check; `make oracle-regenerate` prints a set regenerated, only on a
+# deliberate version bump.
+FROM base AS oracle
+RUN pip install -e ".[oracle]"
+WORKDIR /w/tests
 
 # The conformance half needs the design repo's fixtures, which are not in this
 # repo and are not copied into the image: they are mounted at run time, because
