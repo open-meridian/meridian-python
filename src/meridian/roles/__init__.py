@@ -29,8 +29,19 @@ common item says so in it ("Does not stream", "No key needed") rather than
 leaving it out. The modules: `data`, `custody`, `operations`, `reporting`;
 custody's, operations' and reporting's items are candidates, offered here,
 until a second plugin of the role needs them (the spec's Q4).
+
+From 0.30.0 a role's module also carries the logic every plugin of the role
+must do the same to fulfil its typed operations (sdk-contract/the-sdk-carries-
+each-roles-common-logic, ruled 2026-10-13): `data`'s wants, standing wants,
+recording, restart backfill and pages, with a venue's whole work by what it
+lists (`data.pairs`, `data.event_contracts`); and `connectivity`, the
+role's whole work over a venue's adapter (`Trader`) -- a placement sent at
+most once, an unknown outcome resolved from the venue's orders, fills into
+the book, cancels and replaces, pauses and stops -- and its Trading page.
+How a plugin talks to its venue -- its client, its conversion, FIX, a
+stream's transport -- is never here.
 """
 
-from . import custody, data, operations, reporting
+from . import connectivity, custody, data, operations, reporting
 
-__all__ = ["custody", "data", "operations", "reporting"]
+__all__ = ["connectivity", "custody", "data", "operations", "reporting"]

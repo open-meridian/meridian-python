@@ -149,7 +149,7 @@ base-image:
 # The roles' templates, which `meridian plugin new --role <role>` writes:
 # each a whole plugin holding that role, sharing these files with template/
 # byte for byte, so the agents' instructions, the CI and the image are one.
-ROLE_TEMPLATES := data reporting custody operations
+ROLE_TEMPLATES := data reporting custody operations connectivity
 SHARED := AGENTS.md CLAUDE.md Dockerfile .dockerignore .gitignore \
           .claude/skills/develop-live/SKILL.md .github/workflows/check.yaml \
           hooks/pre-push docs/overview.md docs/setup.md docs/troubleshooting.md \

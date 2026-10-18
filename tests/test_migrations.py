@@ -100,7 +100,7 @@ def test_every_release_since_the_first_recorded_has_its_step() -> None:
         ("0.6.0", "0.6.1"),
         ("0.6.1", "0.7.0"),
     ]
-    assert (steps[-1].source, steps[-1].target) == ("0.28.0", "0.29.0")
+    assert (steps[-1].source, steps[-1].target) == ("0.29.0", "0.30.0")
     # A release that moves the version records its step, if only the pins.
     assert steps[-1].target == SDK
 
@@ -1100,3 +1100,213 @@ def test_a_plugin_sending_no_dockerfile_is_not_held_to_one() -> None:
     # A meridian before 0.1.46 sends the Python and pyproject.toml alone.
     files = {"pyproject.toml": CONNECTIVITY, "src/venue/declaration.py": _declared("docs")}
     assert left_by_hand(migrate(files, "0.28.0", "0.29.0")) == []
+
+
+# ── 0.29.0 to 0.30.0: the copied middle layer onto the SDK's helpers ─────
+
+PAIRS = "The same module in plugin-one and plugin-two.\n"
+CONTRACTS_PAIR = "The same module in plugin-ka and plugin-pm.\n"
+
+
+def _copied_pairs() -> dict[str, str]:
+    """A pairs plugin's copied layer, in the few lines that make each what it
+    is: its marker and its own definitions."""
+    return {
+        "pyproject.toml": '[project]\nname = "one"\ndependencies = ["open-meridian==0.29.0"]\n',
+        "src/one/__init__.py": "",
+        "src/one/market.py": f'"""Values. {PAIRS}"""\nclass Listed: ...\nclass Candle: ...\n',
+        "src/one/products.py": f'"""The map. {PAIRS}"""\nclass ProductMap: ...\n',
+        "src/one/raw.py": (
+            f'"""Raw. {PAIRS}"""\nKIND = "answers"\nLABEL = "Raw answers"\nWINDOW_DAYS = 9\n'
+            "class RawStore: ...\n"
+        ),
+        "src/one/dgm.py": (
+            f'"""Work. {PAIRS}"""\nfrom .products import ProductMap\n'
+            "from .stream import Stream\nclass Dgm: ...\n"
+        ),
+        "src/one/page.py": f'"""Pages. {PAIRS}"""\n',
+        "src/one/stream.py": (
+            f'"""A stream. {PAIRS}"""\nfrom fake_venues import Keeper as Stream  # noqa: F401\n'
+        ),
+        "src/one/preview.py": "def go(feed):\n    feed.stream.connect = None\n",
+        "src/one/convert.py": '"""Its own: The same words, not a copy."""\nclass Listed: ...\n',
+        "tests/test_suite.py": '"""The same file in plugin-one and plugin-two (held)."""\n',
+    }
+
+
+def test_a_pairs_plugins_copied_modules_become_re_exports_of_the_sdk() -> None:
+    files = _copied_pairs()
+    result = migrate(files, "0.29.0", "0.30.0")
+    assert set(result.files) == {
+        "src/one/market.py", "src/one/products.py", "src/one/raw.py", "src/one/dgm.py",
+    }  # fmt: skip
+    assert all(t.startswith('"""Moved into the SDK (open-meridian 0.30.0)') for t in
+               result.files.values())  # fmt: skip
+    assert "WINDOW_DAYS = 9" in result.files["src/one/raw.py"]
+    assert 'KIND = "answers"' in result.files["src/one/raw.py"]
+    assert "stream_factory: StreamFactory | None = Stream" in result.files["src/one/dgm.py"]
+    assert left_by_hand(result) == [
+        ("suite-same-retired", "pyproject.toml", 0),
+        ("re-export-left", "src/one/dgm.py", 1),
+        ("re-export-left", "src/one/market.py", 1),
+        ("copied-page", "src/one/page.py", 1),
+        ("stream-connect-assigned", "src/one/preview.py", 2),
+        ("re-export-left", "src/one/products.py", 1),
+        ("re-export-left", "src/one/raw.py", 1),
+        ("stream-is-the-plugins", "src/one/stream.py", 1),
+        ("copied-tests", "tests/test_suite.py", 1),
+    ]
+    for text in result.files.values():
+        compile(text, "<re-export>", "exec")
+
+
+def test_the_re_exports_run_as_the_modules_they_replace(tmp_path: Path) -> None:
+    files = _copied_pairs()
+    files.update(migrate(files, "0.29.0", "0.30.0").files)
+    for path, text in files.items():
+        if path.startswith("src/"):
+            (tmp_path / path).parent.mkdir(parents=True, exist_ok=True)
+            (tmp_path / path).write_text(text)
+    sys.path.insert(0, str(tmp_path / "src"))
+    try:
+        import importlib
+
+        dgm = importlib.import_module("one.dgm")
+        raw = importlib.import_module("one.raw")
+        products = importlib.import_module("one.products")
+        from fake_venues import pairs_venue
+        from meridian.roles.data import pairs
+        from meridian.suites import Recorder
+
+        work = dgm.Dgm(Recorder("one"), pairs_venue.market(), products.ProductMap())
+        assert isinstance(work, pairs.Feed) and work.stream_factory is not None
+        store = raw.RawStore(tmp_path / "storage")
+        assert store.kind == "answers" and raw.WINDOW_DAYS == 9
+    finally:
+        sys.path.remove(str(tmp_path / "src"))
+        for name in [m for m in sys.modules if m == "one" or m.startswith("one.")]:
+            del sys.modules[name]
+
+
+def test_an_event_contract_plugins_copied_modules_become_re_exports() -> None:
+    files = {
+        "src/ka/market.py": f'"""{CONTRACTS_PAIR}"""\nclass Contract: ...\nclass Cash: ...\n',
+        "src/ka/contracts.py": f'"""{CONTRACTS_PAIR}"""\nclass ContractMap: ...\n',
+        "src/ka/dgm.py": (
+            f'"""{CONTRACTS_PAIR}"""\nfrom .contracts import ContractMap\nclass Dgm: ...\n'
+        ),
+    }
+    result = migrate(files, "0.29.0", "0.30.0")
+    assert set(result.files) == set(files)
+    assert "Dgm = Feed" in result.files["src/ka/dgm.py"]
+    assert (
+        "event_contracts import ContractMap as ContractMap"
+        in result.files["src/ka/contracts.py"]
+    )
+    assert "event_contracts import Cash as Cash" in result.files["src/ka/market.py"]
+
+
+def test_a_plugins_own_modules_of_the_same_names_are_left_alone() -> None:
+    files = {
+        "pyproject.toml": '[project]\nname = "own"\n',
+        "src/own/market.py": '"""Its own market."""\nclass Listed: ...\nclass Candle: ...\n',
+        "src/own/raw.py": "class RawStore: ...\n",
+        "src/own/dgm.py": "from .products import ProductMap\nclass Dgm: ...\n",
+        "src/own/preview.py": "def go(feed):\n    feed.stream.connect = None\n",
+    }
+    result = migrate(files, "0.29.0", "0.30.0")
+    assert result.files == {} and left_by_hand(result) == []
+
+
+# ── 0.29.0 to 0.30.0: a trading layer onto meridian.roles.connectivity ───
+
+_TRADING = '''"""The connectivity role, in SnapTrade 0.16.0's shape."""
+from typing import Protocol
+from zoneinfo import ZoneInfo
+
+PRICE_PLACES = 6
+MARKET_ZONE = ZoneInfo("Asia/Tokyo")
+
+
+class Venue(Protocol):
+    def accounts(self): ...
+
+
+class Noted: ...
+
+
+class Watched: ...
+
+
+class Trader: ...
+
+
+def trading_files(base): ...
+'''
+
+
+def _traded() -> dict[str, str]:
+    return {
+        "pyproject.toml": '[project]\nname = "br"\n',
+        "src/br/trading.py": _TRADING,
+        "src/br/records.py": "class TradingRead: ...\nclass AccountTrading: ...\n",
+        "tests/trading_cases.py": "class Rig:\n    def make(self):\n        return Trader(1)\n",
+    }
+
+
+def test_a_trading_layer_becomes_a_re_export_of_the_sdks_connectivity(tmp_path: Path) -> None:
+    files = _traded()
+    result = migrate(files, "0.29.0", "0.30.0")
+    assert set(result.files) == {"src/br/trading.py"}
+    files.update(result.files)
+    (tmp_path / "br").mkdir()
+    (tmp_path / "br" / "trading.py").write_text(files["src/br/trading.py"])
+    sys.path.insert(0, str(tmp_path))
+    try:
+        import importlib
+        from datetime import UTC, datetime
+        from decimal import Decimal
+
+        from meridian.roles import connectivity
+        from meridian.suites import Recorder
+
+        trading = importlib.import_module("br.trading")
+        assert trading.Noted is connectivity.Sent and trading.PRICE_PLACES == 6
+        trader = trading.Trader(Recorder("br"), lambda: None, now=lambda: datetime.now(UTC))
+        assert isinstance(trader, connectivity.Trader)
+        assert str(trader.market_zone) == "Asia/Tokyo" and trader.price_places == 6
+        assert trading.fill_price(Decimal(0), None, Decimal(3), Decimal(1)) == (
+            Decimal(1),
+            False,
+        )
+        at = datetime(2026, 9, 29, 16, tzinfo=UTC)
+        assert str(trading.trade_date_of(at)) == "2026-09-30"
+    finally:
+        sys.path.remove(str(tmp_path))
+        for name in [m for m in sys.modules if m == "br" or m.startswith("br.")]:
+            del sys.modules[name]
+    assert [(rule, file) for rule, file, _ in left_by_hand(result)] == [
+        ("trading-page-onto-sdk", "src/br/records.py"),
+        ("trader-re-export-left", "src/br/trading.py"),
+        ("trading-rig-onto-sdk", "tests/trading_cases.py"),
+    ]
+
+
+def test_a_trading_layer_whose_zone_is_not_a_constant_is_left_by_hand() -> None:
+    files = _traded()
+    files["src/br/trading.py"] = _TRADING.replace(
+        'MARKET_ZONE = ZoneInfo("Asia/Tokyo")', "MARKET_ZONE = zone_of_the_venue()"
+    )
+    result = migrate(files, "0.29.0", "0.30.0")
+    assert result.files == {}
+    assert ("trader-by-hand", "src/br/trading.py", 1) in left_by_hand(result)
+
+
+def test_a_plugins_own_trader_is_left_alone() -> None:
+    files = {
+        "src/own/trading.py": "class Trader: ...\nclass Noted: ...\n",
+        "src/own/records.py": "class TradingRead: ...\n",
+        "tests/cases.py": "class Rig:\n    t = Trader(1)\n",
+    }
+    result = migrate(files, "0.29.0", "0.30.0")
+    assert result.files == {} and left_by_hand(result) == []
