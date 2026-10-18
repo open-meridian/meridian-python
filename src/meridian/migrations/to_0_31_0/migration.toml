@@ -90,3 +90,17 @@ session called: environment = meridian.reached_environment(base_url, \
 live=("api.example.com",), paper=("paper-api.example.com",)); and offer the vendor's \
 demo by its word in the setting, meridian.environment(demo="paper") where it is \
 paper trading"""
+
+[[by_hand]]
+rule = "custody-pages-onto-sdk"
+what = """custody's pages a plugin declares itself -- Account links \
+(read_account_links, check_link_account, link_account), Statements (read_statements) \
+and History (read_account_activities), as Alpaca's and Tradier's custody_pages.py \
+kept them between them -- which are the SDK's from 0.31.0 (ruling 213)"""
+instead = """keep only what is the vendor's: a class with `vendor`, `credential`, \
+`reached()`, `account(number)`, `custodian()`, `account_type(number)`, \
+`statement(number)`, `activities(number)` and `links()` read from the plugin's own sync \
+(meridian.roles.custody.CustodySource), and call \
+custody.account_pages(pages, Source, what=WHAT, templates=(...)) in the module; \
+LinkAsked is meridian.roles.custody.LinkAsked, and LINKS, STATEMENTS and HISTORY are \
+custody.ACCOUNT_LINKS, .STATEMENTS and .HISTORY"""

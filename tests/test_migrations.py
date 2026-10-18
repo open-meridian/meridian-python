@@ -1373,3 +1373,16 @@ def test_a_venue_adapter_saying_no_environment_is_left_to_report_one() -> None:
     )
     result = migrate({"src/br/venue.py": adapter}, "0.30.0", "0.31.0")
     assert left_by_hand(result) == [("venue-reports-no-environment", "src/br/venue.py", 1)]
+
+
+def test_custody_pages_a_plugin_declares_itself_are_left_to_move_onto_the_sdk() -> None:
+    copied = (
+        '"""Custody\'s pages."""\n'
+        '@pages.page(LINKS, "Account links", name="read_account_links")\n'
+        "async def account_links(request): ...\n"
+        "async def link_account(request): ...\n"
+        '@pages.page(HISTORY, "History", name="read_account_activities")\n'
+        "async def history(request): ...\n"
+    )
+    result = migrate({"src/br/custody_pages.py": copied}, "0.30.0", "0.31.0")
+    assert left_by_hand(result) == [("custody-pages-onto-sdk", "src/br/custody_pages.py", 1)]
