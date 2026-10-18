@@ -104,3 +104,17 @@ instead = """keep only what is the vendor's: a class with `vendor`, `credential`
 custody.account_pages(pages, Source, what=WHAT, templates=(...)) in the module; \
 LinkAsked is meridian.roles.custody.LinkAsked, and LINKS, STATEMENTS and HISTORY are \
 custody.ACCOUNT_LINKS, .STATEMENTS and .HISTORY"""
+
+[[by_hand]]
+rule = "lake-onto-sdk"
+what = """a broker's listings layer a plugin keeps itself -- a Lake class with \
+trade_row and quote_row beside a Products map, as Alpaca's and Tradier's lake.py kept \
+it between them -- which is the SDK's from 0.31.0 (meridian.roles.data.listings, \
+ruling 213)"""
+instead = """subclass listings.Feed in lake.py, naming source_name and history_from \
+(settles_declines = False to send each decline), and override only what is the \
+broker's: attributes(stated) from its trade conditions, withdrawn_unrecorded(stated) \
+(None to count a withdrawal naming no trade recorded here), quote_characteristics \
+(stated) and sequence_of(stated); re-export DAILY, LIVE, TRADES, PRICE, QUOTE, TRADE, \
+LIVE_KINDS, LIVE_CADENCE_SECONDS, Standing and the rest from the SDK, and Products as \
+listings.Listings; the source reads its trade history only where it defines trades()"""

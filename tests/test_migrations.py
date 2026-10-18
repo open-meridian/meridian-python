@@ -1386,3 +1386,13 @@ def test_custody_pages_a_plugin_declares_itself_are_left_to_move_onto_the_sdk() 
     )
     result = migrate({"src/br/custody_pages.py": copied}, "0.30.0", "0.31.0")
     assert left_by_hand(result) == [("custody-pages-onto-sdk", "src/br/custody_pages.py", 1)]
+
+
+def test_a_listings_layer_a_plugin_keeps_itself_is_left_to_move_onto_the_sdk() -> None:
+    copied = (
+        "class Products:\n    pass\n\n\nclass Lake:\n"
+        "    async def trade_row(self, stated, subject): ...\n"
+        "    async def quote_row(self, stated, subject): ...\n"
+    )
+    result = migrate({"src/br/lake.py": copied}, "0.30.0", "0.31.0")
+    assert left_by_hand(result) == [("lake-onto-sdk", "src/br/lake.py", 5)]

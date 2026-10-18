@@ -7,8 +7,8 @@ read the new release's digest; `meridian plugin migrate` (CLI 0.1.47) has
 moved the tag and the digest before this runs, and then there is nothing to
 do. Left by hand: pinning the digest again; a role's suite test that v26's
 cases are new to; and a connectivity adapter saying no environment its
-session reached; and custody's pages a plugin declares itself, which are the
-SDK's (ruling 213). migration.toml, beside this, records the rules.
+session reached; and custody's pages and a broker's listings layer a plugin
+keeps itself, which are the SDK's (ruling 213). migration.toml, beside this, records the rules.
 """
 
 from __future__ import annotations
@@ -59,6 +59,16 @@ def left(path: str, text: str) -> list[Finding]:
         and re.search(r"^async def link_account\(", text, re.M)
     ):
         found.append(Finding("custody-pages-onto-sdk", path, 1, line_of(text, 1)))
+    lake = re.search(r"^class Lake\b", text, re.M)
+    if (
+        not is_test(path)
+        and lake is not None
+        and re.search(r"^class Products\b", text, re.M)
+        and re.search(r"^    async def trade_row\(", text, re.M)
+        and re.search(r"^    async def quote_row\(", text, re.M)
+    ):
+        line = text[: lake.start()].count("\n") + 1
+        found.append(Finding("lake-onto-sdk", path, line, line_of(text, line)))
     if is_test(path):
         for match in _RUN.finditer(text):
             line = text.count("\n", 0, match.start()) + 1
