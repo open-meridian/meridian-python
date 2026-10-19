@@ -52,6 +52,9 @@ DECIMAL_DIGITS = 38
 """Every Decimal-typed field: the most significant digits its integer has, its
 magnitude below 10 to this power (decisions/023)."""
 
+MEASURE_DEFINITION_SCALE_RANGE = Range(least=0, most=18, capped=False)
+"""meridian.v1.MeasureDefinition.scale: states the scale values are rounded to"""
+
 LIST_POSITIONS_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=True)
 """meridian.v1.ListPositionsRequest.page_size: bounds a page"""
 
@@ -189,6 +192,9 @@ SPOT_DATE_RULE_PAIR_COUNT = Count(least=2, most=2)
 """meridian.v1.SpotDateRule.pair: names the currency pair a spot-date rule is
 for (W1.22)"""
 
+LIST_EVENT_GROUPS_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=False)
+"""meridian.v1.ListEventGroupsRequest.page_size: bounds a page"""
+
 OBSERVATION_META_ROW_KEY_LENGTH = Length(least=1, most=128)
 """meridian.v1.ObservationMeta.row_key: names one observation, so recording it
 again changes nothing"""
@@ -283,6 +289,12 @@ RECORD_OUTCOMES_REQUEST_OUTCOMES_COUNT = Count(least=1, most=500)
 LIST_OUTCOMES_REQUEST_SUBJECTS_COUNT = Count(least=1, most=500)
 """meridian.v1.ListOutcomesRequest.subjects: names the event contracts'
 instruments a read is about (W10.6)"""
+
+QUERY_LAKE_REQUEST_SUBJECTS_COUNT = Count(least=1, most=500)
+"""meridian.v1.QueryLakeRequest.subjects: names the subjects a query reads"""
+
+QUERY_LAKE_REQUEST_ROW_LIMIT_RANGE = Range(least=0, most=10000, capped=False)
+"""meridian.v1.QueryLakeRequest.row_limit: caps the rows a query answers"""
 
 AS_REPORTED_SCHEME_LENGTH = Length(least=1, most=64)
 """meridian.v1.AsReported.scheme: says whose vocabulary a value as reported is
@@ -581,6 +593,10 @@ DOCUMENTATION_SECTION_BYTES_RANGE = Range(least=1, most=65536, capped=False)
 ALGORITHM_DECLARATION_DESCRIPTION_LENGTH = Length(least=1, most=1024)
 """meridian.v1.AlgorithmDeclaration.description: says what the algorithm is,
 for a person reading the plugin's page"""
+
+HEARTBEAT_REQUEST_MODEL_TOKENS_COUNT = Count(least=0, most=64)
+"""meridian.v1.HeartbeatRequest.model_tokens: reports the model tokens the
+plugin used since it started (W4.5; item 191)"""
 
 RECORD_HOLDINGS_STATEMENT_REQUEST_PROVENANCE_COUNT = Count(least=0, most=32)
 """meridian.v1.RecordHoldingsStatementRequest.provenance: says where each value

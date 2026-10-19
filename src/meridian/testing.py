@@ -121,6 +121,7 @@ def caller_header(
     owner_subject: str = "",
     algorithm_id: str = "",
     connectivity_instance_ids: Iterable[str] = (),
+    demo_connectivity_instance_ids: Iterable[str] = (),
 ) -> str:
     """The `Meridian-Caller` header a sidecar forwards for a session at
     `level`, with the accounts cut to it: `read` and `write` are those the
@@ -150,7 +151,9 @@ def caller_header(
 
     From contract v22 `algorithm_id` is the algorithm a service account's
     call named, and `connectivity_instance_ids` the connectivity plugin
-    instances the user may route through, for an `ems`'s tests."""
+    instances the user may route through, for an `ems`'s tests; from
+    contract v26 `demo_connectivity_instance_ids` those of them that are demo
+    (W11.38), for the agents' guard."""
     at = _levels(level, "the session")[0] if level else sidecar_pb2.ACCESS_LEVEL_UNSPECIFIED
     writes = sorted(set(write))
     reads = sorted(set(read) | set(writes))
@@ -191,6 +194,7 @@ def caller_header(
         owner_subject=owner_subject,
         algorithm_id=algorithm_id,
         connectivity_instance_ids=sorted(set(connectivity_instance_ids)),
+        demo_connectivity_instance_ids=sorted(set(demo_connectivity_instance_ids)),
         own_settings=(
             []
             if at == sidecar_pb2.ACCESS_LEVEL_ADMIN

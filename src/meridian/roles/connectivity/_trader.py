@@ -72,7 +72,11 @@ a refused change by the events `order_replace_rejected` and
 
 **Its catalogue**, per venue account code, published on start and when
 trading is enabled (ReportVenueCatalogue), none for a read-only account; no
-execution acknowledgement; never a strategy.
+execution acknowledgement; never a strategy. From 0.31.0 (contract v26) it
+carries the environment the session reached, where the adapter states one
+(`Venue.environment`, read from the vendor's host with
+`meridian.reached_environment`): the second key of the agents' demo-only
+guard, which counts a connection with no report live.
 
 **Venue-originated fills** (contract v23): an order the venue lists on a
 mapped account that no placement names is never recorded as an order: only
@@ -80,6 +84,20 @@ its fills after the plugin first watched the account are reported, on no
 placement (`Watched` keeps when, and each such order's fills), so the book
 holds them unmatched until the `ems` accepts or answers DK. Once accepted,
 the accept's placement is adopted and the order's later fills reported on it.
+
+**Charges and a stated settlement date** (0.31.0; ruling 213: SnapTrade's
+trading.py onto the SDK). An adapter whose venue states charges apart from
+its orders -- an account's activities -- answers `charges(code)`, each a
+`VenueCharge` naming the venue order it is on: a fee on a placement that
+ended with nothing filled is reported as its charge (kind cancel where the
+placement was cancelled, else exchange), and a commission on a trade on its
+placement, or for a venue-originated order on no placement, kept unplaced
+and reported again on the placement an accept creates. Each order is looked
+for over `CHARGE_POLLS` polls after it ended or last filled on no placement,
+and each charge is reported once (`charged`, noted in storage). An adapter
+whose venue states a fill's settlement date (`stated_settlement(code,
+order, traded)`) has it sent where the date read answers none, rather than
+the fill waiting.
 
 What the venue is and how it is reached -- its API, FIX, a stream -- is the
 adapter's, never here.
@@ -89,6 +107,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import inspect
 import json
 import logging
 import os
@@ -106,6 +125,7 @@ from ...errors import MeridianError
 from ...operations import (
     DateBasis,
     DateRuleRef,
+    Fee,
     Finality,
     Money,
     PlacementChange,
@@ -135,6 +155,9 @@ PRICE_PLACES = 8
 #: How many polls after a placement ends its order is still read, for a
 #: bust after it filled; then it is let go.
 ENDED_POLLS = 10
+#: How many polls after an order ended, or last filled on no placement, its
+#: charges are looked for.
+CHARGE_POLLS = 10
 HOLDING = (ops.TRADING_INSTRUCTION_VALUE_PAUSE, ops.TRADING_INSTRUCTION_VALUE_STOP)
 
 Json = dict[str, Any]
@@ -222,6 +245,26 @@ class VenueOrder:
     # The last fill the venue states, quantity and price, where it does.
     last_fill: tuple[Decimal, Decimal] | None = None
     reason: str = ""
+    # The listing market's zone where the venue states one for the order
+    # (0.31.0): its fills' trade dates fall in it, else in the Trader's.
+    market_zone: tzinfo | None = None
+
+
+@dataclass(frozen=True)
+class VenueCharge:
+    """A charge the venue states apart from its orders (an account's
+    activity), naming the venue order it is on: a `fee` (charged on an order
+    that filled nothing) or a `commission` (on a trade), its amount as the
+    venue states it, the currency, its dates and the raw record it is in."""
+
+    charge_id: str
+    venue_order_id: str
+    kind: str
+    amount: Decimal
+    currency: str
+    trade_date: str = ""
+    settlement_date: str = ""
+    raw_key: str = ""
 
 
 @dataclass(frozen=True)
@@ -234,9 +277,19 @@ class Fill:
 
 
 class Venue(Protocol):
-    """What the Trader asks of a venue (venue.py)."""
+    """What the Trader asks of a venue (venue.py).
+
+    An adapter may also say which environment its session reached, as an
+    attribute `environment` (contract v26): `live`, `paper` or `sandbox`,
+    read from the host it called (`meridian.reached_environment`), empty for
+    no report. The Trader reads it where it is, so an adapter written
+    before 0.31.0 reports none."""
 
     #: The venue's statuses by their category; any other is not mapped.
+    #: An adapter may also answer `charges(code)` (a list of `VenueCharge`)
+    #: and `stated_settlement(code, order, traded)` (the settlement date the
+    #: venue states for an order's fill, "" for none); the Trader asks
+    #: either only where the adapter has it.
     statuses: dict[str, str]
     #: The sides it places, by the contract's, in its words.
     sides: dict[int, str]
@@ -302,6 +355,8 @@ class Worked:
     # A venue-originated order's placement, created at filled by its ems's
     # accept (contract v23): only its later fills and busts are reported.
     adopted: bool = False
+    # How many polls its charges have been looked for, since it ended.
+    charge_polls: int = 0
 
 
 @dataclass
@@ -324,6 +379,10 @@ class Originated:
     executions: dict[str, str] = field(default_factory=dict)
     adopted: str = ""
     missing: bool = False
+    # Its charges on no placement, by charge ID, reported again on an
+    # accept's placement; and how many polls they have been looked for.
+    charges: dict[str, Json] = field(default_factory=dict)
+    charge_polls: int = 0
 
     def held(self) -> Json:
         return {
@@ -339,6 +398,7 @@ class Originated:
             "fills": [[f, str(c), d] for f, c, d in self.fills],
             "executions": self.executions,
             "adopted": self.adopted,
+            "charges": self.charges,
         }
 
     @staticmethod
@@ -359,6 +419,7 @@ class Originated:
             ],
             executions={str(k): str(v) for k, v in (held.get("executions") or {}).items()},
             adopted=str(held.get("adopted") or ""),
+            charges={str(k): dict(v) for k, v in (held.get("charges") or {}).items()},
         )
 
 
@@ -440,8 +501,14 @@ class Trader:
         market_zone: tzinfo,
         price_places: int = PRICE_PLACES,
         default_currency: str = "USD",
+        charged: Sent | None = None,
     ) -> None:
         self._plugin = plugin
+        #: The charges reported, each once, by charge and placement.
+        self.charged = charged if charged is not None else Sent(None)
+        #: The accounts first watched in the poll under way: what their
+        #: orders had filled then is their history (0.31.0).
+        self._first_read: set[str] = set()
         #: The listing market's zone, the day a fill's trade date is in.
         self.market_zone = market_zone
         #: The places a fill's price worked out from two averages is rounded
@@ -467,7 +534,7 @@ class Trader:
         #: said once in the log.
         self.history: set[str] = set()
         self.watermark: ops.Watermark | None = None
-        self.published: dict[str, Catalogue] = {}
+        self.published: dict[str, tuple[Catalogue, str]] = {}
         #: The accounts the key reached when last asked, by their codes.
         self.reached: tuple[str, ...] = ()
         self.shown = Shown()
@@ -476,12 +543,16 @@ class Trader:
         #: then is the start's to find.
         self.started = asyncio.Event()
 
-    def _trade_date(self, at: datetime) -> date:
-        """The date a fill's time falls on in the listing market's zone."""
-        return at.astimezone(self.market_zone).date()
+    def _trade_date(self, at: datetime, zone: tzinfo | None = None) -> date:
+        """The date a fill's time falls on in the listing market's zone: the
+        order's, where the venue states one, else the Trader's."""
+        return at.astimezone(zone or self.market_zone).date()
 
     async def _call(self, work: Callable[..., Any], *args: Any) -> Any:
-        """A venue's call, off the loop: its client blocks."""
+        """A venue's call: awaited where the adapter's client is async (from
+        0.31.0), else off the loop, since its client blocks."""
+        if inspect.iscoroutinefunction(work):
+            return await work(*args)
         return await asyncio.to_thread(work, *args)
 
     def _raw(self, key: str) -> ops.RawRecordRef:
@@ -548,7 +619,7 @@ class Trader:
     ) -> None:
         if placement.connectivity_instance_id != self.me:
             return
-        if self._adopt(placement):
+        if await self._adopt(placement):
             return
         self.venue_orders.update(placement.venue_order_ids)
         if placement.venue_order_id:
@@ -581,7 +652,7 @@ class Trader:
         if worked is not None:
             await self._asked_to_change(placement, order, worked)
 
-    def _adopt(self, placement: ops.Placement) -> bool:
+    async def _adopt(self, placement: ops.Placement) -> bool:
         """A placement an accept created at filled for a venue-originated
         order (contract v23): its order's later fills are reported on it from
         here. True where the placement is one."""
@@ -614,6 +685,9 @@ class Trader:
             held.venue_order_id,
             placement.placement_id,
         )
+        # Its charges kept on no placement, reported again on it (0.31.0).
+        for charge_id, charge in sorted(held.charges.items()):
+            await self._charge(placement.placement_id, charge_id, charge)
         return True
 
     async def _order_of(self, placement: ops.Placement) -> ops.Order | None:
@@ -657,7 +731,7 @@ class Trader:
                 and execution.placement_id
                 and not held.adopted
             ):
-                self._adopt(
+                await self._adopt(
                     ops.Placement(
                         placement_id=execution.placement_id,
                         order_id=execution.order_id,
@@ -1067,8 +1141,11 @@ class Trader:
                     worked.ended_polls += 1
             watched = {w.code for w in self.working.values() if w.ended_polls <= ENDED_POLLS}
             codes = sorted(watched | (self.mapped() & set(await self._reached(venue))))
+            self._first_read = set()
             for code in codes:
                 if code in self.mapped():
+                    if code not in self.watched.since:
+                        self._first_read.add(code)
                     self.watched.first(code, self._now())
                 try:
                     orders, key = await self._call(venue.orders, code)
@@ -1077,6 +1154,7 @@ class Trader:
                     log.warning("%s: the orders were not read: %s", code, failed)
                     continue
                 await self._read_orders(venue, code, orders, key)
+            await self._charges(venue)
             self.shown = Shown(
                 working=sum(1 for w in self.working.values() if not w.ended),
                 held=len(self.held),
@@ -1125,6 +1203,28 @@ class Trader:
         """A venue order no placement names (contract v23): each fill after
         the plugin first watched the account reported on no placement."""
         held = self.watched.orders.get(record.order_id)
+        if held is None and record.filled and code in self._first_read:
+            # What it had filled when the plugin first read the account is
+            # the account's history, never reported; only what it fills
+            # after is (0.31.0, as SnapTrade read it).
+            self.history.add(record.order_id)
+            log.info(
+                "%s: the venue lists an order no placement names (%s), filled before this "
+                "plugin first read the account: its history, not reported",
+                code,
+                record.order_id,
+            )
+            self.watched.orders[record.order_id] = Originated(
+                venue_order_id=record.order_id,
+                code=code,
+                client_order_id=record.client_order_id,
+                symbol=record.symbol,
+                side=venue.sides_said.get(record.side, 0),
+                filled=record.filled,
+                average=record.average,
+            )
+            self.watched.save()
+            return
         if held is None:
             if not record.filled:
                 return
@@ -1178,14 +1278,16 @@ class Trader:
             kind = ops.EXECUTION_KIND_INFERRED
         else:
             return
-        traded = self._trade_date(at)
+        traded = self._trade_date(at, record.market_zone)
         settles = await self._plugin.compute_date(
             settlement=ops.SettlementDateInputs(
                 instrument_id=held.instrument_id, trade_date=traded.isoformat()
             ),
             as_of_ns=_ns(at),
         )
-        if not (settles.outcome == ops.DATE_OUTCOME_COMPUTED and settles.date):
+        computed = settles.outcome == ops.DATE_OUTCOME_COMPUTED and bool(settles.date)
+        stated = "" if computed else await self._stated(venue, code, record, traded)
+        if not computed and not stated:
             return
         derived = execution_id(held.venue_order_id, record.filled)
         done = await self._plugin.report_execution(
@@ -1202,8 +1304,9 @@ class Trader:
             trade_time_ns=_ns(at),
             trade_date=traded.isoformat(),
             finality=Finality(level=ops.FINALITY_LEVEL_FINAL, at_ns=_ns(at)),
-            computed_settlement_date=settles.date,
-            settlement_date_basis=basis_of(settles.basis),
+            settlement_date=stated,
+            computed_settlement_date=settles.date if computed else "",
+            settlement_date_basis=basis_of(settles.basis) if computed else None,
             raw_record=self._raw(key),
             idempotency_key=f"fill:{derived}",
         )
@@ -1212,6 +1315,7 @@ class Trader:
         held.fills.append((derived, record.filled, traded.isoformat()))
         held.filled = record.filled
         held.average = record.average
+        held.charge_polls = 0
         self.watched.save()
         log.info(
             "%s: a fill of %s on no placement (%s), placed outside the platform",
@@ -1471,7 +1575,7 @@ class Trader:
         else:
             return
         at = at or self._now()
-        traded = self._trade_date(at)
+        traded = self._trade_date(at, record.market_zone)
         await self._symbol_filled(venue, worked, record, at)
         settles = await self._plugin.compute_date(
             settlement=ops.SettlementDateInputs(
@@ -1479,7 +1583,9 @@ class Trader:
             ),
             as_of_ns=_ns(at),
         )
-        if not (settles.outcome == ops.DATE_OUTCOME_COMPUTED and settles.date):
+        computed = settles.outcome == ops.DATE_OUTCOME_COMPUTED and bool(settles.date)
+        stated = "" if computed else await self._stated(venue, worked.code, record, traded)
+        if not computed and not stated:
             # Never sent with a guessed date: asked again on the next read.
             if not worked.waiting:
                 worked.waiting = True
@@ -1503,8 +1609,9 @@ class Trader:
             trade_time_ns=_ns(at),
             trade_date=traded.isoformat(),
             finality=Finality(level=ops.FINALITY_LEVEL_FINAL, at_ns=_ns(at)),
-            computed_settlement_date=settles.date,
-            settlement_date_basis=basis_of(settles.basis),
+            settlement_date=stated,
+            computed_settlement_date=settles.date if computed else "",
+            settlement_date_basis=basis_of(settles.basis) if computed else None,
             raw_record=self._raw(key),
             idempotency_key=f"fill:{derived}",
         )
@@ -1585,6 +1692,104 @@ class Trader:
                 return str(execution.execution_id)
         return ""
 
+    # ── A stated settlement date, and charges (0.31.0) ──────────────────
+
+    async def _stated(self, venue: Venue, code: str, record: VenueOrder, traded: date) -> str:
+        """The settlement date the venue states for an order's fill, where the
+        adapter reads one; "" for none."""
+        stated = getattr(venue, "stated_settlement", None)
+        if stated is None:
+            return ""
+        try:
+            said = await self._call(stated, code, record, traded)
+        except (VenueRefused, VenueUnanswered) as failed:
+            log.info("%s: the stated settlement date was not read: %s", code, failed)
+            return ""
+        return str(said or "")[:10]
+
+    async def _charges(self, venue: Venue) -> None:
+        """The charges the venue states apart from its orders (the module's
+        **Charges**), for each placement ended and each venue-originated
+        order filled within `CHARGE_POLLS` polls; and an accept's
+        placement's charges kept unplaced, reported on it."""
+        read = getattr(venue, "charges", None)
+        if read is None:
+            return
+        ended = [w for w in self.working.values() if w.ended and w.charge_polls < CHARGE_POLLS]
+        originated = [
+            o
+            for o in self.watched.orders.values()
+            if o.fills and not o.adopted and o.charge_polls < CHARGE_POLLS
+        ]
+        for each in ended:
+            each.charge_polls += 1
+        for one in originated:
+            one.charge_polls += 1
+        codes = sorted({w.code for w in ended} | {o.code for o in originated})
+        for code in codes:
+            try:
+                stated: list[VenueCharge] = await self._call(read, code)
+            except (VenueRefused, VenueUnanswered) as failed:
+                log.info("%s: the charges were not read: %s", code, failed)
+                continue
+            placed = {w.venue_order_id: w for w in ended if w.code == code and w.venue_order_id}
+            unplaced = {o.venue_order_id: o for o in originated if o.code == code}
+            for charge in stated:
+                await self._charged_by(charge, placed, unplaced)
+
+    async def _charged_by(
+        self, charge: VenueCharge, placed: dict[str, Worked], unplaced: dict[str, Originated]
+    ) -> None:
+        """One stated charge, reported where it is one: a fee on a placement
+        that ended with nothing filled (kind cancel where it was cancelled,
+        else exchange); a commission on a placement's trade, or on a
+        venue-originated order's, on no placement."""
+        worked, originated = (
+            placed.get(charge.venue_order_id),
+            unplaced.get(charge.venue_order_id),
+        )
+        if charge.kind == "fee":
+            if worked is None or worked.filled != 0 or worked.ended == "filled":
+                return
+            kind = ops.FEE_KIND_CANCEL if worked.ended == "cancelled" else ops.FEE_KIND_EXCHANGE
+        elif charge.kind == "commission":
+            kind = ops.FEE_KIND_COMMISSION
+        else:
+            return
+        if charge.amount == 0 or (worked is None and originated is None):
+            return
+        held: Json = {
+            "kind": ops.FeeKind.Name(kind),
+            "amount": str(abs(charge.amount)),
+            "currency": charge.currency or self.default_currency,
+            "trade_date": charge.trade_date[:10],
+            "settlement_date": charge.settlement_date[:10],
+            "raw": charge.raw_key,
+        }
+        if originated is not None and worked is None:
+            # Kept unplaced until an accept's placement names the order, and
+            # sent again on it then.
+            originated.charges[charge.charge_id] = held
+            self.watched.save()
+        await self._charge(worked.placement_id if worked else "", charge.charge_id, held)
+
+    async def _charge(self, placement_id: str, charge_id: str, charge: Json) -> None:
+        """A charge sent on a placement, or on none, once (`charged`)."""
+        noted = f"{charge_id}|{placement_id}"
+        if noted in self.charged:
+            return
+        self.charged.note(noted)
+        await self._plugin.report_charge(
+            placement_id=placement_id,
+            fee=Fee(
+                kind=str(charge["kind"]),
+                amount=Money(Decimal(str(charge["amount"])), str(charge["currency"])),
+            ),
+            trade_date=str(charge.get("trade_date") or ""),
+            settlement_date=str(charge.get("settlement_date") or ""),
+            raw_record=self._raw(str(charge.get("raw") or "")),
+        )
+
     # ── Accounts and the catalogue ──────────────────────────────────────
 
     async def _reached(self, venue: Venue) -> tuple[str, ...]:
@@ -1615,13 +1820,17 @@ class Trader:
         if venue is None:
             return
         stated_at = _ns(self._now())
+        environment = str(getattr(venue, "environment", "") or "")
         for code in sorted(await self._reached(venue)):
             offered = self.catalogue_of(venue, code)
-            if code in self.published and self.published[code] == offered:
+            said = (offered, environment)
+            if code in self.published and self.published[code] == said:
                 continue
             await self._plugin.report_venue_catalogue(
                 catalogue=VenueCatalogue(
                     venue_account_code=code,
+                    # The environment the session reached (contract v26).
+                    environment=environment,
                     # The venue takes no execution acknowledgement, BN or Q
                     # (contract v23): a DK's ems is told the venue is not.
                     execution_acknowledgement=ops.EXECUTION_ACKNOWLEDGEMENT_NONE,
@@ -1635,7 +1844,7 @@ class Trader:
                     ],
                 )
             )
-            self.published[code] = offered
+            self.published[code] = said
 
     # ── Running ─────────────────────────────────────────────────────────
 
@@ -1720,3 +1929,9 @@ def trading_files(base: Path | None) -> tuple[Path | None, Path | None, Path | N
         return None, None, None
     held = base / "trading"
     return held / "sent.json", held / "enabled.json", held / "originated.json"
+
+
+def charged_file(base: Path | None) -> Path | None:
+    """Where the charges reported are noted (0.31.0): `trading/charged.json`
+    in storage."""
+    return None if base is None else base / "trading" / "charged.json"

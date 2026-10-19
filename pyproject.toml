@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "open-meridian"
-version = "0.30.0"
+version = "0.31.0"
 description = "Build Meridian plugins"
 license = { text = "Apache-2.0" }
 requires-python = ">=3.11"
@@ -32,6 +32,15 @@ dependencies = [
 # installs it in an image of its own, built on this SDK's base.
 migrate = [
   "libcst>=1.4,<2",
+]
+# The analytics engine's test oracle (spec/the-analytics-engines-first-
+# release, §4 and Q12): QuantLib at one pinned release, a test dependency
+# only, which `make oracle-live` and `make oracle-regenerate` install in an
+# image of their own. Never a dependency of the SDK, a plugin or an image a
+# deployment runs (the product owner, 2026-10-12). tests/oracle/PINNED names
+# the same release.
+oracle = [
+  "QuantLib==1.40",
 ]
 dev = [
   "pytest>=8",

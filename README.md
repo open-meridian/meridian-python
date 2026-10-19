@@ -2,7 +2,7 @@
 
 The Python SDK for building [Open Meridian](https://open-meridian.com) plugins:
 the tools a trader has an AI agent build, and the bots and analytics a
-developer writes. Python 3.11 or newer. This is release 0.30.0; its reference
+developer writes. Python 3.11 or newer. This is release 0.31.0; its reference
 is at [open-meridian.dev](https://open-meridian.dev/api/python-sdk/).
 
 ## Start here
@@ -30,8 +30,13 @@ the data suite; a custody plugin's Connections, Account links and
 Statements; an operations plugin's Breaks, Reconciliations and Opening
 balances, its confirmation preparable by an agent; and a `reporting` plugin
 valuing the book's positions at the close from the lake, its Closes and
-Datasets pages, and its tests running the `reporting` suite. Each is a whole
-plugin, its agents' files, CI and `Dockerfile` the reference plugin's own.
+Datasets pages, and its tests running the `reporting` suite. `--role
+connectivity` writes a plugin placing at a stand-in venue through the SDK's
+Trader, its tests running the connectivity suite; and from 0.31.0 `--role
+pricing` a plugin answering the analytics component's batches, its tests
+running the `pricing` suite. Each is a whole plugin, its agents' files, CI and
+`Dockerfile` the reference plugin's own, and each passes `meridian plugin
+check --verified` as written.
 
 ## The SDK
 
@@ -1751,6 +1756,81 @@ await plugin.receive(observations_wanted=lambda heard: wants.hear(heard, answer)
   others: the Trader over a stand-in venue held in memory.
 - The role's Datasets template pages its Wants with the kit's `om-pager`.
 
+### The analytics component, event groups and the agents' guard (contract v26)
+
+0.31.0 declares contract v26 (`meridian.SCHEMA_VERSION`).
+
+- **Asking the analytics component** (`meridian.analytics`; a `reporting`,
+  `portfolio`, `compliance` or `signal` plugin): a job built with typed
+  builders, checked as it is built, answered inline or later; every figure
+  read with how it was computed (`exact` now, `model` from v28) and the
+  scenario it is under, a weight compared by cross-multiplication, and what
+  was not evaluated listed with why, never as a zero.
+
+  ```python
+  from meridian import analytics
+
+  job = analytics.job(
+      analytics.measure("exposure", by=["asset_class"]),
+      analytics.measure("historical_var"),
+      accounts=["ACC-12"],
+  )
+  answer = await analytics.Jobs().run(plugin, job)   # waits for one answered later
+  for figure in answer.figures("exposure"):
+      print(figure.breakdown, figure.value)
+  ```
+
+  `exposure` answers each bucket gross and net, each a `component`
+  breakdown; `pnl` version 1 is Unrealized P&L, one `unrealized` component
+  per bucket (realized P&L since the account opened is `pnl` version 2,
+  v27's: the reference computes it, and a v26 job cannot ask for it). A job answered later is heard on
+  `job_finished` (`plugin.receive(job_finished=jobs.heard)`) and caught up by
+  sequence (`jobs.catch_up`).
+- **The reference computations** (`meridian.analytics.reference`): v26's
+  models (`cash`, `quoted_price`, `binary_event`) and its eight measure
+  definitions in `decimal` and exact fractions, which the engine equals
+  exactly, the answer's hash included: SHA-256 over the RFC 8785 canonical
+  JSON of a case's inputs. The pinned cases are `tests/reference_cases/`,
+  written by `tools/write_reference_cases.py`.
+- **A pricing plugin** (`meridian.roles.pricing.Pricer`): each batch the
+  component routes to it answered whole, from exactly the market objects
+  each unit carries, with no sensitivity until v28; the batches still
+  waiting read after a restart. `reference_model` is the built-in models'
+  own computation, so an implementation of a v26 model equals them.
+- **Event groups**: `meridian.EventGroups` keeps every version read
+  (`list_event_groups`) and heard (`event_group_changed`), and answers the
+  one in force at a moment; a venue's data plugin reports its venue's
+  grouping with `event_contracts.Feed.report_event`, a flag the venue does
+  not state reported not stated, never false. Every role's suite's
+  `hears-and-reads-an-event-group` is answered by the SDK.
+- **The agents' demo-only guard**: `meridian.environment(demo="paper")`
+  offers paper beside sandbox; a connectivity adapter says which environment
+  its session reached (`environment`, read with
+  `meridian.reached_environment`), which the Trader publishes on its
+  catalogue; `meridian.connection_badge` draws Demo, Live or "Live
+  (environment not confirmed)"; `Caller.agent_refused` says before sending
+  what the book would refuse an agent.
+- **The agent tools**: `plugin.query_lake`, one bounded query of the lake,
+  and `plugin.count_model_tokens`, a model's tokens on every heartbeat.
+- **The QuantLib oracle** (`tests/oracle`): QuantLib pinned in the
+  `oracle` extra alone, never a dependency of the SDK or an image; committed
+  case sets, regenerated only on a version bump (`make oracle-regenerate`),
+  and a scheduled live run (`make oracle-live`); its calendars built from
+  core's settlement calendars.
+
+### More of each role's common logic (0.31.0; ruling 213)
+
+- **Custody's pages** (`custody.account_pages` over a plugin's
+  `CustodySource`): Account links, Statements and History, each the same
+  answer as its tool, from Alpaca's and Tradier's plugins.
+- **A broker's US equity listings** (`meridian.roles.data.listings`): the
+  lake layer Alpaca's and Tradier's plugins kept, a plugin subclassing
+  `listings.Feed` and converting only its broker's trade conditions.
+- **The Trader** reports the charges a venue states apart from its orders
+  (`VenueCharge`) and a fill's settlement date it states, awaits an async
+  adapter, and dates a fill in its order's own zone: SnapTrade's trading,
+  onto the SDK.
+
 ## Moving a plugin to a new release
 
     meridian plugin migrate            # to the latest release
@@ -1819,6 +1899,7 @@ carries libcst.
 | 0.27.0 to 0.28.0: the SDK declares contract v24, an execution booked to its accounts and one ID for every instrument: booking (`book_order`, `Allocation`, `hand_off_booking`, `correct_booking`, `BookingCorrectionKind`, `list_bookings`, `receive(booking_updated=)`, `BookingState`, `ErrorCause`), the allocation instruction amended (`set_allocation_instruction`), the give-up (`report_give_up`, `GiveUpAnswer`), the sleeve cross (`record_sleeve_cross`, `SleeveCross`), the alert (`raise_alert`, `acknowledge_alert`, `list_alerts`, `receive(alert_changed=)`, `AlertKind`, `AlertState`); cash under option (c); a provisional record (`InstrumentRecord.provisional`, `ResolveIdentifierResult.provisional`, `template_id`, `template_version`), the replacement heard by every role and caught up by sequence (`receive(replace_merged_instrument=)`, `list_replacements`, `ReplacementCause`) and followed by `meridian.CurrentIdMap`; the template catalogue (`list_templates`, `read_template`, `meridian.TemplateCatalogue`); `offer_template_fields` and the `reference` suite, in preview; `read_local_record_orders`; every suite's two cases the SDK answers; the suites' resolves answering `INS-suite-n`, and `LCL-suite-n` on `Recorder(provisional=True)`; `DatasetDeclaration.calendar_id`; `meridian.environment()` defaulting to `sandbox` | a record's `instrument_id.startswith("LCL-")` into its `provisional`; the platform's ID read from the `open_meridian` identifier into the record's `instrument_id` (the read's default where the record is provisional); a test's `LCL-suite-n` into `INS-suite-n` | an ID tested for the prefix `LCL-` with no record at hand: read the record's `provisional`; `open_meridian` read or written any other way; a plugin whose environment was Live by default: say `environment(default="live")` only where Live is meant, otherwise its admin chooses |
 | 0.28.0 to 0.29.0: the SDK declares contract v25, plugins shared through registries and carrying their own documentation: the whole declaration (`Declaration(interface=, reads_external_accounts=, documentation=, affirmation_deadline=)`, its settings, interface, tools and documentation by digest), `meridian-declaration --documentation`, registration held to the version uploaded, `connect` refusing an interface its declaration does not name; `record_break(unresolved_identifiers=)`, `resolve_venue(venue_id=)`; the give-up cases marked `about: give-ups`. Breaking: a plugin whose declaration does not carry its interface is refused at registration until it does | a connectivity plugin's `await plugin.read_local_record_orders()` removed, and its test's mapping of `reads-whether-orders-may-name-local-records` | `connect` given an interface, settings or `reads_external_accounts`: declare them in the `Declaration`, the port fixed, and pass `connect(declaration=DECLARATION)`; a `[tool.meridian]` naming no `declaration`: name one, and write `docs/overview.md` and `docs/setup.md`; a Dockerfile whose last stage copies no documentation directory (one installing only the package from a mount): `COPY docs/ docs/`, or the whole context as the templates do (`COPY . .`), since the declaration reads its sections in the built image; a connectivity plugin's read of the escape hatch whose answer it uses: remove it and what depends on it |
 | 0.29.0 to 0.30.0: each role's common logic in the SDK, contract v25 unchanged: `meridian.roles.data` a package -- `Wants` (wants heard and declined by reason, standing wants, rows recorded in the lake's batches and counted, licences, a restart's gap read back once), `Venue`, `unconverted`, `asked`, the venue's reading (`number`, `json_decimal`, `Unread`, `Session`, `Health`, `Limits`, `Endpoint`), `served`, `want_rows`, `WantHeard`, `VenueConnection`; `meridian.roles.data.pairs` and `.event_contracts`, a venue's whole work by what it lists (`Feed`, `ProductMap`, `ContractMap`, their pages and templates); `meridian.roles.data.testing` (`Lake`, the suite's producers, `PairsChecks`, `EventContractsChecks`); `meridian.edge.RawStore`; `meridian.roles.connectivity` (`Sent`, `place_once`, `resolve_unanswered`, `report_status_not_mapped`, `execution_id`, `bust_id`, `fill_price`, `filled_in_book`, and the role's work: `Trader` over a `Venue`, `Watched`, `trading_read` and its template, `testing.Rig`); a connectivity role template; the role's Wants paged | a module copied from a sibling plugin (`market.py`, `products.py`, `contracts.py`, `raw.py`, `dgm.py`, saying "The same module in ... and ...") into a re-export of the SDK's names; a trading layer in SnapTrade 0.16.0's shape (`trading.py` defining `Trader`, `Noted`, `Venue`, `Watched`, `trading_files`) into a re-export of `meridian.roles.connectivity`, its `Trader` in the module's market zone | import from the SDK and delete the re-exports, constructing `Trader` with `market_zone=` and `Sent` for `Noted`; the Trading page: `trading_read` and the SDK's template; the trading test rig: a subclass of `testing.Rig`; the copied `page.py` and templates: the kind's builders and templates; the copied tests: one class of the SDK's checks; a copied `stream.py`: the plugin's own transport, handed to the feed; an assignment of a stream's `connect`: `retarget` it; the Makefile's suite-same: removed |
+| 0.30.0 to 0.31.0: the SDK declares contract v26: `meridian.analytics` (typed builders for a job, `Answer`, `Jobs`) and its reference computations, the `pricing` role (`roles.pricing.Pricer`) and template, event groups (`EventGroups`, `event_contracts.Feed.report_event`), the agents' guard (`environment(demo="paper")`, `reached_environment`, `connection_badge`, `Caller.agent_refused`), `query_lake` and `count_model_tokens`; custody's pages (`custody.account_pages`), a broker's listings (`roles.data.listings`) and the Trader's charges and stated settlement dates (ruling 213) | a base pinned by digest at an older release moved to 0.31.0, its digest dropped (offline) | pin the base's digest again; map each role suite's v26 cases; give a connectivity adapter its `environment`; move custody pages, a listings layer or a SnapTrade-shaped trader onto the SDK |
 
 `tests/migrations/` holds the plugins the migrations are recorded for, as
 written and as their migration leaves them, and `make check-migrations` holds

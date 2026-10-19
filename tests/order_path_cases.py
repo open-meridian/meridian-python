@@ -12,7 +12,10 @@ allocation; `portfolio`'s instruction amended; `compliance`'s alerts and an
 order on a local record; the give-up; bookings and alerts heard by their
 readers), the escape hatch's setting read, a custodian's thinly described
 holding left unresolved, the `reference` suite, and the two every-role cases
-the SDK answers itself.
+the SDK answers itself; and contract v26's: the reading roles' analytics
+jobs run and caught up, the agents' guard read and its five `ems` cases, and
+the lake's bounded query (the third every-role case, an event group heard
+and read, the SDK answers too).
 
 Each producer is what a plugin holding the role does, through the SDK's
 typed operations, for what the case's source presents: it runs against the
@@ -1116,6 +1119,160 @@ async def resolves_a_security_it_reconciles(recorder: Recorder) -> None:
     )
 
 
+# ── Contract v26 ─────────────────────────────────────────────────────────────
+
+JOB = "JOB-01JAG0A1B2C30000000000002"
+DEMO_VENUE = "sim-venue-demo-1"
+#: An agent working for the person through a delegation: an agent's act.
+AGENT = caller_header(
+    "write",
+    write=[ACCOUNT],
+    delegation_id="DLG-01JAG0000000000000000001",
+    client_name="Claude",
+    connectivity_instance_ids=[VENUE, DEMO_VENUE],
+    demo_connectivity_instance_ids=[DEMO_VENUE],
+)
+#: The person making, at the page, a placement an agent prepared.
+PERSON_FROM_PREPARED = caller_header(
+    "write",
+    write=[ACCOUNT],
+    prepared_call_id="PRC-01JAG0000000000000000001",
+    connectivity_instance_ids=[VENUE, DEMO_VENUE],
+    demo_connectivity_instance_ids=[DEMO_VENUE],
+)
+
+
+def refused_live(row: str):  # type: ignore[no-untyped-def]
+    """The book's answer to an agent's live act while the guard is on."""
+
+    def reply(_: object) -> object:
+        raise meridian.CommandRefused(
+            row,
+            "agents may place orders on demo connections only",
+            sidecar_pb2.REFUSAL_REASON_AGENT_LIVE_ORDER,
+        )
+
+    return reply
+
+
+async def runs_a_job_and_reads_its_answer(recorder: Recorder) -> None:
+    from meridian import analytics
+
+    recorder.answer(
+        "ListMeasureDefinitions",
+        lambda _: ops.ListMeasureDefinitionsResult(
+            definitions=[ops.MeasureDefinition(definition="exposure", version=1, scale=2)]
+        ),
+    )
+    recorder.answer("RunJob", lambda _: ops.RunJobResult(answered_inline=False, job_id=JOB))
+    recorder.answer("JobFinished", lambda _: ops.JobFinishedEvent(job_id=JOB, sequence=1))
+    recorder.answer("ReadJobAnswer", lambda params: ops.ReadJobAnswerResult(job_id=JOB))
+    held = analytics.measures_of((await recorder.list_measure_definitions()).definitions)
+    assert "exposure" in held
+    jobs = analytics.Jobs(poll_seconds=0.01, timeout_seconds=1)
+    await recorder.receive(job_finished=jobs.heard)
+    answer = await jobs.run(
+        recorder,
+        analytics.job(analytics.measure("exposure", by=["asset_class"]), accounts=[ACCOUNT]),
+    )
+    assert answer.job_id == JOB
+
+
+async def catches_up_finished_jobs(recorder: Recorder) -> None:
+    from meridian import analytics
+
+    jobs = analytics.Jobs()
+    jobs.sequence = 41  # the last finishing it saw, kept before it lost the stream
+    await jobs.catch_up(recorder)
+
+
+async def reads_the_agents_guard(recorder: Recorder) -> None:
+    recorder.answer(
+        "ReadAgentOrdersDemoOnly",
+        lambda _: ops.ReadAgentOrdersDemoOnlyResult(agent_orders_demo_only=True),
+    )
+    guard = await recorder.read_agent_orders_demo_only()
+    caller = meridian.Caller.from_header(AGENT)
+    assert caller.agent_refused(VENUE, guard_on=guard.agent_orders_demo_only)
+
+
+def queries_the_lake(kind: str, field: str) -> Producer:
+    async def produce(recorder: Recorder) -> None:
+        await recorder.query_lake(
+            kind=kind,
+            subjects=[ops.SubjectRef(entity_id=AAPL)],
+            fields=[field],
+            row_limit=100,
+        )
+
+    return produce
+
+
+async def _place(recorder: Recorder, venue: str, acting_for: str) -> None:
+    await recorder.create_placement(
+        order_id=ORDER,
+        connectivity_instance_id=venue,
+        venue_account_code=CODE,
+        quantity=Decimal("10"),
+        idempotency_key=f"place:{ORDER}:{venue}",
+        acting_for=acting_for,
+    )
+
+
+async def agent_placement_on_a_live_connection_refused(recorder: Recorder) -> None:
+    recorder.answer("CreatePlacement", refused_live("CreatePlacement"))
+    try:
+        await _place(recorder, VENUE, AGENT)
+    except meridian.CommandRefused as refusal:
+        assert refusal.reason == sidecar_pb2.REFUSAL_REASON_AGENT_LIVE_ORDER
+    else:
+        raise AssertionError("an agent's live placement was not refused")
+
+
+async def agent_placement_on_a_demo_connection(recorder: Recorder) -> None:
+    assert not meridian.Caller.from_header(AGENT).agent_refused(DEMO_VENUE)
+    await _place(recorder, DEMO_VENUE, AGENT)
+    await hearing(PLACEMENT_UPDATED)(recorder)
+
+
+async def person_makes_an_agents_prepared_live_placement(recorder: Recorder) -> None:
+    assert not meridian.Caller.from_header(PERSON_FROM_PREPARED).agent_refused(VENUE)
+    await _place(recorder, VENUE, PERSON_FROM_PREPARED)
+
+
+async def agent_accept_to_a_new_order_on_a_live_connection_refused(recorder: Recorder) -> None:
+    recorder.answer("AcceptExecution", refused_live("AcceptExecution"))
+    try:
+        await recorder.accept_execution(
+            execution_ids=[EXECUTION],
+            new_order=ops.NewOrderFromExecutions(note="Placed in the broker's app"),
+            acting_for=AGENT,
+        )
+    except meridian.CommandRefused as refusal:
+        assert refusal.reason == sidecar_pb2.REFUSAL_REASON_AGENT_LIVE_ORDER
+    else:
+        raise AssertionError("an agent's accept to a new order on a live connection went")
+
+
+async def setting_and_session_disagree_counts_live(recorder: Recorder) -> None:
+    recorder.answer(
+        "ReadVenueCatalogue",
+        lambda _: ops.ReadVenueCatalogueResult(
+            catalogue=ops.VenueCatalogue(
+                connectivity_instance_id=VENUE, venue_account_code=CODE, environment="live"
+            )
+        ),
+    )
+    read = await recorder.read_venue_catalogue(
+        connectivity_instance_id=VENUE, venue_account_code=CODE
+    )
+    # The person set the connection's environment to paper; its session says live.
+    assert meridian.connection_badge("paper", read.catalogue.environment) == (
+        "Live (environment not confirmed)"
+    )
+    await agent_placement_on_a_live_connection_refused(recorder)
+
+
 PRODUCERS: dict[str, Producer] = {
     # Every role's settlement calendar reads.
     "reads-a-calendar": reads_a_calendar,
@@ -1283,4 +1440,20 @@ PRODUCERS: dict[str, Producer] = {
     "offers-never-overwrite-a-person": offers_with_the_vendors_provenance,
     "reads-the-record-it-fills": reads_the_record_it_fills,
     "resolves-a-security-it-reconciles": resolves_a_security_it_reconciles,
+    # Contract v26: jobs, the guard and the lake's bounded query.
+    "runs-a-job-and-reads-its-answer": runs_a_job_and_reads_its_answer,
+    "catches-up-finished-jobs": catches_up_finished_jobs,
+    "reads-the-agents-guard": reads_the_agents_guard,
+    "queries-the-lake-within-bounds": queries_the_lake("prices", "meridian.v1.Price.price"),
+    "agent-placement-on-a-live-connection-refused": (
+        agent_placement_on_a_live_connection_refused
+    ),
+    "agent-placement-on-a-demo-connection": agent_placement_on_a_demo_connection,
+    "person-makes-an-agents-prepared-live-placement": (
+        person_makes_an_agents_prepared_live_placement
+    ),
+    "agent-accept-to-a-new-order-on-a-live-connection-refused": (
+        agent_accept_to_a_new_order_on_a_live_connection_refused
+    ),
+    "setting-and-session-disagree-counts-live": setting_and_session_disagree_counts_live,
 }

@@ -71,8 +71,8 @@ def _docs(root: Path, **texts: str | bytes) -> Path:
     return folder
 
 
-def test_the_schema_is_contract_v25() -> None:
-    assert meridian.SCHEMA_VERSION == "v25"
+def test_the_schema_is_contract_v25_or_later() -> None:
+    assert int(meridian.SCHEMA_VERSION.removeprefix("v")) >= 25
     assert "documentation" in sidecar_pb2.PluginDeclaration.DESCRIPTOR.fields_by_name
     assert "affirmation_deadline" in sidecar_pb2.PluginDeclaration.DESCRIPTOR.fields_by_name
 

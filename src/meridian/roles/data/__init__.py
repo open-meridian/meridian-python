@@ -65,7 +65,13 @@ streams, its transport:
   back;
 - `meridian.roles.data.event_contracts` -- a venue of binary event
   contracts: live prices and quotes per contract, and each contract's
-  outcome (contract v23);
+  outcome (contract v23); from contract v26 the venue's event groups
+  reported (`Feed.report_event`);
+- `meridian.roles.data.listings` (0.31.0, ruling 213) -- a broker's US
+  equity listings: daily closes and bars, live prices and quotes, trades
+  streamed and, where the broker reads its history, a range and a gap read
+  back; the plugin subclasses `Feed`, naming its source and converting its
+  broker's trade conditions;
 - `meridian.roles.data.testing` -- the lake as a test stands it in, and the
   data suite's producers for each, so a plugin runs the suite unchanged
   against its own conversion.

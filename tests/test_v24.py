@@ -25,7 +25,7 @@ from conftest import Stream
 from meridian import _transitions as transitions
 from meridian.operations import SEQUENCED
 from meridian.plugin.v1 import operations_pb2 as ops
-from meridian.suites import ANSWERED_BY_SDK, HEARD, Recorder, run, suites
+from meridian.suites import ANSWERED_BY_SDK, HEARD, Recorder, names, run, suites
 
 LCL = "LCL-01JB2000000000000000000001"
 INS = "INS-01JB2000000000000000000001"
@@ -53,10 +53,18 @@ def test_the_sdk_declares_contract_v24_or_later() -> None:
 
 def test_a_replacement_is_a_sequenced_row_every_role_hears() -> None:
     assert [(row.name, row.caught_up_by, row.records) for row in SEQUENCED] == [
-        ("ReplaceMergedInstrument", "list_replacements", "replacements")
+        ("ReplaceMergedInstrument", "list_replacements", "replacements"),
+        # Contract v26's three: a pricing plugin's batches, a client's
+        # finished jobs, and event groups.
+        ("PriceBatch", "list_price_batches", "batches"),
+        ("JobFinished", "list_finished_jobs", "finished"),
+        ("EventGroupChanged", "list_event_groups", "event_groups"),
     ]
     assert "ReplaceMergedInstrument" in HEARD
     for role, held in suites().items():
+        if role == "pricing":
+            # Contract v26: a pricing plugin reads nothing a batch did not carry.
+            continue
         names = {case.name for case in held.cases}
         assert {"hears-and-reads-a-replacement", "reads-the-template-catalogue"} <= names, role
 
@@ -224,16 +232,23 @@ async def test_the_catalogue_lists_and_reads_a_version_once() -> None:
 
 
 def test_the_runner_answers_the_every_role_cases_for_a_plugin_mapping_neither() -> None:
+    # Contract v26 adds a third, an event group heard and read.
     assert set(ANSWERED_BY_SDK) == {
         "hears-and-reads-a-replacement",
         "reads-the-template-catalogue",
+        "hears-and-reads-an-event-group",
     }
     for role in suites():
         report = run(role, {})
-        for name in ANSWERED_BY_SDK:
+        holds = [name for name in names(role) if name in ANSWERED_BY_SDK]
+        if role == "pricing":
+            assert holds == [], "a pricing plugin reads nothing a batch did not carry"
+            continue
+        assert set(holds) == set(ANSWERED_BY_SDK), role
+        for name in holds:
             assert name in report.passed_cases, (role, name)
             assert name not in report.failures, (role, report.failures.get(name))
-        assert report.answered_by_sdk == list(ANSWERED_BY_SDK), role
+        assert report.answered_by_sdk == holds, role
 
 
 def test_a_plugins_own_producer_is_run_instead_and_held_to_the_case() -> None:
@@ -245,7 +260,10 @@ def test_a_plugins_own_producer_is_run_instead_and_held_to_the_case() -> None:
         "nothing was heard on ReplaceMergedInstrument"
         in (report.failures["hears-and-reads-a-replacement"])
     )
-    assert report.answered_by_sdk == ["reads-the-template-catalogue"]
+    assert report.answered_by_sdk == [
+        "reads-the-template-catalogue",
+        "hears-and-reads-an-event-group",
+    ]
 
 
 async def test_an_ordinary_resolve_answers_the_platforms_record_or_a_provisional_one() -> None:

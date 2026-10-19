@@ -42,6 +42,11 @@ answer first stating it arrived. It answers no want: it is recorded, unasked,
 for each contract a subject the lake asked for is, and each minute for a
 contract past its close until its final stage is recorded.
 
+**A contract's identifiers** (0.31.0, ruling 312): its symbol at the venue
+and its ticker -- the venue's own market ticker under the `ticker` scheme,
+the venue's ISO 10383 MIC in source, or its VEN- ID where it has no MIC --
+which the platform matches and mints on.
+
 **Per subject wanted, never the whole venue** (W3.6, W3.1, W3.14): each
 subject is the deployment's record, read and named as one of the venue's
 contracts by its identifiers -- the venue's own code first, then another
@@ -60,6 +65,25 @@ binary event contracts, `beyond_history` for a day or range already past,
 `source_silent` where the venue states nothing. A standing want keeps its
 subjects current until withdrawn, at most once a second. It records no
 trades, so a restart leaves no gap to read back.
+
+**Event groups** (contract v26; W3.29, W3.30; spec/the-contract-gaps-v26-
+and-v27-close, A1 to A9). The venue's grouping of its contracts into an
+event, as its conversion reads it (`Event`): the event's reference and
+words, its members by the venue's codes, whether the venue states them
+mutually exclusive and exhaustive -- each True, False or None where it
+states nothing, which is reported not stated, never false (A2) -- its
+series and when the grouping took effect. `Feed.report_event` resolves
+every member (W3.1) and reports the group (ReportEventGroup) with the raw
+record it was read from; the platform matches or mints it, and the
+deployment keeps its own `LCL-` group meanwhile. A member that does not
+resolve holds the report back: a group missing a member would misstate it.
+A range market's bounds are the member's (A4): `Contract.floor` and
+`Contract.cap`, each a `Bound` (a Decimal and whether it is inclusive --
+Kalshi's `greater` false, `greater_or_equal` true), and `bound_unit`.
+
+Every role reads groups through `EventGroups` (re-exported here and as
+`meridian.EventGroups`): the versions read and heard, and the one in force
+at a moment.
 """
 
 from __future__ import annotations
@@ -82,6 +106,7 @@ from ...figures import Figure
 from ...operations import Money, ObservationMeta, Outcome, Price, Quote, SourceTime, as_money
 from ...plugin.v1 import operations_pb2 as ops
 from . import figures as role_figures
+from ._groups import EventGroups, flag, stated
 from ._pages import connection_fields, connection_figure, served, want_rows
 from ._reading import NANOS_PER_SECOND, Session, Unread, iso_time, utc_day
 from ._records import DatasetsRead as RoleDatasetsRead
@@ -89,6 +114,11 @@ from ._records import VenueConnection
 from ._wants import Counts, Heard, Standing, Venue, Wants, asked, same, unconverted
 
 __all__ = [
+    "Bound",
+    "Event",
+    "EventGroups",
+    "flag",
+    "stated",
     "DETERMINED",
     "DISPUTED",
     "FINAL",
@@ -229,6 +259,55 @@ class Contract:
     resolution: Resolution | None = None
     #: When the answer it was read from first arrived, in UTC nanoseconds.
     read_at_ns: int = 0
+    #: A range market's bounds as the venue states them (contract v26, A4):
+    #: an open tail has one only; neither for a contract that is no range.
+    floor: Bound | None = None
+    cap: Bound | None = None
+    #: The unit both bounds are in: the venue's word (`degrees_f`,
+    #: `index_points`, `percent`), or an instrument's ID where a bound is a
+    #: price; empty where neither is set.
+    bound_unit: str = ""
+
+
+@dataclass(frozen=True)
+class Bound:
+    """One bound of a range market (contract v26, A4): its value and whether
+    it is inclusive."""
+
+    value: Decimal
+    inclusive: bool
+
+    def wire(self) -> ops.EventContractBound:
+        from ...operations import _decimal
+
+        return ops.EventContractBound(
+            value=_decimal(self.value, "bound"), inclusive=self.inclusive
+        )
+
+
+@dataclass(frozen=True)
+class Event:
+    """A venue's event grouping its contracts (contract v26, W3.29), as the
+    plugin's conversion read it: nothing of the deployment's yet."""
+
+    #: The venue's reference for the event: Kalshi's event ticker,
+    #: Polymarket's event slug.
+    ref: str
+    #: The venue's words for it.
+    title: str
+    #: Its members, by the venue's own codes, as `Market.contract` takes them.
+    members: tuple[str, ...]
+    #: Whether the venue states its members mutually exclusive, and
+    #: exhaustive; None where it states nothing (reported not stated).
+    mutually_exclusive: bool | None = None
+    exhaustive: bool | None = None
+    #: The venue's series, for a recurring event (A5); empty for none.
+    series: str = ""
+    #: When the grouping took effect, as the venue states it; 0 for when the
+    #: answer it was read from arrived.
+    valid_from_ns: int = 0
+    #: The raw record the event was read from, as the plugin kept it.
+    raw_key: str = ""
 
 
 @dataclass(frozen=True)
@@ -522,6 +601,55 @@ class Feed:
         self.market, self.contracts, self.venue = market, contracts, Venue()
         self.unnamed.clear()
 
+    # ── Event groups (contract v26) ──────────────────────────────────────
+
+    async def member_id(self, code: str) -> str:
+        """The deployment's record of one of the venue's contracts by its
+        code (W3.1), resolved by the venue's identifiers for it; empty where
+        none resolves or the venue knows no such contract."""
+        contract = await self.contract(code)
+        if contract is None:
+            return ""
+        found = await self.plugin.resolve_identifier(
+            identifiers=await self._stated_identifiers(contract),
+            as_of_ns=self.clock_ns(),
+            stated_asset_class="event_contract",
+            stated_instrument_type="binary_event_contract",
+            stated_currency=self.market.cash.currency_code,
+            stated_description=contract.title[:MOST_DESCRIPTION],
+        )
+        return str(found.instrument_id) if found.found and found.instrument_id else ""
+
+    async def report_event(self, event: Event) -> ops.ReportEventGroupResult | None:
+        """Report the venue's grouping of an event (ReportEventGroup, W3.29):
+        each member resolved, the two flags as the venue states them (not
+        stated where it says nothing), its series and when it took effect,
+        with the raw record it was read from. None, and nothing sent, where
+        a member does not resolve or the venue is not held: a group missing
+        a member would misstate it."""
+        members: list[str] = []
+        for code in event.members:
+            member = await self.member_id(code)
+            if not member:
+                log.info("event %s held back: its member %s does not resolve", event.ref, code)
+                return None
+            members.append(member)
+        venue = await self.venue_id()
+        if not venue:
+            return None
+        answer: ops.ReportEventGroupResult = await self.plugin.report_event_group(
+            venue_id=venue,
+            venue_event_ref=event.ref,
+            title=event.title[:MOST_DESCRIPTION],
+            member_instrument_ids=members,
+            mutually_exclusive=flag(event.mutually_exclusive),
+            exhaustive=flag(event.exhaustive),
+            series_id=event.series,
+            valid_from_ns=event.valid_from_ns or self.clock_ns(),
+            raw_record=self.plugin.raw_record(event.raw_key) if event.raw_key else None,
+        )
+        return answer
+
     # ── Resolving ────────────────────────────────────────────────────────
 
     def venue_identifiers(self) -> list[ops.Identifier]:
@@ -581,6 +709,32 @@ class Feed:
         code, as a `symbol` with the venue as source."""
         return [ops.Identifier(scheme="symbol", value=contract.code, source=self.market.venue)]
 
+    async def _ticker(self, contract: Contract) -> ops.Identifier | None:
+        """The contract's ticker (0.31.0, ruling 312): the venue's own market
+        ticker under the contract's `ticker` scheme, its venue in source as
+        an ISO 10383 MIC, or the venue master's VEN- ID where the venue has
+        no MIC -- what the platform matches and mints on, beside the
+        source-scoped symbol. None where the venue is not held."""
+        mic = next(
+            (
+                value
+                for scheme, value, _ in self.market.venue_identifiers
+                if scheme == "iso10383"
+            ),
+            "",
+        )
+        venue = mic or await self.venue_id()
+        if not venue:
+            return None
+        return ops.Identifier(scheme="ticker", value=contract.code, source=venue)
+
+    async def _stated_identifiers(self, contract: Contract) -> list[ops.Identifier]:
+        """What the plugin sends for a contract: its symbol at the venue and,
+        where the venue is known, its ticker (`ticker`)."""
+        held = self.identifiers(contract)
+        ticker = await self._ticker(contract)
+        return held + ([ticker] if ticker is not None else [])
+
     def _candidates(self, record: ops.InstrumentRecord) -> list[ops.Identifier]:
         """The record's identifiers that may name one of the venue's
         contracts, in order: the venue's own code, then another source's
@@ -630,7 +784,7 @@ class Feed:
         record lacks any of them; meeting another record is a miss (W3.2),
         reported once, and the subject is served all the same."""
         held = list(record.identifiers)
-        own = self.identifiers(contract)
+        own = await self._stated_identifiers(contract)
         if (
             all(any(same(o, h) for h in held) for o in own)
             and record.asset_class == ops.ASSET_CLASS_EVENT_CONTRACT

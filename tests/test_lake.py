@@ -1082,14 +1082,49 @@ def producers(**mutations: bool) -> dict[str, object]:
         # The calendars' reads every role holds (contract v22).
         "reads-a-calendar": PRODUCERS["reads-a-calendar"],
         "asks-for-a-settlement-date": PRODUCERS["asks-for-a-settlement-date"],
+        # Contract v26: the venue's event groups, and the lake's bounded query.
+        "reports-an-event-group": event_group(exhaustive=True),
+        "reports-a-flag-the-venue-does-not-state": event_group(exhaustive=None),
+        "queries-the-lake-within-bounds": PRODUCERS["queries-the-lake-within-bounds"],
     }
 
 
-def test_the_data_suite_is_carried_with_its_thirty_one_cases() -> None:
+def event_group(*, exhaustive: bool | None):  # type: ignore[no-untyped-def]
+    """A venue's event, its members resolved and the grouping reported as the
+    venue states it: a flag it does not state is not stated, never false."""
+    from meridian.roles.data.event_contracts import flag
+
+    async def produce(recorder: Recorder) -> None:
+        members = []
+        for code in ("KXHIGHNY-26OCT19-B89", "KXHIGHNY-26OCT19-B91"):
+            found = await recorder.resolve_identifier(
+                identifiers=[ops.Identifier(scheme="symbol", value=code, source="kalshi")],
+                as_of_ns=DAY,
+            )
+            members.append(found.instrument_id)
+        await recorder.report_event_group(
+            venue_id="VEN-suite-kalshi",
+            venue_event_ref="KXHIGHNY-26OCT19",
+            title="Highest temperature in NYC on Oct 19",
+            member_instrument_ids=members,
+            mutually_exclusive=flag(True),
+            exhaustive=flag(exhaustive),
+            valid_from_ns=DAY,
+            raw_record=recorder.raw_record("kalshi:event:KXHIGHNY-26OCT19"),
+        )
+
+    return produce
+
+
+def test_the_data_suite_is_carried_with_its_thirty_five_cases() -> None:
     held = suite("data")
     assert held.since == "v18"
-    # Contract v24 adds the two every role's suite holds, which the SDK answers.
-    assert len(held.cases) == 31
+    # Contract v24 adds the two every role's suite holds, which the SDK answers;
+    # v26 a third, the venue's event groups reported (two, about outcomes) and
+    # the lake's bounded query.
+    assert len(held.cases) == 35
+    assert held.case("reports-an-event-group").about == "outcomes"
+    assert held.case("reports-a-flag-the-venue-does-not-state").about == "outcomes"
     assert "a-want-recorded-against" in names("data")
     assert "a-subject-another-source-resolved" in names("data")
     # The 1b's eight (contract v19), each about trades or quotes.
@@ -1166,10 +1201,11 @@ V19_DATA_CASES = {
 def test_a_data_plugin_converting_exactly_passes_every_case_of_its_suite() -> None:
     report = run("data", producers(), instance_id="toy-1")
     assert report.passed, report.failures
-    assert len(report.passed_cases) == 31
+    assert len(report.passed_cases) == 35
     assert report.answered_by_sdk == [
         "hears-and-reads-a-replacement",
         "reads-the-template-catalogue",
+        "hears-and-reads-an-event-group",
     ]
 
 
@@ -1192,7 +1228,7 @@ def test_a_case_about_a_kind_the_plugin_never_publishes_may_be_not_presented() -
     report = run("data", mapped, not_presented=never)
     assert report.passed, report.failures
     assert report.not_presented == never
-    assert len(report.passed_cases) == 31 - 9
+    assert len(report.passed_cases) == 35 - 9
 
 
 def test_a_case_about_a_field_the_source_never_states_may_be_not_presented() -> None:
@@ -1331,6 +1367,10 @@ def test_a_reading_role_hears_and_reads_as_its_suite_asks() -> None:
                     # Bookings and alerts (contract v24).
                     "hears-and-reads-bookings",
                     "hears-and-reads-alerts",
+                    # Jobs and the lake's bounded query (contract v26).
+                    "runs-a-job-and-reads-its-answer",
+                    "catches-up-finished-jobs",
+                    "queries-the-lake-within-bounds",
                 )
             },
         },

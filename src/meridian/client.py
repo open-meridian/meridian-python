@@ -119,7 +119,7 @@ if TYPE_CHECKING:
 #: venue resolved by its ID, and an operations plugin's affirmation deadline
 #: -- and a newer sidecar still admits it. Raised with every contract
 #: revision that adds something a plugin can depend on.
-SCHEMA_VERSION = "v25"
+SCHEMA_VERSION = "v26"
 
 #: Where a sidecar listens. Loopback, always: a sidecar reachable from another
 #: host is a way around the boundary it exists to enforce.
@@ -819,6 +819,18 @@ class Caller:
     refused REFUSAL_REASON_CONNECTIVITY_NOT_ALLOWED and recorded. It names
     which connectivity plugins, never the person's groups. Empty for every
     other plugin.
+
+    From contract v26 it also carries which of them are demo
+    (`demo_connectivity_instance_ids`, W11.38): a connection whose
+    environment setting and whose session's reported environment both say
+    `sandbox` or `paper`, computed by the dashboard at admission. While the
+    agents' guard is on, the book refuses an agent's placement on any other
+    (REFUSAL_REASON_AGENT_LIVE_ORDER, recorded) -- an agent's act being one
+    through a delegation or by a service account -- whatever the plugin
+    sends; a person's own placement, and one a person makes from an agent's
+    prepared change, are never refused. `agent_refused(instance)` says before
+    sending what the book would answer, for a page or a `check_` tool to
+    show; the badge a page draws is `connection_badge`.
     """
 
     subject: str
@@ -881,6 +893,28 @@ class Caller:
     # calling `ems` (contract v22, W11.8, W11.21): for showing which may be
     # chosen; the sidecar checks a placement against them whatever is drawn.
     connectivity_instance_ids: frozenset[str] = frozenset()
+    # Which of them are demo (contract v26, W11.38): for showing, and for the
+    # check before sending; the book refuses an agent's live placement
+    # whatever is drawn.
+    demo_connectivity_instance_ids: frozenset[str] = frozenset()
+
+    @property
+    def agents_act(self) -> bool:
+        """Whether this call is an agent's act (contract v26, W11.38): one
+        through a delegation, or a service account's."""
+        return bool(self.delegation_id) or (
+            self.subject_kind == envelope_pb2.SUBJECT_KIND_SERVICE_ACCOUNT
+        )
+
+    def agent_refused(self, connectivity_instance_id: str, *, guard_on: bool = True) -> bool:
+        """Whether the book would refuse this caller's placement on the
+        connection while the agents' guard is `guard_on` (W11.38): an
+        agent's act on a connection not demo. A person's own act never is,
+        nor is one made from an agent's prepared change (`prepared_call_id`):
+        its actor is the person."""
+        if not guard_on or not self.agents_act or self.prepared_call_id:
+            return False
+        return connectivity_instance_id not in self.demo_connectivity_instance_ids
 
     @classmethod
     def from_header(cls, header: str) -> Caller:
@@ -927,6 +961,7 @@ class Caller:
             owner_subject=claims.owner_subject,
             algorithm_id=claims.algorithm_id,
             connectivity_instance_ids=frozenset(claims.connectivity_instance_ids),
+            demo_connectivity_instance_ids=frozenset(claims.demo_connectivity_instance_ids),
         )
 
     def level_for(self, role: str) -> int:
@@ -1157,6 +1192,11 @@ class Plugin(Operations):
     _healthy: bool = field(default=True, repr=False)
     _detail: str = field(default="", repr=False)
     _not_carried_seen: dict[tuple[str, str], int] = field(default_factory=dict, repr=False)
+    # The model tokens it used since it started, per endpoint, subject and
+    # client (contract v26, item 191): input and output.
+    _model_tokens: dict[tuple[str, str, str], list[int]] = field(
+        default_factory=dict, repr=False
+    )
     # The storage it declared, with its kinds of raw record (contract v16);
     # the settings as last delivered, which a window's move names; what it
     # says each kind holds in storage; and its moves.
@@ -1184,6 +1224,48 @@ class Plugin(Operations):
         name and a count, never a value."""
         key = (scheme, name)
         self._not_carried_seen[key] = self._not_carried_seen.get(key, 0) + 1
+
+    def count_model_tokens(
+        self,
+        endpoint: str,
+        input_tokens: int,
+        output_tokens: int,
+        *,
+        subject: str = "",
+        client_name: str = "",
+    ) -> None:
+        """Count the tokens one call to a model used (W4.5, contract v26, item
+        191): the endpoint the plugin called, as it names it
+        (`in-cluster/qwen2.5-7b`), the person or service account it worked
+        for (empty for its own work) and the client of the delegation it
+        worked through. Each heartbeat carries the sums since it started,
+        counts and never a prompt or an answer; they never leave the
+        deployment. At most 64 endpoint, subject and client combinations, a
+        65th refused here as the sidecar would refuse it."""
+        from .bounds import HEARTBEAT_REQUEST_MODEL_TOKENS_COUNT
+
+        if not endpoint.strip():
+            raise ValueError("a model's tokens name the endpoint called")
+        for name, count in (("input_tokens", input_tokens), ("output_tokens", output_tokens)):
+            if isinstance(count, bool) or not isinstance(count, int) or count < 0:
+                raise ValueError(f"{name} is a count, 0 or more, not {count!r}")
+        key = (endpoint, subject, client_name)
+        if key not in self._model_tokens and not HEARTBEAT_REQUEST_MODEL_TOKENS_COUNT.admits(
+            len(self._model_tokens) + 1
+        ):
+            raise ValueError(
+                f"the heartbeat carries at most {HEARTBEAT_REQUEST_MODEL_TOKENS_COUNT.most} "
+                "model token counts; this would be one more"
+            )
+        held = self._model_tokens.setdefault(key, [0, 0])
+        held[0] += input_tokens
+        held[1] += output_tokens
+
+    @property
+    def model_tokens(self) -> Mapping[tuple[str, str, str], tuple[int, int]]:
+        """The tokens counted since it started, input and output, by
+        endpoint, subject and client."""
+        return {key: (held[0], held[1]) for key, held in self._model_tokens.items()}
 
     @property
     def figures(self) -> Sequence[Figure]:
@@ -1739,6 +1821,16 @@ class Plugin(Operations):
                 for (scheme, name), count in sorted(self._not_carried_seen.items())
             ],
             stored=self._stored_with_bytes(),
+            model_tokens=[
+                sidecar_pb2.ModelTokenCount(
+                    endpoint=endpoint,
+                    subject=subject,
+                    client_name=client,
+                    input_tokens=held[0],
+                    output_tokens=held[1],
+                )
+                for (endpoint, subject, client), held in sorted(self._model_tokens.items())
+            ],
         )
 
     def _stored_with_bytes(self) -> tuple[sidecar_pb2.StoredSpan, ...]:

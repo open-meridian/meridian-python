@@ -4,6 +4,13 @@
   "read_at_a_version": "an entry exists at contract version N when its since is at or below N and it is not retired at or below N; its required uses are those whose since is at or below N; its bounds and allowed values are the latest, each change after N undone by its `was`; an allowed value counts from its since (or the entry's) until it is retired",
   "stores": [
     {
+      "name": "analytics",
+      "proto_files": [
+        "meridian/v1/analytics.proto"
+      ],
+      "records": []
+    },
+    {
       "name": "bor",
       "proto_files": [
         "meridian/v1/book.proto"
@@ -187,6 +194,10 @@
         {
           "message": "meridian.v1.InstrumentRecord",
           "intent": "the deployment's record of an instrument: its identifiers, asset class and currency, each value with where it came from"
+        },
+        {
+          "message": "meridian.v1.EventGroup",
+          "intent": "an event's group of contracts as its venue states it, at a version: its members, whether they are mutually exclusive and exhaustive, and its series (contract v26)"
         }
       ]
     },
@@ -296,6 +307,7 @@
     "AcceptExecution": "meridian.v1.AcceptExecutionRequest",
     "AcknowledgeAlert": "meridian.v1.AcknowledgeAlertRequest",
     "AcknowledgeFlag": "meridian.v1.AcknowledgeFlagRequest",
+    "AnswerPriceBatch": "meridian.v1.PriceBatchReply",
     "BookOrder": "meridian.v1.BookOrderRequest",
     "CloseBreaksAsCleared": "meridian.v1.CloseBreaksAsClearedRequest",
     "ComputeDate": "meridian.v1.ComputeDateRequest",
@@ -316,10 +328,14 @@
     "ListBreaks": "meridian.v1.ListBreaksRequest",
     "ListCustodialPositions": "meridian.v1.ListCustodialPositionsRequest",
     "ListDatasets": "meridian.v1.ListDatasetsRequest",
+    "ListEventGroups": "meridian.v1.ListEventGroupsRequest",
+    "ListFinishedJobs": "meridian.v1.ListFinishedJobsRequest",
     "ListLocates": "meridian.v1.ListLocatesRequest",
+    "ListMeasureDefinitions": "meridian.v1.ListMeasureDefinitionsRequest",
     "ListOrders": "meridian.v1.ListOrdersRequest",
     "ListOutcomes": "meridian.v1.ListOutcomesRequest",
     "ListPositions": "meridian.v1.ListPositionsRequest",
+    "ListPriceBatches": "meridian.v1.ListPriceBatchesRequest",
     "ListPrices": "meridian.v1.ListPricesRequest",
     "ListQuotes": "meridian.v1.ListQuotesRequest",
     "ListReplacements": "meridian.v1.ListReplacementsRequest",
@@ -331,10 +347,13 @@
     "MapVenueAccount": "meridian.v1.MapVenueAccountRequest",
     "OfferTemplateFields": "meridian.v1.OfferTemplateFieldsRequest",
     "ProposeOrder": "meridian.v1.ProposeOrderRequest",
+    "QueryLake": "meridian.v1.QueryLakeRequest",
     "RaiseAlert": "meridian.v1.RaiseAlertRequest",
     "ReResolveActivity": "meridian.v1.ReResolveActivityRequest",
     "ReadAccountsForLinking": "meridian.v1.AccountsRequest",
+    "ReadAgentOrdersDemoOnly": "meridian.v1.ReadAgentOrdersDemoOnlyRequest",
     "ReadCalendar": "meridian.v1.ReadCalendarRequest",
+    "ReadJobAnswer": "meridian.v1.ReadJobAnswerRequest",
     "ReadLocalRecordOrders": "meridian.v1.ReadLocalRecordOrdersRequest",
     "ReadOrderHistory": "meridian.v1.OrderHistoryRequest",
     "ReadTemplate": "meridian.v1.ReadTemplateRequest",
@@ -358,6 +377,7 @@
     "RecordTrades": "meridian.v1.RecordTradesRequest",
     "ReleaseOrder": "meridian.v1.ReleaseOrderRequest",
     "ReportCharge": "meridian.v1.ReportChargeRequest",
+    "ReportEventGroup": "meridian.v1.ReportEventGroupRequest",
     "ReportExecution": "meridian.v1.ReportExecutionRequest",
     "ReportExternalAccounts": "meridian.v1.ExternalAccountsEvent",
     "ReportGiveUp": "meridian.v1.ReportGiveUpRequest",
@@ -373,6 +393,7 @@
     "ResolveIdentifier": "meridian.v1.ResolveIdentifierRequest",
     "ResolveInstrument": "meridian.v1.ResolveInstrumentRequest",
     "ResolveVenue": "meridian.v1.ResolveVenueRequest",
+    "RunJob": "meridian.v1.RunJobRequest",
     "SetAllocationInstruction": "meridian.v1.SetAllocationInstructionRequest",
     "SetWorkingCondition": "meridian.v1.SetWorkingConditionRequest",
     "SidecarCallAsServiceAccount": "meridian.v1.CallAsServiceAccountRequest",
@@ -389,6 +410,1677 @@
     "SidecarWatchSettings": "meridian.v1.WatchSettingsRequest"
   },
   "entries": [
+    {
+      "name": "meridian.v1.RunJobRequest.job",
+      "type": "message Job",
+      "empty": "never unset",
+      "intent": "carries the job a client asks (W12.1)",
+      "meaning": "what to compute, over which accounts, against which inputs, named by reference",
+      "not_meaning": "a record: a job changes nothing",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.Job.account_ids",
+      "type": "repeated identifier account",
+      "empty": "never empty",
+      "intent": "names the accounts a job is over (W12.1)",
+      "meaning": "each in the client's read scope, which the sidecar stamped on the request; one outside it is refused naming it, and all are read at one watermark",
+      "not_meaning": "an account group, which a client expands itself",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.Job.inputs",
+      "type": "message InputRefs",
+      "empty": "unset reads the book now, the lake now and the deployment's default sources",
+      "intent": "names a job's inputs by reference (requirement 3)",
+      "meaning": "the book's watermark, the lake's as-of and source choice, one for the whole job",
+      "not_meaning": "the inputs' values, which the component reads itself",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.Job.measures",
+      "type": "repeated message MeasureRef",
+      "empty": "never empty",
+      "intent": "names the measures a job asks for",
+      "meaning": "each a definition and version the component serves, with its breakdowns",
+      "not_meaning": "a measure's parameters, which its definition fixes",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.Job.what_if",
+      "type": "message WhatIf",
+      "empty": "unset for no what-if",
+      "intent": "adds trades to one account's positions (W12.5)",
+      "meaning": "the trades, priced at their stated price or the job's as-of price; each figure answered before and after",
+      "not_meaning": "a proposal: a what-if trade is never a book record unless proposed",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.InputRefs.book_at",
+      "type": "message Watermark",
+      "empty": "unset for now, which the component resolves to the watermark it read",
+      "intent": "names the book's watermark a job reads at",
+      "meaning": "a sequence per account partition; every account of the job is read at it, so a firm-wide figure is one cut",
+      "not_meaning": "a business date",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.InputRefs.lake_as_of_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "0 for now, resolved to the as-of read",
+      "intent": "names the lake's recorded-time cut-off for a job",
+      "meaning": "rows recorded at or before it, as the lake's reads take as_of_ns (W10.6)",
+      "not_meaning": "a valid time or a business date",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.InputRefs.sources",
+      "type": "message SourceChoice",
+      "empty": "none set is the deployment's default priority",
+      "intent": "names the sources a job's prices come from",
+      "meaning": "the lake's source choice: the default with its failover, named datasets, or side by side",
+      "not_meaning": "an entitlement: the client's own decide what is read",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.MeasureRef.definition",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names a measure's definition",
+      "meaning": "market_value, exposure, concentration, pnl, historical_var, expected_shortfall, resolution_payoff or implied_distribution in v26, as ListMeasureDefinitions answers; pnl version 1 is Unrealized P&L alone, each bucket's market value less its open lots' cost under the breakdown component, and realized P&L beside it is pnl version 2, v27's (ruling 320)",
+      "not_meaning": "a formula a client supplies",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.MeasureRef.version",
+      "type": "integer",
+      "unit": "a definition's versions",
+      "empty": "never zero",
+      "intent": "names the definition's version",
+      "meaning": "1 or more; an answer names it back, and a published version never changes",
+      "not_meaning": "the component's version",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.MeasureRef.breakdowns",
+      "type": "repeated text",
+      "empty": "empty for one figure per account",
+      "intent": "says what to break figures down by",
+      "meaning": "each a breakdown the definition allows: account, asset_class, currency, instrument, sleeve, country, or a scheme the deployment holds; a scheme it lacks is not evaluated",
+      "not_meaning": "a filter on positions",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.MeasureRef.event_group_id",
+      "type": "text",
+      "empty": "empty for a measure over positions",
+      "intent": "names the event group an event measure is over (W12.3)",
+      "meaning": "an EventGroup's ID, read at the version in force at the job's as-of",
+      "not_meaning": "a member instrument",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.WhatIf.account_id",
+      "type": "identifier account",
+      "empty": "never empty",
+      "intent": "names the account a what-if adds trades to",
+      "meaning": "an account of the job",
+      "not_meaning": "an account the trades are booked to",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.WhatIf.trades",
+      "type": "repeated message WhatIfTrade",
+      "empty": "never empty",
+      "intent": "lists the trades a what-if adds",
+      "meaning": "each an instrument, a side, a quantity and a price or none",
+      "not_meaning": "orders",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.WhatIfTrade.instrument_id",
+      "type": "identifier instrument",
+      "empty": "never empty",
+      "intent": "names a what-if trade's instrument",
+      "meaning": "the deployment's record, followed through its replacement",
+      "not_meaning": "a venue's symbol",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.WhatIfTrade.side",
+      "type": "enum Side",
+      "allowed": [
+        {
+          "value": "SIDE_UNSPECIFIED",
+          "meaning": "refused"
+        },
+        {
+          "value": "SIDE_BUY",
+          "meaning": "adds the quantity"
+        },
+        {
+          "value": "SIDE_SELL",
+          "meaning": "removes the quantity"
+        },
+        {
+          "value": "SIDE_SELL_SHORT",
+          "meaning": "removes the quantity below zero"
+        },
+        {
+          "value": "SIDE_SELL_SHORT_EXEMPT",
+          "meaning": "removes the quantity below zero, exempt"
+        }
+      ],
+      "empty": "never unspecified",
+      "intent": "says whether a what-if trade buys or sells",
+      "meaning": "the order's sides, as an order states them",
+      "not_meaning": "an execution's side",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.WhatIfTrade.quantity",
+      "type": "Decimal",
+      "bounds": {
+        "digits": 38,
+        "scale": [
+          0,
+          18
+        ]
+      },
+      "unit": "units of the instrument",
+      "required": [
+        {
+          "row": "RunJob",
+          "since": "v26"
+        }
+      ],
+      "empty": "never unset",
+      "intent": "states a what-if trade's quantity",
+      "meaning": "units of the instrument, greater than zero",
+      "not_meaning": "a notional",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.WhatIfTrade.price",
+      "type": "Money",
+      "unit": "the major unit of the asset the Money names, per unit",
+      "empty": "unset for the price at the job's as-of",
+      "intent": "states an assumed price for a what-if trade",
+      "meaning": "the price of one unit, naming the asset it is in",
+      "not_meaning": "a limit",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.RunJobReply.answered_inline",
+      "type": "boolean",
+      "empty": "false when the job finishes later",
+      "intent": "says whether the answer is in the reply (Q5)",
+      "meaning": "true when the component answered within the request's deadline; false when it answers later, the client hearing JobFinished",
+      "not_meaning": "a failure",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.RunJobReply.job_id",
+      "type": "identifier message",
+      "empty": "never empty",
+      "intent": "names the job",
+      "meaning": "JOB- and a ULID, never reused; a later answer is read by it",
+      "not_meaning": "a record's ID: a job is not a record",
+      "filled": "minted",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.RunJobReply.answer",
+      "type": "message JobAnswer",
+      "empty": "unset when answered later",
+      "intent": "carries the answer inline",
+      "meaning": "the figures, what was not evaluated and why, and the provenance",
+      "not_meaning": "a record",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.JobAnswer.job_id",
+      "type": "identifier message",
+      "empty": "never empty",
+      "intent": "names the job answered",
+      "meaning": "as RunJobReply.job_id",
+      "not_meaning": "a record",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.JobAnswer.figures",
+      "type": "repeated message Figure",
+      "empty": "empty when nothing was evaluated",
+      "intent": "carries the figures",
+      "meaning": "each a measure's value or weight for an account and breakdown, under a scenario",
+      "not_meaning": "a verdict, which compliance decides",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.JobAnswer.not_evaluated",
+      "type": "repeated message NotEvaluated",
+      "empty": "empty when everything was evaluated",
+      "intent": "lists what was not evaluated, and why (requirement 9)",
+      "meaning": "a position or a measure with its reason; never answered as zero",
+      "not_meaning": "an error",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.JobAnswer.provenance",
+      "type": "message AnswerProvenance",
+      "empty": "never unset",
+      "intent": "says what the answer was computed from (requirement 4)",
+      "meaning": "the inputs by reference, the implementations and versions, and the answer's hash",
+      "not_meaning": "a record",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.Figure.measure",
+      "type": "message MeasureRef",
+      "empty": "never unset",
+      "intent": "names the measure a figure answers",
+      "meaning": "as the job asked it",
+      "not_meaning": "a formula",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.Figure.account_id",
+      "type": "identifier account",
+      "empty": "empty for a figure across the job's accounts",
+      "intent": "names the account a figure is for",
+      "meaning": "an account of the job",
+      "not_meaning": "the account's base currency",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.Figure.breakdown",
+      "type": "repeated message BreakdownValue",
+      "empty": "empty for a figure with no breakdown",
+      "intent": "places a figure in its breakdowns",
+      "meaning": "one value per breakdown the measure asked for",
+      "not_meaning": "a filter",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.Figure.scenario_key",
+      "type": "message ScenarioKey",
+      "empty": "unset reads as base",
+      "intent": "says which scenario a figure is under (approved 2026-10-14)",
+      "meaning": "base, a what-if, a historical day, an outcome, and from v28 a grid point, with no field added",
+      "not_meaning": "a scenario record",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.Figure.value",
+      "type": "Decimal",
+      "bounds": {
+        "digits": 38,
+        "scale": [
+          0,
+          18
+        ]
+      },
+      "unit": "the major unit of currency_instrument_id's asset",
+      "empty": "unset for a weight or a probability",
+      "intent": "states a figure that is one value",
+      "meaning": "exact decimal in v26, rounded once, half to even, to the definition's scale; in currency_instrument_id's major unit",
+      "not_meaning": "a weight's rounded division",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.Figure.numerator",
+      "type": "Decimal",
+      "bounds": {
+        "digits": 38,
+        "scale": [
+          0,
+          18
+        ]
+      },
+      "unit": "the measure's own unit",
+      "empty": "unset for a value",
+      "intent": "states a weight's or a probability's numerator",
+      "meaning": "with denominator, so a bound is compared by cross-multiplication, never a rounded division (requirement 5)",
+      "not_meaning": "a percentage",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.Figure.denominator",
+      "type": "Decimal",
+      "bounds": {
+        "digits": 38,
+        "scale": [
+          0,
+          18
+        ]
+      },
+      "unit": "the measure's own unit",
+      "empty": "unset for a value",
+      "intent": "states a weight's or a probability's denominator",
+      "meaning": "greater than zero; for an implied distribution the sum of the group's prices",
+      "not_meaning": "a percentage",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.Figure.currency_instrument_id",
+      "type": "identifier instrument",
+      "empty": "empty for a weight",
+      "intent": "names the cash instrument a value is in",
+      "meaning": "the account's base currency or the client's stated reporting currency",
+      "not_meaning": "the instruments' quote currencies",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.Figure.computed_as",
+      "type": "enum ComputedAs",
+      "allowed": [
+        {
+          "value": "COMPUTED_AS_UNSPECIFIED",
+          "meaning": "read as exact by a v26 reader; never sent"
+        },
+        {
+          "value": "COMPUTED_AS_EXACT",
+          "meaning": "exact decimal from quantities, quoted prices and FX"
+        },
+        {
+          "value": "COMPUTED_AS_MODEL",
+          "meaning": "a model's floating-point value, crossing at its definition's scale, rounded half to even (from v28)"
+        }
+      ],
+      "empty": "never unspecified from the component",
+      "intent": "says how a figure was computed (approved 2026-10-14 as exact and model)",
+      "meaning": "exact decimal from quantities, quoted prices and FX in v26; a model's value from v28",
+      "not_meaning": "a confidence",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.BreakdownValue.breakdown",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the breakdown",
+      "meaning": "as MeasureRef.breakdowns names it",
+      "not_meaning": "a filter",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.BreakdownValue.value",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "states a figure's place in the breakdown",
+      "meaning": "an asset class's name, a currency's ISO 4217 code, an instrument's or a sleeve's ID, a country's ISO 3166-1 alpha-2 code, or a scheme's class",
+      "not_meaning": "a guess: a scheme the deployment lacks is not evaluated",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.ScenarioKey.kind",
+      "type": "enum ScenarioKind",
+      "allowed": [
+        {
+          "value": "SCENARIO_KIND_UNSPECIFIED",
+          "meaning": "read as base"
+        },
+        {
+          "value": "SCENARIO_KIND_BASE",
+          "meaning": "the positions and the market as they are"
+        },
+        {
+          "value": "SCENARIO_KIND_WHAT_IF",
+          "meaning": "with the job's what-if trades added (W12.5)"
+        },
+        {
+          "value": "SCENARIO_KIND_HISTORICAL_DAY",
+          "meaning": "one historical day's returns applied, for historical VaR and ES"
+        },
+        {
+          "value": "SCENARIO_KIND_OUTCOME",
+          "meaning": "one member of an event group resolving YES, for resolution_payoff"
+        },
+        {
+          "value": "SCENARIO_KIND_NONE_OF_THE_NAMED",
+          "meaning": "no named member resolving YES, for a group mutually exclusive and not exhaustive"
+        }
+      ],
+      "empty": "unspecified reads as base",
+      "intent": "says which kind of scenario",
+      "meaning": "one of the kinds, each a set of overrides the engine derived",
+      "not_meaning": "a scenario the client wrote: the scenario format is v28's",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.ScenarioKey.business_date",
+      "type": "date",
+      "empty": "empty but for a historical day",
+      "intent": "names a historical day's business date",
+      "meaning": "ISO 8601, the day whose returns were applied",
+      "not_meaning": "the job's as-of",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.ScenarioKey.outcome_instrument_id",
+      "type": "identifier instrument",
+      "empty": "empty but for an outcome",
+      "intent": "names the member resolving YES",
+      "meaning": "a member of the measure's event group",
+      "not_meaning": "a settlement",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.NotEvaluated.account_id",
+      "type": "identifier account",
+      "empty": "never empty",
+      "intent": "names the account",
+      "meaning": "an account of the job",
+      "not_meaning": "a refusal",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.NotEvaluated.instrument_id",
+      "type": "identifier instrument",
+      "empty": "empty where the whole measure is not evaluated",
+      "intent": "names the position's instrument",
+      "meaning": "the deployment's record",
+      "not_meaning": "a zero value",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.NotEvaluated.measure",
+      "type": "message MeasureRef",
+      "empty": "never unset",
+      "intent": "names the measure not evaluated",
+      "meaning": "as the job asked it",
+      "not_meaning": "a refusal of the job",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.NotEvaluated.reason",
+      "type": "enum NotEvaluatedReason",
+      "allowed": [
+        {
+          "value": "NOT_EVALUATED_REASON_UNSPECIFIED",
+          "meaning": "never sent"
+        },
+        {
+          "value": "NOT_EVALUATED_REASON_PRICE_MISSING",
+          "meaning": "no price of the kind the model declares at the as-of"
+        },
+        {
+          "value": "NOT_EVALUATED_REASON_PRICE_STALE",
+          "meaning": "a price older than the client's setting for its source allows"
+        },
+        {
+          "value": "NOT_EVALUATED_REASON_CONVERSION_MISSING",
+          "meaning": "a conversion leg to the base or reporting currency missing (the first release's Q10)"
+        },
+        {
+          "value": "NOT_EVALUATED_REASON_NOT_ENTITLED",
+          "meaning": "a dataset the client is not entitled to, named in detail (Q11)"
+        },
+        {
+          "value": "NOT_EVALUATED_REASON_LOCAL_RECORD",
+          "meaning": "a local LCL- record, never priced"
+        },
+        {
+          "value": "NOT_EVALUATED_REASON_IMPLEMENTATION_UNAVAILABLE",
+          "meaning": "the routed implementation did not answer by the deadline, for a figure a compliance rule reads (requirement 22)"
+        },
+        {
+          "value": "NOT_EVALUATED_REASON_SCHEME_NOT_HELD",
+          "meaning": "a breakdown whose scheme the deployment does not hold (requirement 17)"
+        },
+        {
+          "value": "NOT_EVALUATED_REASON_GROUP_NOT_EXHAUSTIVE",
+          "meaning": "an implied distribution over a group not exhaustive in the version in force; the raw prices and their sum still answered"
+        },
+        {
+          "value": "NOT_EVALUATED_REASON_HISTORY_INSUFFICIENT",
+          "meaning": "history too short or too sparse for the definition's window"
+        }
+      ],
+      "empty": "never unspecified",
+      "intent": "says why a figure was not evaluated (requirement 9)",
+      "meaning": "the input missing, stale, unentitled, local or unpriceable",
+      "not_meaning": "zero",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.NotEvaluated.detail",
+      "type": "text",
+      "empty": "empty where the reason says all",
+      "intent": "names what the reason is about",
+      "meaning": "the dataset not entitled, the implementation unavailable, or the scheme not held",
+      "not_meaning": "instructions",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.AnswerProvenance.book_watermark",
+      "type": "message Watermark",
+      "empty": "unset for a job reading no position",
+      "intent": "states the watermark the book was read at",
+      "meaning": "the resolved watermark, every account at it",
+      "not_meaning": "a time",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.AnswerProvenance.lake_as_of_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "0 for a job reading no price",
+      "intent": "states the lake's as-of the job read at",
+      "meaning": "the resolved recorded-time cut-off",
+      "not_meaning": "a valid time",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.AnswerProvenance.datasets",
+      "type": "repeated identifier dataset",
+      "empty": "empty for a job reading no price",
+      "intent": "names each dataset read",
+      "meaning": "as the lake's replies named them, a default read's fallback among them",
+      "not_meaning": "the datasets entitled",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.AnswerProvenance.instruments",
+      "type": "repeated message InstrumentInput",
+      "empty": "empty for a job reading no instrument",
+      "intent": "names each instrument read, by its versions",
+      "meaning": "its record version, template and template version, and calculation version",
+      "not_meaning": "the instrument's terms",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.AnswerProvenance.models",
+      "type": "repeated message ModelRef",
+      "empty": "empty for a job pricing nothing",
+      "intent": "names each model and its implementation",
+      "meaning": "the model id and version, and the implementation and version that answered it",
+      "not_meaning": "a vendor's code",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.AnswerProvenance.measures",
+      "type": "repeated message MeasureRef",
+      "empty": "never empty",
+      "intent": "names each measure definition and version used",
+      "meaning": "as answered",
+      "not_meaning": "parameters a client supplied",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.AnswerProvenance.event_groups",
+      "type": "repeated message EventGroupInput",
+      "empty": "empty for a job with no event measure",
+      "intent": "names each event group read, at its version",
+      "meaning": "its ID and the version in force at the as-of",
+      "not_meaning": "membership the client supplied",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.AnswerProvenance.routing_version",
+      "type": "integer",
+      "unit": "routing table versions",
+      "empty": "never zero",
+      "intent": "names the routing table's version",
+      "meaning": "as ListModelRouting answered it",
+      "not_meaning": "a time",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.AnswerProvenance.engine_version",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the component's version",
+      "meaning": "its release",
+      "not_meaning": "the contract version",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.AnswerProvenance.answer_hash",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the answer by its inputs (Q7)",
+      "meaning": "sha256: and the hex of SHA-256 over the RFC 8785 canonical JSON of the inputs; two answers with the same hash are the same answer",
+      "not_meaning": "a signature",
+      "filled": "derived",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.InstrumentInput.instrument_id",
+      "type": "identifier instrument",
+      "empty": "never empty",
+      "intent": "names an instrument read",
+      "meaning": "the deployment's record",
+      "not_meaning": "a venue's symbol",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.InstrumentInput.record_version",
+      "type": "integer",
+      "unit": "record versions",
+      "empty": "never zero",
+      "intent": "names the record's version read",
+      "meaning": "as the instrument store answered it",
+      "not_meaning": "the template's version",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.InstrumentInput.template_id",
+      "type": "text",
+      "empty": "empty for a record held to no template",
+      "intent": "names the record's template",
+      "meaning": "TPL- and its name",
+      "not_meaning": "a calculation",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.InstrumentInput.template_version",
+      "type": "text",
+      "empty": "empty with template_id",
+      "intent": "names the template's version",
+      "meaning": "a published version, immutable",
+      "not_meaning": "the calculation version",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.InstrumentInput.calculation_version",
+      "type": "text",
+      "empty": "empty for a version with no calculation package",
+      "intent": "names the calculation package's version (the master intent's ruling 9)",
+      "meaning": "as the template version's package states it",
+      "not_meaning": "the engine's version",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.EventGroupInput.event_group_id",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names an event group read",
+      "meaning": "an EVG- or LCL- ID",
+      "not_meaning": "a venue's event reference",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.EventGroupInput.version",
+      "type": "integer",
+      "unit": "event group versions",
+      "empty": "never zero",
+      "intent": "names the group's version read",
+      "meaning": "the version in force at the job's as-of",
+      "not_meaning": "the record's sequence",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.ModelRef.model_id",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names a pricing model",
+      "meaning": "cash, quoted_price or binary_event in v26; immutable once published",
+      "not_meaning": "an implementation",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.ModelRef.model_version",
+      "type": "integer",
+      "unit": "model versions",
+      "empty": "never zero",
+      "intent": "names the model's version",
+      "meaning": "an improved model is a new version a deployment admin routes",
+      "not_meaning": "the implementation's version",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.ModelRef.implementation",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names what answered the model",
+      "meaning": "built-in, or a pricing plugin's instance ID",
+      "not_meaning": "a vendor's name",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.ModelRef.implementation_version",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the implementation's version",
+      "meaning": "the component's version for the built-in one, the plugin's version for a plugin's",
+      "not_meaning": "the model's version",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.ListMeasureDefinitionsReply.definitions",
+      "type": "repeated message MeasureDefinition",
+      "empty": "never empty",
+      "intent": "lists the definitions the component serves (W12.1)",
+      "meaning": "each definition and version shipped with the component",
+      "not_meaning": "a firm's own definitions, which wait for their row",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.MeasureDefinition.definition",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the definition",
+      "meaning": "as MeasureRef.definition",
+      "not_meaning": "a formula a client supplies",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.MeasureDefinition.version",
+      "type": "integer",
+      "unit": "a definition's versions",
+      "empty": "never zero",
+      "intent": "names the version",
+      "meaning": "immutable once published",
+      "not_meaning": "the component's version",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.MeasureDefinition.parameters",
+      "type": "repeated message MeasureParameter",
+      "empty": "empty for a definition with none",
+      "intent": "states every parameter that changes the number (Q15)",
+      "meaning": "a VaR's confidence, horizon, window, return type, missing-day treatment, quantile and daily cut, fixed by the version",
+      "not_meaning": "settings a client may change",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.MeasureDefinition.breakdowns",
+      "type": "repeated text",
+      "empty": "empty for none",
+      "intent": "lists the breakdowns the definition allows",
+      "meaning": "as MeasureRef.breakdowns",
+      "not_meaning": "schemes the deployment holds",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.MeasureDefinition.scale",
+      "type": "integer",
+      "bounds": {
+        "range": {
+          "least": "0",
+          "most": "18"
+        }
+      },
+      "unit": "decimal places",
+      "empty": "never unset",
+      "intent": "states the scale values are rounded to",
+      "meaning": "decimal places, 0 to 18, rounded once, half to even",
+      "not_meaning": "a display precision",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.MeasureDefinition.description",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "describes the definition in the component's words",
+      "meaning": "words for people",
+      "not_meaning": "instructions to an agent",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.MeasureParameter.name",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names a parameter",
+      "meaning": "confidence, horizon_days, window_days, return_type, missing_days, quantile, daily_cut and the like",
+      "not_meaning": "a field a client sets",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.MeasureParameter.value",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "states the parameter's value",
+      "meaning": "as the definition writes it: 0.99, 500, relative",
+      "not_meaning": "a default a client overrides",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.PriceBatchRequest.batch_id",
+      "type": "identifier message",
+      "empty": "never empty",
+      "intent": "names a batch (W12.3)",
+      "meaning": "PBT- and a ULID; the answer names it back",
+      "not_meaning": "a job",
+      "filled": "minted",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.PriceBatchRequest.pricing_instance_id",
+      "type": "identifier instance",
+      "empty": "never empty",
+      "intent": "names the routed pricing instance, which alone hears the batch",
+      "meaning": "the instance the model id is routed to (W12.6)",
+      "not_meaning": "the client's instance",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.PriceBatchRequest.model_id",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the model the batch is priced under",
+      "meaning": "as the template versions bind it",
+      "not_meaning": "an implementation",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.PriceBatchRequest.model_version",
+      "type": "integer",
+      "unit": "model versions",
+      "empty": "never zero",
+      "intent": "names the model's version",
+      "meaning": "as routed",
+      "not_meaning": "the plugin's version",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.PriceBatchRequest.units",
+      "type": "repeated message PricingUnit",
+      "empty": "never empty",
+      "intent": "lists the instruments to price, each under a scenario",
+      "meaning": "every instrument of the job sharing the model, laid out by column; never one batch per instrument",
+      "not_meaning": "positions or accounts, which never reach a pricing plugin",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.PriceBatchRequest.deadline_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "never zero",
+      "intent": "states when the component stops waiting",
+      "meaning": "past it, a figure a compliance rule reads is not evaluated",
+      "not_meaning": "a timeout the plugin chooses",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.PriceBatchRequest.batch_hash",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the batch by its inputs",
+      "meaning": "sha256: over the batch's inputs: a batch answered twice is harmless",
+      "not_meaning": "a signature",
+      "filled": "derived",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.PriceBatchRequest.sequence",
+      "type": "integer",
+      "unit": "items in the instance's sequence",
+      "empty": "never zero",
+      "intent": "numbers the batch in the instance's sequence",
+      "meaning": "ListPriceBatches reads after it",
+      "not_meaning": "a priority",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.PricingUnit.instrument_id",
+      "type": "identifier instrument",
+      "empty": "never empty",
+      "intent": "names an instrument to price",
+      "meaning": "the deployment's record",
+      "not_meaning": "a venue's symbol",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.PricingUnit.template_version",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the template version the instrument is priced by",
+      "meaning": "its terms and binding",
+      "not_meaning": "the model's version",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.PricingUnit.scenario_key",
+      "type": "message ScenarioKey",
+      "empty": "unset reads as base",
+      "intent": "says which scenario the unit is priced under",
+      "meaning": "base, or a scenario's shocked values in inputs",
+      "not_meaning": "a scenario the plugin chooses",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.PricingUnit.inputs",
+      "type": "repeated message MarketObjectValue",
+      "empty": "empty for a model declaring no market object",
+      "intent": "carries exactly the market objects the model declares (requirement 20)",
+      "meaning": "each observed, or a scenario's in its place",
+      "not_meaning": "anything else the plugin may read for the job: it reads nothing else",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.MarketObjectValue.subject_id",
+      "type": "identifier instrument",
+      "empty": "never empty",
+      "intent": "names the market object's subject",
+      "meaning": "the instrument it is about",
+      "not_meaning": "a vendor's symbol",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.MarketObjectValue.kind",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the market object's kind by the lake's terms (Q6)",
+      "meaning": "close, nav, mid, last or outcome",
+      "not_meaning": "a vendor's field name",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.MarketObjectValue.value",
+      "type": "Money",
+      "unit": "the major unit of the asset the Money names, per unit",
+      "empty": "never unset",
+      "intent": "states the market object's value",
+      "meaning": "a price in the asset it is quoted in; for outcome, the settlement value per contract",
+      "not_meaning": "a value per unit of the job's base currency",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.MarketObjectValue.dataset",
+      "type": "identifier dataset",
+      "empty": "empty for a scenario's value",
+      "intent": "names the dataset the value came from",
+      "meaning": "as the lake's reply named it",
+      "not_meaning": "an entitlement",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.PriceBatchReply.batch_id",
+      "type": "identifier message",
+      "empty": "never empty",
+      "intent": "names the batch answered",
+      "meaning": "the PriceBatchRequest's batch_id",
+      "not_meaning": "a job",
+      "filled": "as-reported",
+      "filled_by": "pricing",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.PriceBatchReply.values",
+      "type": "repeated message PricedUnit",
+      "empty": "never empty",
+      "intent": "carries a value per unit for each instrument and scenario",
+      "meaning": "one per unit the batch named",
+      "not_meaning": "a figure, which the component computes from it",
+      "filled": "as-reported",
+      "filled_by": "pricing",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.PriceBatchReply.sensitivities",
+      "type": "repeated message Sensitivity",
+      "empty": "empty in v26",
+      "intent": "carries the sensitivities a model declares (the first release, §3 rule 4)",
+      "meaning": "from v28; a v26 plugin sends none and stays valid",
+      "not_meaning": "greeks a plugin invents",
+      "filled": "as-reported",
+      "filled_by": "pricing",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.PriceBatchReply.pricing_instance_id",
+      "type": "identifier instance",
+      "empty": "never empty: the sidecar stamps it",
+      "intent": "names the answering instance",
+      "meaning": "stamped by its sidecar",
+      "not_meaning": "anything the plugin supplies",
+      "filled": "stamped",
+      "filled_by": "sidecar",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.PricedUnit.instrument_id",
+      "type": "identifier instrument",
+      "empty": "never empty",
+      "intent": "names the instrument priced",
+      "meaning": "a unit of the batch",
+      "not_meaning": "a venue's symbol",
+      "filled": "as-reported",
+      "filled_by": "pricing",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.PricedUnit.scenario_key",
+      "type": "message ScenarioKey",
+      "empty": "unset reads as base",
+      "intent": "names the scenario the value is under",
+      "meaning": "the unit's",
+      "not_meaning": "a scenario the plugin chooses",
+      "filled": "as-reported",
+      "filled_by": "pricing",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.PricedUnit.value_per_unit",
+      "type": "Money",
+      "unit": "the major unit of the asset the Money names, per unit",
+      "required": [
+        {
+          "row": "AnswerPriceBatch",
+          "since": "v26"
+        }
+      ],
+      "empty": "never unset",
+      "intent": "states the value of one unit of the instrument",
+      "meaning": "naming the asset it is in; equal to the built-in model's for the same inputs where the plugin implements a v26 model",
+      "not_meaning": "a figure for a position",
+      "filled": "as-reported",
+      "filled_by": "pricing",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.Sensitivity.instrument_id",
+      "type": "identifier instrument",
+      "empty": "never empty",
+      "intent": "names the instrument",
+      "meaning": "a unit of the batch",
+      "not_meaning": "a venue's symbol",
+      "filled": "as-reported",
+      "filled_by": "pricing",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.Sensitivity.scenario_key",
+      "type": "message ScenarioKey",
+      "empty": "unset reads as base",
+      "intent": "names the scenario",
+      "meaning": "the unit's",
+      "not_meaning": "a scenario the plugin chooses",
+      "filled": "as-reported",
+      "filled_by": "pricing",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.Sensitivity.name",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the sensitivity",
+      "meaning": "as the model declares it",
+      "not_meaning": "a measure",
+      "filled": "as-reported",
+      "filled_by": "pricing",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.Sensitivity.value",
+      "type": "Decimal",
+      "bounds": {
+        "digits": 38,
+        "scale": [
+          0,
+          18
+        ]
+      },
+      "unit": "the model's declared unit",
+      "required": [
+        {
+          "row": "AnswerPriceBatch",
+          "since": "v26"
+        }
+      ],
+      "empty": "never unset",
+      "intent": "states the sensitivity",
+      "meaning": "at the model's declared scale",
+      "not_meaning": "a price",
+      "filled": "as-reported",
+      "filled_by": "pricing",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.AnswerPriceBatchReply.batch_id",
+      "type": "identifier message",
+      "empty": "never empty",
+      "intent": "acknowledges the batch answered",
+      "meaning": "the batch_id",
+      "not_meaning": "an evaluation of the answer",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.ListPriceBatchesRequest.after_sequence",
+      "type": "integer",
+      "unit": "items in the instance's sequence",
+      "empty": "zero reads every batch waiting",
+      "intent": "reads the batches waiting after a sequence (W12.3)",
+      "meaning": "the last sequence the instance saw",
+      "not_meaning": "a time",
+      "filled": "as-reported",
+      "filled_by": "pricing",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.ListPriceBatchesReply.batches",
+      "type": "repeated message PriceBatchRequest",
+      "empty": "empty when none waits",
+      "intent": "lists the asking instance's batches still waiting",
+      "meaning": "each as delivered",
+      "not_meaning": "another instance's batches",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.ListPriceBatchesReply.sequence",
+      "type": "integer",
+      "unit": "items in the instance's sequence",
+      "empty": "the sequence asked after, when none since",
+      "intent": "states the sequence read to",
+      "meaning": "the next read's after_sequence",
+      "not_meaning": "a count",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.JobFinishedEvent.job_id",
+      "type": "identifier message",
+      "empty": "never empty",
+      "intent": "names the job finished (W12.4)",
+      "meaning": "as RunJobReply.job_id",
+      "not_meaning": "a record",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.JobFinishedEvent.client_instance_id",
+      "type": "identifier instance",
+      "empty": "never empty",
+      "intent": "names the instance that ran the job, which alone hears it",
+      "meaning": "the client's instance",
+      "not_meaning": "an account",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.JobFinishedEvent.answer_hash",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the answer by its inputs",
+      "meaning": "as AnswerProvenance.answer_hash",
+      "not_meaning": "a signature",
+      "filled": "derived",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.JobFinishedEvent.finished_at_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "never zero",
+      "intent": "states when the job finished",
+      "meaning": "by the component's clock",
+      "not_meaning": "when it was asked",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.JobFinishedEvent.sequence",
+      "type": "integer",
+      "unit": "items in the instance's sequence",
+      "empty": "never zero",
+      "intent": "numbers the event in the instance's sequence",
+      "meaning": "ListFinishedJobs reads after it",
+      "not_meaning": "a priority",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.ListFinishedJobsRequest.after_sequence",
+      "type": "integer",
+      "unit": "items in the instance's sequence",
+      "empty": "zero reads every finished job held",
+      "intent": "reads the jobs that finished after a sequence (W12.4)",
+      "meaning": "the last sequence the instance saw",
+      "not_meaning": "a time",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.ListFinishedJobsReply.finished",
+      "type": "repeated message JobFinishedEvent",
+      "empty": "empty when none finished since",
+      "intent": "lists the asking instance's jobs finished since",
+      "meaning": "each as delivered",
+      "not_meaning": "another instance's jobs",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.ListFinishedJobsReply.sequence",
+      "type": "integer",
+      "unit": "items in the instance's sequence",
+      "empty": "the sequence asked after, when none since",
+      "intent": "states the sequence read to",
+      "meaning": "the next read's after_sequence",
+      "not_meaning": "a count",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
+    {
+      "name": "meridian.v1.ReadJobAnswerRequest.job_id",
+      "type": "identifier message",
+      "empty": "never empty",
+      "intent": "names the job whose answer is read (W12.4)",
+      "meaning": "a job the asking instance ran; another's answers not found",
+      "not_meaning": "a record",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v26",
+      "stability": "preview",
+      "store": "analytics"
+    },
     {
       "name": "meridian.v1.Actor.person",
       "type": "message PersonActor",
@@ -9504,6 +11196,11 @@
           "value": "UNPLACED_REASON_NOTHING_PENDING",
           "meaning": "a value-date roll meets no pending line on its from date that the sending connectivity plugin's fills or rolls on the code put there (W11.25): kept in the account, so operations sees the venue's position and the book's differ",
           "since": "v23"
+        },
+        {
+          "value": "UNPLACED_REASON_UNKNOWN_EXECUTION",
+          "meaning": "a give-up's answer names an execution, or an allocation, the book does not hold (W11.32): kept whole in give_up, claimed by the record that later names it",
+          "since": "v26"
         }
       ],
       "empty": "never unspecified",
@@ -14634,6 +16331,19 @@
       "store": "bor"
     },
     {
+      "name": "meridian.v1.AccountAttributes.base_cash_instrument_id",
+      "type": "identifier instrument",
+      "empty": "empty while no base currency is set, and while the instrument store has not resolved its code",
+      "intent": "names the cash instrument of the account's base currency (W9.13, W12.2; ruling 316)",
+      "meaning": "the platform's ID of the base currency's cash instrument, which the book resolves from base_currency_code when the base is set and keeps, each resolution its own record; an account whose base was set before v26 carries it once the book holds the resolution. What the analytics component values the account in",
+      "not_meaning": "an attribute a person or a plugin sets, or a conversion: the book converts nothing",
+      "filled": "decided",
+      "filled_by": "bor",
+      "since": "v26",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
       "name": "meridian.v1.SetAccountAttributeRequest.error_account",
       "type": "boolean",
       "empty": "unset unless this is the attribute",
@@ -15827,13 +17537,20 @@
       "name": "meridian.v1.Alert.due_by",
       "type": "moment",
       "unit": "nanoseconds since the epoch",
-      "empty": "zero unless the alert is a held booking's",
+      "empty": "zero unless the alert is a held booking's; zero too, from v26, where no operations instance is launched or none declares a deadline, and on every held booking raised before v26",
       "intent": "says when a held booking's alert is due (W11.34)",
-      "meaning": "the moment the operations plugin's affirmation_deadline falls on the trade date, in the deployment's time zone; overdue is a reader's comparison against the one clock",
-      "not_meaning": "a second record of overdue",
+      "meaning": "from v26, the moment the earliest affirmation_deadline the launched operations instances declare next falls on or after the booking's trade date, in the deployment's time zone (deployment_time_zone, W6.35); overdue is a reader's comparison against the one clock",
+      "not_meaning": "a second record of overdue, or a deadline the book enforces; the deployment's time zone moves no market-defined cut",
       "filled": "decided",
       "filled_by": "bor",
       "since": "v24",
+      "changes": [
+        {
+          "version": "v26",
+          "kind": "clarified",
+          "what": "set from v26: the book reads the deployment's time zone and the deadline the operations instances declare (ReadDeploymentTimeZone), the earliest of several; in v24 and v25 it read zero (ruling 164)"
+        }
+      ],
       "stability": "preview",
       "store": "bor"
     },
@@ -16449,6 +18166,19 @@
       "filled": "as-reported",
       "filled_by": "compliance",
       "since": "v24",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
+      "name": "meridian.v1.AgentOrdersDemoOnlySetting.agent_orders_demo_only",
+      "type": "boolean",
+      "empty": "never false in v26: on by default, and refused off in the version that brings it",
+      "intent": "says whether agents may place orders on demo connections only (W11.38, W11.39; approved 2026-10-14)",
+      "meaning": "true: the book refuses a placement, or an accept to a new order, made through a delegation or by a service account on a connection that is not demo, REFUSAL_REASON_AGENT_LIVE_ORDER, recorded",
+      "not_meaning": "a limit on a person's own acts, or on cancels, which are never refused",
+      "filled": "decided",
+      "filled_by": "bor",
+      "since": "v26",
       "stability": "preview",
       "store": "bor"
     },
@@ -18354,6 +20084,19 @@
       "store": "conductor"
     },
     {
+      "name": "meridian.v1.VenueCatalogue.environment",
+      "type": "text",
+      "empty": "empty, as a v25 catalogue is: no report, which counts as live",
+      "intent": "reports the environment the connectivity plugin's session reached (W11.20; G1 question 5)",
+      "meaning": "live, sandbox or paper, read from the host the session reached -- a vendor's practice, paper or sandbox host against its live one; a connection is demo only while this and its environment setting both say sandbox or paper",
+      "not_meaning": "the environment setting, which a person sets and core keeps",
+      "filled": "as-reported",
+      "filled_by": "connectivity",
+      "since": "v26",
+      "stability": "preview",
+      "store": "conductor"
+    },
+    {
       "name": "meridian.v1.Ticket.filed_by",
       "type": "message TicketAuthor",
       "empty": "never unset",
@@ -19725,6 +21468,32 @@
       "filled": "stamped",
       "filled_by": "sidecar",
       "since": "v22",
+      "stability": "preview",
+      "store": "envelope"
+    },
+    {
+      "name": "meridian.v1.MessageMeta.connectivity_demo",
+      "type": "boolean",
+      "empty": "false on every message but a CreatePlacement or an AcceptExecution naming a new order, where false means the connection is not demo",
+      "intent": "carries the sending ems sidecar's verdict on whether the connection is demo (W4.9, W11.8)",
+      "meaning": "true when the placement's, or the reported fills', connectivity instance is in the caller's CallerClaims.demo_connectivity_instance_ids; the book refuses an agent's act stamped false while agent_orders_demo_only is on, REFUSAL_REASON_AGENT_LIVE_ORDER, recorded",
+      "not_meaning": "anything a plugin supplies, or a verdict read on any other command",
+      "filled": "stamped",
+      "filled_by": "sidecar",
+      "since": "v26",
+      "stability": "preview",
+      "store": "envelope"
+    },
+    {
+      "name": "meridian.v1.MessageMeta.on_behalf_of_instance_id",
+      "type": "identifier instance",
+      "empty": "empty on every message but the analytics component's reads for a job",
+      "intent": "names the client instance the analytics component reads for (W12.2)",
+      "meaning": "the stores answer within that instance's dataset entitlements and role's kinds, beside the account scope carried in account_scope",
+      "not_meaning": "anything a sidecar or a plugin sets: a store ignores it from anything but the analytics component",
+      "filled": "stamped",
+      "filled_by": "analytics",
+      "since": "v26",
       "stability": "preview",
       "store": "envelope"
     },
@@ -22913,13 +24682,20 @@
     {
       "name": "meridian.v1.SecurityTemplate.calculation",
       "type": "text",
-      "empty": "empty in every template until the template calculations (row 6i')",
+      "empty": "empty in every template: from v26 the package is calculation_package",
       "intent": "names the template version's calculation package (approved 2026-10-14)",
-      "meaning": "the slot is defined and empty at v24; the package's form is the template calculations' to rule",
+      "meaning": "the slot defined and empty at v24, kept empty from v26, when the package is calculation_package, declarative data (the v26 plan's question 225)",
       "not_meaning": "a calculation a deployment or a plugin defines",
       "filled": "decided",
       "filled_by": "platform",
       "since": "v24",
+      "changes": [
+        {
+          "version": "v26",
+          "kind": "clarified",
+          "what": "kept empty; the calculation package is calculation_package from v26"
+        }
+      ],
       "stability": "preview",
       "store": "instrument"
     },
@@ -22972,6 +24748,739 @@
       "filled": "decided",
       "filled_by": "platform",
       "since": "v24",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.BinaryEventContract.floor",
+      "type": "message EventContractBound",
+      "empty": "unset where the contract has no lower bound: no range, or an open lower tail",
+      "intent": "states a range market's lower bound (A4)",
+      "meaning": "its value and whether it is inclusive, in bound_unit; a venue's greater is inclusive false, its greater or equal true",
+      "not_meaning": "a price, unless bound_unit names an instrument",
+      "filled": "decided",
+      "filled_by": "instrument",
+      "since": "v26",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.BinaryEventContract.cap",
+      "type": "message EventContractBound",
+      "empty": "unset where the contract has no upper bound: no range, or an open upper tail",
+      "intent": "states a range market's upper bound (A4)",
+      "meaning": "its value and whether it is inclusive, in bound_unit",
+      "not_meaning": "a price, unless bound_unit names an instrument",
+      "filled": "decided",
+      "filled_by": "instrument",
+      "since": "v26",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.BinaryEventContract.bound_unit",
+      "type": "text",
+      "empty": "empty where neither bound is set",
+      "intent": "names the unit both bounds are in",
+      "meaning": "an instrument's ID where the bound is a price; otherwise the venue's unit word: degrees_f, index_points, percent",
+      "not_meaning": "a currency the contract pays in, which payout names",
+      "filled": "decided",
+      "filled_by": "instrument",
+      "since": "v26",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.EventContractBound.value",
+      "type": "Decimal",
+      "bounds": {
+        "digits": 38,
+        "scale": [
+          0,
+          18
+        ]
+      },
+      "unit": "the contract's bound_unit",
+      "empty": "never unset in a bound that is set",
+      "intent": "states the bound",
+      "meaning": "in the contract's bound_unit, as the venue states it",
+      "not_meaning": "a probability",
+      "filled": "decided",
+      "filled_by": "instrument",
+      "since": "v26",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.EventContractBound.inclusive",
+      "type": "boolean",
+      "empty": "false: the bound itself is outside the range",
+      "intent": "says whether the bound is in the range",
+      "meaning": "true for greater_or_equal and less_or_equal, false for greater and less",
+      "not_meaning": "which side wins a tie at settlement, which the venue's rules say",
+      "filled": "decided",
+      "filled_by": "instrument",
+      "since": "v26",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.SecurityTemplate.calculation_package",
+      "type": "message CalculationPackage",
+      "empty": "unset on a class's base template and a version published before v26",
+      "intent": "carries the template version's calculation package (W1.24; the v26 plan's question 225)",
+      "meaning": "the pricing model it binds, its pricing inputs, its corporate-action factor source, its calculation version and its test cases with exact answers: data, never code",
+      "not_meaning": "a calculation a deployment or a plugin defines",
+      "filled": "decided",
+      "filled_by": "platform",
+      "since": "v26",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.CalculationPackage.model_id",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the pricing model the template version binds",
+      "meaning": "cash, quoted_price or binary_event in v26, immutable once published",
+      "not_meaning": "an implementation, which a deployment admin routes (W12.6)",
+      "filled": "decided",
+      "filled_by": "platform",
+      "since": "v26",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.CalculationPackage.model_version",
+      "type": "integer",
+      "unit": "model versions",
+      "empty": "never zero",
+      "intent": "names the model's version",
+      "meaning": "an improved model is a new version, bound by a new template version",
+      "not_meaning": "the template's version",
+      "filled": "decided",
+      "filled_by": "platform",
+      "since": "v26",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.CalculationPackage.pricing_inputs",
+      "type": "repeated text",
+      "empty": "empty for a model reading none, as cash in its base currency",
+      "intent": "names the kinds of market object the model reads",
+      "meaning": "as the lake names them: close, nav, mid, last, outcome",
+      "not_meaning": "datasets, which the source priority picks",
+      "filled": "decided",
+      "filled_by": "platform",
+      "since": "v26",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.CalculationPackage.corporate_action_factors",
+      "type": "text",
+      "empty": "empty where none applies",
+      "intent": "names where the model's corporate-action factors come from, for returns",
+      "meaning": "the template's split and distribution factors, CRSP's A(t) = P(t)/C(t) (the first release's Q7)",
+      "not_meaning": "a vendor's adjusted series, which is restated retroactively",
+      "filled": "decided",
+      "filled_by": "platform",
+      "since": "v26",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.CalculationPackage.calculation_version",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the package's version, which every valuation names",
+      "meaning": "the master intent's ruling 9",
+      "not_meaning": "the engine's version",
+      "filled": "decided",
+      "filled_by": "platform",
+      "since": "v26",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.CalculationPackage.test_cases",
+      "type": "repeated message CalculationTestCase",
+      "empty": "never empty",
+      "intent": "carries test cases with exact answers",
+      "meaning": "which the built-in model and every implementation routed for it must equal exactly, answer hashes included",
+      "not_meaning": "tolerances: v26's models are arithmetic",
+      "filled": "decided",
+      "filled_by": "platform",
+      "since": "v26",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.CalculationTestCase.name",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names a test case",
+      "meaning": "the platform's words",
+      "not_meaning": "instructions",
+      "filled": "decided",
+      "filled_by": "platform",
+      "since": "v26",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.CalculationTestCase.inputs",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "states a test case's inputs",
+      "meaning": "RFC 8785 canonical JSON, by the engine's own terms",
+      "not_meaning": "a fixture of a vendor",
+      "filled": "decided",
+      "filled_by": "platform",
+      "since": "v26",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.CalculationTestCase.expected",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "states a test case's exact answer",
+      "meaning": "RFC 8785 canonical JSON; every implementation equals it exactly",
+      "not_meaning": "a figure within a tolerance",
+      "filled": "decided",
+      "filled_by": "platform",
+      "since": "v26",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.EventGroup.event_group_id",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names an event group for life (A1)",
+      "meaning": "EVG- and a ULID, the platform's; LCL- and a ULID for the deployment's own while it waits; never reused (decisions/034)",
+      "not_meaning": "a venue's event reference",
+      "filled": "minted",
+      "filled_by": "instrument",
+      "since": "v26",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.EventGroup.venue_id",
+      "type": "identifier venue",
+      "empty": "never empty",
+      "intent": "names the venue that states the group",
+      "meaning": "the venue master's ID",
+      "not_meaning": "a data plugin's instance",
+      "filled": "decided",
+      "filled_by": "instrument",
+      "since": "v26",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.EventGroup.venue_event_ref",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the venue's event",
+      "meaning": "the venue's own reference for its event: its event ticker or slug",
+      "not_meaning": "an identity across venues: cross-venue equivalence is not in v26 (A6)",
+      "filled": "decided",
+      "filled_by": "instrument",
+      "since": "v26",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.EventGroup.title",
+      "type": "text",
+      "empty": "empty where the venue gave none",
+      "intent": "describes the event in the venue's words",
+      "meaning": "the venue's words, data, never instructions",
+      "not_meaning": "the platform's words",
+      "filled": "decided",
+      "filled_by": "instrument",
+      "since": "v26",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.EventGroup.member_instrument_ids",
+      "type": "repeated identifier instrument",
+      "empty": "never empty",
+      "intent": "names the group's members at this version",
+      "meaning": "each a binary event contract the deployment holds",
+      "not_meaning": "a ranking or an order of outcomes",
+      "filled": "decided",
+      "filled_by": "instrument",
+      "since": "v26",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.EventGroup.mutually_exclusive",
+      "type": "enum EventGroupFlag",
+      "allowed": [
+        {
+          "value": "EVENT_GROUP_FLAG_UNSPECIFIED",
+          "meaning": "read as not stated"
+        },
+        {
+          "value": "EVENT_GROUP_FLAG_TRUE",
+          "meaning": "the venue states it true"
+        },
+        {
+          "value": "EVENT_GROUP_FLAG_FALSE",
+          "meaning": "the venue states it false"
+        },
+        {
+          "value": "EVENT_GROUP_FLAG_NOT_STATED",
+          "meaning": "the venue does not state it: unknown, never false (A2)"
+        }
+      ],
+      "empty": "unspecified reads as not stated",
+      "intent": "says whether at most one member can resolve YES (A2)",
+      "meaning": "as the venue states it at this version",
+      "not_meaning": "a check core makes: core records and does not police (A7)",
+      "filled": "decided",
+      "filled_by": "instrument",
+      "since": "v26",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.EventGroup.exhaustive",
+      "type": "enum EventGroupFlag",
+      "allowed": [
+        {
+          "value": "EVENT_GROUP_FLAG_UNSPECIFIED",
+          "meaning": "read as not stated"
+        },
+        {
+          "value": "EVENT_GROUP_FLAG_TRUE",
+          "meaning": "the venue states it true"
+        },
+        {
+          "value": "EVENT_GROUP_FLAG_FALSE",
+          "meaning": "the venue states it false"
+        },
+        {
+          "value": "EVENT_GROUP_FLAG_NOT_STATED",
+          "meaning": "the venue does not state it: unknown, never false (A2)"
+        }
+      ],
+      "empty": "unspecified reads as not stated",
+      "intent": "says whether at least one member must resolve YES (A2)",
+      "meaning": "as the venue states it at this version; an augmented negative-risk event is not stated among its named outcomes",
+      "not_meaning": "a guarantee that exactly one pays, which is a reader's check",
+      "filled": "decided",
+      "filled_by": "instrument",
+      "since": "v26",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.EventGroup.series_id",
+      "type": "text",
+      "empty": "empty for an event in no series",
+      "intent": "names the venue's series, for a recurring event (A5)",
+      "meaning": "the venue's own reference for the series, its series ticker",
+      "not_meaning": "a series record, which v26 does not have",
+      "filled": "decided",
+      "filled_by": "instrument",
+      "since": "v26",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.EventGroup.version",
+      "type": "integer",
+      "unit": "event group versions",
+      "empty": "never zero",
+      "intent": "numbers the group's versions (A3)",
+      "meaning": "monotonic from 1, a new version for each change of a flag or a member",
+      "not_meaning": "the store's sequence",
+      "filled": "decided",
+      "filled_by": "instrument",
+      "since": "v26",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.EventGroup.valid_from_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "never zero",
+      "intent": "states when this version became true",
+      "meaning": "as the venue states it, its effective time; a reader computing a set's sum reads the version in force at its moment",
+      "not_meaning": "when the store recorded it",
+      "filled": "decided",
+      "filled_by": "instrument",
+      "since": "v26",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.EventGroup.record_time_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "never zero",
+      "intent": "states when the store recorded this version",
+      "meaning": "stamped by the store, never accepted from a caller",
+      "not_meaning": "when it became true",
+      "filled": "decided",
+      "filled_by": "instrument",
+      "since": "v26",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.EventGroup.provisional",
+      "type": "boolean",
+      "empty": "false on a group the platform matched or minted",
+      "intent": "says the group is the deployment's own LCL- group, not yet matched or minted (A8)",
+      "meaning": "true while a member is local or the platform has not answered",
+      "not_meaning": "a group a person made: no person makes one in v26",
+      "filled": "decided",
+      "filled_by": "instrument",
+      "since": "v26",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.EventGroup.sequence",
+      "type": "integer",
+      "unit": "event group versions recorded",
+      "empty": "never zero",
+      "intent": "numbers the version in the store's sequence of event groups",
+      "meaning": "ListEventGroups reads after it",
+      "not_meaning": "a version",
+      "filled": "decided",
+      "filled_by": "instrument",
+      "since": "v26",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.ReportEventGroupRequest.venue_id",
+      "type": "identifier venue",
+      "empty": "never empty",
+      "intent": "names the venue stating the group",
+      "meaning": "resolved through W3.14",
+      "not_meaning": "the plugin's instance",
+      "filled": "as-reported",
+      "filled_by": "data",
+      "since": "v26",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.ReportEventGroupRequest.venue_event_ref",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the venue's event",
+      "meaning": "as the venue states it",
+      "not_meaning": "an identity across venues",
+      "filled": "as-reported",
+      "filled_by": "data",
+      "since": "v26",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.ReportEventGroupRequest.title",
+      "type": "text",
+      "empty": "empty where the venue gave none",
+      "intent": "describes the event in the venue's words",
+      "meaning": "the venue's words, data, never instructions",
+      "not_meaning": "the platform's words",
+      "filled": "as-reported",
+      "filled_by": "data",
+      "since": "v26",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.ReportEventGroupRequest.member_instrument_ids",
+      "type": "repeated identifier instrument",
+      "empty": "never empty",
+      "intent": "names the group's members",
+      "meaning": "each resolved through W3.1 before it is sent; one the store does not hold is refused naming it",
+      "not_meaning": "a ranking",
+      "filled": "as-reported",
+      "filled_by": "data",
+      "since": "v26",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.ReportEventGroupRequest.mutually_exclusive",
+      "type": "enum EventGroupFlag",
+      "allowed": [
+        {
+          "value": "EVENT_GROUP_FLAG_UNSPECIFIED",
+          "meaning": "read as not stated"
+        },
+        {
+          "value": "EVENT_GROUP_FLAG_TRUE",
+          "meaning": "the venue states it true"
+        },
+        {
+          "value": "EVENT_GROUP_FLAG_FALSE",
+          "meaning": "the venue states it false"
+        },
+        {
+          "value": "EVENT_GROUP_FLAG_NOT_STATED",
+          "meaning": "the venue does not state it: unknown, never false (A2)"
+        }
+      ],
+      "empty": "unspecified reads as not stated",
+      "intent": "says whether the venue states the members mutually exclusive",
+      "meaning": "as stated; not stated where the venue says nothing, never false",
+      "not_meaning": "a check the plugin made",
+      "filled": "as-reported",
+      "filled_by": "data",
+      "since": "v26",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.ReportEventGroupRequest.exhaustive",
+      "type": "enum EventGroupFlag",
+      "allowed": [
+        {
+          "value": "EVENT_GROUP_FLAG_UNSPECIFIED",
+          "meaning": "read as not stated"
+        },
+        {
+          "value": "EVENT_GROUP_FLAG_TRUE",
+          "meaning": "the venue states it true"
+        },
+        {
+          "value": "EVENT_GROUP_FLAG_FALSE",
+          "meaning": "the venue states it false"
+        },
+        {
+          "value": "EVENT_GROUP_FLAG_NOT_STATED",
+          "meaning": "the venue does not state it: unknown, never false (A2)"
+        }
+      ],
+      "empty": "unspecified reads as not stated",
+      "intent": "says whether the venue states the members exhaustive",
+      "meaning": "as stated; not stated where the venue says nothing or adds placeholders later",
+      "not_meaning": "a check the plugin made",
+      "filled": "as-reported",
+      "filled_by": "data",
+      "since": "v26",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.ReportEventGroupRequest.series_id",
+      "type": "text",
+      "empty": "empty for an event in no series",
+      "intent": "names the venue's series",
+      "meaning": "as the venue states it",
+      "not_meaning": "a series record",
+      "filled": "as-reported",
+      "filled_by": "data",
+      "since": "v26",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.ReportEventGroupRequest.valid_from_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "0 for now",
+      "intent": "states when the grouping took effect",
+      "meaning": "as the venue states it",
+      "not_meaning": "when the plugin read it",
+      "filled": "as-reported",
+      "filled_by": "data",
+      "since": "v26",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.ReportEventGroupRequest.raw_record",
+      "type": "message RawRecordRef",
+      "empty": "never unset",
+      "intent": "references the raw record the grouping was converted from",
+      "meaning": "the record in the data plugin's own storage, by its instance and key",
+      "not_meaning": "the record itself",
+      "filled": "as-reported",
+      "filled_by": "data",
+      "since": "v26",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.ReportEventGroupRequest.publisher_instance_id",
+      "type": "identifier instance",
+      "empty": "never empty: the sidecar stamps it",
+      "intent": "names the reporting instance",
+      "meaning": "stamped by its sidecar",
+      "not_meaning": "anything the plugin supplies",
+      "filled": "stamped",
+      "filled_by": "sidecar",
+      "since": "v26",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.ReportEventGroupReply.event_group",
+      "type": "message EventGroup",
+      "empty": "never unset",
+      "intent": "answers the group as the store holds it",
+      "meaning": "at its version, under its EVG- ID or the deployment's own LCL- ID",
+      "not_meaning": "the platform's answer alone",
+      "filled": "decided",
+      "filled_by": "instrument",
+      "since": "v26",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.ReportEventGroupReply.pending_review",
+      "type": "boolean",
+      "empty": "false where matched, minted or not yet asked",
+      "intent": "says the platform's staff have the group to review",
+      "meaning": "the deployment keeps its own LCL- group meanwhile",
+      "not_meaning": "a refusal",
+      "filled": "decided",
+      "filled_by": "instrument",
+      "since": "v26",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.ListEventGroupsRequest.instrument_ids",
+      "type": "repeated identifier instrument",
+      "empty": "empty for none",
+      "intent": "reads the groups holding these instruments (W3.30)",
+      "meaning": "each followed through its replacement",
+      "not_meaning": "a filter on outcomes",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v26",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.ListEventGroupsRequest.event_group_ids",
+      "type": "repeated text",
+      "empty": "empty for none",
+      "intent": "reads these groups",
+      "meaning": "by ID",
+      "not_meaning": "venue references",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v26",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.ListEventGroupsRequest.as_of_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "0 for now",
+      "intent": "reads the versions in force at a time",
+      "meaning": "by valid_from_ns: the version a set's sum is computed from (A3)",
+      "not_meaning": "a recorded-time cut-off",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v26",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.ListEventGroupsRequest.after_sequence",
+      "type": "integer",
+      "unit": "event group versions recorded",
+      "empty": "zero reads by the filters above",
+      "intent": "reads the groups changed after a sequence",
+      "meaning": "the last sequence the plugin saw, as a replacement is caught up (W3.22)",
+      "not_meaning": "a time",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v26",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.ListEventGroupsRequest.page_size",
+      "type": "integer",
+      "bounds": {
+        "range": {
+          "least": "0",
+          "most": "500"
+        }
+      },
+      "unit": "groups",
+      "empty": "0 takes the default, 100",
+      "intent": "bounds a page",
+      "meaning": "at most 500",
+      "not_meaning": "a total",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v26",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.ListEventGroupsRequest.cursor",
+      "type": "text",
+      "empty": "empty for the first page",
+      "intent": "continues a paged read",
+      "meaning": "the reply's next_cursor",
+      "not_meaning": "a position anyone else can read",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v26",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.ListEventGroupsReply.event_groups",
+      "type": "repeated message EventGroup",
+      "empty": "empty when none matches",
+      "intent": "answers the groups",
+      "meaning": "each at the version asked for",
+      "not_meaning": "outcomes, which the lake holds",
+      "filled": "decided",
+      "filled_by": "instrument",
+      "since": "v26",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.ListEventGroupsReply.sequence",
+      "type": "integer",
+      "unit": "event group versions recorded",
+      "empty": "the sequence asked after, when none since",
+      "intent": "states the sequence read to",
+      "meaning": "the next read's after_sequence",
+      "not_meaning": "a count",
+      "filled": "decided",
+      "filled_by": "instrument",
+      "since": "v26",
+      "stability": "preview",
+      "store": "instrument"
+    },
+    {
+      "name": "meridian.v1.ListEventGroupsReply.next_cursor",
+      "type": "text",
+      "empty": "empty on the last page",
+      "intent": "continues the read",
+      "meaning": "the next page's cursor",
+      "not_meaning": "a sequence",
+      "filled": "decided",
+      "filled_by": "instrument",
+      "since": "v26",
       "stability": "preview",
       "store": "instrument"
     },
@@ -26527,6 +29036,282 @@
       "store": "lake"
     },
     {
+      "name": "meridian.v1.QueryLakeRequest.kind",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the kind of row a query reads (W10.10)",
+      "meaning": "prices, bars, trades, quotes or outcomes; a kind the asking role does not read is refused naming it",
+      "not_meaning": "a dataset",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v26",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.QueryLakeRequest.subjects",
+      "type": "repeated message SubjectRef",
+      "bounds": {
+        "count": [
+          1,
+          500
+        ]
+      },
+      "empty": "never empty",
+      "intent": "names the subjects a query reads",
+      "meaning": "each the deployment's own entity, at most 500",
+      "not_meaning": "a vendor's symbols",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v26",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.QueryLakeRequest.sources",
+      "type": "message SourceChoice",
+      "empty": "none set is the deployment's default priority",
+      "intent": "names the sources a query reads",
+      "meaning": "as the reads take it (W10.6)",
+      "not_meaning": "an entitlement",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v26",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.QueryLakeRequest.valid_from_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "0 with valid_until_ns 0 reads by business date, or the latest",
+      "intent": "bounds the valid times read from",
+      "meaning": "inclusive",
+      "not_meaning": "a recorded time",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v26",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.QueryLakeRequest.valid_until_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "0 for no upper bound",
+      "intent": "bounds the valid times read to",
+      "meaning": "exclusive",
+      "not_meaning": "a recorded time",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v26",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.QueryLakeRequest.from_date",
+      "type": "date",
+      "empty": "empty with to_date empty reads by valid time, or the latest",
+      "intent": "bounds the business dates read from",
+      "meaning": "inclusive, ISO 8601",
+      "not_meaning": "a valid time",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v26",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.QueryLakeRequest.to_date",
+      "type": "date",
+      "empty": "empty for no upper bound",
+      "intent": "bounds the business dates read to",
+      "meaning": "inclusive, ISO 8601",
+      "not_meaning": "a valid time",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v26",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.QueryLakeRequest.as_of_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "0 for now",
+      "intent": "names the recorded-time cut-off",
+      "meaning": "rows recorded at or before it",
+      "not_meaning": "a valid time",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v26",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.QueryLakeRequest.fields",
+      "type": "repeated text",
+      "empty": "empty names every field the asker may read",
+      "intent": "names the fields a query answers, capping its columns",
+      "meaning": "each by its dictionary entry, meridian.v1.Price.price; one the asker may not read is answered unanswered per field",
+      "not_meaning": "a projection the lake computes",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v26",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.QueryLakeRequest.row_limit",
+      "type": "integer",
+      "bounds": {
+        "range": {
+          "least": "0",
+          "most": "10000"
+        }
+      },
+      "unit": "rows",
+      "empty": "0 reads 1,000",
+      "intent": "caps the rows a query answers",
+      "meaning": "1 to 10,000; past it the reply is cut and truncated says so, never paged",
+      "not_meaning": "a page size",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v26",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.QueryLakeRequest.instance_id",
+      "type": "identifier instance",
+      "empty": "never empty once stamped",
+      "intent": "names the instance whose entitlements and roles bound the answer",
+      "meaning": "a plugin's own, stamped by its sidecar; for the dashboard's tool, the instance the person names and holds read on",
+      "not_meaning": "anything a plugin supplies",
+      "filled": "stamped",
+      "filled_by": "sidecar",
+      "since": "v26",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.QueryLakeReply.prices",
+      "type": "repeated message Price",
+      "empty": "empty unless the kind is prices",
+      "intent": "answers prices",
+      "meaning": "each with only the fields named",
+      "not_meaning": "every price matched past the limit",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v26",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.QueryLakeReply.bars",
+      "type": "repeated message Bar",
+      "empty": "empty unless the kind is bars",
+      "intent": "answers bars",
+      "meaning": "each with only the fields named",
+      "not_meaning": "every bar matched past the limit",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v26",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.QueryLakeReply.trades",
+      "type": "repeated message Trade",
+      "empty": "empty unless the kind is trades",
+      "intent": "answers trades",
+      "meaning": "each with only the fields named, for a role that reads trades",
+      "not_meaning": "every trade matched past the limit",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v26",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.QueryLakeReply.quotes",
+      "type": "repeated message Quote",
+      "empty": "empty unless the kind is quotes",
+      "intent": "answers quotes",
+      "meaning": "each with only the fields named, for a role that reads quotes",
+      "not_meaning": "every quote matched past the limit",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v26",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.QueryLakeReply.outcomes",
+      "type": "repeated message Outcome",
+      "empty": "empty unless the kind is outcomes",
+      "intent": "answers outcomes",
+      "meaning": "each with only the fields named",
+      "not_meaning": "every outcome matched past the limit",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v26",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.QueryLakeReply.unanswered",
+      "type": "repeated message Unanswered",
+      "empty": "empty when everything asked was answered",
+      "intent": "lists what went unanswered, and why",
+      "meaning": "per subject, dataset and field, as the reads answer it",
+      "not_meaning": "an error",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v26",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.QueryLakeReply.datasets",
+      "type": "repeated message DatasetRef",
+      "empty": "empty when nothing was read",
+      "intent": "names the datasets read",
+      "meaning": "as the reads name them",
+      "not_meaning": "the datasets entitled",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v26",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.QueryLakeReply.watermark",
+      "type": "message Watermark",
+      "empty": "unset when nothing was read",
+      "intent": "states where the query read to",
+      "meaning": "a sequence per dataset",
+      "not_meaning": "a time",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v26",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.QueryLakeReply.truncated",
+      "type": "boolean",
+      "empty": "false when every matching row is answered",
+      "intent": "says the reply was cut at row_limit",
+      "meaning": "true when more rows matched; the asker narrows the query, never pages",
+      "not_meaning": "a failure",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v26",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
       "name": "meridian.v1.Decimal.high",
       "type": "integer",
       "unit": "none: the upper 64 bits of the value's integer",
@@ -26674,6 +29459,14 @@
         {
           "row": "RecordSleeveCross",
           "since": "v24"
+        },
+        {
+          "row": "RunJob",
+          "since": "v26"
+        },
+        {
+          "row": "AnswerPriceBatch",
+          "since": "v26"
         }
       ],
       "empty": "never unset in an amount that is set: the amount is the Money",
@@ -30805,6 +33598,11 @@
           "value": "REFUSAL_REASON_LOCAL_RECORD_NOT_ALLOWED",
           "meaning": "beside ABORTED: a proposal, or an accept of venue-originated fills, naming an instrument whose record is provisional, a local record, while the deployment's setting allows_local_record_orders is off (W11's invariant, W11.1, W11.23); nothing changed, a fill staying unmatched. FIX's OrdRejReason (103) 1, Unknown symbol",
           "since": "v24"
+        },
+        {
+          "value": "REFUSAL_REASON_AGENT_LIVE_ORDER",
+          "meaning": "beside ABORTED: a placement, or an accept of fills to a new order, made through a delegation or by a service account on a connectivity instance that is not demo while the deployment's agent_orders_demo_only is on (W11.8, W11.23, W11.38); recorded, as the connectivity refusal is, a fill staying unmatched",
+          "since": "v26"
         }
       ],
       "empty": "unspecified where the status says all there is",
@@ -33163,13 +35961,20 @@
           "most": "1440"
         }
       },
-      "empty": "0 declares none: a held booking's due_by reads zero",
+      "empty": "0 declares none: a held booking's due_by reads zero unless another launched operations instance declares one",
       "intent": "declares an operations plugin's affirmation deadline (W11.28, W11.34)",
-      "meaning": "the time of day by which the firm allocates, confirms and affirms its trades, 1 to 1440, 1440 the day's end; a held booking's alert carries the moment it next falls as due_by. Refused on a version not holding operations",
+      "meaning": "the time of day by which the firm allocates, confirms and affirms its trades, 1 to 1440, 1440 the day's end, in the deployment's time zone; from v26 a held booking's alert carries as due_by the moment the earliest deadline the launched operations instances declare next falls (W11.34, W6.35). Refused on a version not holding operations",
       "not_meaning": "a settlement date, or a deadline the book enforces: overdue is a reader's comparison against the one clock",
       "filled": "as-reported",
       "filled_by": "operations",
       "since": "v25",
+      "changes": [
+        {
+          "version": "v26",
+          "kind": "clarified",
+          "what": "due_by is set from v26 (W11.34): the book reads the earliest deadline the launched operations instances declare, in the deployment's time zone; in v25 it read zero"
+        }
+      ],
       "stability": "preview",
       "store": "sidecar"
     },
@@ -33816,6 +36621,170 @@
       "filled": "decided",
       "filled_by": "instrument",
       "since": "v24",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.CallerClaims.demo_connectivity_instance_ids",
+      "type": "repeated identifier instance",
+      "empty": "empty in an assertion for any plugin but an ems, and where no connection the user may route through is demo",
+      "intent": "names those of connectivity_instance_ids that are demo (W4.9, W11.8)",
+      "meaning": "each instance whose environment setting, core's record, is sandbox or paper and whose venue catalogue reports the same, computed by the dashboard at admission",
+      "not_meaning": "a plugin's word: neither key is the plugin's to change at runtime",
+      "filled": "stamped",
+      "filled_by": "dashboard",
+      "since": "v26",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.plugin.v1.AnswerPriceBatchParams.acting_for",
+      "type": "message CallerAssertion",
+      "empty": "unset: a pricing plugin answers a batch as itself",
+      "intent": "names the person AnswerPriceBatch is sent for",
+      "meaning": "the assertion the plugin was handed for them, the same bytes, never altered; a batch's answer is the plugin's own act, so it is sent unset",
+      "not_meaning": "the plugin's own identity, which the sidecar knows",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v26",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.plugin.v1.ReportEventGroupParams.acting_for",
+      "type": "message CallerAssertion",
+      "empty": "unset: a data plugin reports its venue's grouping as itself",
+      "intent": "names the person ReportEventGroup is sent for",
+      "meaning": "the assertion the plugin was handed for them, the same bytes, never altered; a venue's statement is the plugin's own report, so it is sent unset",
+      "not_meaning": "the plugin's own identity, which the sidecar knows",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v26",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.plugin.v1.Delivery.price_batch",
+      "type": "message PriceBatchRequest",
+      "empty": "unset unless the delivery is a batch routed to this pricing instance",
+      "intent": "delivers a batch to price (W12.3)",
+      "meaning": "a batch for this instance alone, caught up by ListPriceBatches after a loss",
+      "not_meaning": "a job: a pricing plugin never sees the job or its accounts",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.plugin.v1.Delivery.job_finished",
+      "type": "message JobFinishedEvent",
+      "empty": "unset unless the delivery is a job this instance ran finishing",
+      "intent": "tells the client a job answered later has finished (W12.4)",
+      "meaning": "the job's ID and answer hash, for this instance alone, caught up by ListFinishedJobs after a loss",
+      "not_meaning": "the answer, which ReadJobAnswer reads",
+      "filled": "decided",
+      "filled_by": "analytics",
+      "since": "v26",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.plugin.v1.Delivery.event_group_changed",
+      "type": "message EventGroup",
+      "empty": "unset unless the delivery is an event group's new version",
+      "intent": "delivers an event group's new version (W3.30)",
+      "meaning": "the group's whole new version, unscoped reference data, caught up by ListEventGroups after a sequence",
+      "not_meaning": "an outcome, which the lake delivers",
+      "filled": "decided",
+      "filled_by": "instrument",
+      "since": "v26",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.HeartbeatRequest.model_tokens",
+      "type": "repeated message ModelTokenCount",
+      "bounds": {
+        "count": [
+          0,
+          64
+        ]
+      },
+      "empty": "empty for a plugin calling no model",
+      "intent": "reports the model tokens the plugin used since it started (W4.5; item 191)",
+      "meaning": "per endpoint, person or service account, and client; each heartbeat replaces the last, at most 64",
+      "not_meaning": "a prompt, an answer or a cost",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v26",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.ModelTokenCount.endpoint",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the model endpoint",
+      "meaning": "its host and model as the plugin names it",
+      "not_meaning": "a vendor's account",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v26",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.ModelTokenCount.subject",
+      "type": "text",
+      "empty": "empty for the plugin's own work",
+      "intent": "names the person or service account the tokens were used for",
+      "meaning": "as the assertion named them",
+      "not_meaning": "an agent's identity, which client_name gives",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v26",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.ModelTokenCount.client_name",
+      "type": "text",
+      "empty": "empty where no delegation was used",
+      "intent": "names the client of the delegation the work went through",
+      "meaning": "as the claims named it",
+      "not_meaning": "a model",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v26",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.ModelTokenCount.input_tokens",
+      "type": "integer",
+      "unit": "tokens",
+      "empty": "0 for none",
+      "intent": "counts the tokens sent to the model",
+      "meaning": "since the plugin started",
+      "not_meaning": "a cost",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v26",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.ModelTokenCount.output_tokens",
+      "type": "integer",
+      "unit": "tokens",
+      "empty": "0 for none",
+      "intent": "counts the tokens the model answered",
+      "meaning": "since the plugin started",
+      "not_meaning": "a cost",
+      "filled": "as-reported",
+      "filled_by": "plugin",
+      "since": "v26",
       "stability": "preview",
       "store": "sidecar"
     },

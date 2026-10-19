@@ -477,8 +477,9 @@ def test_the_ems_suite_is_carried_with_its_six_cases_and_v22s() -> None:
     ]
     # The order path's and the calendars' (contract v22), from contract v23 a
     # venue-originated fill's accept and DK, and from v24 the two every-role
-    # cases and the escape hatch's read.
-    assert len(held.cases) == 27
+    # cases and the escape hatch's read; v26 an event group heard and read, the
+    # agents' guard read and its five cases, and the lake's bounded query.
+    assert len(held.cases) == 35
     assert "places-at-a-linked-connectivity-plugin" in [case.name for case in held.cases]
 
 

@@ -100,7 +100,7 @@ def test_every_release_since_the_first_recorded_has_its_step() -> None:
         ("0.6.0", "0.6.1"),
         ("0.6.1", "0.7.0"),
     ]
-    assert (steps[-1].source, steps[-1].target) == ("0.29.0", "0.30.0")
+    assert (steps[-1].source, steps[-1].target) == ("0.30.0", "0.31.0")
     # A release that moves the version records its step, if only the pins.
     assert steps[-1].target == SDK
 
@@ -1310,3 +1310,98 @@ def test_a_plugins_own_trader_is_left_alone() -> None:
     }
     result = migrate(files, "0.29.0", "0.30.0")
     assert result.files == {} and left_by_hand(result) == []
+
+
+# ── 0.30.0 to 0.31.0: contract v26 ───────────────────────────────────────
+
+_DIGEST = "sha256:" + "ab" * 32
+
+
+def test_a_base_pinned_by_digest_at_an_older_release_drops_its_digest() -> None:
+    """Run without `meridian plugin migrate`'s pin move (CLI 0.1.47), the step
+    moves the tag offline and drops the digest it cannot read: an old digest
+    is never kept under a new tag."""
+    dockerfile = (
+        f"ARG BASE=ghcr.io/open-meridian/plugin-python:0.30.0@{_DIGEST}\nFROM ${{BASE}}\n"
+    )
+    result = migrate({"Dockerfile": dockerfile}, "0.30.0", "0.31.0")
+    assert result.files["Dockerfile"].splitlines()[0] == (
+        "ARG BASE=ghcr.io/open-meridian/plugin-python:0.31.0"
+    )
+    assert ("base-digest", "Dockerfile", 1) in left_by_hand(result)
+    rewrote = {r for step in result.steps for rules in step.rewrote.values() for r in rules}
+    assert rewrote == {"base-digest-dropped"}
+
+
+def test_a_base_the_command_line_moved_with_its_digest_is_left_alone() -> None:
+    dockerfile = (
+        f"ARG BASE=ghcr.io/open-meridian/plugin-python:0.31.0@{_DIGEST}\nFROM ${{BASE}}\n"
+    )
+    result = migrate({"Dockerfile": dockerfile}, "0.30.0", "0.31.0")
+    assert result.files == {}
+    assert [rule for rule, _, _ in left_by_hand(result)] == []
+
+
+def test_a_role_suite_v26_adds_cases_to_is_left_to_map() -> None:
+    files = {
+        "tests/test_suite.py": 'report = run("reporting", PRODUCERS, not_presented=NP)\n',
+        "tests/test_other.py": "asyncio.run(main())\n",
+    }
+    result = migrate(files, "0.30.0", "0.31.0")
+    assert result.files == {}
+    assert left_by_hand(result) == [("suite-cases-v26", "tests/test_suite.py", 1)]
+
+
+def test_a_venue_adapter_saying_no_environment_is_left_to_report_one() -> None:
+    adapter = textwrap.dedent(
+        """\
+        class BrokerVenue:
+            source = "broker"
+
+            def catalogue(self, code): ...
+            def place(self, code, asked): ...
+            def orders(self, code): ...
+
+
+        class Reaching(BrokerVenue):
+            environment = "paper"
+
+            def catalogue(self, code): ...
+            def place(self, code, asked): ...
+            def orders(self, code): ...
+        """
+    )
+    result = migrate({"src/br/venue.py": adapter}, "0.30.0", "0.31.0")
+    assert left_by_hand(result) == [("venue-reports-no-environment", "src/br/venue.py", 1)]
+
+
+def test_custody_pages_a_plugin_declares_itself_are_left_to_move_onto_the_sdk() -> None:
+    copied = (
+        '"""Custody\'s pages."""\n'
+        '@pages.page(LINKS, "Account links", name="read_account_links")\n'
+        "async def account_links(request): ...\n"
+        "async def link_account(request): ...\n"
+        '@pages.page(HISTORY, "History", name="read_account_activities")\n'
+        "async def history(request): ...\n"
+    )
+    result = migrate({"src/br/custody_pages.py": copied}, "0.30.0", "0.31.0")
+    assert left_by_hand(result) == [("custody-pages-onto-sdk", "src/br/custody_pages.py", 1)]
+
+
+def test_a_listings_layer_a_plugin_keeps_itself_is_left_to_move_onto_the_sdk() -> None:
+    copied = (
+        "class Products:\n    pass\n\n\nclass Lake:\n"
+        "    async def trade_row(self, stated, subject): ...\n"
+        "    async def quote_row(self, stated, subject): ...\n"
+    )
+    result = migrate({"src/br/lake.py": copied}, "0.30.0", "0.31.0")
+    assert left_by_hand(result) == [("lake-onto-sdk", "src/br/lake.py", 5)]
+
+
+def test_a_trader_in_snaptrades_shape_is_left_to_move_onto_the_sdk() -> None:
+    copied = (
+        "class Charged:\n    pass\n\n\nclass Worked:\n    pass\n\n\nclass Trader:\n"
+        "    async def _charges(self, venue): ...\n"
+    )
+    result = migrate({"src/st/trading.py": copied}, "0.30.0", "0.31.0")
+    assert left_by_hand(result) == [("trading-onto-sdk", "src/st/trading.py", 9)]

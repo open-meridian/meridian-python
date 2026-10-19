@@ -444,6 +444,56 @@ class PluginOperationsStub(object):
                 request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListDatasetsParams.SerializeToString,
                 response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListDatasetsResult.FromString,
                 _registered_method=True)
+        self.RunJob = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/RunJob',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RunJobParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RunJobResult.FromString,
+                _registered_method=True)
+        self.ListMeasureDefinitions = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ListMeasureDefinitions',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListMeasureDefinitionsParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListMeasureDefinitionsResult.FromString,
+                _registered_method=True)
+        self.ListPriceBatches = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ListPriceBatches',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListPriceBatchesParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListPriceBatchesResult.FromString,
+                _registered_method=True)
+        self.AnswerPriceBatch = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/AnswerPriceBatch',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.AnswerPriceBatchParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.AnswerPriceBatchResult.FromString,
+                _registered_method=True)
+        self.ListFinishedJobs = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ListFinishedJobs',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListFinishedJobsParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListFinishedJobsResult.FromString,
+                _registered_method=True)
+        self.ReadJobAnswer = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ReadJobAnswer',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadJobAnswerParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadJobAnswerResult.FromString,
+                _registered_method=True)
+        self.ReportEventGroup = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ReportEventGroup',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReportEventGroupParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReportEventGroupResult.FromString,
+                _registered_method=True)
+        self.ListEventGroups = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ListEventGroups',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListEventGroupsParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListEventGroupsResult.FromString,
+                _registered_method=True)
+        self.ReadAgentOrdersDemoOnly = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ReadAgentOrdersDemoOnly',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadAgentOrdersDemoOnlyParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadAgentOrdersDemoOnlyResult.FromString,
+                _registered_method=True)
+        self.QueryLake = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/QueryLake',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.QueryLakeParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.QueryLakeResult.FromString,
+                _registered_method=True)
         self.Receive = channel.unary_stream(
                 '/meridian.plugin.v1.PluginOperations/Receive',
                 request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReceiveRequest.SerializeToString,
@@ -1028,6 +1078,76 @@ class PluginOperationsServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def RunJob(self, request, context):
+        """W12.1: platform.analytics.query.run-job (query; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListMeasureDefinitions(self, request, context):
+        """W12.1: platform.analytics.query.list-measure-definitions (query; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListPriceBatches(self, request, context):
+        """W12.3: platform.analytics.query.list-price-batches (query; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def AnswerPriceBatch(self, request, context):
+        """W12.3: platform.analytics.command.answer-price-batch (command; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListFinishedJobs(self, request, context):
+        """W12.4: platform.analytics.query.list-finished-jobs (query; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ReadJobAnswer(self, request, context):
+        """W12.4: platform.analytics.query.read-job-answer (query; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ReportEventGroup(self, request, context):
+        """W3.29: platform.reference.command.report-event-group (command; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListEventGroups(self, request, context):
+        """W3.30: platform.reference.query.list-event-groups (query; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ReadAgentOrdersDemoOnly(self, request, context):
+        """W11.39: platform.book.query.read-agent-orders-demo-only (query; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def QueryLake(self, request, context):
+        """W10.10: platform.lake.query.query-lake (query; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def Receive(self, request, context):
         """W4.3: every row this plugin's roles hear, within its read scope.
         """
@@ -1447,6 +1567,56 @@ def add_PluginOperationsServicer_to_server(servicer, server):
                     servicer.ListDatasets,
                     request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListDatasetsParams.FromString,
                     response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListDatasetsResult.SerializeToString,
+            ),
+            'RunJob': grpc.unary_unary_rpc_method_handler(
+                    servicer.RunJob,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RunJobParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RunJobResult.SerializeToString,
+            ),
+            'ListMeasureDefinitions': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListMeasureDefinitions,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListMeasureDefinitionsParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListMeasureDefinitionsResult.SerializeToString,
+            ),
+            'ListPriceBatches': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListPriceBatches,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListPriceBatchesParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListPriceBatchesResult.SerializeToString,
+            ),
+            'AnswerPriceBatch': grpc.unary_unary_rpc_method_handler(
+                    servicer.AnswerPriceBatch,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.AnswerPriceBatchParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.AnswerPriceBatchResult.SerializeToString,
+            ),
+            'ListFinishedJobs': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListFinishedJobs,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListFinishedJobsParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListFinishedJobsResult.SerializeToString,
+            ),
+            'ReadJobAnswer': grpc.unary_unary_rpc_method_handler(
+                    servicer.ReadJobAnswer,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadJobAnswerParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadJobAnswerResult.SerializeToString,
+            ),
+            'ReportEventGroup': grpc.unary_unary_rpc_method_handler(
+                    servicer.ReportEventGroup,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReportEventGroupParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReportEventGroupResult.SerializeToString,
+            ),
+            'ListEventGroups': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListEventGroups,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListEventGroupsParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListEventGroupsResult.SerializeToString,
+            ),
+            'ReadAgentOrdersDemoOnly': grpc.unary_unary_rpc_method_handler(
+                    servicer.ReadAgentOrdersDemoOnly,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadAgentOrdersDemoOnlyParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadAgentOrdersDemoOnlyResult.SerializeToString,
+            ),
+            'QueryLake': grpc.unary_unary_rpc_method_handler(
+                    servicer.QueryLake,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.QueryLakeParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.QueryLakeResult.SerializeToString,
             ),
             'Receive': grpc.unary_stream_rpc_method_handler(
                     servicer.Receive,
@@ -3668,6 +3838,276 @@ class PluginOperations(object):
             '/meridian.plugin.v1.PluginOperations/ListDatasets',
             meridian_dot_plugin_dot_v1_dot_operations__pb2.ListDatasetsParams.SerializeToString,
             meridian_dot_plugin_dot_v1_dot_operations__pb2.ListDatasetsResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RunJob(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/RunJob',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RunJobParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RunJobResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListMeasureDefinitions(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ListMeasureDefinitions',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListMeasureDefinitionsParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListMeasureDefinitionsResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListPriceBatches(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ListPriceBatches',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListPriceBatchesParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListPriceBatchesResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def AnswerPriceBatch(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/AnswerPriceBatch',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.AnswerPriceBatchParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.AnswerPriceBatchResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListFinishedJobs(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ListFinishedJobs',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListFinishedJobsParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListFinishedJobsResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ReadJobAnswer(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ReadJobAnswer',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadJobAnswerParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadJobAnswerResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ReportEventGroup(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ReportEventGroup',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ReportEventGroupParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ReportEventGroupResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListEventGroups(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ListEventGroups',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListEventGroupsParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListEventGroupsResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ReadAgentOrdersDemoOnly(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ReadAgentOrdersDemoOnly',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadAgentOrdersDemoOnlyParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadAgentOrdersDemoOnlyResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def QueryLake(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/QueryLake',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.QueryLakeParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.QueryLakeResult.FromString,
             options,
             channel_credentials,
             insecure,

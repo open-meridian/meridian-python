@@ -358,3 +358,119 @@ def test_number_is_one_function_for_both_roles() -> None:
         assert connectivity.number(value) == read, value
     for beyond in ("NaN", "Infinity", "1." + "0" * 19, "1" * 39):
         assert connectivity.number(beyond) is None, beyond
+
+
+# ── 0.31.0: charges and a stated settlement date (ruling 213, SnapTrade's) ──
+
+
+class ChargingVenue(FakeVenue):
+    """A venue stating charges in its activities, and fills' settlement dates."""
+
+    def __init__(self, code: str) -> None:
+        super().__init__(code)
+        self.stated: list[connectivity.VenueCharge] = []
+        self.settles = ""
+
+    def charges(self, code: str) -> list[connectivity.VenueCharge]:
+        return list(self.stated)
+
+    def stated_settlement(self, code: str, order: VenueOrder, traded: Any) -> str:
+        return self.settles
+
+
+def test_a_fee_on_a_cancelled_placement_is_its_charge_once(tmp_path: Path) -> None:
+    recorder = Recorder("broker")
+    venue = ChargingVenue("ACC-NUMBER-1")
+    rig = placed(recorder, broker=venue)
+    rig.trader.charged = Sent(tmp_path / "charged.json")
+    venue.held["1"] = replace(venue.held["1"], status="canceled")
+    venue.stated = [
+        connectivity.VenueCharge("act-1", "1", "fee", Decimal("-0.50"), "USD", "2026-09-29"),
+        connectivity.VenueCharge("act-2", "9", "fee", Decimal("-1.00"), "USD"),
+    ]
+    run(rig.poll(3))
+    (charge,) = recorder.on("ReportCharge")
+    assert charge.placement_id == "PLC-01JAE00000000000000000001"
+    assert charge.fee.kind == ops.FEE_KIND_CANCEL
+    assert as_decimal(charge.fee.amount.amount) == Decimal("0.50")
+    assert "act-1|PLC-01JAE00000000000000000001" in Sent(tmp_path / "charged.json")
+
+
+def test_a_fee_on_a_placement_that_filled_is_not_its_charge() -> None:
+    recorder = Recorder("broker")
+    venue = ChargingVenue("ACC-NUMBER-1")
+    rig = placed(recorder, broker=venue)
+    venue.fill("1", "10", "230")
+    venue.stated = [connectivity.VenueCharge("act-1", "1", "fee", Decimal("1"), "USD")]
+    run(rig.poll(2))
+    assert recorder.on("ReportCharge") == []
+
+
+def test_a_commission_on_a_trade_is_reported_on_its_placement() -> None:
+    recorder = Recorder("broker")
+    venue = ChargingVenue("ACC-NUMBER-1")
+    rig = placed(recorder, broker=venue)
+    venue.fill("1", "10", "230")
+    venue.stated = [
+        connectivity.VenueCharge("act-3", "1", "commission", Decimal("1.25"), "USD")
+    ]
+    run(rig.poll(2))
+    (charge,) = recorder.on("ReportCharge")
+    assert charge.fee.kind == ops.FEE_KIND_COMMISSION
+
+
+def test_a_fill_the_date_read_answers_none_takes_the_venues_stated_date() -> None:
+    recorder = Recorder("broker")
+    venue = ChargingVenue("ACC-NUMBER-1")
+    rig = placed(recorder, broker=venue)
+    recorder.answer("ComputeDate", lambda _: ops.ComputeDateResult())
+    venue.fill("1", "10", "230")
+    run(rig.poll())
+    assert recorder.on("ReportExecution") == [], "no date at all: the fill waits"
+    venue.settles = "2026-09-30"
+    run(rig.poll())
+    (fill,) = recorder.on("ReportExecution")
+    assert (fill.settlement_date, fill.computed_settlement_date) == ("2026-09-30", "")
+
+
+class AsyncVenue(FakeVenue):
+    """An adapter whose client is async (0.31.0): the Trader awaits it."""
+
+    async def orders(self, code: str) -> tuple[list[VenueOrder], str]:  # type: ignore[override]
+        return super().orders(code)
+
+
+def test_an_async_adapter_is_awaited() -> None:
+    recorder = Recorder("broker")
+    rig = placed(recorder, broker=AsyncVenue("ACC-NUMBER-1"))
+    rig.fake.fill("1", "10", "230")
+    run(rig.poll())
+    assert len(recorder.on("ReportExecution")) == 1
+
+
+def test_an_orders_own_market_zone_sets_its_trade_date() -> None:
+    recorder = Recorder("broker")
+    rig = placed(recorder)
+    rig.fake.fill("1", "10", "230", at=datetime(2026, 9, 29, 23, 0, tzinfo=UTC))
+    rig.fake.held["1"] = replace(rig.fake.held["1"], market_zone=ZoneInfo("Asia/Tokyo"))
+    run(rig.poll())
+    (fill,) = recorder.on("ReportExecution")
+    assert fill.trade_date == "2026-09-30", "08:00 on the 30th in Tokyo"
+
+
+def test_what_an_order_had_filled_at_the_first_read_is_history() -> None:
+    """A venue order no placement names, filled when the plugin first read
+    the account, whatever its timestamps: its history, never reported; only
+    what it fills after is."""
+    recorder = Recorder("broker")
+    venue = FakeVenue("ACC-NUMBER-1")
+    rig = Rig(recorder, broker=venue)
+    venue.held["90"] = VenueOrder("90", "", "partially_filled", symbol="AAPL", side="buy",
+                                  quantity=Decimal(5), filled=Decimal(2), average=Decimal(230),
+                                  updated_at=datetime(2030, 1, 1, tzinfo=UTC))  # fmt: skip
+    run(rig.poll())
+    assert recorder.on("ReportExecution") == [] and "90" in rig.trader.history
+    venue.fill("90", "5", "230")
+    run(rig.poll())
+    (fill,) = recorder.on("ReportExecution")
+    assert as_decimal(fill.quantity) == Decimal(3) and fill.placement_id == ""
