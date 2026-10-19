@@ -407,7 +407,7 @@ async def test_settings_arrive_typed_by_what_was_declared(
     assert seen[1].values == {"api_key": "sk-123", "page_size": 50, "live": True}
 
 
-async def test_an_unset_setting_holds_its_default_and_a_choice_outside_its_options_is_raised(
+async def test_an_unset_setting_holds_its_default_and_a_choice_outside_its_options_is_unset(
     sidecar: tuple[FakeSidecar, str],
 ) -> None:
     service, address = sidecar
@@ -432,35 +432,137 @@ async def test_an_unset_setting_holds_its_default_and_a_choice_outside_its_optio
             Setting("poll_seconds", kind=int, default=300, unit="seconds"),
         ],
     )
-    seen: list[Settings] = []
     try:
-        with pytest.raises(ValueError, match="not one of its choices"):
-            async for settings in plugin.settings():
-                seen.append(settings)
+        seen = [settings async for settings in plugin.settings()]
     finally:
         await plugin.leave()
     assert seen[0].values == {"key_type": "personal", "poll_seconds": 300}
     assert seen[1].values == {"key_type": "personal", "poll_seconds": 60}
+    # 0.31.1: a value no longer among its choices is never raised nor mapped:
+    # unset, so an optional setting holds its default, and said why.
+    assert seen[2].values == {"key_type": "personal", "poll_seconds": 300}
+    assert seen[2].missing_required == ()
+    assert seen[2].refused == (
+        meridian.RefusedSetting("key_type", "key_type", "trial", meridian.client.NOT_A_CHOICE),
+    )
+    assert seen[0].refused == seen[1].refused == ()
 
 
-async def test_a_setting_that_does_not_parse_is_raised_not_guessed(
+async def test_a_setting_that_does_not_parse_is_unset_not_guessed(
     sidecar: tuple[FakeSidecar, str],
 ) -> None:
     service, address = sidecar
     service.settings = [
         sidecar_pb2.SettingsDelivery(
-            values=[sidecar_pb2.SettingValue(name="live", value="maybe")]
+            values=[
+                sidecar_pb2.SettingValue(name="live", value="maybe"),
+                sidecar_pb2.SettingValue(name="token", value="sk-not-a-choice"),
+            ]
         )
     ]
     plugin = await meridian.connect(
-        address, heartbeat=False, settings=[Setting("live", kind=bool)]
+        address,
+        heartbeat=False,
+        settings=[
+            Setting("live", kind=bool),
+            Setting("token", secret=True, choices=(Choice("a"), Choice("b"))),
+        ],
     )
     try:
-        with pytest.raises(ValueError, match="not a boolean"):
-            async for _ in plugin.settings():
-                pass
+        (now,) = [settings async for settings in plugin.settings()]
     finally:
         await plugin.leave()
+    assert now.values == {}
+    live, token = now.refused
+    assert (live.name, live.value, live.reason) == ("live", "maybe", "not_its_kind")
+    assert live.message == (
+        "live was saved as 'maybe', which this version cannot read; save it again"
+    )
+    # A secret's value is never said, not even refused.
+    assert token.value == "" and "sk-" not in token.message and "sk-" not in repr(now)
+
+
+@meridian.settings
+class _Broker:
+    environment: str = meridian.environment(demo="paper", demo_label="Practice")
+    api_key: str = meridian.setting("API key", required=True, secret=True)
+
+
+async def test_an_environment_saved_before_its_choices_were_renamed_is_unset_and_never_demo(
+    sidecar: tuple[FakeSidecar, str],
+) -> None:
+    """OANDA's `practice` and Alpaca's `sandbox`, saved before 0.31.0 named
+    the demo `paper`: the settings stream goes on, the value delivered empty
+    -- not the default, never mapped -- and named missing. Empty is not live,
+    so the plugin reaches the demo host; nor demo, so the guard counts it
+    live (fail closed)."""
+    service, address = sidecar
+    service.settings = [
+        sidecar_pb2.SettingsDelivery(
+            values=[
+                sidecar_pb2.SettingValue(name="environment", value="practice"),
+                sidecar_pb2.SettingValue(name="api_key", value="sk-1"),
+            ]
+        ),
+        sidecar_pb2.SettingsDelivery(
+            values=[
+                sidecar_pb2.SettingValue(name="environment", value="paper"),
+                sidecar_pb2.SettingValue(name="api_key", value="sk-1"),
+            ]
+        ),
+    ]
+    plugin = await meridian.connect(address, heartbeat=False, settings=_Broker)
+    try:
+        plain = [settings async for settings in plugin._settings()]
+        typed = [settings async for settings in plugin.settings(_Broker)]
+    finally:
+        await plugin.leave()
+    stale, saved = plain
+    assert "environment" not in stale.values and stale.values["api_key"] == "sk-1"
+    assert stale.missing_required == ("environment",)
+    [refused] = stale.refused
+    assert refused.message == (
+        "Environment was saved as 'practice', which this version no longer offers; "
+        "save it again"
+    )
+    assert saved.values["environment"] == "paper" and not saved.refused
+    first, then = typed
+    assert first.environment == "" and first.missing == ("environment",)
+    assert first.refused == (refused,)
+    assert first.environment != "live", "anything not live reaches the demo host"
+    assert not meridian.is_demo(first.environment, "paper")
+    assert meridian.connection_badge(first.environment, "paper") == (
+        "Live (environment not confirmed)"
+    )
+    assert then.environment == "paper" and then.missing == () and then.refused == ()
+    assert meridian.is_demo(then.environment, "paper")
+
+
+def test_a_persons_own_value_no_longer_a_choice_is_unset_never_raised() -> None:
+    from meridian.testing import PageClient
+
+    view = Setting(
+        "view", label="View", default="table", choices=(Choice("table"), Choice("chart")),
+        per_person=True,
+    )  # fmt: skip
+    pages = meridian.Pages("Board")
+    seen: list[tuple[dict, tuple]] = []
+
+    @pages.page("/", "Board", levels=["write", "read", "admin"])
+    async def board(request: meridian.Request) -> str:
+        seen.append((request.own_settings, request.own_settings_refused))
+        return "ok"
+
+    class Stub:
+        _declared = (view,)
+
+    client = PageClient(pages, Stub(), own_settings={"view": "grid"})
+    assert client.get("/", "write").status == 200
+    values, refused = seen[-1]
+    assert values == {"view": "table"}
+    assert [r.message for r in refused] == [
+        "View was saved as 'grid', which this version no longer offers; save it again"
+    ]
 
 
 async def test_the_account_scope_and_the_access_table_arrive(

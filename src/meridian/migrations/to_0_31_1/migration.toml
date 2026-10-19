@@ -1,0 +1,32 @@
+# open-meridian 0.31.0 to 0.31.1: nothing a plugin calls changed shape, so
+# only the pins move.
+from = "0.31.0"
+to = "0.31.1"
+summary = """
+A saved setting value this version cannot read -- no longer one of its
+choices, as Alpaca's `sandbox` and OANDA's `practice` became `paper`, or not
+of its kind -- no longer crashes the settings stream or a person's request:
+it is delivered unset, never mapped to another value. A required setting
+then holds nothing, not even its default, and is named among the missing;
+each refused value is said in `Settings.refused` and a typed class's
+`.refused` (meridian.RefusedSetting, its `message` for a page), and a
+person's own in `request.own_settings_refused`. An environment so refused is
+empty: not live, so the plugin still reaches the demo host, and not demo, so
+the agents' guard counts it live until a person saves it again.
+
+An event-contract venue's contract map keeps a range market's bounds
+(Contract.floor, .cap, .bound_unit), each value's exact text, and reads them
+back. `event_contracts.Feed.stated_identifiers` is public, and
+EventContractsChecks holds a record complete by it, so a venue with an ISO
+10383 MIC, or with none and its ticker under its VEN- ID, passes
+test_a_record_already_complete_is_not_resolved_again. A record holding the
+venue's ticker alone, under its MIC or VEN- ID, is named by it as the
+venue's own code.
+
+The pricing role's template declares no storage, keeping the last batch it
+answered in memory (pricing is not a role at the edge); every template's
+AGENTS.md says how a version is published to a registry, and its pre-push
+hook says what a tag push runs. Nothing a plugin calls changed shape, so
+`meridian plugin migrate` moves the pins and changes no code.
+"""
+breaking = false

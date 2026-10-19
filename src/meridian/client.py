@@ -24,6 +24,7 @@ import asyncio
 import base64
 import contextlib
 import json
+import logging
 import os
 import re
 import warnings
@@ -624,6 +625,74 @@ class Setting:
             raise ValueError(f"setting {self.name} is not one of its choices: {text!r}")
         return text
 
+    def _read(
+        self, text: str
+    ) -> tuple[str | int | bool | list[dict[str, str]] | None, RefusedSetting | None]:
+        """A delivered value, typed; or, where this version cannot read it,
+        None and why (0.31.1): never raised, never mapped to another value."""
+        try:
+            return self._parsed(text), None
+        except ValueError:
+            pass
+        offered = {choice.value for choice in self.choices}
+        refused = RefusedSetting(
+            name=self.name,
+            label=self.label or self.name,
+            value="" if self.secret else text,
+            reason=NOT_A_CHOICE if self.choices and text not in offered else NOT_ITS_KIND,
+        )
+        said = (self.name, refused.value, refused.reason)
+        if said not in _REFUSED_LOGGED:
+            _REFUSED_LOGGED.add(said)
+            log.warning("%s; it is delivered unset", refused.message)
+        return None, refused
+
+
+#: Why a saved value was refused (0.31.1): it is no longer one of the
+#: setting's choices, or it does not read as the setting's kind.
+NOT_A_CHOICE = "not_a_choice"
+NOT_ITS_KIND = "not_its_kind"
+
+log = logging.getLogger("meridian.settings")
+#: The refusals logged, so each is logged once.
+_REFUSED_LOGGED: set[tuple[str, str, str]] = set()
+
+
+@dataclass(frozen=True)
+class RefusedSetting:
+    """A saved value this version of the plugin cannot read (0.31.1): one no
+    longer among the setting's choices -- saved before the plugin renamed
+    them, as Alpaca's `sandbox` and OANDA's `practice` became `paper` -- or
+    one that does not read as its kind. The setting is delivered unset, never
+    raised and never mapped to another value: a required setting holds
+    nothing, not even its default, and is named among the missing, so the
+    plugin's own not-ready path names it; an optional one holds its default
+    where it declares one. `message` says so in a page's words."""
+
+    #: The setting's name, and its label as the Settings form shows it.
+    name: str
+    label: str
+    #: The value as saved; empty for a secret, whose value is never shown.
+    value: str
+    #: Why: NOT_A_CHOICE or NOT_ITS_KIND.
+    reason: str
+
+    @property
+    def message(self) -> str:
+        """What a page says: `Environment was saved as 'practice', which
+        this version no longer offers; save it again`."""
+        if not self.value:
+            return f"{self.label} holds a value this version cannot read; save it again"
+        if self.reason == NOT_A_CHOICE:
+            return (
+                f"{self.label} was saved as {self.value!r}, which this version no longer "
+                "offers; save it again"
+            )
+        return (
+            f"{self.label} was saved as {self.value!r}, which this version cannot read; "
+            "save it again"
+        )
+
 
 def _written(value: str | int | bool | Sequence[Mapping[str, str]]) -> str:
     """A value as the form would take it, and as `_parsed` reads it back: a
@@ -643,6 +712,9 @@ class Settings:
 
     values: dict[str, str | int | bool | list[dict[str, str]]]
     missing_required: tuple[str, ...] = ()
+    #: The saved values this version cannot read, each delivered unset and
+    #: said why (0.31.1); a required one is among `missing_required`.
+    refused: tuple[RefusedSetting, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -1290,13 +1362,17 @@ class Plugin(Operations):
     def settings(self, typed: type[Any] | None = None) -> AsyncIterator[Any]:
         """The settings it declared, now and again on every change (W4.7).
 
-        Each is typed by its declaration; a value that does not parse is
-        raised rather than guessed at. A setting declared `per_person` has
-        no deployment-wide value and is not among them (contract v20).
+        Each is typed by its declaration. A saved value this version cannot
+        read -- no longer one of its choices, or not of its kind -- is never
+        raised and never guessed at (0.31.1): it is delivered unset, a
+        required one named among the missing and holding nothing, not even
+        its default, and said in `refused`. A setting declared `per_person`
+        has no deployment-wide value and is not among them (contract v20).
 
         Given a class decorated `@meridian.settings`, each delivery is an
         instance of it: its fields typed and defaulted, `at_least` and
-        `at_most` held, and `.missing` the required settings holding nothing.
+        `at_most` held, `.missing` the required settings holding nothing and
+        `.refused` the values refused.
         """
         if typed is None:
             return self._settings()
@@ -1304,7 +1380,7 @@ class Plugin(Operations):
 
     async def _typed_settings(self, typed: type[Any]) -> AsyncGenerator[Any, None]:
         async for now in self._settings():
-            yield cast(Any, typed)._of(now.values, now.missing_required)
+            yield cast(Any, typed)._of(now.values, now.missing_required, now.refused)
 
     async def _settings(self) -> AsyncIterator[Settings]:
         self._check_open()
@@ -1317,15 +1393,27 @@ class Plugin(Operations):
             if setting.default is not None
         }
         async for delivered in self._stub.WatchSettings(sidecar_pb2.WatchSettingsRequest()):
-            now = Settings(
-                values=defaults
-                | {
-                    held.name: by_name[held.name]._parsed(held.value)
-                    for held in delivered.values
-                    if held.name in by_name
-                },
-                missing_required=tuple(delivered.missing_required),
+            values = dict(defaults)
+            refused: list[RefusedSetting] = []
+            for held in delivered.values:
+                setting = by_name.get(held.name)
+                if setting is None:
+                    continue
+                value, refusal = setting._read(held.value)
+                if refusal is None:
+                    values[held.name] = cast(Any, value)
+                    continue
+                # Unset: a required setting holds nothing, not its default --
+                # `environment` is then neither live nor demo, so the
+                # agents' guard counts it live -- and is named missing.
+                refused.append(refusal)
+                if setting.required:
+                    values.pop(held.name, None)
+            missing = tuple(delivered.missing_required)
+            missing += tuple(
+                r.name for r in refused if by_name[r.name].required and r.name not in missing
             )
+            now = Settings(values=values, missing_required=missing, refused=tuple(refused))
             self._settings_now = dict(now.values)
             yield now
 
@@ -2197,12 +2285,16 @@ def _arguments_json(arguments: Any) -> str:
 
 
 def _own(
-    declared: Sequence[Setting], held: Mapping[str, str]
+    declared: Sequence[Setting],
+    held: Mapping[str, str],
+    refused: list[RefusedSetting] | None = None,
 ) -> dict[str, str | int | bool | list[dict[str, str]]]:
     """A person's own values (contract v20), typed by the per-person settings
     `declared`: each declared one held, parsed, or its default where it has
     one; a value naming no such setting is left out, as delivered settings
-    are. At most as many as the claims carry."""
+    are. A value this version cannot read is never raised (0.31.1): it is
+    left unset, its default filled, and added to `refused` where given. At
+    most as many as the claims carry."""
     if len(held) > CALLER_CLAIMS_OWN_SETTINGS_COUNT.most:
         raise ValueError(
             f"the claims carry {len(held)} own settings; at most "
@@ -2212,8 +2304,13 @@ def _own(
     for setting in declared:
         if not setting.per_person:
             continue
-        if held.get(setting.name):
-            out[setting.name] = setting._parsed(held[setting.name])
+        value, refusal = (
+            setting._read(held[setting.name]) if held.get(setting.name) else (None, None)
+        )
+        if refusal is not None and refused is not None:
+            refused.append(refusal)
+        if value is not None:
+            out[setting.name] = value
         elif setting.default is not None:
             out[setting.name] = setting.default
     return out

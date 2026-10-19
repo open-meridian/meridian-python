@@ -79,7 +79,11 @@ deployment keeps its own `LCL-` group meanwhile. A member that does not
 resolve holds the report back: a group missing a member would misstate it.
 A range market's bounds are the member's (A4): `Contract.floor` and
 `Contract.cap`, each a `Bound` (a Decimal and whether it is inclusive --
-Kalshi's `greater` false, `greater_or_equal` true), and `bound_unit`.
+Kalshi's `greater` false, `greater_or_equal` true), and `bound_unit`, kept
+in the contract map with each value's exact text (0.31.1). The contract
+carries them as the binary event contract template's fields on the member's
+own record, which only the `reference` role offers (OfferTemplateFields): a
+data plugin has no operation that sends them, so they reach no row yet.
 
 Every role reads groups through `EventGroups` (re-exported here and as
 `meridian.EventGroups`): the versions read and heard, and the one in force
@@ -433,7 +437,24 @@ def _contract(held: dict[str, Any]) -> Contract:
         unread=tuple(Unread(**u) for u in held.get("unread", [])),
         resolution=_resolution(held.get("resolution")),
         read_at_ns=int(held.get("read_at_ns", 0)),
+        floor=_bound(held.get("floor")),
+        cap=_bound(held.get("cap")),
+        bound_unit=held.get("bound_unit", ""),
     )
+
+
+def _bound(held: dict[str, Any] | None) -> Bound | None:
+    """A range market's bound as the map keeps it (0.31.1): its value as
+    its exact text, and whether it is inclusive."""
+    if not held:
+        return None
+    return Bound(value=Decimal(held["value"]), inclusive=bool(held["inclusive"]))
+
+
+def _bound_held(bound: Bound | None) -> dict[str, Any] | None:
+    if bound is None:
+        return None
+    return {"value": str(bound.value), "inclusive": bound.inclusive}
 
 
 def _held(contract: Contract) -> dict[str, Any]:
@@ -442,6 +463,8 @@ def _held(contract: Contract) -> dict[str, Any]:
     if contract.resolution is not None:
         value = contract.resolution.value
         body["resolution"]["value"] = None if value is None else str(value)
+    # Each bound's value as its exact text, as the payout's (0.31.1).
+    body["floor"], body["cap"] = _bound_held(contract.floor), _bound_held(contract.cap)
     return body
 
 
@@ -611,7 +634,7 @@ class Feed:
         if contract is None:
             return ""
         found = await self.plugin.resolve_identifier(
-            identifiers=await self._stated_identifiers(contract),
+            identifiers=await self.stated_identifiers(contract),
             as_of_ns=self.clock_ns(),
             stated_asset_class="event_contract",
             stated_instrument_type="binary_event_contract",
@@ -715,7 +738,14 @@ class Feed:
         an ISO 10383 MIC, or the venue master's VEN- ID where the venue has
         no MIC -- what the platform matches and mints on, beside the
         source-scoped symbol. None where the venue is not held."""
-        mic = next(
+        venue = self._mic() or await self.venue_id()
+        if not venue:
+            return None
+        return ops.Identifier(scheme="ticker", value=contract.code, source=venue)
+
+    def _mic(self) -> str:
+        """The venue's ISO 10383 MIC, where its statements give one."""
+        return next(
             (
                 value
                 for scheme, value, _ in self.market.venue_identifiers
@@ -723,25 +753,36 @@ class Feed:
             ),
             "",
         )
-        venue = mic or await self.venue_id()
-        if not venue:
-            return None
-        return ops.Identifier(scheme="ticker", value=contract.code, source=venue)
 
-    async def _stated_identifiers(self, contract: Contract) -> list[ops.Identifier]:
-        """What the plugin sends for a contract: its symbol at the venue and,
-        where the venue is known, its ticker (`ticker`)."""
+    async def stated_identifiers(self, contract: Contract) -> list[ops.Identifier]:
+        """What the plugin sends for a contract (0.31.0, ruling 312): its
+        symbol at the venue and, where the venue is known, its ticker
+        (`ticker`), with the venue's MIC, or its VEN- ID, as source. A record
+        holding all of them, as a binary event contract, is complete: the
+        plugin resolves it no further (W3.1)."""
         held = self.identifiers(contract)
         ticker = await self._ticker(contract)
         return held + ([ticker] if ticker is not None else [])
 
-    def _candidates(self, record: ops.InstrumentRecord) -> list[ops.Identifier]:
+    async def _stated_identifiers(self, contract: Contract) -> list[ops.Identifier]:
+        """`stated_identifiers`, by its 0.31.0 name."""
+        return await self.stated_identifiers(contract)
+
+    async def _candidates(self, record: ops.InstrumentRecord) -> list[ops.Identifier]:
         """The record's identifiers that may name one of the venue's
-        contracts, in order: the venue's own code, then another source's
+        contracts, in order: the venue's own code -- its symbol at the venue,
+        or (0.31.1) its ticker with the venue's MIC or VEN- ID as source, as
+        `stated_identifiers` sends it (ruling 312), so a record the platform
+        minted with the ticker alone is named -- then another source's
         symbol -- never for a record that is a security, or of another type."""
         held = list(record.identifiers)
         venue = self.market.venue
         own = [i for i in held if i.scheme == "symbol" and i.source == venue and i.value]
+        if any(i.scheme == "ticker" and i.value for i in held):
+            # The venue master's ID is asked only for a record holding a
+            # ticker, and once per reading of the venue.
+            sources = {self._mic(), await self.venue_id()} - {""}
+            own += [i for i in held if i.scheme == "ticker" and i.source in sources and i.value]
         if (
             record.asset_class not in _EVENT_CLASSES
             or record.instrument_type not in _BINARY_TYPES
@@ -784,7 +825,7 @@ class Feed:
         record lacks any of them; meeting another record is a miss (W3.2),
         reported once, and the subject is served all the same."""
         held = list(record.identifiers)
-        own = await self._stated_identifiers(contract)
+        own = await self.stated_identifiers(contract)
         if (
             all(any(same(o, h) for h in held) for o in own)
             and record.asset_class == ops.ASSET_CLASS_EVENT_CONTRACT
@@ -842,7 +883,7 @@ class Feed:
             self.unnamed[subject] = NOT_READ
             return ""
         record = found.instrument
-        for matched in self._candidates(record):
+        for matched in await self._candidates(record):
             contract = await self.contract(matched.value)
             if contract is None or not contract.binary:
                 continue
