@@ -1741,8 +1741,10 @@ class EventContractsChecks(_PageChecks):
         feed = self.feed(lake)
         contract = await feed.contract(v.BASE)
         assert contract is not None
+        # Complete: every identifier the plugin states -- the symbol, and the
+        # ticker with the venue's MIC or VEN- ID as source (ruling 312).
         subject = lake.instruments.hold(
-            "INS-DONE", *feed.identifiers(contract),
+            "INS-DONE", *await feed.stated_identifiers(contract),
             asset_class=ops.ASSET_CLASS_EVENT_CONTRACT,
             instrument_type=ops.INSTRUMENT_TYPE_BINARY_EVENT_CONTRACT,
         )  # fmt: skip
