@@ -126,6 +126,7 @@ def test_the_reference_cases_are_pinned() -> None:
         "resolved-in-a-stablecoin",
         "historical-var-and-es",
         "what-if",
+        "pnl-v2-realized",
     }
 
 
@@ -222,6 +223,44 @@ def test_the_reference_refuses_a_definition_it_does_not_hold() -> None:
     inputs["job"]["measures"] = [{"definition": "market_value", "version": 2}]
     with pytest.raises(ValueError, match="no definition market_value v2"):
         reference.compute(inputs)
+
+
+def _components(figures: list[dict[str, Any]]) -> set[str]:
+    return {
+        b["value"] for f in figures for b in f["breakdown"] if b["breakdown"] == "component"
+    }
+
+
+def test_pnl_v1_is_unrealized_alone_and_v2_adds_realized() -> None:
+    # Ruling 320: v1 ("Unrealized P&L") answers one component, after the
+    # measure's own breakdowns; no v1 case carries a realized component.
+    for path in _cases():
+        v1 = [f for f in _figures(path.stem, "pnl") if f["measure"]["version"] == 1]
+        assert _components(v1) <= {"unrealized"}, path.stem
+    valuation = _figures("valuation", "pnl")
+    assert valuation and all(
+        [b["breakdown"] for b in f["breakdown"]] == ["sleeve", "component"] for f in valuation
+    )
+    assert "closed_lots" not in reference.load(CASES / "valuation.json")["inputs"]
+    # v2 (v27's) is computed by the reference and pinned, never asked in v26.
+    v2 = _figures("pnl-v2-realized", "pnl")
+    assert {f["measure"]["version"] for f in v2} == {2}
+    assert _components(v2) == {"unrealized", "realized"}
+    realized = {
+        (f["account_id"], f["breakdown"][0]["value"]): f["value"]
+        for f in v2
+        if f["breakdown"][1]["value"] == "realized"
+    }
+    assert realized[("ACC-1", "core")] == "100.00"
+    assert realized[("ACC-1", "hedge")] == "-30.40"
+    assert reference.UNREALIZED_PNL == "Unrealized P&L"
+    assert reference.definition_of("pnl", 1).parameters == (
+        ("unrealized", "market_value_less_open_lots_cost"),
+    )
+    with pytest.raises(ValueError, match="pnl v2 is not served in contract v26.*v27"):
+        analytics.measure("pnl", 2)
+    with pytest.raises(ValueError, match="exposure v2 is not served in contract v26; v1 is$"):
+        analytics.measure("exposure", 2)
 
 
 # ── Typed builders and an answer read (Q1, Q13, Q14) ────────────────────────

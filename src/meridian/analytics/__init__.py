@@ -66,6 +66,7 @@ from ._canonical import answer_hash, canonical, decimal_text
 
 __all__ = [
     "EVENT_MEASURES",
+    "SERVED_VERSIONS",
     "STANDARD_MEASURES",
     "Answer",
     "JobFigure",
@@ -93,6 +94,10 @@ STANDARD_MEASURES = (
     "resolution_payoff",
     "implied_distribution",
 )
+#: The version of each standard definition v26's component serves: a later
+#: one (`pnl` version 2, v27's realized P&L; ruling 320) is refused as a job
+#: is built.
+SERVED_VERSIONS = {name: 1 for name in STANDARD_MEASURES}
 #: The definitions over an event group, which name it.
 EVENT_MEASURES = frozenset({"resolution_payoff", "implied_distribution"})
 #: The breakdowns a standard definition may allow; a scheme the deployment
@@ -117,6 +122,12 @@ def measure(
         raise ValueError(f"{definition} is broken down by {', '.join(twice)} twice")
     if any(not b.strip() for b in names):
         raise ValueError(f"{definition} names an empty breakdown")
+    served = SERVED_VERSIONS.get(definition)
+    if served is not None and version > served:
+        later = " (pnl v2's realized P&L comes with v27)" if definition == "pnl" else ""
+        raise ValueError(
+            f"{definition} v{version} is not served in contract v26; v{served} is{later}"
+        )
     if definition in EVENT_MEASURES and not event_group:
         raise ValueError(f"{definition} is over an event group, and names none")
     if event_group and definition in STANDARD_MEASURES and definition not in EVENT_MEASURES:

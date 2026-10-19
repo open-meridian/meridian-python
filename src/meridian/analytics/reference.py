@@ -33,8 +33,8 @@ and every 64-bit integer a string, as protobuf's JSON writes one:
   -- `cost` the open lots' cost in the account's base currency (empty where
   the book holds none), `sleeve` empty where the position is in none.
 - `closed_lots`: `[{"account_id", "instrument_id", "quantity", "proceeds",
-  "cost", "sleeve"}]`, each lot the book closed up to its watermark (since
-  the account opened), its
+  "cost", "sleeve"}]`, for `pnl` version 2 alone: each lot the book closed
+  up to its watermark (since the account opened), its
   proceeds and cost in the account's base currency.
 - `instruments`: `[{"instrument_id", "record_version", "template_id",
   "template_version", "calculation_version", "model_id", "model_version",
@@ -88,12 +88,14 @@ but `implied_distribution`'s, which is the group's.
 - `concentration`: each instrument's market value in the account, as a
   weight -- its numerator the instrument's market value, its denominator the
   account's -- broken down by instrument.
-- `pnl`: per bucket, two figures under the breakdown `component`:
-  `unrealized`, Σ (quantity × value per unit − the open lots' cost), and
-  `realized`, Σ (a closed lot's proceeds − its cost) over every lot the book
-  closed up to its watermark: since the account opened (rulings 301, 303;
-  v26's job names no period, so version 1 fixes it, and wherever it is shown
-  it is labelled "since the account opened", `REALIZED_SINCE`).
+- `pnl`, version 1 (ruling 320; shown to people as "Unrealized P&L"): per
+  bucket, one figure under the breakdown `component`, `unrealized`, Σ
+  (quantity × value per unit − the open lots' cost). Version 2, v27's, once
+  the book records each closed lot's proceeds (`LATER_DEFINITIONS`: computed
+  here and pinned, never asked of 0.31.0's component) adds `realized`, Σ (a
+  closed lot's proceeds − its cost) over every lot the book closed up to its
+  watermark -- since the account opened, labelled so wherever it is shown
+  (rulings 303, 320; `REALIZED_SINCE`).
 - `historical_var` and `expected_shortfall`: full revaluation over the
   history's last `window_days` relative returns of every market object a
   position reads, each scenario's value quantity × Π(object now × close on
@@ -163,7 +165,10 @@ __all__ = [
     "COMPONENT",
     "COMPONENTS",
     "MODELS",
+    "LATER_DEFINITIONS",
     "REALIZED_SINCE",
+    "UNREALIZED_PNL",
+    "definition_of",
     "Answer",
     "AnswerFigure",
     "Definition",
@@ -189,13 +194,19 @@ MODELS = ("cash", "quoted_price", "binary_event")
 #: value per unit|) and `net` (long minus short); `pnl` its `unrealized`
 #: (market value less the open lots' cost) and `realized` (closed lots'
 #: proceeds less their cost, every lot closed to the book's watermark: since
-#: the account opened). The vocabulary is ruling 302's, the period 303's.
+#: the account opened). The vocabulary is ruling 302's, the period 303's;
+#: from ruling 320 `pnl` version 1 is unrealized alone and realized is
+#: version 2's, v27's.
 COMPONENT = "component"
-#: How realized P&L's period is labelled wherever it is shown (ruling 303).
+#: How version 2's realized P&L's period is labelled wherever it is shown
+#: (rulings 303, 320).
 REALIZED_SINCE = "since the account opened"
-COMPONENTS: Mapping[str, tuple[str, ...]] = {
-    "exposure": ("gross", "net"),
-    "pnl": ("unrealized", "realized"),
+#: What people call `pnl` version 1 (ruling 320).
+UNREALIZED_PNL = "Unrealized P&L"
+COMPONENTS: Mapping[tuple[str, int], tuple[str, ...]] = {
+    ("exposure", 1): ("gross", "net"),
+    ("pnl", 1): ("unrealized",),
+    ("pnl", 2): ("unrealized", "realized"),
 }
 #: `concentration` v1: each instrument's market value over the account's
 #: market value ("account_market_value"), or over its gross exposure
@@ -272,14 +283,10 @@ DEFINITIONS: Mapping[str, Definition] = {
         Definition(
             "pnl",
             1,
-            (
-                ("unrealized", "market_value_less_open_lots_cost"),
-                ("realized", "closed_lots_proceeds_less_cost_since_the_account_opened"),
-            ),
+            (("unrealized", "market_value_less_open_lots_cost"),),
             _BY,
             2,
-            "Each bucket's unrealized P&L (open lots) and realized P&L since the account "
-            "opened (closed lots)",
+            "Unrealized P&L: each bucket's market value less its open lots' cost",
         ),
         Definition(
             "historical_var",
@@ -338,6 +345,34 @@ DEFINITIONS: Mapping[str, Definition] = {
         ),
     )
 }
+
+#: The definitions v26's component does not serve, which the reference
+#: computes and pins all the same, for the engine's later identity tests:
+#: `pnl` version 2, v27's, once the book records each closed lot's proceeds
+#: (ruling 320). A 0.31.0 job asks for none of them.
+LATER_DEFINITIONS: Mapping[tuple[str, int], Definition] = {
+    ("pnl", 2): Definition(
+        "pnl",
+        2,
+        (
+            ("unrealized", "market_value_less_open_lots_cost"),
+            ("realized", "closed_lots_proceeds_less_cost_since_the_account_opened"),
+        ),
+        _BY,
+        2,
+        "Each bucket's unrealized P&L (open lots) and realized P&L since the account "
+        "opened (closed lots)",
+    ),
+}
+
+
+def definition_of(name: str, version: int) -> Definition | None:
+    """A definition the reference computes: v26's, or a later one's."""
+    served = DEFINITIONS.get(name)
+    if served is not None and served.version == version:
+        return served
+    return LATER_DEFINITIONS.get((name, version))
+
 
 # The enum names the answer's JSON carries, as the wire's mirrors name them.
 BASE, WHAT_IF, HISTORICAL_DAY = (
@@ -861,7 +896,7 @@ def _linear(run: _Run, ref: Mapping[str, Any], definition: Definition) -> None:
         for name in unknown:
             run.answer.not_evaluated.append(Unevaluated("", "", key, SCHEME_NOT_HELD, name))
         return
-    components = COMPONENTS.get(definition.definition, ("",))
+    components = COMPONENTS.get((definition.definition, definition.version), ("",))
     for account in case.account_ids:
         base = case.bases[account]
         for scenario in _scenarios(case, account):
@@ -902,7 +937,7 @@ def _linear(run: _Run, ref: Mapping[str, Any], definition: Definition) -> None:
                     add(group, "unrealized", _unrealized(position, worth))
                 else:
                     add(group, "", worth)
-            if definition.definition == "pnl":
+            if "realized" in components:
                 for lot in case.closed_lots:
                     if lot.account_id != account:
                         continue
@@ -1344,8 +1379,8 @@ def compute(inputs: Mapping[str, Any]) -> Answer:
     run = _Run(case, Answer())
     for ref in case.measures:
         key = _measure_key(ref)
-        definition = DEFINITIONS.get(key[0])
-        if definition is None or definition.version != key[1]:
+        definition = definition_of(key[0], key[1])
+        if definition is None:
             raise ValueError(f"the reference holds no definition {key[0]} v{key[1]}")
         before = len(run.answer.figures)
         unevaluated = len(run.answer.not_evaluated)

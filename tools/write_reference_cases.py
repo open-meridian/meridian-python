@@ -107,8 +107,15 @@ def position(
     }
 
 
-def measure(definition: str, by: tuple[str, ...] = (), group: str = "") -> dict[str, Any]:
-    return {"definition": definition, "version": 1, "breakdowns": list(by), "event_group_id": group}
+def measure(
+    definition: str, by: tuple[str, ...] = (), group: str = "", version: int = 1
+) -> dict[str, Any]:
+    return {
+        "definition": definition,
+        "version": version,
+        "breakdowns": list(by),
+        "event_group_id": group,
+    }
 
 
 def inputs(**given: Any) -> dict[str, Any]:
@@ -120,7 +127,6 @@ def inputs(**given: Any) -> dict[str, Any]:
         "routing_version": "1",
         "accounts": [],
         "positions": [],
-        "closed_lots": [],
         "instruments": [],
         "market": [],
         "history": {"dates": [], "closes": []},
@@ -143,8 +149,8 @@ def valuation() -> dict[str, Any]:
     currency, an equity, an ETF at its close, a mutual fund at its NAV, a
     money-market fund whose NAV is missing, a crypto asset quoted in a
     stablecoin, a local record, a stale price; net and gross, broken down,
-    concentration and P&L (unrealized from the open lots, realized from the
-    lots the book closed), across two accounts with different bases."""
+    concentration and Unrealized P&L (pnl version 1, the open lots' cost),
+    across two accounts with different bases."""
     return inputs(
         job={
             "account_ids": ["ACC-1", "ACC-2"],
@@ -174,15 +180,6 @@ def valuation() -> dict[str, Any]:
             position("ACC-2", AAPL, "4", "800.00", "core"),
             position("ACC-2", USD, "100.00", "92.00", "core"),
         ],
-        # Lots the book closed to its watermark: realized P&L (ruling 301).
-        closed_lots=[
-            {"account_id": "ACC-1", "instrument_id": AAPL, "quantity": "5", "proceeds": "1100.00",
-             "cost": "1000.00", "sleeve": "core"},
-            {"account_id": "ACC-1", "instrument_id": SPY, "quantity": "-2", "proceeds": "-1150.40",
-             "cost": "-1120.00", "sleeve": "hedge"},
-            {"account_id": "ACC-2", "instrument_id": AAPL, "quantity": "1", "proceeds": "195.10",
-             "cost": "200.00", "sleeve": "core"},
-        ],
         instruments=[
             CASH,
             CASH_EUR,
@@ -206,6 +203,28 @@ def valuation() -> dict[str, Any]:
         ],
         stale_after_ns={"tiingo-1:funds": "86400000000000"},
     )
+
+
+def realized_v2() -> dict[str, Any]:
+    """`pnl` version 2 (v27's, ruling 320; never asked of v26's component):
+    the valuation's accounts, each bucket's unrealized P&L from its open
+    lots beside its realized P&L from the lots the book closed up to its
+    watermark, since the account opened."""
+    given = valuation()
+    given["job"] = {
+        "account_ids": ["ACC-1", "ACC-2"],
+        "measures": [measure("pnl", ("sleeve",), version=2)],
+        "what_if": None,
+    }
+    given["closed_lots"] = [
+        {"account_id": "ACC-1", "instrument_id": AAPL, "quantity": "5", "proceeds": "1100.00",
+         "cost": "1000.00", "sleeve": "core"},
+        {"account_id": "ACC-1", "instrument_id": SPY, "quantity": "-2", "proceeds": "-1150.40",
+         "cost": "-1120.00", "sleeve": "hedge"},
+        {"account_id": "ACC-2", "instrument_id": AAPL, "quantity": "1", "proceeds": "195.10",
+         "cost": "200.00", "sleeve": "core"},
+    ]  # fmt: skip
+    return given
 
 
 def stale() -> dict[str, Any]:
@@ -467,6 +486,7 @@ CASES = {
     "resolved-in-a-stablecoin": (resolved, "a final 50/50 outcome in USDC, leg by leg"),
     "historical-var-and-es": (historical, "500 days by full revaluation, gaps carried, events beside"),
     "what-if": (what_if, "a pre-trade what-if beside the base"),
+    "pnl-v2-realized": (realized_v2, "pnl version 2 (v27): unrealized beside realized since the account opened"),
 }
 
 

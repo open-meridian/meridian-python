@@ -1780,9 +1780,10 @@ await plugin.receive(observations_wanted=lambda heard: wants.hear(heard, answer)
       print(figure.breakdown, figure.value)
   ```
 
-  `exposure` answers each bucket gross and net, and `pnl` unrealized and
-  realized -- realized over every lot closed since the account opened --
-  each part a `component` breakdown. A job answered later is heard on
+  `exposure` answers each bucket gross and net, each a `component`
+  breakdown; `pnl` version 1 is Unrealized P&L, one `unrealized` component
+  per bucket (realized P&L since the account opened is `pnl` version 2,
+  v27's: the reference computes it, and a v26 job cannot ask for it). A job answered later is heard on
   `job_finished` (`plugin.receive(job_finished=jobs.heard)`) and caught up by
   sequence (`jobs.catch_up`).
 - **The reference computations** (`meridian.analytics.reference`): v26's
