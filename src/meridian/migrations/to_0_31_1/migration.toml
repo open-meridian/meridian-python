@@ -18,7 +18,10 @@ An event-contract venue's contract map keeps a range market's bounds
 (Contract.floor, .cap, .bound_unit), each value's exact text, and reads them
 back. `event_contracts.Feed.stated_identifiers` is public, and
 EventContractsChecks holds a record complete by it, so a venue with an ISO
-10383 MIC passes test_a_record_already_complete_is_not_resolved_again.
+10383 MIC, or with none and its ticker under its VEN- ID, passes
+test_a_record_already_complete_is_not_resolved_again. A record holding the
+venue's ticker alone, under its MIC or VEN- ID, is named by it as the
+venue's own code.
 
 The pricing role's template declares no storage, keeping the last batch it
 answered in memory (pricing is not a role at the edge); every template's

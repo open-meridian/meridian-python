@@ -276,6 +276,66 @@ async def test_a_mic_venues_record_holding_the_symbol_alone_is_not_complete() ->
     )
 
 
+async def _ticker_source(feed: event_contracts.Feed) -> str:
+    """The source a venue's ticker carries: its MIC, or its VEN- ID."""
+    return feed._mic() or await feed.venue_id()
+
+
+@pytest.mark.parametrize("market", [ContractsMarket, RangeMarketWithoutMic])
+async def test_the_stated_ticker_names_the_mic_or_else_the_venue_masters_id(
+    market: type[ContractsMarket],
+) -> None:
+    lake = Lake(contracts_venue.VENUE)
+    feed = event_contracts.Feed(
+        lake, market(NOW_NS), event_contracts.ContractMap(), clock_ns=lambda: NOW_NS
+    )
+    contract = await feed.contract("BASE-1")
+    assert contract is not None
+    [_, ticker] = await feed.stated_identifiers(contract)
+    expected = "XFKE" if market is ContractsMarket else await feed.venue_id()
+    assert (ticker.scheme, ticker.value, ticker.source) == ("ticker", "BASE-1", expected)
+    assert market is ContractsMarket or expected.startswith("VEN-"), "Polymarket's shape"
+
+
+@pytest.mark.parametrize("market", [ContractsMarket, RangeMarketWithoutMic])
+async def test_a_record_holding_the_venues_ticker_alone_is_named_by_it(
+    market: type[ContractsMarket],
+) -> None:
+    """A record the platform minted with the ticker alone (ruling 312): the
+    venue's own code, matched whether its source is the MIC or the VEN- ID,
+    and the symbol reported beside it."""
+    lake = Lake(contracts_venue.VENUE)
+    feed = event_contracts.Feed(
+        lake, market(NOW_NS), event_contracts.ContractMap(), clock_ns=lambda: NOW_NS
+    )
+    source = await _ticker_source(feed)
+    subject = lake.instruments.hold(
+        "INS-MINTED", ops.Identifier(scheme="ticker", value="BASE-1", source=source),
+        asset_class=ops.ASSET_CLASS_EVENT_CONTRACT,
+        instrument_type=ops.INSTRUMENT_TYPE_BINARY_EVENT_CONTRACT,
+    )  # fmt: skip
+    declined = await feed.record_live([subject], data_type="meridian.v1.Price")
+    assert not declined and feed.contracts.subjects == {subject: "BASE-1"}
+    [joined] = [r for r in lake.on("ResolveIdentifier") if r.stated_instrument_type]
+    named = {(i.scheme, i.value, i.source) for i in joined.identifiers}
+    assert ("symbol", "BASE-1", "fakev") in named and ("ticker", "BASE-1", source) in named
+
+
+async def test_another_venues_ticker_is_not_this_venues_code() -> None:
+    lake = Lake(contracts_venue.VENUE)
+    feed = event_contracts.Feed(
+        lake, contracts_venue.market(), event_contracts.ContractMap(), clock_ns=lambda: NOW_NS
+    )
+    subject = lake.instruments.hold(
+        "INS-ELSEWHERE", ops.Identifier(scheme="ticker", value="BASE-1", source="XOTH"),
+        asset_class=ops.ASSET_CLASS_EVENT_CONTRACT,
+        instrument_type=ops.INSTRUMENT_TYPE_BINARY_EVENT_CONTRACT,
+    )  # fmt: skip
+    await feed.record_live([subject], data_type="meridian.v1.Price")
+    assert feed.contracts.subjects == {}
+    assert feed.unnamed[subject] == event_contracts.NOT_A_CONTRACT
+
+
 # ── The pages, from the kind templates ──────────────────────────────────
 
 CATALOGUE = [

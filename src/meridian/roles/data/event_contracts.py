@@ -738,7 +738,14 @@ class Feed:
         an ISO 10383 MIC, or the venue master's VEN- ID where the venue has
         no MIC -- what the platform matches and mints on, beside the
         source-scoped symbol. None where the venue is not held."""
-        mic = next(
+        venue = self._mic() or await self.venue_id()
+        if not venue:
+            return None
+        return ops.Identifier(scheme="ticker", value=contract.code, source=venue)
+
+    def _mic(self) -> str:
+        """The venue's ISO 10383 MIC, where its statements give one."""
+        return next(
             (
                 value
                 for scheme, value, _ in self.market.venue_identifiers
@@ -746,10 +753,6 @@ class Feed:
             ),
             "",
         )
-        venue = mic or await self.venue_id()
-        if not venue:
-            return None
-        return ops.Identifier(scheme="ticker", value=contract.code, source=venue)
 
     async def stated_identifiers(self, contract: Contract) -> list[ops.Identifier]:
         """What the plugin sends for a contract (0.31.0, ruling 312): its
@@ -765,13 +768,21 @@ class Feed:
         """`stated_identifiers`, by its 0.31.0 name."""
         return await self.stated_identifiers(contract)
 
-    def _candidates(self, record: ops.InstrumentRecord) -> list[ops.Identifier]:
+    async def _candidates(self, record: ops.InstrumentRecord) -> list[ops.Identifier]:
         """The record's identifiers that may name one of the venue's
-        contracts, in order: the venue's own code, then another source's
+        contracts, in order: the venue's own code -- its symbol at the venue,
+        or (0.31.1) its ticker with the venue's MIC or VEN- ID as source, as
+        `stated_identifiers` sends it (ruling 312), so a record the platform
+        minted with the ticker alone is named -- then another source's
         symbol -- never for a record that is a security, or of another type."""
         held = list(record.identifiers)
         venue = self.market.venue
         own = [i for i in held if i.scheme == "symbol" and i.source == venue and i.value]
+        if any(i.scheme == "ticker" and i.value for i in held):
+            # The venue master's ID is asked only for a record holding a
+            # ticker, and once per reading of the venue.
+            sources = {self._mic(), await self.venue_id()} - {""}
+            own += [i for i in held if i.scheme == "ticker" and i.source in sources and i.value]
         if (
             record.asset_class not in _EVENT_CLASSES
             or record.instrument_type not in _BINARY_TYPES
@@ -872,7 +883,7 @@ class Feed:
             self.unnamed[subject] = NOT_READ
             return ""
         record = found.instrument
-        for matched in self._candidates(record):
+        for matched in await self._candidates(record):
             contract = await self.contract(matched.value)
             if contract is None or not contract.binary:
                 continue
