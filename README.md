@@ -2,7 +2,7 @@
 
 The Python SDK for building [Open Meridian](https://open-meridian.com) plugins:
 the tools a trader has an AI agent build, and the bots and analytics a
-developer writes. Python 3.11 or newer. This is release 0.31.0; its reference
+developer writes. Python 3.11 or newer. This is release 0.31.1; its reference
 is at [open-meridian.dev](https://open-meridian.dev/api/python-sdk/).
 
 ## Start here
@@ -1291,6 +1291,18 @@ plugin = await meridian.connect(settings=Config, interface=...)
 config = await plugin.first_settings(Config)
 ```
 
+A saved value this version cannot read -- no longer one of its choices, as
+`practice` once the plugin says `paper`, or not of its kind -- never raises
+and is never mapped to another value (0.31.1). It is delivered unset: a
+required setting holds nothing, not even its default, and is in
+`config.missing`; an optional one holds its default. Each is in
+`config.refused` (`Settings.refused`), a `meridian.RefusedSetting` whose
+`message` a page shows: "Environment was saved as 'practice', which this
+version no longer offers; save it again". A person's own values refused are
+in `request.own_settings_refused`. An environment so refused is empty: not
+`live`, so the plugin reaches the demo host, and not demo, so `is_demo` and
+the badge count it live.
+
 Every page's loader holds the kit's patterns as macros, `meridian/kit.html`:
 `status`, `action`, `notice`, `badge`, `tiles`, `when`, `grid`,
 `nothing_here`, `empty` and `facts`.
@@ -1795,7 +1807,8 @@ await plugin.receive(observations_wanted=lambda heard: wants.hear(heard, answer)
 - **A pricing plugin** (`meridian.roles.pricing.Pricer`): each batch the
   component routes to it answered whole, from exactly the market objects
   each unit carries, with no sensitivity until v28; the batches still
-  waiting read after a restart. `reference_model` is the built-in models'
+  waiting read after a restart, from the last sequence answered, kept in
+  memory, since `pricing` holds no storage. `reference_model` is the built-in models'
   own computation, so an implementation of a v26 model equals them.
 - **Event groups**: `meridian.EventGroups` keeps every version read
   (`list_event_groups`) and heard (`event_group_changed`), and answers the
@@ -1900,6 +1913,7 @@ carries libcst.
 | 0.28.0 to 0.29.0: the SDK declares contract v25, plugins shared through registries and carrying their own documentation: the whole declaration (`Declaration(interface=, reads_external_accounts=, documentation=, affirmation_deadline=)`, its settings, interface, tools and documentation by digest), `meridian-declaration --documentation`, registration held to the version uploaded, `connect` refusing an interface its declaration does not name; `record_break(unresolved_identifiers=)`, `resolve_venue(venue_id=)`; the give-up cases marked `about: give-ups`. Breaking: a plugin whose declaration does not carry its interface is refused at registration until it does | a connectivity plugin's `await plugin.read_local_record_orders()` removed, and its test's mapping of `reads-whether-orders-may-name-local-records` | `connect` given an interface, settings or `reads_external_accounts`: declare them in the `Declaration`, the port fixed, and pass `connect(declaration=DECLARATION)`; a `[tool.meridian]` naming no `declaration`: name one, and write `docs/overview.md` and `docs/setup.md`; a Dockerfile whose last stage copies no documentation directory (one installing only the package from a mount): `COPY docs/ docs/`, or the whole context as the templates do (`COPY . .`), since the declaration reads its sections in the built image; a connectivity plugin's read of the escape hatch whose answer it uses: remove it and what depends on it |
 | 0.29.0 to 0.30.0: each role's common logic in the SDK, contract v25 unchanged: `meridian.roles.data` a package -- `Wants` (wants heard and declined by reason, standing wants, rows recorded in the lake's batches and counted, licences, a restart's gap read back once), `Venue`, `unconverted`, `asked`, the venue's reading (`number`, `json_decimal`, `Unread`, `Session`, `Health`, `Limits`, `Endpoint`), `served`, `want_rows`, `WantHeard`, `VenueConnection`; `meridian.roles.data.pairs` and `.event_contracts`, a venue's whole work by what it lists (`Feed`, `ProductMap`, `ContractMap`, their pages and templates); `meridian.roles.data.testing` (`Lake`, the suite's producers, `PairsChecks`, `EventContractsChecks`); `meridian.edge.RawStore`; `meridian.roles.connectivity` (`Sent`, `place_once`, `resolve_unanswered`, `report_status_not_mapped`, `execution_id`, `bust_id`, `fill_price`, `filled_in_book`, and the role's work: `Trader` over a `Venue`, `Watched`, `trading_read` and its template, `testing.Rig`); a connectivity role template; the role's Wants paged | a module copied from a sibling plugin (`market.py`, `products.py`, `contracts.py`, `raw.py`, `dgm.py`, saying "The same module in ... and ...") into a re-export of the SDK's names; a trading layer in SnapTrade 0.16.0's shape (`trading.py` defining `Trader`, `Noted`, `Venue`, `Watched`, `trading_files`) into a re-export of `meridian.roles.connectivity`, its `Trader` in the module's market zone | import from the SDK and delete the re-exports, constructing `Trader` with `market_zone=` and `Sent` for `Noted`; the Trading page: `trading_read` and the SDK's template; the trading test rig: a subclass of `testing.Rig`; the copied `page.py` and templates: the kind's builders and templates; the copied tests: one class of the SDK's checks; a copied `stream.py`: the plugin's own transport, handed to the feed; an assignment of a stream's `connect`: `retarget` it; the Makefile's suite-same: removed |
 | 0.30.0 to 0.31.0: the SDK declares contract v26: `meridian.analytics` (typed builders for a job, `Answer`, `Jobs`) and its reference computations, the `pricing` role (`roles.pricing.Pricer`) and template, event groups (`EventGroups`, `event_contracts.Feed.report_event`), the agents' guard (`environment(demo="paper")`, `reached_environment`, `connection_badge`, `Caller.agent_refused`), `query_lake` and `count_model_tokens`; custody's pages (`custody.account_pages`), a broker's listings (`roles.data.listings`) and the Trader's charges and stated settlement dates (ruling 213) | a base pinned by digest at an older release moved to 0.31.0, its digest dropped (offline) | pin the base's digest again; map each role suite's v26 cases; give a connectivity adapter its `environment`; move custody pages, a listings layer or a SnapTrade-shaped trader onto the SDK |
+| 0.31.0 to 0.31.1: a saved setting value that is no longer one of its choices, or not of its kind, is delivered unset rather than raised (`Settings.refused`, a typed class's `.refused`, `meridian.RefusedSetting`, `request.own_settings_refused`), a required one named missing and an environment so refused counted live by the guard; an event-contract venue's contract map keeps a range market's bounds; `event_contracts.Feed.stated_identifiers`, by which `EventContractsChecks` holds a record complete; the pricing template declares no storage; the templates' AGENTS.md on publishing to a registry and their pre-push hook's tag-push message | only the pins move | |
 
 `tests/migrations/` holds the plugins the migrations are recorded for, as
 written and as their migration leaves them, and `make check-migrations` holds
