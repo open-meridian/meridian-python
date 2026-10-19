@@ -11,8 +11,7 @@ every unit, in the base currency the unit's inputs convert to, and reads
 nothing else for the job. It is never called by a client; a batch reaches
 the instance it names alone (matrix/directed.tsv).
 
-    pricer = pricing.Pricer(plugin, {"quoted_price": my_model},
-                            sequence=pricing.Sequence(storage / "pricing.json"))
+    pricer = pricing.Pricer(plugin, {"quoted_price": my_model})
     await pricer.run()           # the batches waiting, then each one heard
 
 **A model** is a function of one unit -- `(batch, unit) -> Money` -- its value
@@ -28,8 +27,10 @@ not evaluated (requirement 22) -- never a half-answered batch.
 (the first release's §3 rule 4): a v26 plugin stays valid when they arrive.
 
 **After a restart** it reads the batches still waiting after the last
-sequence it saw (ListPriceBatches), kept in `Sequence`; a batch answered
-twice is harmless, named by its hash.
+sequence it saw (ListPriceBatches), kept in `Sequence`: in memory, since
+`pricing` is not a role at the edge and holds no storage (decisions/028), so
+a restart reads every batch still waiting; a batch answered twice is
+harmless, named by its hash.
 
 The plugin declares the role `pricing`; nothing else is the SDK's: which
 instruments it prices is the deployment admin's routing.
@@ -97,9 +98,9 @@ def scenario_of(unit: ops.PricingUnit) -> ScenarioKey:
 
 
 class Sequence:
-    """The last batch sequence answered, kept in the plugin's storage so a
-    restart reads the batches still waiting after it; in memory with no
-    path."""
+    """The last batch sequence answered: in memory with no path, as a
+    pricing plugin keeps it (0.31.1; `pricing` holds no storage,
+    decisions/028); or in a file at `path`, read back on a restart."""
 
     def __init__(self, path: Path | None = None) -> None:
         self.path = path
