@@ -4975,7 +4975,7 @@ class ReportedPositionValue(_message.Message):
     def __init__(self, instrument_id: _Optional[str] = ..., side: _Optional[_Union[HoldingSide, str]] = ..., market_value: _Optional[_Union[Money, _Mapping]] = ..., margin_requirement: _Optional[_Union[Money, _Mapping]] = ...) -> None: ...
 
 class AccountAttributes(_message.Message):
-    __slots__ = ("account_id", "base_currency_code", "lot_relief_default", "last_change", "opening_balance", "waits_for_compliance", "error_account", "allocation_account")
+    __slots__ = ("account_id", "base_currency_code", "lot_relief_default", "last_change", "opening_balance", "waits_for_compliance", "error_account", "allocation_account", "base_cash_instrument_id")
     ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
     BASE_CURRENCY_CODE_FIELD_NUMBER: _ClassVar[int]
     LOT_RELIEF_DEFAULT_FIELD_NUMBER: _ClassVar[int]
@@ -4984,6 +4984,7 @@ class AccountAttributes(_message.Message):
     WAITS_FOR_COMPLIANCE_FIELD_NUMBER: _ClassVar[int]
     ERROR_ACCOUNT_FIELD_NUMBER: _ClassVar[int]
     ALLOCATION_ACCOUNT_FIELD_NUMBER: _ClassVar[int]
+    BASE_CASH_INSTRUMENT_ID_FIELD_NUMBER: _ClassVar[int]
     account_id: str
     base_currency_code: str
     lot_relief_default: LotReliefMethod
@@ -4992,7 +4993,8 @@ class AccountAttributes(_message.Message):
     waits_for_compliance: bool
     error_account: bool
     allocation_account: bool
-    def __init__(self, account_id: _Optional[str] = ..., base_currency_code: _Optional[str] = ..., lot_relief_default: _Optional[_Union[LotReliefMethod, str]] = ..., last_change: _Optional[_Union[JournalRef, _Mapping]] = ..., opening_balance: _Optional[_Union[OpeningBalance, _Mapping]] = ..., waits_for_compliance: bool = ..., error_account: bool = ..., allocation_account: bool = ...) -> None: ...
+    base_cash_instrument_id: str
+    def __init__(self, account_id: _Optional[str] = ..., base_currency_code: _Optional[str] = ..., lot_relief_default: _Optional[_Union[LotReliefMethod, str]] = ..., last_change: _Optional[_Union[JournalRef, _Mapping]] = ..., opening_balance: _Optional[_Union[OpeningBalance, _Mapping]] = ..., waits_for_compliance: bool = ..., error_account: bool = ..., allocation_account: bool = ..., base_cash_instrument_id: _Optional[str] = ...) -> None: ...
 
 class OpeningBalance(_message.Message):
     __slots__ = ("entry_id", "as_of_date", "sources", "recorded_by", "journal", "reason")
