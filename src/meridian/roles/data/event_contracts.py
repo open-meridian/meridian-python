@@ -42,6 +42,11 @@ answer first stating it arrived. It answers no want: it is recorded, unasked,
 for each contract a subject the lake asked for is, and each minute for a
 contract past its close until its final stage is recorded.
 
+**A contract's identifiers** (0.31.0, ruling 312): its symbol at the venue
+and its ticker -- the venue's own market ticker under the `ticker` scheme,
+the venue's ISO 10383 MIC in source, or its VEN- ID where it has no MIC --
+which the platform matches and mints on.
+
 **Per subject wanted, never the whole venue** (W3.6, W3.1, W3.14): each
 subject is the deployment's record, read and named as one of the venue's
 contracts by its identifiers -- the venue's own code first, then another
@@ -606,7 +611,7 @@ class Feed:
         if contract is None:
             return ""
         found = await self.plugin.resolve_identifier(
-            identifiers=self.identifiers(contract),
+            identifiers=await self._stated_identifiers(contract),
             as_of_ns=self.clock_ns(),
             stated_asset_class="event_contract",
             stated_instrument_type="binary_event_contract",
@@ -704,6 +709,32 @@ class Feed:
         code, as a `symbol` with the venue as source."""
         return [ops.Identifier(scheme="symbol", value=contract.code, source=self.market.venue)]
 
+    async def _ticker(self, contract: Contract) -> ops.Identifier | None:
+        """The contract's ticker (0.31.0, ruling 312): the venue's own market
+        ticker under the contract's `ticker` scheme, its venue in source as
+        an ISO 10383 MIC, or the venue master's VEN- ID where the venue has
+        no MIC -- what the platform matches and mints on, beside the
+        source-scoped symbol. None where the venue is not held."""
+        mic = next(
+            (
+                value
+                for scheme, value, _ in self.market.venue_identifiers
+                if scheme == "iso10383"
+            ),
+            "",
+        )
+        venue = mic or await self.venue_id()
+        if not venue:
+            return None
+        return ops.Identifier(scheme="ticker", value=contract.code, source=venue)
+
+    async def _stated_identifiers(self, contract: Contract) -> list[ops.Identifier]:
+        """What the plugin sends for a contract: its symbol at the venue and,
+        where the venue is known, its ticker (`ticker`)."""
+        held = self.identifiers(contract)
+        ticker = await self._ticker(contract)
+        return held + ([ticker] if ticker is not None else [])
+
     def _candidates(self, record: ops.InstrumentRecord) -> list[ops.Identifier]:
         """The record's identifiers that may name one of the venue's
         contracts, in order: the venue's own code, then another source's
@@ -753,7 +784,7 @@ class Feed:
         record lacks any of them; meeting another record is a miss (W3.2),
         reported once, and the subject is served all the same."""
         held = list(record.identifiers)
-        own = self.identifiers(contract)
+        own = await self._stated_identifiers(contract)
         if (
             all(any(same(o, h) for h in held) for o in own)
             and record.asset_class == ops.ASSET_CLASS_EVENT_CONTRACT

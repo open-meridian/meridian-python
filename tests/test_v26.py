@@ -713,3 +713,45 @@ async def test_a_65th_model_token_count_is_refused(sidecar: tuple[Any, str]) -> 
         assert plugin.model_tokens[("endpoint-1", "", "")] == (2, 2)
     finally:
         await plugin.leave()
+
+
+# ── A contract's ticker (ruling 312) ────────────────────────────────────────
+
+
+async def test_an_event_contract_is_sent_with_its_ticker_beside_its_symbol() -> None:
+    """The venue's own market ticker under the contract's `ticker` scheme,
+    its venue's MIC in source -- what core's stand-in mints on -- beside the
+    source-scoped symbol sent before."""
+    from fake_venues import contracts_venue
+
+    recorder = Recorder("fakev-1")
+    feed = event_contracts.Feed(
+        recorder,
+        contracts_venue.market(contracts_venue.NOW_NS),
+        event_contracts.ContractMap(),
+        clock_ns=lambda: contracts_venue.NOW_NS,
+    )
+    await feed.member_id("BASE-1")
+    (resolve,) = recorder.on("ResolveIdentifier")
+    assert [(i.scheme, i.value, i.source) for i in resolve.identifiers] == [
+        ("symbol", "BASE-1", "fakev"),
+        ("ticker", "BASE-1", "XFKE"),
+    ]
+
+
+async def test_a_venue_with_no_mic_names_its_ticker_by_its_venue_id() -> None:
+    from fake_venues import contracts_venue
+
+    market = contracts_venue.market(contracts_venue.NOW_NS)
+    market.venue_identifiers = (("symbol", "fakev", "fakev"),)
+    recorder = Recorder("fakev-1")
+    feed = event_contracts.Feed(recorder, market, event_contracts.ContractMap())
+    ticker = await feed._ticker(await feed.contract("BASE-1"))  # type: ignore[arg-type]
+    assert ticker is not None and ticker.scheme == "ticker"
+    assert ticker.source.startswith("VEN-")
+    unheld = event_contracts.Feed(Recorder("fakev-2"), market, event_contracts.ContractMap())
+    unheld.plugin.answer(
+        "ResolveVenue",
+        lambda _: ops.ResolveVenueResult(found=False, miss_reason=ops.MISS_REASON_NOT_FOUND),
+    )
+    assert await unheld._ticker(await unheld.contract("BASE-1")) is None  # type: ignore[arg-type]
