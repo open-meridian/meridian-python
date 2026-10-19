@@ -19,8 +19,10 @@ A field's annotation is its kind -- `str`, `int`, `bool`, or `list` for a
 table -- `choices` make a choice, and the order of the fields is the form's.
 `at_least` and `at_most` are the SDK's, not the wire's: a value outside is
 held to the bound, logged once per value. `.missing` is the sidecar's
-`missing_required`, as delivered. A secret field is never in `repr` or
-`str`. `meridian.Setting` tuples keep working, and a class and a tuple
+`missing_required`, as delivered, and from 0.31.1 each required setting
+whose saved value this version cannot read; `.refused` says each such value
+(`meridian.RefusedSetting`), never raised. A secret field is never in `repr`
+or `str`. `meridian.Setting` tuples keep working, and a class and a tuple
 declare the same thing.
 """
 
@@ -32,7 +34,7 @@ import typing
 from collections.abc import Mapping, Sequence
 from typing import Any, ClassVar, cast
 
-from .client import AppliesWhen, Choice, Column, Setting
+from .client import AppliesWhen, Choice, Column, RefusedSetting, Setting
 
 log = logging.getLogger("meridian.settings")
 
@@ -193,6 +195,13 @@ def environment(
     the value treats anything but `live` as the demo environment. The
     description says which it starts on, unless the plugin gives its own.
 
+    A value saved that this version no longer offers -- `practice` or
+    `sandbox` where the plugin now says `paper` -- is never mapped to one it
+    does (0.31.1): it is delivered empty, not even the default, named among
+    the missing and said in `refused`. Empty is not `live`, so the plugin
+    still reaches the demo host; and it is not demo, so `is_demo` and the
+    badge count it live until a person saves it again.
+
     The value is one key of the agents' demo-only guard (W11.38): a
     connection is demo only while this setting and the environment its
     session reports on its venue catalogue (`reached_environment`) both say
@@ -320,6 +329,7 @@ class Typed:
     __meridian_settings__: ClassVar[tuple[Setting, ...]] = ()
     __meridian_bounds__: ClassVar[dict[str, tuple[int | None, int | None]]] = {}
     missing: tuple[str, ...]
+    refused: tuple[RefusedSetting, ...]
 
     @classmethod
     def declared(cls) -> tuple[Setting, ...]:
@@ -337,11 +347,20 @@ class Typed:
         raise KeyError(f"{cls.__name__} declares no setting {name!r}")
 
     @classmethod
-    def _of(cls, values: Mapping[str, Any], missing: Sequence[str] = ()) -> Any:
+    def _of(
+        cls,
+        values: Mapping[str, Any],
+        missing: Sequence[str] = (),
+        refused: Sequence[RefusedSetting] = (),
+    ) -> Any:
         given: dict[str, Any] = {}
+        unread = {r.name for r in refused}
         for each in cls.__meridian_settings__:
             if each.name in values:
                 value = values[each.name]
+            elif each.name in unread and each.required:
+                # Refused and required: unset, never its default (0.31.1).
+                value = _EMPTY[each.kind]
             elif each.default is not None:
                 value = each.default
             else:
@@ -352,7 +371,7 @@ class Typed:
             if isinstance(value, int) and not isinstance(value, bool):
                 value = _held(cls.__name__, each.name, value, least, most)
             given[each.name] = value
-        return cast(Any, cls)(**given, missing=tuple(missing))
+        return cast(Any, cls)(**given, missing=tuple(missing), refused=tuple(refused))
 
 
 def _held(owner: str, name: str, value: int, least: int | None, most: int | None) -> int:
@@ -380,7 +399,7 @@ def settings(cls: type[_C]) -> type[_C]:
     `meridian.sample_data()` or `meridian.account_currency()` is a setting
     named as the field. The class
     becomes a frozen dataclass of the values, with `declared()`,
-    `label(name)` and `.missing`."""
+    `label(name)`, `.missing` and `.refused`."""
     hints = typing.get_type_hints(cls)
     declared: list[Setting] = []
     bounds: dict[str, tuple[int | None, int | None]] = {}
@@ -417,6 +436,7 @@ def settings(cls: type[_C]) -> type[_C]:
             )
         )
     fields.append(("missing", tuple[str, ...], dataclasses.field(default=())))
+    fields.append(("refused", tuple[RefusedSetting, ...], dataclasses.field(default=())))
     made_class = dataclasses.make_dataclass(
         cls.__name__,
         fields,

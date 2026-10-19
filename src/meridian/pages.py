@@ -144,7 +144,7 @@ from markupsafe import Markup
 
 from . import params as _params
 from .asgi import ASGIApp, CallerMiddleware, Receive, Scope, Send
-from .client import BUTTONS, Caller, Page, _levels, _roles, _serves
+from .client import BUTTONS, Caller, Page, RefusedSetting, _levels, _roles, _serves
 from .v1 import sidecar_pb2
 
 if TYPE_CHECKING:
@@ -261,6 +261,17 @@ class Request:
 
         declared = getattr(self.plugin, "_declared", ())
         return _own(declared, self.caller.own_settings)
+
+    @property
+    def own_settings_refused(self) -> tuple[RefusedSetting, ...]:
+        """The person's own values this version cannot read (0.31.1): each
+        left unset in `own_settings`, its default filled, and said here for
+        the page to show, never raised."""
+        from .client import _own
+
+        refused: list[RefusedSetting] = []
+        _own(getattr(self.plugin, "_declared", ()), self.caller.own_settings, refused)
+        return tuple(refused)
 
     @property
     def second_pair_of_eyes(self) -> frozenset[str]:
