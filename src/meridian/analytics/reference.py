@@ -343,13 +343,26 @@ DEFINITIONS: Mapping[str, Definition] = {
             "Each outcome's price over the sum of the group's prices, as a numerator "
             "and a denominator",
         ),
+        Definition(
+            "execution_cost",
+            1,
+            (
+                ("benchmarks", "decision_arrival_placement_arrival_mid_at_fill"),
+                ("sign", "side_adjusted_positive_cost"),
+                ("units", "bps"),
+                ("staleness_bound_ns", str(5_000_000_000)),
+            ),
+            ("account",),
+            4,
+            "Each execution's cost against each benchmark in bps, side-adjusted, "
+            "positive a cost; each account's notional-weighted mean per benchmark",
+        ),
     )
 }
 
-#: The definitions v26's component does not serve, which the reference
-#: computes and pins all the same, for the engine's later identity tests:
-#: `pnl` version 2, v27's, once the book records each closed lot's proceeds
-#: (ruling 320). A 0.31.0 job asks for none of them.
+#: The definitions at a version after 1: `pnl` version 2, realized P&L
+#: beside unrealized, served from contract v27 now the book records each
+#: closed lot's proceeds (rulings 320 and 396; `Lot.reliefs`).
 LATER_DEFINITIONS: Mapping[tuple[str, int], Definition] = {
     ("pnl", 2): Definition(
         "pnl",
@@ -390,6 +403,11 @@ SCHEME_NOT_HELD = "NOT_EVALUATED_REASON_SCHEME_NOT_HELD"
 GROUP_NOT_EXHAUSTIVE = "NOT_EVALUATED_REASON_GROUP_NOT_EXHAUSTIVE"
 HISTORY_INSUFFICIENT = "NOT_EVALUATED_REASON_HISTORY_INSUFFICIENT"
 FLAG_TRUE = "EVENT_GROUP_FLAG_TRUE"
+COST_MISSING = "NOT_EVALUATED_REASON_COST_MISSING"
+DIRECT = "CONVERSION_DERIVATION_DIRECT"
+INVERTED = "CONVERSION_DERIVATION_INVERTED"
+CROSSED = "CONVERSION_DERIVATION_CROSSED"
+_DERIVATION_RANK = {DIRECT: 0, INVERTED: 1, CROSSED: 2}
 
 
 def round_half_even(value: Fraction | Decimal, scale: int) -> Decimal:
@@ -428,6 +446,38 @@ class _Price:
     instrument_id: str
     dataset: str
     valid_at_ns: int
+    row_key: str = ""
+    version: int = 0
+    source_ns: int = 0
+
+
+@dataclass(frozen=True)
+class _Leg:
+    """One conversion leg as the answer names it (contract v27, ruling 462):
+    from one cash instrument to another at a rate -- the lake's own, its
+    inverse rounded half to even to 18 places, or a cross through a pivot,
+    its two sub-legs' rates multiplied and rounded so -- with the lake's
+    prices it moves with, each with its exponent (1, or -1 inverted)."""
+
+    from_id: str
+    to_id: str
+    rate: Decimal
+    derivation: str
+    via: str
+    dataset: str
+    factors: tuple[tuple[_Price, int], ...]
+    subs: tuple[_Leg, ...] = ()
+    kind_rank: int = 0
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "from_instrument_id": self.from_id,
+            "to_instrument_id": self.to_id,
+            "rate": decimal_text(self.rate),
+            "derivation": self.derivation,
+            "via_instrument_id": self.via,
+            "dataset": self.dataset,
+        }
 
 
 @dataclass(frozen=True)
@@ -444,6 +494,9 @@ class _Instrument:
     price_kind: str
     payout: tuple[Decimal, str] | None
     country: str
+    #: Its ISO 4217 code: a fiat currency's cash instrument, whose legs alone
+    #: may be inverted or crossed (ruling 462); empty for a token.
+    currency_code: str = ""
 
 
 @dataclass(frozen=True)
@@ -461,7 +514,7 @@ class _ClosedLot:
     instrument_id: str
     quantity: Decimal
     proceeds: Decimal
-    cost: Decimal
+    cost: Decimal | None
     sleeve: str
 
 
@@ -552,6 +605,10 @@ class Answer:
     figures: list[AnswerFigure] = field(default_factory=list)
     not_evaluated: list[Unevaluated] = field(default_factory=list)
     provenance: dict[str, Any] = field(default_factory=dict)
+    #: The `ExecutionCost` rows an `execution_cost` job records (contract
+    #: v27, W10.11), in the answer's JSON only where the job asks for it.
+    execution_costs: list[dict[str, Any]] = field(default_factory=list)
+    asks_execution_cost: bool = False
 
     @property
     def answer_hash(self) -> str:
@@ -559,11 +616,14 @@ class Answer:
 
     def to_json(self) -> dict[str, Any]:
         """The answer as a reference case's `answer` holds it."""
-        return {
+        out: dict[str, Any] = {
             "figures": [each.to_json() for each in self.figures],
             "not_evaluated": [each.to_json() for each in self.not_evaluated],
             "provenance": self.provenance,
         }
+        if self.asks_execution_cost:
+            out["execution_costs"] = self.execution_costs
+        return out
 
 
 class _Case:
@@ -577,6 +637,11 @@ class _Case:
         self.measures: tuple[Mapping[str, Any], ...] = tuple(job.get("measures") or ())
         self.what_if: Mapping[str, Any] | None = job.get("what_if")
         self.lake_as_of_ns = int(inputs.get("lake_as_of_ns") or 0)
+        self.business_date = str(job.get("business_date") or "")
+        self.reporting_currency = str(job.get("reporting_currency") or "")
+        #: The deployment's pivot order (ruling 483), each a fiat cash
+        #: instrument's ID, tried in order for a cross.
+        self.pivots: tuple[str, ...] = tuple(inputs.get("fx_pivot_currencies") or ())
         self.bases = {
             a["account_id"]: a["base_currency_instrument_id"] for a in inputs["accounts"]
         }
@@ -596,6 +661,7 @@ class _Case:
                 if not i.get("payout")
                 else (_d(i["payout"]["amount"]), i["payout"]["instrument_id"]),
                 country=i.get("country", ""),
+                currency_code=i.get("currency_code", ""),
             )
             for i in inputs.get("instruments", [])
         }
@@ -615,7 +681,7 @@ class _Case:
                 instrument_id=c["instrument_id"],
                 quantity=_d(c["quantity"]),
                 proceeds=_d(c["proceeds"]),
-                cost=_d(c["cost"]),
+                cost=_d(c["cost"]) if c.get("cost") else None,
                 sleeve=c.get("sleeve", ""),
             )
             for c in inputs.get("closed_lots", [])
@@ -629,6 +695,9 @@ class _Case:
                 instrument_id=m["instrument_id"],
                 dataset=m.get("dataset", ""),
                 valid_at_ns=int(m.get("valid_at_ns") or 0),
+                row_key=m.get("row_key", ""),
+                version=int(m.get("version") or 0),
+                source_ns=int(m.get("source_ns") or m.get("valid_at_ns") or 0),
             )
             self.market.setdefault((price.subject_id, price.kind), []).append(price)
         history = inputs.get("history") or {}
@@ -657,11 +726,14 @@ class _Case:
             for g in inputs.get("event_groups", [])
         }
         self.stale_after = {k: int(v) for k, v in (inputs.get("stale_after_ns") or {}).items()}
+        self.executions: list[Mapping[str, Any]] = list(inputs.get("executions") or ())
         # What the answer read, for its provenance.
         self.datasets: set[str] = set()
         self.read_instruments: set[str] = set()
         self.models: set[tuple[str, int]] = set()
         self.read_groups: set[str] = set()
+        self.input_prices: dict[str, _Price] = {}
+        self.legs: dict[tuple[str, str, str, str], _Leg] = {}
 
     # ── Market objects ───────────────────────────────────────────────────
 
@@ -671,37 +743,134 @@ class _Case:
         # case states more.
         return max(held, key=lambda p: (p.valid_at_ns, p.dataset)) if held else None
 
+    def price_in(self, subject: str, kind: str, instrument_id: str) -> _Price | None:
+        """The price of `subject` in one instrument: an FX rate is the price
+        of one cash instrument in another, and a currency may be priced in
+        several (EURUSD and EURCHF), each its own row."""
+        held = [p for p in self.market.get((subject, kind)) or [] if p.instrument_id == instrument_id]
+        return max(held, key=lambda p: (p.valid_at_ns, p.dataset)) if held else None
+
+    def quoted_in(self, subject: str, kind: str) -> list[_Price]:
+        """The latest price of `subject` of `kind` in each instrument it is
+        priced in, by instrument ID."""
+        ins = sorted({p.instrument_id for p in self.market.get((subject, kind)) or []})
+        return [p for p in (self.price_in(subject, kind, i) for i in ins) if p is not None]
+
     def stale(self, price: _Price) -> bool:
         limit = self.stale_after.get(price.dataset)
         return limit is not None and self.lake_as_of_ns - price.valid_at_ns > limit
 
-    def conversion(self, held: str, base: str) -> tuple[list[_Price], str] | tuple[None, str]:
-        """The legs from `held` to `base`, or None and why."""
+    def fiat(self, instrument_id: str) -> bool:
+        """Whether a cash instrument is a fiat currency's (it has an ISO 4217
+        code): only a fiat leg is inverted or crossed (ruling 462)."""
+        record = self.instruments.get(instrument_id)
+        return record is not None and bool(record.currency_code)
+
+    def _direct(self, at: str, to: str) -> _Leg | None:
+        """The lake's own rate from `at` to `to`, by kind in order."""
+        for rank, kind in enumerate(CONVERSION_KINDS):
+            price = self.price_in(at, kind, to)
+            if price is not None:
+                return _Leg(at, to, price.amount, DIRECT, "", price.dataset, ((price, 1),),
+                            kind_rank=rank)  # fmt: skip
+        return None
+
+    def _inverted(self, at: str, to: str) -> _Leg | None:
+        """The lake's rate the other way (`to` priced in `at`), inverted: 1 ÷
+        x, rounded half to even to 18 places (ruling 462)."""
+        for rank, kind in enumerate(CONVERSION_KINDS):
+            price = self.price_in(to, kind, at)
+            if price is not None and price.amount != 0:
+                rate = round_half_even(1 / Fraction(price.amount), 18)
+                return _Leg(at, to, rate, INVERTED, "", price.dataset, ((price, -1),),
+                            kind_rank=rank)  # fmt: skip
+        return None
+
+    def _either(self, at: str, to: str) -> _Leg | None:
+        return self._direct(at, to) or self._inverted(at, to)
+
+    def _derived(self, at: str, to: str) -> _Leg | None:
+        """A fiat leg with no direct rate in the lake's direction: inverted,
+        else crossed through the first pivot both sub-legs reach, each
+        direct or inverted, its rate their product rounded half to even to
+        18 places (rulings 462 and 483). None for a token's leg."""
+        if not (self.fiat(at) and self.fiat(to)):
+            return None
+        inverted = self._inverted(at, to)
+        if inverted is not None:
+            return inverted
+        for pivot in self.pivots:
+            if pivot in (at, to) or not self.fiat(pivot):
+                continue
+            first, second = self._either(at, pivot), self._either(pivot, to)
+            if first is None or second is None:
+                continue
+            rate = round_half_even(Fraction(first.rate) * Fraction(second.rate), 18)
+            return _Leg(
+                at,
+                to,
+                rate,
+                CROSSED,
+                pivot,
+                "",
+                first.factors + second.factors,
+                subs=(first, second),
+                kind_rank=max(first.kind_rank, second.kind_rank),
+            )
+        return None
+
+    def conversion(self, held: str, base: str) -> tuple[list[_Leg], str] | tuple[None, str]:
+        """The legs from `held` to `base`, or None and why: the shortest
+        chain of the lake's own rates, at most `MOST_LEGS` (a cross counting
+        as its two sub-legs), its last leg from a fiat currency to a fiat
+        base inverted or crossed where the lake has no direct rate (contract
+        v27, ruling 462); a token's leg only ever the lake's own.
+        Ties go by each leg's derivation (direct, then inverted, then
+        crossed), then the lowest kinds, then the instrument IDs' order."""
         if held == base:
             return [], ""
-        chains: list[tuple[tuple[int, ...], tuple[str, ...], list[_Price]]] = []
+        chains: list[
+            tuple[int, tuple[int, ...], tuple[int, ...], tuple[str, ...], list[_Leg]]
+        ] = []
 
-        def walk(at: str, legs: list[_Price], seen: frozenset[str]) -> None:
+        def keep(legs: list[_Leg]) -> None:
+            chains.append(
+                (
+                    _counted(legs),
+                    tuple(_DERIVATION_RANK[leg.derivation] for leg in legs),
+                    tuple(leg.kind_rank for leg in legs),
+                    tuple(leg.to_id for leg in legs),
+                    list(legs),
+                )
+            )
+
+        def walk(at: str, legs: list[_Leg], seen: frozenset[str]) -> None:
             if at == base:
-                ranks = tuple(CONVERSION_KINDS.index(p.kind) for p in legs)
-                chains.append((ranks, tuple(p.instrument_id for p in legs), list(legs)))
+                keep(legs)
                 return
             if len(legs) == MOST_LEGS:
                 return
-            for kind in CONVERSION_KINDS:
-                leg = self.price(at, kind)
-                if leg is None or leg.instrument_id in seen:
-                    continue
-                walk(leg.instrument_id, [*legs, leg], seen | {leg.instrument_id})
+            if self._direct(at, base) is None:
+                derived = self._derived(at, base)
+                if derived is not None and _counted([*legs, derived]) <= MOST_LEGS:
+                    keep([*legs, derived])
+            for rank, kind in enumerate(CONVERSION_KINDS):
+                for price in self.quoted_in(at, kind):
+                    if price.instrument_id in seen:
+                        continue
+                    leg = _Leg(at, price.instrument_id, price.amount, DIRECT, "", price.dataset,
+                               ((price, 1),), kind_rank=rank)  # fmt: skip
+                    walk(leg.to_id, [*legs, leg], seen | {leg.to_id})
 
         walk(held, [], frozenset({held}))
         if not chains:
             return None, CONVERSION_MISSING
-        chains.sort(key=lambda c: (len(c[2]), c[0], c[1]))
-        legs = chains[0][2]
+        chains.sort(key=lambda c: c[:4])
+        legs = chains[0][4]
         for leg in legs:
-            if self.stale(leg):
-                return None, PRICE_STALE
+            for price, _ in leg.factors:
+                if self.stale(price):
+                    return None, PRICE_STALE
         return legs, ""
 
 
@@ -710,11 +879,21 @@ class _Case:
 
 @dataclass(frozen=True)
 class _Valued:
-    """A position's value per unit in its base, the market objects it read,
-    and how its scenarios move them."""
+    """A position's value per unit in its base, the market objects it read
+    with how each moves it (its exponent), its own price where its model
+    read one, and its conversion legs."""
 
     per_unit: Fraction
-    objects: tuple[_Price, ...]
+    factors: tuple[tuple[_Price, int], ...]
+    own: _Price | None = None
+    legs: tuple[_Leg, ...] = ()
+
+
+def _valued(per_unit: Fraction, legs: Sequence[_Leg], own: _Price | None = None) -> _Valued:
+    factors = tuple(f for leg in legs for f in leg.factors)
+    if own is not None:
+        factors = ((own, 1), *factors)
+    return _Valued(per_unit, factors, own, tuple(legs))
 
 
 def _value(case: _Case, instrument_id: str, base: str) -> tuple[_Valued | None, str, str]:
@@ -730,7 +909,7 @@ def _value(case: _Case, instrument_id: str, base: str) -> tuple[_Valued | None, 
         legs, why = case.conversion(instrument_id, base)
         if legs is None:
             return None, why, ""
-        return _Valued(_product(legs), tuple(legs)), "", ""
+        return _valued(_product(legs), legs), "", ""
     if record.model_id == "binary_event":
         outcome = case.outcomes.get(instrument_id)
         if outcome is not None and outcome.final:
@@ -741,11 +920,7 @@ def _value(case: _Case, instrument_id: str, base: str) -> tuple[_Valued | None, 
             legs, why = case.conversion(record.payout[1], base)
             if legs is None:
                 return None, why, ""
-            return (
-                _Valued(Fraction(outcome.settlement_value) * _product(legs), tuple(legs)),
-                "",
-                "",
-            )
+            return _valued(Fraction(outcome.settlement_value) * _product(legs), legs), "", ""
     elif record.model_id != "quoted_price":
         raise ValueError(f"{instrument_id}'s model {record.model_id!r} is not one of v26's")
     price = case.price(instrument_id, record.price_kind)
@@ -756,14 +931,30 @@ def _value(case: _Case, instrument_id: str, base: str) -> tuple[_Valued | None, 
     legs, why = case.conversion(price.instrument_id, base)
     if legs is None:
         return None, why, ""
-    return _Valued(Fraction(price.amount) * _product(legs), (price, *legs)), "", ""
+    per_unit = Fraction(price.amount) * _product(legs)
+    if record.model_id == "quoted_price":
+        # Contract v27 (rulings 453 and 486): a quoted price's value per unit
+        # rounded half to even to 18 places; its market value that times the
+        # quantity, exact.
+        per_unit = Fraction(round_half_even(per_unit, 18))
+    return _valued(per_unit, legs, price), "", ""
 
 
-def _product(legs: Iterable[_Price]) -> Fraction:
+def _counted(legs: Iterable[_Leg]) -> int:
+    """A chain's length against `MOST_LEGS`: a cross counts as its two."""
+    return sum(2 if leg.derivation == CROSSED else 1 for leg in legs)
+
+
+def _product(legs: Iterable[_Leg]) -> Fraction:
     out = Fraction(1)
     for leg in legs:
-        out *= Fraction(leg.amount)
+        out *= Fraction(leg.rate)
     return out
+
+
+def _past_18(value: Decimal) -> bool:
+    exponent = value.as_tuple().exponent
+    return isinstance(exponent, int) and -exponent > 18
 
 
 def value_per_unit(
@@ -774,8 +965,9 @@ def value_per_unit(
     (or, for `binary_event`, its `outcome` where one is carried), times each
     conversion leg the inputs hold from the currency in hand, until none
     leads further. The value and the cash instrument (or ISO 4217 code) it
-    is in. `inputs` are `(subject_id, kind, amount, instrument_id or code)`
-    tuples."""
+    is in; from contract v27 a quoted price's rounded half to even to 18
+    places where it runs past them (rulings 453 and 486). `inputs` are
+    `(subject_id, kind, amount, instrument_id or code)` tuples."""
     rows = [(str(s), str(k), Decimal(a), str(i)) for s, k, a, i in inputs]
     if model_id not in MODELS:
         raise ValueError(f"{model_id!r} is not one of v26's models {MODELS}")
@@ -795,6 +987,10 @@ def value_per_unit(
     while True:
         leg = next((r for r in legs if r[0] == held and r[0] not in visited), None)
         if leg is None:
+            if model_id == "quoted_price" and _past_18(value):
+                # Contract v27 (rulings 453 and 486): rounded half to even to
+                # 18 places, as the engine rounds it, where it runs past them.
+                value = round_half_even(value, 18)
             return value, held
         visited.add(held)
         with localcontext() as context:
@@ -899,6 +1095,10 @@ def _linear(run: _Run, ref: Mapping[str, Any], definition: Definition) -> None:
     components = COMPONENTS.get((definition.definition, definition.version), ("",))
     for account in case.account_ids:
         base = case.bases[account]
+        reported = _reporting(run, account, key)
+        if reported is None:
+            continue
+        rate, currency = reported
         for scenario in _scenarios(case, account):
             sums: dict[tuple[tuple[str, str], ...], dict[str, Fraction]] = {}
 
@@ -934,7 +1134,15 @@ def _linear(run: _Run, ref: Mapping[str, Any], definition: Definition) -> None:
                     add(group, "gross", abs(worth))
                     add(group, "net", worth)
                 elif definition.definition == "pnl":
-                    add(group, "unrealized", _unrealized(position, worth))
+                    if position.cost is None:
+                        # Contract v27 (ruling 325): a lot's cost the book
+                        # does not record, never zero.
+                        if scenario == BASE:
+                            run.answer.not_evaluated.append(
+                                Unevaluated(account, position.instrument_id, key, COST_MISSING)
+                            )
+                        continue
+                    add(group, "unrealized", worth - Fraction(position.cost))
                 else:
                     add(group, "", worth)
             if "realized" in components:
@@ -953,6 +1161,12 @@ def _linear(run: _Run, ref: Mapping[str, Any], definition: Definition) -> None:
                                 )
                             )
                         continue
+                    if lot.cost is None:
+                        if scenario == BASE:
+                            run.answer.not_evaluated.append(
+                                Unevaluated(account, lot.instrument_id, key, COST_MISSING)
+                            )
+                        continue
                     add(group, "realized", Fraction(lot.proceeds) - Fraction(lot.cost))
             if not sums and not names:
                 sums[()] = {}
@@ -966,27 +1180,48 @@ def _linear(run: _Run, ref: Mapping[str, Any], definition: Definition) -> None:
                             breakdown=breakdown,
                             scenario=(scenario, "", ""),
                             value=round_half_even(
-                                held.get(component, Fraction(0)), definition.scale
+                                held.get(component, Fraction(0)) * rate, definition.scale
                             ),
-                            currency_instrument_id=base,
+                            currency_instrument_id=currency,
                         )
                     )
 
 
-def _unrealized(position: _Position, worth: Fraction) -> Fraction:
-    """One open position's unrealized P&L: its market value less its open
-    lots' cost."""
-    if position.cost is None:
-        raise ValueError(
-            f"pnl asks {position.instrument_id}'s lots' cost, and the case states none"
-        )
-    return worth - Fraction(position.cost)
+def _reporting(run: _Run, account: str, key: Key) -> tuple[Fraction, str] | None:
+    """The rate from an account's base to the job's reporting currency
+    (contract v27, ruling 459), its legs read, and the currency its figures
+    are in: 1 and the base where the job names none, or its base. None, the
+    account not evaluated with why, where no chain reaches it."""
+    case = run.case
+    base, reporting = case.bases[account], case.reporting_currency
+    if not reporting or reporting == base:
+        return Fraction(1), base
+    legs, why = case.conversion(base, reporting)
+    if legs is None:
+        run.answer.not_evaluated.append(Unevaluated(account, "", key, why, reporting))
+        return None
+    _read_legs(case, legs)
+    return _product(legs), reporting
 
 
 def _read(case: _Case, valued: _Valued) -> None:
-    for each in valued.objects:
-        if each.dataset:
-            case.datasets.add(each.dataset)
+    """What a valued position read, for the provenance: its datasets, its
+    own price (ruling 460) and its conversion legs (ruling 462)."""
+    for price, _ in valued.factors:
+        if price.dataset:
+            case.datasets.add(price.dataset)
+    if valued.own is not None:
+        case.input_prices.setdefault(valued.own.subject_id, valued.own)
+    _read_legs(case, valued.legs)
+
+
+def _read_legs(case: _Case, legs: Iterable[_Leg]) -> None:
+    for leg in legs:
+        for price, _ in leg.factors:
+            if price.dataset:
+                case.datasets.add(price.dataset)
+        case.legs.setdefault((leg.from_id, leg.to_id, leg.derivation, leg.via), leg)
+        _read_legs(case, leg.subs)
 
 
 def _concentration(run: _Run, ref: Mapping[str, Any], definition: Definition) -> None:
@@ -1134,11 +1369,10 @@ def _payoffs(
         if legs is None:
             failed.append((position.instrument_id, why, ""))
             continue
-        for leg in legs:
-            if leg.dataset:
-                case.datasets.add(leg.dataset)
         if position.cost is None:
-            raise ValueError(f"{position.instrument_id}'s payoff needs its lots' cost")
+            failed.append((position.instrument_id, COST_MISSING, ""))
+            continue
+        _read_legs(case, legs)
         terms.append((position, Fraction(record.payout[0]) * _product(legs)))
     if failed:
         return None, failed
@@ -1165,6 +1399,10 @@ def _resolution_payoff(run: _Run, ref: Mapping[str, Any], definition: Definition
         positions = [p for p in case.positions if p.account_id == account]
         if not any(p.instrument_id in group.members for p in positions):
             continue
+        reported = _reporting(run, account, key)
+        if reported is None:
+            continue
+        rate, currency = reported
         payoffs, failed = _payoffs(case, group, positions, base)
         if payoffs is None:
             for instrument, why, detail in failed:
@@ -1179,8 +1417,8 @@ def _resolution_payoff(run: _Run, ref: Mapping[str, Any], definition: Definition
                     account_id=account,
                     breakdown=(),
                     scenario=scenario,
-                    value=round_half_even(total, definition.scale),
-                    currency_instrument_id=base,
+                    value=round_half_even(total * rate, definition.scale),
+                    currency_instrument_id=currency,
                 )
             )
 
@@ -1268,6 +1506,10 @@ def _historical(run: _Run, ref: Mapping[str, Any], definition: Definition) -> No
     dates = case.dates[-(window + 1) :]
     for account in case.account_ids:
         base = case.bases[account]
+        reported = _reporting(run, account, key)
+        if reported is None:
+            continue
+        rate, currency = reported
         for scenario in _scenarios(case, account):
             groups: dict[tuple[tuple[str, str], ...], list[Fraction]] = {}
             positions = _positions(case, account, scenario)
@@ -1295,14 +1537,15 @@ def _historical(run: _Run, ref: Mapping[str, Any], definition: Definition) -> No
                     continue
                 moves: list[list[Fraction]] = []
                 short = False
-                for each in valued.objects:
+                for each, exponent in valued.factors:
                     series = _series(case, each.subject_id, dates)
-                    if series is None or any(v == 0 for v in series[:-1]):
+                    if series is None or any(v == 0 for v in series):
                         short = True
                         break
+                    # An inverted leg moves inversely with its lake price.
                     moves.append(
                         [
-                            Fraction(series[i]) / Fraction(series[i - 1])
+                            (Fraction(series[i]) / Fraction(series[i - 1])) ** exponent
                             for i in range(1, len(series))
                         ]
                     )
@@ -1337,8 +1580,8 @@ def _historical(run: _Run, ref: Mapping[str, Any], definition: Definition) -> No
                         account_id=account,
                         breakdown=group,
                         scenario=(scenario, "", ""),
-                        value=round_half_even(figure, definition.scale),
-                        currency_instrument_id=base,
+                        value=round_half_even(figure * rate, definition.scale),
+                        currency_instrument_id=currency,
                     )
                 )
             worst = _worst_resolution(case, positions, base)
@@ -1354,13 +1597,155 @@ def _historical(run: _Run, ref: Mapping[str, Any], definition: Definition) -> No
                         account_id=account,
                         breakdown=(),
                         scenario=(OUTCOME, "", ""),
-                        value=round_half_even(-worst, definition.scale),
-                        currency_instrument_id=base,
+                        value=round_half_even(-worst * rate, definition.scale),
+                        currency_instrument_id=currency,
                     )
                 )
 
 
+# ── execution_cost, version 1 (contract v27; the gaps spec's C1 to C10) ──────
+
+#: The benchmarks version 1 measures, each with the execution's moment it is
+#: taken at; FIX and INTERVAL_VWAP need a fixing or trades, which a v1 job
+#: does not read.
+TCA_MOMENTS = (
+    ("TCA_BENCHMARK_DECISION", "decision_at_ns"),
+    ("TCA_BENCHMARK_ARRIVAL", "arrival_at_ns"),
+    ("TCA_BENCHMARK_PLACEMENT_ARRIVAL", "placement_arrival_at_ns"),
+    ("TCA_BENCHMARK_MID_AT_FILL", "executed_at_ns"),
+)
+#: The quote's staleness bound by default (C4): 5 seconds.
+TCA_STALENESS_BOUND_NS = 5_000_000_000
+NO_QUOTE, NOT_MEASURED = "TCA_UNANSWERED_NO_QUOTE", "TCA_UNANSWERED_NOT_MEASURED"
+
+
+def _money_json(amount: Decimal, instrument_id: str) -> dict[str, str]:
+    return {"amount": decimal_text(amount), "instrument_id": instrument_id}
+
+
+def _bps(value: Fraction) -> Decimal:
+    return round_half_even(value * 10_000, 4)
+
+
+def _execution_cost(run: _Run, ref: Mapping[str, Any], definition: Definition) -> None:
+    """execution_cost v1: each execution of the job's accounts against each
+    benchmark it is measured by, in bps, side-adjusted, positive a cost --
+    s × (price − benchmark) ÷ benchmark × 10⁴ (C3) -- against the mid in
+    force at the benchmark's moment within the staleness bound, never an
+    imputed value (C4); fees and financing apart in bps of notional. Each
+    row is the lake's `ExecutionCost`; the figures are each account's
+    notional-weighted mean per benchmark, in its base (or the job's
+    reporting currency)."""
+    case, key = run.case, _measure_key(ref)
+    bound_default = int(case.inputs.get("tca_staleness_bound_ns") or TCA_STALENESS_BOUND_NS)
+    for account in case.account_ids:
+        base = case.bases[account]
+        reported = _reporting(run, account, key)
+        if reported is None:
+            continue
+        rate, _currency = reported
+        weighted: dict[str, tuple[Fraction, Fraction]] = {}
+        for execution in case.executions:
+            if execution["account_id"] != account:
+                continue
+            price = _d(execution["price"]["amount"])
+            held = execution["price"]["instrument_id"]
+            quantity = _d(execution["quantity"])
+            notional = price * quantity
+            sign = 1 if execution["side"] == "SIDE_BUY" else -1
+            legs, _ = case.conversion(held, base)
+            in_base = None if legs is None else Fraction(notional) * _product(legs) * rate
+            if legs is not None:
+                _read_legs(case, legs)
+            charges = {}
+            for name in ("fees", "financing"):
+                charge = execution.get(name)
+                charges[name] = (
+                    None
+                    if not charge or notional == 0
+                    else _bps(Fraction(_d(charge["amount"])) / Fraction(notional))
+                )
+            for benchmark, moment_name in TCA_MOMENTS:
+                moment = int(execution.get(moment_name) or 0)
+                quotes = [
+                    q
+                    for q in case.market.get((execution["instrument_id"], "mid"), [])
+                    if q.instrument_id == held and q.valid_at_ns <= moment
+                ]
+                quote = max(quotes, key=lambda q: (q.valid_at_ns, q.dataset)) if quotes else None
+                bound = bound_default
+                if quote is not None and quote.dataset in case.stale_after:
+                    bound = min(bound, case.stale_after[quote.dataset])
+                unanswered = ""
+                if moment == 0:
+                    unanswered = NOT_MEASURED
+                elif quote is None or moment - quote.valid_at_ns > bound or quote.amount == 0:
+                    unanswered = NO_QUOTE
+                cost = None
+                if not unanswered and quote is not None:
+                    case.datasets.add(quote.dataset)
+                    exact = sign * (Fraction(price) - Fraction(quote.amount)) / Fraction(
+                        quote.amount
+                    )
+                    cost = _bps(exact)
+                    if in_base is not None:
+                        total, weight = weighted.get(benchmark, (Fraction(0), Fraction(0)))
+                        weighted[benchmark] = (
+                            total + exact * 10_000 * in_base,
+                            weight + in_base,
+                        )
+                run.answer.execution_costs.append(
+                    {
+                        "execution_id": execution["execution_id"],
+                        "order_id": execution.get("order_id", ""),
+                        "placement_id": execution.get("placement_id", ""),
+                        "account_id": account,
+                        "benchmark": benchmark,
+                        "benchmark_price": None
+                        if unanswered or quote is None
+                        else _money_json(quote.amount, quote.instrument_id),
+                        "benchmark_at_ns": str(0 if unanswered == NOT_MEASURED else moment),
+                        "benchmark_dataset": "" if unanswered or quote is None else quote.dataset,
+                        "benchmark_row_key": "" if unanswered or quote is None else quote.row_key,
+                        "execution_price": _money_json(price, held),
+                        "side": execution["side"],
+                        "notional": _money_json(notional, held),
+                        "cost_bps": None if cost is None else decimal_text(cost),
+                        "fees_bps": None
+                        if charges["fees"] is None
+                        else decimal_text(charges["fees"]),
+                        "financing_bps": None
+                        if charges["financing"] is None
+                        else decimal_text(charges["financing"]),
+                        "liquidity_indicator": execution.get("liquidity_indicator", ""),
+                        "venue_id": execution.get("venue_id", ""),
+                        "unanswered": unanswered,
+                        "staleness_bound_ns": str(bound),
+                        "time_precision": execution.get("time_precision", ""),
+                        "reject_count": int(execution.get("reject_count") or 0),
+                        "time_to_fill_ns": str(int(execution.get("time_to_fill_ns") or 0)),
+                    }
+                )
+        for benchmark, _ in TCA_MOMENTS:
+            if benchmark not in weighted or weighted[benchmark][1] == 0:
+                continue
+            total, weight = weighted[benchmark]
+            run.answer.figures.append(
+                AnswerFigure(
+                    measure=key,
+                    account_id=account,
+                    breakdown=(("benchmark", benchmark),),
+                    scenario=(BASE, "", ""),
+                    value=round_half_even(total / weight, definition.scale),
+                )
+            )
+    run.answer.execution_costs.sort(
+        key=lambda r: (r["execution_id"], [b for b, _ in TCA_MOMENTS].index(r["benchmark"]))
+    )
+
+
 _MEASURES = {
+    "execution_cost": _execution_cost,
     "market_value": _linear,
     "exposure": _linear,
     "pnl": _linear,
@@ -1384,6 +1769,8 @@ def compute(inputs: Mapping[str, Any]) -> Answer:
             raise ValueError(f"the reference holds no definition {key[0]} v{key[1]}")
         before = len(run.answer.figures)
         unevaluated = len(run.answer.not_evaluated)
+        if key[0] == "execution_cost":
+            run.answer.asks_execution_cost = True
         _MEASURES[key[0]](run, ref, definition)
         run.answer.not_evaluated[unevaluated:] = sorted(
             run.answer.not_evaluated[unevaluated:],
@@ -1401,6 +1788,7 @@ def compute(inputs: Mapping[str, Any]) -> Answer:
         )
     run.answer.provenance = {
         "book_watermark": list(inputs.get("book_watermark") or []),
+        "business_date": case.business_date,
         "lake_as_of_ns": str(case.lake_as_of_ns),
         "datasets": sorted(case.datasets),
         "instruments": [
@@ -1433,6 +1821,24 @@ def compute(inputs: Mapping[str, Any]) -> Answer:
         "routing_version": str(inputs.get("routing_version", "0")),
         "engine_version": case.engine_version,
         "answer_hash": answer_hash(inputs),
+        "input_prices": [
+            {
+                "instrument_id": instrument,
+                "price": {
+                    "amount": decimal_text(price.amount),
+                    "instrument_id": price.instrument_id,
+                },
+                "dataset": price.dataset,
+                "row_key": price.row_key,
+                "version": str(price.version),
+                "source_ns": str(price.source_ns),
+            }
+            for instrument, price in sorted(case.input_prices.items())
+        ],
+        "conversion_legs": [
+            case.legs[k].to_json()
+            for k in sorted(case.legs, key=lambda k: (k[0], k[1], _DERIVATION_RANK[k[2]], k[3]))
+        ],
     }
     return run.answer
 

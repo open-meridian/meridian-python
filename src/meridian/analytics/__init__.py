@@ -82,8 +82,8 @@ __all__ = [
     "what_if",
 ]
 
-#: v26's standard measure definitions (the v26 plan's question 226), each
-#: served at version 1.
+#: The standard measure definitions: v26's eight (the v26 plan's question
+#: 226) and from contract v27 `execution_cost` (W12.1, the gaps spec's C).
 STANDARD_MEASURES = (
     "market_value",
     "exposure",
@@ -93,11 +93,13 @@ STANDARD_MEASURES = (
     "expected_shortfall",
     "resolution_payoff",
     "implied_distribution",
+    "execution_cost",
 )
-#: The version of each standard definition v26's component serves: a later
-#: one (`pnl` version 2, v27's realized P&L; ruling 320) is refused as a job
-#: is built.
-SERVED_VERSIONS = {name: 1 for name in STANDARD_MEASURES}
+#: The latest version of each standard definition the component serves:
+#: from contract v27 `pnl` version 2, realized P&L beside unrealized
+#: (rulings 320 and 396), version 1 still served; a later one is refused as
+#: a job is built.
+SERVED_VERSIONS = {name: 1 for name in STANDARD_MEASURES} | {"pnl": 2}
 #: The definitions over an event group, which name it.
 EVENT_MEASURES = frozenset({"resolution_payoff", "implied_distribution"})
 #: The breakdowns a standard definition may allow; a scheme the deployment
@@ -124,9 +126,8 @@ def measure(
         raise ValueError(f"{definition} names an empty breakdown")
     served = SERVED_VERSIONS.get(definition)
     if served is not None and version > served:
-        later = " (pnl v2's realized P&L comes with v27)" if definition == "pnl" else ""
         raise ValueError(
-            f"{definition} v{version} is not served in contract v26; v{served} is{later}"
+            f"{definition} v{version} is not served in contract v27; up to v{served} is"
         )
     if definition in EVENT_MEASURES and not event_group:
         raise ValueError(f"{definition} is over an event group, and names none")
@@ -170,12 +171,19 @@ def job(
     lake_as_of_ns: int = 0,
     sources: ops.SourceChoice | None = None,
     what_if: WhatIf | None = None,
+    business_date: str = "",
+    reporting_currency: str = "",
 ) -> Job:
     """A job (W12.1): its measures, the accounts it is over, and its inputs by
     reference -- the book's watermark (none for now), the lake's as-of (0
-    for now) and its source choice (none for the deployment's default).
-    Refused as it is built: no measure, a measure twice, an account twice,
-    or a what-if on an account the job is not over."""
+    for now) and its source choice (none for the deployment's default);
+    from contract v27 a business date (ISO 8601, the book at that date's end
+    and the lake at its closes; ruling 458) in place of both, and a
+    reporting currency by its cash instrument's `INS-` ID (ruling 459).
+    Refused as it is built, as the component refuses it: no account (a job
+    is over one account or more), an account empty or twice, no measure, a
+    measure twice, a what-if on an account the job is not over, or a
+    business date beside a watermark or an as-of."""
     if not measures:
         raise ValueError("a job asks at least one measure")
     seen: list[tuple[str, int, tuple[str, ...], str]] = []
@@ -192,9 +200,16 @@ def job(
     twice = sorted({a for a in named if named.count(a) > 1})
     if twice:
         raise ValueError(f"the job names {', '.join(twice)} twice")
-    needs_accounts = [m.definition for m in measures if m.definition != "implied_distribution"]
-    if needs_accounts and not named:
-        raise ValueError(f"{needs_accounts[0]} is over accounts, and the job names none")
+    if not named:
+        raise ValueError("a job is over one account or more, and this names none")
+    for i, account in enumerate(named):
+        if not account:
+            raise ValueError(f"the job's account {i} is empty")
+    if business_date and (book_at is not None or lake_as_of_ns):
+        raise ValueError(
+            "a job for a business date reads the book at its end and the lake at its "
+            "closes; it names no watermark and no as-of beside it"
+        )
     if what_if is not None and what_if.account_id not in named:
         raise ValueError(f"the what-if's account {what_if.account_id} is not among the job's")
     return Job(
@@ -202,6 +217,8 @@ def job(
         inputs=ops.InputRefs(book_at=book_at, lake_as_of_ns=lake_as_of_ns, sources=sources),
         measures=list(measures),
         what_if=what_if,
+        business_date=business_date,
+        reporting_currency=reporting_currency,
     )
 
 
@@ -418,6 +435,32 @@ def answer_json(message: Any) -> dict[str, Any]:
             "routing_version": str(p.routing_version),
             "engine_version": p.engine_version,
             "answer_hash": p.answer_hash,
+            "business_date": p.business_date,
+            "input_prices": [
+                {
+                    "instrument_id": i.instrument_id,
+                    "price": {
+                        "amount": decimal_text(as_decimal(i.price.amount)),
+                        "instrument_id": i.price.instrument_id,
+                    },
+                    "dataset": i.dataset,
+                    "row_key": i.row_key,
+                    "version": str(i.version),
+                    "source_ns": str(i.source_ns),
+                }
+                for i in p.input_prices
+            ],
+            "conversion_legs": [
+                {
+                    "from_instrument_id": c.from_instrument_id,
+                    "to_instrument_id": c.to_instrument_id,
+                    "rate": decimal_text(as_decimal(c.rate)),
+                    "derivation": ops.ConversionDerivation.Name(c.derivation),
+                    "via_instrument_id": c.via_instrument_id,
+                    "dataset": c.dataset,
+                }
+                for c in p.conversion_legs
+            ],
         },
     }
 
@@ -497,6 +540,32 @@ def answer_message(answer: Mapping[str, Any]) -> ops.ReadJobAnswerResult:
             routing_version=int(p["routing_version"]),
             engine_version=p["engine_version"],
             answer_hash=p["answer_hash"],
+            business_date=p.get("business_date", ""),
+            input_prices=[
+                ops.InputPrice(
+                    instrument_id=i["instrument_id"],
+                    price=ops.Money(
+                        amount=_decimal(Decimal(i["price"]["amount"]), "input price"),
+                        instrument_id=i["price"]["instrument_id"],
+                    ),
+                    dataset=i["dataset"],
+                    row_key=i["row_key"],
+                    version=int(i["version"]),
+                    source_ns=int(i["source_ns"]),
+                )
+                for i in p.get("input_prices") or ()
+            ],
+            conversion_legs=[
+                ops.ConversionLeg(
+                    from_instrument_id=c["from_instrument_id"],
+                    to_instrument_id=c["to_instrument_id"],
+                    rate=_decimal(Decimal(c["rate"]), "conversion leg"),
+                    derivation=c["derivation"],
+                    via_instrument_id=c["via_instrument_id"],
+                    dataset=c["dataset"],
+                )
+                for c in p.get("conversion_legs") or ()
+            ],
         ),
     )
 
