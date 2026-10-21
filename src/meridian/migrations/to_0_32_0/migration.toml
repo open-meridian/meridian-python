@@ -19,7 +19,10 @@ pivots, and name each position's input price and each conversion leg.
 A data plugin records the lake's rates slice with meridian.roles.data.rates
 (fixings, averages, index levels and curves' points; `Feed`, `read_curve`);
 records each row's age at the edge, its feed delay, with a roles.Latency on
-its Wants (`Wants.latency`), and a stream's liveness (`Wants.liveness`); and
+its Wants (`Wants.latency`) -- recorded, not yet reported: core receives
+ReportLatency from contract v28 (rulings 515 and 516), so `Latency.report`
+sends nothing in 0.32.0 -- and a stream's liveness (`Wants.liveness`, sent
+as RecordLiveness); and
 declares a dataset's delay (DatasetDeclaration.declared_delay_ns). A
 DatasetLicence writes both derived_use and derived_use_terms (ruling 479).
 A connectivity plugin's Trader takes the placement types its venue takes,
@@ -82,7 +85,9 @@ reads-a-trade-dates-fx-close"""
 instead = """map each new case to the plugin's own producer -- a curve read with \
 rates.read_curve, a rate and a liveness heard (receive(rates_recorded=..., \
 liveness_recorded=roles.Liveness().heard)), costs read with list_execution_costs, \
-the feed delay or a session's round trip sent by a roles.Latency, the ems's check \
+the feed delay or a session's round trip taken by a roles.Latency and sent by the \
+case itself (report_latency(snapshots=latency.snapshots())), since 0.32.0's \
+Latency.report sends nothing until contract v28, the ems's check \
 with roles.ems.ReferenceCheck -- or, for a case about something the plugin's source \
 never presents (`about`: rates, streams, rfqs, trades), name it in not_presented with \
 why; meridian.roles.data.testing's PAIRS_NOT_PRESENTED and \

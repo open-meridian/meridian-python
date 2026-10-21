@@ -15,10 +15,13 @@ increment. Every value is recorded, never sampled.
     latency.age("oanda-1:live", AGE_HOP_EDGE, now_ns - source_ns)
     await latency.report()                             # every 10 seconds
 
-**Every 10 seconds** `report` takes the counts, resets them and sends them
-as sparse snapshots (`ReportLatency`), each with its counters, clock skew,
-the session's last sign of life and the ceilings in force from the
-plugin's `session_ceilings` (`ceilings`); `run` does it in a loop.
+**Every 10 seconds** `report` takes the counts and resets them as sparse
+snapshots (`snapshots`), each with its counters, clock skew, the session's
+last sign of life and the ceilings in force from the plugin's
+`session_ceilings` (`ceilings`); `run` does it in a loop. **Recorded, not
+yet reported:** core receives ReportLatency from contract v28 (ruling 515),
+so 0.32.0 sends nothing -- the snapshots are taken, kept for
+`session_latency`, and dropped -- until v28 turns the send on.
 `session_latency` answers each session's `SessionLatency` -- p50, p95 and
 p99 over the last minute, congestion over the last hour -- for the
 connection page's Sessions section and its tool.
@@ -71,6 +74,11 @@ HIGHEST_NS = 3_600 * 1_000_000_000
 SIGNIFICANT_DIGITS = 2
 #: A snapshot's interval: 10 seconds.
 INTERVAL_NS = 10 * 1_000_000_000
+#: Whether `Latency.report` sends its snapshots (ReportLatency). Off in
+#: 0.32.0: core receives ReportLatency from contract v28, ruling 515; v28
+#: turns it on. Until then every recorder records, and the Sessions section
+#: reads what was recorded.
+_SENDS_REPORT_LATENCY = False
 #: How many snapshots `SessionLatency`'s percentiles cover (a minute) and
 #: its counts (an hour).
 _MINUTE = 6
@@ -413,10 +421,16 @@ class Latency:
         return found if isinstance(found, ops.LatencyCeilings) else None
 
     async def report(self) -> int:
-        """Send the snapshots taken now, in `ReportLatency`'s batches of 1 to
-        500; how many were sent. A refusal is kept (`refused`) and the next
-        interval's sent all the same."""
+        """Take the snapshots now, and, from contract v28, send them in
+        `ReportLatency`'s batches of 1 to 500; how many were sent. A refusal
+        is kept (`refused`) and the next interval's sent all the same. In
+        0.32.0 nothing is sent: core receives ReportLatency from contract
+        v28, ruling 515 (`_SENDS_REPORT_LATENCY`); the snapshots are taken
+        all the same, so each interval's counts reset and the last minute's
+        stay for `session_latency`."""
         taken = self.snapshots()
+        if not _SENDS_REPORT_LATENCY:
+            return 0
         most = REPORT_LATENCY_REQUEST_SNAPSHOTS_COUNT.most
         sent = 0
         for start in range(0, len(taken), most):

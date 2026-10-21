@@ -1324,7 +1324,7 @@ async def reports_its_pre_trade_checks_data_age(recorder: Recorder) -> None:
         )
     )
     assert check.stale(price, asset_class="equity") is None
-    await latency.report()
+    await recorder.report_latency(snapshots=latency.snapshots())
 
 
 async def picks_a_quote_on_its_rfq_placement(recorder: Recorder) -> None:
@@ -1374,7 +1374,7 @@ async def reports_a_sessions_round_trip(recorder: Recorder) -> None:
     latency = Latency(recorder)
     latency.rtt("fix-order", 41_000_000)
     latency.alive("fix-order")
-    await latency.report()
+    await recorder.report_latency(snapshots=latency.snapshots())
 
 
 async def sets_a_block_members_allocation_instruction(recorder: Recorder) -> None:

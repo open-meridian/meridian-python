@@ -182,14 +182,16 @@ async def caught_up(recorder: Recorder) -> None:
 
 async def round_trip(recorder: Recorder) -> None:
     """Contract v27: the session's latency over an interval -- each venue
-    call's round trip, a placement's acknowledgement -- sent as the SDK's
-    Trader recorded it."""
+    call's round trip, a placement's acknowledgement -- as the SDK's Trader
+    recorded it, sent as ReportLatency carries it. The SDK records it and
+    sends nothing until contract v28 (ruling 515), so the case sends the
+    snapshots itself."""
     rig = Rig(recorder)
     held = rig.placement()
     rig.holds(held)
     await rig.hear(held)
     await rig.poll()
-    await rig.latency.report()
+    await recorder.report_latency(snapshots=rig.latency.snapshots())
 
 
 PRODUCERS: dict[str, Producer] = {

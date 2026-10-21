@@ -322,7 +322,19 @@ def test_the_histogram_is_hdrhistograms_layout_at_two_significant_digits() -> No
     assert held.percentile(50) <= 50_500_000 and held.total == 100
 
 
-async def test_latency_is_sent_as_sparse_snapshots_every_interval() -> None:
+async def test_latency_is_recorded_and_not_yet_reported() -> None:
+    """Rulings 515 and 516: core receives ReportLatency from contract v28,
+    so 0.32.0's report takes the snapshots and sends nothing."""
+    recorder = Recorder("oanda-1")
+    latency = Latency(recorder)
+    latency.rtt("pricing-stream", 41_000_000)
+    assert await latency.report() == 0
+    assert recorder.on("ReportLatency") == []
+    assert latency.session_latency()[0].rtt.p99_ns, "kept for the Sessions section"
+    assert latency.sessions["pricing-stream"].histograms == {}, "the interval's counts reset"
+
+
+async def test_latency_is_taken_as_sparse_snapshots_every_interval() -> None:
     recorder = Recorder("oanda-1")
     clock = iter(range(0, 10**12, 10**10))
     latency = Latency(
@@ -333,9 +345,10 @@ async def test_latency_is_sent_as_sparse_snapshots_every_interval() -> None:
     latency.rtt("pricing-stream", 41_000_000)
     latency.count("pricing-stream", reconnects=1)
     latency.age("oanda-1:live", "AGE_HOP_EDGE", 120_000_000, session="pricing-stream")
-    sent = await latency.report()
-    assert sent == 2
+    taken = latency.snapshots()
+    await recorder.report_latency(snapshots=taken)
     snapshots = recorder.on("ReportLatency")[0].snapshots
+    assert len(snapshots) == 2
     session, age = snapshots
     assert (session.session, session.metric, session.counters.reconnects) == (
         "pricing-stream",
@@ -353,8 +366,8 @@ async def test_latency_is_sent_as_sparse_snapshots_every_interval() -> None:
     assert shown.rtt.p99_ns and shown.reconnects == 1
     assert shown.feed_delay[0].dataset == "oanda-1:live"
     assert shown.ceiling is not None and shown.ceiling.rtt_p99_ns == 250_000_000
-    # The next interval sends its counters alone, histograms reset.
-    await latency.report()
+    # The next interval takes its counters alone, histograms reset.
+    await recorder.report_latency(snapshots=latency.snapshots())
     again = recorder.on("ReportLatency")[1].snapshots
     assert [s.histogram.total for s in again] == [0]
 

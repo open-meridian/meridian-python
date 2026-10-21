@@ -376,14 +376,17 @@ def feed_delay(record: Callable[[Recorder, Any], Awaitable[None]]) -> Producer:
     """`reports-its-feed-delay` (contract v27, W4.16): the plugin's own
     conversion run with a `roles.Latency` on its `Wants` -- `record(recorder,
     latency)` sets `wants.latency` and records rows that carry a source time
-    -- then the snapshots sent, the `edge` hop's age among them."""
+    -- then the snapshots taken, the `edge` hop's age among them, sent as
+    ReportLatency carries them. 0.32.0's `Latency.report` sends nothing
+    (core receives ReportLatency from contract v28, ruling 515), so the
+    case sends what the recorder took itself."""
 
     async def produce(recorder: Recorder) -> None:
         from .._latency import Latency
 
         latency = Latency(recorder)
         await record(recorder, latency)
-        await latency.report()
+        await recorder.report_latency(snapshots=latency.snapshots())
 
     return produce
 

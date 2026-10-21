@@ -165,12 +165,13 @@ async def asks_for_a_settlement_date(recorder: Recorder) -> None:
 
 # Its feed delay (contract v27): each row it records unasked has its age at
 # the edge -- when it was read, less the vendor's published time -- recorded
-# by the SDK's Latency on its Wants, and sent every 10 seconds.
+# by the SDK's Latency on its Wants. The SDK records it and sends nothing
+# until contract v28 (ruling 515), so the case sends the snapshots itself.
 async def its_feed_delay(recorder: Recorder) -> None:
     plugin = converter(recorder)
     plugin.wants.latency = Latency(recorder)
     await plugin.record_daily("BTC-USD", DAILY["BTC-USD"])
-    await plugin.wants.latency.report()
+    await recorder.report_latency(snapshots=plugin.wants.latency.snapshots())
 
 
 PRODUCERS: dict[str, Producer] = {
