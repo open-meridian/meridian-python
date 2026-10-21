@@ -1886,7 +1886,9 @@ await plugin.receive(observations_wanted=lambda heard: wants.hear(heard, answer)
   **Recorded, not yet reported**: core receives `ReportLatency` from
   contract v28 (rulings 515 and 516), so 0.32.0 records every session and
   hop locally, shows it in "Sessions", and sends nothing; the liveness
-  below is sent. A data plugin's
+  below is sent. The suites' three latency reports are about `latency`, and
+  a v27 plugin names them not presented: "core receives ReportLatency from
+  contract v28, ruling 515" (ruling 518). A data plugin's
   `Wants.latency` records each row's age at the edge, its feed delay, and
   `Wants.liveness` a stream's heartbeat, which confirms the values in force
   (`RecordLiveness`); a dataset declares its delay
@@ -1916,7 +1918,8 @@ await plugin.receive(observations_wanted=lambda heard: wants.hear(heard, answer)
   its group (ruling 464); the events of the contracts served kept reported
   (`Feed.keep_events`).
 - **The data suite**: seven rates cases (about `rates`), a stream's
-  liveness (about `streams`), every data plugin's feed delay; the lake's
+  liveness (about `streams`), every data plugin's feed delay (about
+  `latency`, not presented until v28: ruling 518); the lake's
   bounded query is about trades, so a plugin recording none marks it not
   presented. `data.testing` carries `rates_producers` and each kind's cases
   never presented (`PAIRS_NOT_PRESENTED`, `EVENT_CONTRACTS_NOT_PRESENTED`).

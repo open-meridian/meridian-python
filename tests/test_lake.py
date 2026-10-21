@@ -16,6 +16,7 @@ import asyncio
 import dataclasses
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from typing import Any
 
 import grpc
 import pytest
@@ -40,8 +41,9 @@ from meridian import (
 from meridian.edge import as_reported
 from meridian.plugin.v1 import operations_pb2 as ops
 from meridian.roles.data import backfill_restart
-from meridian.roles.data.testing import RATES_CASES, feed_delay, rates_producers
-from meridian.suites import Recorder, check, names, run, suite
+from meridian.roles.data.testing import RATES_CASES, rates_producers
+from meridian.suites import Recorder, check, names, suite
+from meridian.suites import run as run_suite
 from order_path_cases import PRODUCERS
 from rates_cases import PUBLISHED, RATES
 
@@ -1091,8 +1093,22 @@ def producers(**mutations: bool) -> dict[str, object]:
         # Contract v27: the rates slice, a stream's liveness and the feed delay.
         **rates_producers(RATES, source="ust", now_ns=PUBLISHED),
         "records-a-datasets-liveness": liveness,
-        "reports-its-feed-delay": feed_delay(recorded_with_latency),
     }
+
+
+#: Ruling 518: the feed delay is about `latency` until v28, not presented by
+#: a v27 data plugin with why.
+LATENCY = {
+    "reports-its-feed-delay": "core receives ReportLatency from contract v28, ruling 515"
+}
+
+
+def run(role: str, producers: Any, **given: Any) -> Any:
+    """A suite as a v27 plugin runs it: the data suite's feed delay not
+    presented."""
+    skipped = dict(LATENCY) if role == "data" else {}
+    skipped.update(given.pop("not_presented", None) or {})
+    return run_suite(role, producers, not_presented=skipped, **given)
 
 
 async def liveness(recorder: Recorder) -> None:
@@ -1101,24 +1117,6 @@ async def liveness(recorder: Recorder) -> None:
 
     wants = data.Wants(recorder, ("live",), clock_ns=lambda: DAY)
     assert await wants.liveness("live") == 0  # the recorder keeps nothing
-
-
-async def recorded_with_latency(recorder: Recorder, latency: object) -> None:
-    """A price recorded unasked, its age at the edge kept on the Wants."""
-    from meridian.roles import data
-
-    wants = data.Wants(recorder, ("daily",), clock_ns=lambda: DAY, latency=latency)
-    price = meridian.Price(
-        meta=meridian.ObservationMeta(
-            row_key="BTC-USD:1d:2026-10-08",
-            subjects=[ops.SubjectRef(entity_id=BTC)],
-            source=ops.Source(dataset=DAILY),
-            source_times=[meridian.SourceTime(kind="published", at_ns=DAY - 5_000_000_000)],
-        ),
-        kind="close",
-        price=meridian.Money(Decimal("62000.10"), "USD"),
-    )
-    await wants.record("prices", [price], "daily")
 
 
 def event_group(*, exhaustive: bool | None):  # type: ignore[no-untyped-def]
@@ -1160,7 +1158,7 @@ def test_the_data_suite_is_carried_with_its_forty_four_cases() -> None:
     assert held.case("queries-the-lake-within-bounds").about == "trades"
     assert {held.case(name).about for name in RATES_CASES} == {"rates"}
     assert held.case("records-a-datasets-liveness").about == "streams"
-    assert held.case("reports-its-feed-delay").about == ""
+    assert held.case("reports-its-feed-delay").about == "latency"  # until v28 (518)
     assert held.case("reports-an-event-group").about == "outcomes"
     assert held.case("reports-a-flag-the-venue-does-not-state").about == "outcomes"
     assert "a-want-recorded-against" in names("data")
@@ -1239,7 +1237,8 @@ V19_DATA_CASES = {
 def test_a_data_plugin_converting_exactly_passes_every_case_of_its_suite() -> None:
     report = run("data", producers(), instance_id="toy-1")
     assert report.passed, report.failures
-    assert len(report.passed_cases) == 44
+    assert len(report.passed_cases) == 44 - 1
+    assert report.not_presented == LATENCY
     assert report.answered_by_sdk == [
         "hears-and-reads-a-replacement",
         "reads-the-template-catalogue",
@@ -1268,8 +1267,8 @@ def test_a_case_about_a_kind_the_plugin_never_publishes_may_be_not_presented() -
     mapped = {name: made for name, made in every.items() if name not in never}
     report = run("data", mapped, not_presented=never)
     assert report.passed, report.failures
-    assert report.not_presented == never
-    assert len(report.passed_cases) == 44 - 10
+    assert report.not_presented == {**LATENCY, **never}
+    assert len(report.passed_cases) == 44 - 11
 
 
 def test_a_case_about_a_field_the_source_never_states_may_be_not_presented() -> None:
@@ -1279,7 +1278,7 @@ def test_a_case_about_a_field_the_source_never_states_may_be_not_presented() -> 
     mapped = {name: made for name, made in every.items() if name != "the-takers-side-stated"}
     report = run("data", mapped, not_presented={"the-takers-side-stated": why})
     assert report.passed, report.failures
-    assert report.not_presented == {"the-takers-side-stated": why}
+    assert report.not_presented == {**LATENCY, "the-takers-side-stated": why}
 
 
 def test_a_restart_that_does_not_read_its_last_trades_fails_the_suite() -> None:
@@ -1314,7 +1313,7 @@ def test_a_case_every_data_plugin_answers_is_never_not_presented_and_one_that_is
     assert "required" in report.failures["an-exact-price"]
     assert "required" in report.failures["a-want-recorded-against"]
     assert "says why" in report.failures["a-trade-recorded"]
-    assert report.not_presented == {}
+    assert report.not_presented == LATENCY
 
 
 def test_a_data_plugin_declining_a_subject_another_source_resolved_fails_the_suite() -> None:

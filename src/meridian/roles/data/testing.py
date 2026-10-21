@@ -86,7 +86,6 @@ __all__ = [
     "PAIRS_NOT_PRESENTED",
     "PairsChecks",
     "event_contract_producers",
-    "feed_delay",
     "held",
     "lake_query",
     "hear",
@@ -372,28 +371,10 @@ def lake_query(subject: str, kind: str = "prices") -> Producer:
     return produce
 
 
-def feed_delay(record: Callable[[Recorder, Any], Awaitable[None]]) -> Producer:
-    """`reports-its-feed-delay` (contract v27, W4.16): the plugin's own
-    conversion run with a `roles.Latency` on its `Wants` -- `record(recorder,
-    latency)` sets `wants.latency` and records rows that carry a source time
-    -- then the snapshots taken, the `edge` hop's age among them, sent as
-    ReportLatency carries them. 0.32.0's `Latency.report` sends nothing
-    (core receives ReportLatency from contract v28, ruling 515), so the
-    case sends what the recorder took itself."""
-
-    async def produce(recorder: Recorder) -> None:
-        from .._latency import Latency
-
-        latency = Latency(recorder)
-        await record(recorder, latency)
-        await recorder.report_latency(snapshots=latency.snapshots())
-
-    return produce
-
-
 #: The cases a kind of venue never presents unless its module maps them
 #: (contract v27): a pairs or event-contract venue publishes no rates; an
-#: event-contract venue polls rather than streams, and records no trades.
+#: event-contract venue polls rather than streams, and records no trades;
+#: and every plugin's feed delay, about `latency` until v28 (ruling 518).
 _RATES = (
     "a-rate-fixing",
     "a-same-day-revision",
@@ -403,11 +384,17 @@ _RATES = (
     "an-index-level",
     "a-curve-point-from-another-source",
 )
-PAIRS_NOT_PRESENTED = {case: "a pairs venue publishes no rates" for case in _RATES}
+#: Why a case about `latency` is not presented in contract v27 (ruling 518).
+_LATENCY_NOT_YET = "core receives ReportLatency from contract v28, ruling 515"
+PAIRS_NOT_PRESENTED = {
+    **{case: "a pairs venue publishes no rates" for case in _RATES},
+    "reports-its-feed-delay": _LATENCY_NOT_YET,
+}
 EVENT_CONTRACTS_NOT_PRESENTED = {
     **{case: "an event-contract venue publishes no rates" for case in _RATES},
     "records-a-datasets-liveness": "it polls its venue each second; it streams nothing",
     "queries-the-lake-within-bounds": "it records no trades",
+    "reports-its-feed-delay": _LATENCY_NOT_YET,
 }
 
 
@@ -563,29 +550,6 @@ def pairs_producers(venue: Any, **mutations: Any) -> dict[str, Producer]:
 
         return produce
 
-    def timed(message: str, key: str, data_type: str) -> Producer:
-        # Contract v27: a streamed message's rows, their age at the edge
-        # recorded as the plugin's Latency keeps it, then sent.
-        async def record(recorder: Recorder, latency: Any) -> None:
-            feed, store = made_on(recorder)
-            _mutated(feed, mutations)
-            feed.wants.latency = latency
-            subject = await held(store, feed, venue.BASE)
-            event = ops.ObservationsWantedEvent(
-                want_id="WNT-S", dataset=feed.dataset(key), data_type=data_type,
-                subjects=[ops.SubjectRef(entity_id=subject)], standing=True,
-            )  # fmt: skip
-            await hear(recorder, feed, event)
-
-            async def said(_: str) -> Any:
-                return venue.replayed([message])
-
-            feed.stream.retarget(feed.market.stream_address, said, feed.market.subscriptions)
-            await feed.stream.run(once=True)
-            await feed.flush()
-
-        return feed_delay(record)
-
     async def one_sided(recorder: Recorder) -> None:
         feed, store = made_on(recorder)
         _mutated(feed, mutations)
@@ -648,11 +612,6 @@ def pairs_producers(venue: Any, **mutations: Any) -> dict[str, Producer]:
     if "a-quote-recorded" in venue.STREAM_CASES:
         made["records-a-datasets-liveness"] = streamed(
             venue.STREAM_CASES["a-quote-recorded"], pairs.LIVE, QUOTE
-        )
-    traded = [c for c in venue.STREAM_CASES if c != "a-quote-recorded"]
-    if traded:
-        made["reports-its-feed-delay"] = timed(
-            venue.STREAM_CASES[traded[0]], pairs.TRADES, TRADE
         )
     skipped = {**PAIRS_NOT_PRESENTED, **venue.NOT_PRESENTED}
     return {case: produce for case, produce in made.items() if case not in skipped}
@@ -755,20 +714,6 @@ def event_contract_producers(venue: Any, **mutations: Any) -> dict[str, Producer
         "a-one-sided-quote": live(venue.ONE_SIDED, QUOTE),
         "reads-its-datasets-licences": licences,
     }
-
-    async def timed(recorder: Recorder, latency: Any) -> None:
-        # Contract v27: a standing want's subject kept current, its rows'
-        # age at the edge recorded.
-        feed, store = made_on(recorder, mutate=True)
-        feed.wants.latency = latency
-        subject = await held(store, feed, venue.BASE)
-        feed.standing["WNT-T"] = Standing(
-            "WNT-T", feed.dataset(event_contracts.LIVE), PRICE, (subject,),
-            (ops.PRICE_KIND_LAST,), venue.NOW_NS,
-        )  # fmt: skip
-        await feed.current()
-
-    made["reports-its-feed-delay"] = feed_delay(timed)
 
     def grouped(event: Any) -> Producer | None:
         # Contract v26 (W3.29): the venue's event, as its conversion read

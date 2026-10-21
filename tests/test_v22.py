@@ -530,7 +530,8 @@ def _v22_cases() -> list[tuple[str, str]]:
         (role, case.name)
         for role, held in sorted(suites().items())
         for case in held.cases
-        if held.since == "v22" or case.name in _V22_NAMES
+        # Ruling 518: a case about `latency` is not presented until v28.
+        if (held.since == "v22" or case.name in _V22_NAMES) and case.about != "latency"
     ]
 
 

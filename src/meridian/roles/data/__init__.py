@@ -83,8 +83,10 @@ streams, its transport:
 
 **Latency and liveness** (0.32.0, contract v27): given the plugin's
 `roles.Latency` (`Wants.latency`), every row recorded unasked or for a
-standing want has its age at the `edge` hop recorded, the feed delay the
-suite's `reports-its-feed-delay` asks; a stream's heartbeat with no price
+standing want has its age at the `edge` hop recorded, its feed delay --
+recorded, not yet reported: the suite's `reports-its-feed-delay` is about
+`latency`, not presented until contract v28 (rulings 515 and 518); a
+stream's heartbeat with no price
 changed, or a poll, is the dataset's liveness (`Wants.liveness`,
 `RecordLiveness`), which confirms the values in force; Connection's
 "Sessions" section shows each session's `SessionLatency`

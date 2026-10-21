@@ -1204,6 +1204,7 @@
         {
           "name": "reports-a-sessions-round-trip",
           "since": "v27",
+          "about": "latency",
           "given": "the plugin's session to its venue is open for 10 seconds",
           "expect": [
             {
@@ -3137,6 +3138,7 @@
         {
           "name": "reports-its-feed-delay",
           "since": "v27",
+          "about": "latency",
           "given": "the plugin parses its source's messages for 10 seconds",
           "expect": [
             {
@@ -3689,6 +3691,7 @@
         {
           "name": "reports-its-pre-trade-checks-data-age",
           "since": "v27",
+          "about": "latency",
           "given": "the plugin checks reference prices before placements over 10 seconds",
           "expect": [
             {

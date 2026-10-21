@@ -1306,27 +1306,6 @@ async def reads_an_accounts_execution_costs(recorder: Recorder) -> None:
     await recorder.list_execution_costs(account_id=ACCOUNT, trade_date="2026-10-20")
 
 
-async def reports_its_pre_trade_checks_data_age(recorder: Recorder) -> None:
-    """The `ems`'s reference price checked before placements over an
-    interval: its age at the `ems_check` hop recorded and sent."""
-    from meridian.roles import Latency, ems
-
-    now = 1_792_300_010_000_000_000
-    latency = Latency(recorder, clock_ns=lambda: now)
-    check = ems.ReferenceCheck(after_ns={"equity": 5_000_000_000}, latency=latency,
-                               clock_ns=lambda: now)  # fmt: skip
-    price = ops.Price(
-        meta=ops.ObservationMeta(
-            source=ops.Source(dataset="alpaca-1:live"),
-            source_times=[
-                ops.SourceTime(kind=ops.SOURCE_TIME_KIND_EVENT, at_ns=now - 2_000_000_000)
-            ],
-        )
-    )
-    assert check.stale(price, asset_class="equity") is None
-    await recorder.report_latency(snapshots=latency.snapshots())
-
-
 async def picks_a_quote_on_its_rfq_placement(recorder: Recorder) -> None:
     """Two dealers' quotes stand; a person picks the second best."""
     from meridian.roles import ems
@@ -1366,15 +1345,6 @@ async def records_a_dealers_quote_on_an_rfq_placement(recorder: Recorder) -> Non
         outcome="open",
         raw_record=recorder.raw_record("rfq/quote/Q1"),
     )
-
-
-async def reports_a_sessions_round_trip(recorder: Recorder) -> None:
-    from meridian.roles import Latency
-
-    latency = Latency(recorder)
-    latency.rtt("fix-order", 41_000_000)
-    latency.alive("fix-order")
-    await recorder.report_latency(snapshots=latency.snapshots())
 
 
 async def sets_a_block_members_allocation_instruction(recorder: Recorder) -> None:
@@ -1577,16 +1547,15 @@ PRODUCERS: dict[str, Producer] = {
         agent_accept_to_a_new_order_on_a_live_connection_refused
     ),
     "setting-and-session-disagree-counts-live": setting_and_session_disagree_counts_live,
-    # Contract v27: rates, liveness, latency, execution costs, the RFQ's
-    # quotes, oms's allocation instruction and a trade date's FX close.
+    # Contract v27: rates, liveness, execution costs, the RFQ's quotes, oms's
+    # allocation instruction and a trade date's FX close. The three cases
+    # about `latency` have no producer: not presented until v28 (ruling 518).
     "reads-a-curve-for-a-date": reads_a_curve_for_a_date,
     "hears-a-rate-recorded": hears_a_rate_recorded,
     "hears-a-datasets-liveness": hears_a_datasets_liveness,
     "reads-an-accounts-execution-costs": reads_an_accounts_execution_costs,
-    "reports-its-pre-trade-checks-data-age": reports_its_pre_trade_checks_data_age,
     "picks-a-quote-on-its-rfq-placement": picks_a_quote_on_its_rfq_placement,
     "records-a-dealers-quote-on-an-rfq-placement": records_a_dealers_quote_on_an_rfq_placement,
-    "reports-a-sessions-round-trip": reports_a_sessions_round_trip,
     "sets-a-block-members-allocation-instruction": sets_a_block_members_allocation_instruction,
     "reads-a-trade-dates-fx-close": reads_a_trade_dates_fx_close,
 }

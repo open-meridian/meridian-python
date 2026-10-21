@@ -99,6 +99,11 @@ NOT_PRESENTED = {
     "reports-a-value-date-roll": "the stand-in venue rolls no spot position",
     "reports-a-give-up-rejected": "the stand-in venue clears every order it fills",
     "records-a-dealers-quote-on-an-rfq-placement": "the stand-in venue takes no RFQ",
+    # Ruling 518: about `latency` until v28. The SDK's Trader records the
+    # session's round trip and sends no ReportLatency yet.
+    "reports-a-sessions-round-trip": (
+        "core receives ReportLatency from contract v28, ruling 515"
+    ),
 }
 
 
@@ -180,20 +185,6 @@ async def caught_up(recorder: Recorder) -> None:
     await rig.poll()
 
 
-async def round_trip(recorder: Recorder) -> None:
-    """Contract v27: the session's latency over an interval -- each venue
-    call's round trip, a placement's acknowledgement -- as the SDK's Trader
-    recorded it, sent as ReportLatency carries it. The SDK records it and
-    sends nothing until contract v28 (ruling 515), so the case sends the
-    snapshots itself."""
-    rig = Rig(recorder)
-    held = rig.placement()
-    rig.holds(held)
-    await rig.hear(held)
-    await rig.poll()
-    await recorder.report_latency(snapshots=rig.latency.snapshots())
-
-
 PRODUCERS: dict[str, Producer] = {
     "acknowledges-a-placement-naming-it": placed(),
     "hears-no-placement-of-another-instance": another_instances,
@@ -215,7 +206,6 @@ PRODUCERS: dict[str, Producer] = {
     "catches-up-placements-after-a-loss": caught_up,
     "reads-the-instructions-in-force-on-start": started,
     "reports-a-symbol-it-cannot-resolve": renamed,
-    "reports-a-sessions-round-trip": round_trip,
 }
 
 

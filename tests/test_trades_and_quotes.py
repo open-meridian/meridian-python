@@ -460,7 +460,10 @@ def reading(role: str) -> dict[str, object]:
 
 @pytest.mark.parametrize("role", ["signal", "ems"])
 def test_a_reader_of_trades_and_quotes_passes_its_suite(role: str) -> None:
-    report = run(role, reading(role))
+    # Ruling 518: the ems's data age is about `latency`, not presented in v27.
+    why = "core receives ReportLatency from contract v28, ruling 515"
+    skipped = {c.name: why for c in suite(role).cases if c.about == "latency"}
+    report = run(role, reading(role), not_presented=skipped)
     assert report.passed, report.failures
 
 

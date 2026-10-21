@@ -28,7 +28,6 @@ from typing import cast
 
 import meridian
 from meridian.plugin.v1 import operations_pb2 as ops
-from meridian.roles import Latency
 from meridian.suites import Producer, Recorder, run, suite
 
 from reference_plugin.convert import Converter
@@ -163,17 +162,6 @@ async def asks_for_a_settlement_date(recorder: Recorder) -> None:
     )
 
 
-# Its feed delay (contract v27): each row it records unasked has its age at
-# the edge -- when it was read, less the vendor's published time -- recorded
-# by the SDK's Latency on its Wants. The SDK records it and sends nothing
-# until contract v28 (ruling 515), so the case sends the snapshots itself.
-async def its_feed_delay(recorder: Recorder) -> None:
-    plugin = converter(recorder)
-    plugin.wants.latency = Latency(recorder)
-    await plugin.record_daily("BTC-USD", DAILY["BTC-USD"])
-    await recorder.report_latency(snapshots=plugin.wants.latency.snapshots())
-
-
 PRODUCERS: dict[str, Producer] = {
     "a-daily-close": daily("BTC-USD"),
     "the-forming-day-restated": forming,
@@ -191,7 +179,6 @@ PRODUCERS: dict[str, Producer] = {
     "reads-its-datasets-licences": licences,
     "reads-a-calendar": reads_a_calendar,
     "asks-for-a-settlement-date": asks_for_a_settlement_date,
-    "reports-its-feed-delay": its_feed_delay,
 }
 
 
@@ -221,6 +208,12 @@ if not STREAMED:
     NOT_PRESENTED["records-a-datasets-liveness"] = (
         "its datasets are pulled when wanted, never streamed"
     )
+# Ruling 518: a case about `latency` (its feed delay) waits for contract v28.
+# The SDK records each row's age at the edge (`Wants.latency`) and sends no
+# ReportLatency yet.
+for case in suite("data").cases:
+    if case.about == "latency":
+        NOT_PRESENTED[case.name] = "core receives ReportLatency from contract v28, ruling 515"
 
 
 def test_every_case_of_the_data_suite_passes() -> None:

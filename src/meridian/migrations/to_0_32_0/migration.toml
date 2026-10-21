@@ -43,7 +43,9 @@ reads-an-accounts-execution-costs; the data suite's seven rates cases
 reports-its-feed-delay, its queries-the-lake-within-bounds now about trades;
 connectivity's records-a-dealers-quote-on-an-rfq-placement (about rfqs) and
 reports-a-sessions-round-trip; the ems's reports-its-pre-trade-checks-data-age
-and picks-a-quote-on-its-rfq-placement; the oms's
+and picks-a-quote-on-its-rfq-placement -- the three latency reports about
+`latency`, not presented until contract v28 (ruling 518), since the SDK
+records latency and sends no ReportLatency yet (ruling 515); the oms's
 sets-a-block-members-allocation-instruction; operations'
 reads-a-trade-dates-fx-close. A plugin's suite test maps each new case, or
 marks one it may not present with why: left by hand.
@@ -85,13 +87,16 @@ reads-a-trade-dates-fx-close"""
 instead = """map each new case to the plugin's own producer -- a curve read with \
 rates.read_curve, a rate and a liveness heard (receive(rates_recorded=..., \
 liveness_recorded=roles.Liveness().heard)), costs read with list_execution_costs, \
-the feed delay or a session's round trip taken by a roles.Latency and sent by the \
-case itself (report_latency(snapshots=latency.snapshots())), since 0.32.0's \
-Latency.report sends nothing until contract v28, the ems's check \
+the ems's check \
 with roles.ems.ReferenceCheck -- or, for a case about something the plugin's source \
 never presents (`about`: rates, streams, rfqs, trades), name it in not_presented with \
 why; meridian.roles.data.testing's PAIRS_NOT_PRESENTED and \
-EVENT_CONTRACTS_NOT_PRESENTED name a kind of venue's"""
+EVENT_CONTRACTS_NOT_PRESENTED name a kind of venue's. The three cases about \
+`latency` -- reports-its-feed-delay, reports-a-sessions-round-trip and \
+reports-its-pre-trade-checks-data-age -- every plugin holding the role names in \
+not_presented with the reason "core receives ReportLatency from contract v28, \
+ruling 515" (ruling 518): the SDK records latency and sends no ReportLatency until \
+v28, when they are required in full"""
 
 [[by_hand]]
 rule = "lake-query-without-trades"

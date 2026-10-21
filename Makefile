@@ -68,8 +68,8 @@ contract-diff:
 # thing. `make vendor-schema` moves the copy to SCHEMA_REV; `check-vendored`
 # fails when the two disagree, as core's check-codegen does for its bindings.
 # meridian-schema's pushed `v27` (contract v27, DESIGN27; open-meridian/meridian-schema#5,
-# at f31ba7d), its gen/ and boundaries/ vendored here byte for byte.
-SCHEMA_REV := f31ba7deecf1d9db475c95e0829d1813faff3448
+# at 4069608, ruling 518), its gen/ and boundaries/ vendored here byte for byte.
+SCHEMA_REV := 40696086ac6edc48f95b5148aa219556bea3fcfc
 SCHEMA_REPO := https://github.com/open-meridian/meridian-schema.git
 SCRATCH     := .schema-scratch
 
