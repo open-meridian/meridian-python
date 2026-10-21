@@ -237,6 +237,24 @@ async def test_a_rate_not_held_is_reported_once_a_day_and_not_recorded() -> None
     assert asked.stated_asset_class == ops.ASSET_CLASS_REFERENTIAL
 
 
+def test_a_rates_row_key_stays_within_the_contracts_128_characters() -> None:
+    feed = rates.Feed(Recorder("rates-1"), "fred", clock_ns=lambda: PUBLISHED)
+    subject = "INS-01JAH000000000000000000PAR"
+    short = feed.rate(
+        subject, "fred_public", "par_yield", "4.21", tenor="10Y", business_date=DAY
+    )
+    assert short.meta.row_key == f"fred:par_yield:10Y:-:{DAY}@{subject}"
+    long = [
+        feed.rate(subject, "fred_public", "par_yield", value, tenor="10Y", business_date=DAY,
+                  series="A_VERY_LONG_SERIES_NAME_" * 6)
+        for value in ("4.21", "4.22")
+    ]  # fmt: skip
+    keys = {row.meta.row_key for row in long}
+    assert len(keys) == 1, "one key for every version"
+    key = keys.pop()
+    assert len(key) <= 128 and key.endswith(f":{DAY}@{subject}")
+
+
 def test_a_publishers_tenor_labels_read_as_the_wires() -> None:
     for label, (count, unit, said) in {
         "1 Mo": (1, "month", "1M"),

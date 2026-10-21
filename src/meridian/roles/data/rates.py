@@ -49,6 +49,7 @@ fractional tenor is refused, for the plugin to name its maturity instead.
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import logging
 import re
 import time
@@ -57,6 +58,7 @@ from decimal import Decimal
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from ...bounds import OBSERVATION_META_ROW_KEY_LENGTH
 from ...operations import (
     Money,
     ObservationMeta,
@@ -200,6 +202,25 @@ def _convention_label(convention: RateConvention | None) -> str:
     return f"{convention.day_count or '-'}:{convention.compounding or '-'}{periods}"
 
 
+def _row_key(said: str, day: str, subject: str) -> str:
+    """A rate's row key: what the source said of it, its business date and
+    its record (`@INS-...`), within the contract's 128 characters
+    (OBSERVATION_META_ROW_KEY_LENGTH): where the words run past, they are
+    named by their SHA-256 instead, so the key stays the same for every
+    version and never collides by truncation."""
+    key = f"{said}:{day}@{subject}"
+    if OBSERVATION_META_ROW_KEY_LENGTH.admits(len(key)):
+        return key
+    digest = hashlib.sha256(said.encode()).hexdigest()[:32]
+    key = f"{digest}:{day}@{subject}"
+    if not OBSERVATION_META_ROW_KEY_LENGTH.admits(len(key)):
+        raise ValueError(
+            f"a rate's row key for {subject!r} runs past "
+            f"{OBSERVATION_META_ROW_KEY_LENGTH.most} characters"
+        )
+    return key
+
+
 class Feed:
     """A data plugin's rates (see the module): its subjects resolved, its
     rows built under one row-key scheme, and recorded through its `Wants`
@@ -299,16 +320,17 @@ class Feed:
             maturity_date if isinstance(maturity_date, str) else maturity_date.isoformat()
         )
         point = tenor_label(held_tenor) if held_tenor is not None else (maturity or "-")
-        row_key = (
-            f"{series or self.source_name}:{kind}:{point}:{_convention_label(convention)}:"
-            f"{day}@{subject}"
+        row_key = _row_key(
+            f"{series or self.source_name}:{kind}:{point}:{_convention_label(convention)}",
+            day,
+            subject,
         )
         start = dt.datetime.combine(dt.date.fromisoformat(day), dt.time(), self.zone)
         valid_from = int(start.timestamp() * 1e9)
         valid_until = int((start + dt.timedelta(days=1)).timestamp() * 1e9)
         return Rate(
             meta=ObservationMeta(
-                row_key=row_key[:256],
+                row_key=row_key,
                 subjects=[ops.SubjectRef(entity_id=subject)],
                 source=ops.Source(dataset=self.dataset(key)),
                 valid_from_ns=valid_from,
