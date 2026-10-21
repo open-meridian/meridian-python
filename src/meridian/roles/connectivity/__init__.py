@@ -38,6 +38,15 @@ placements working, held back or of unknown outcome; counts and codes only.
 **A plugin's tests** (`meridian.roles.connectivity.testing`): `Rig`, the
 Trader over the suites' recorder and the plugin's own adapter on its fake
 broker, and the book's messages as a test builds them. Fakes only.
+
+From 0.32.0 the Trading page and its acts are the SDK's to declare
+(`trading_pages`), with Raw records (`raw_records_page`) -- Alpaca's and
+Tradier's `trading_page.py`, which they kept nearly byte for byte -- and,
+for a plugin holding the data role too, one Connection for both roles
+(`connection_pages`, 457). Trading's record carries the connection's badge
+and each session's latency; the Trader the placement types its venue takes,
+an RFQ placement's quotes and its pick (`VenueQuote`), and its session's
+latency.
 """
 
 from ..._numbers import number
@@ -54,7 +63,21 @@ from ._bookkeeping import (
     report_status_not_mapped,
     resolve_unanswered,
 )
-from ._pages import AccountTrading, TradingAsked, TradingEnabled, TradingRead, trading_read
+from ._pages import (
+    CONNECTION,
+    ENABLE_TRADING,
+    RAW,
+    TRADING,
+    AccountTrading,
+    TradingAsked,
+    TradingEnabled,
+    TradingRead,
+    TradingState,
+    connection_pages,
+    raw_records_page,
+    trading_pages,
+    trading_read,
+)
 from ._trader import (
     CANCELLED,
     DONE_FOR_DAY,
@@ -87,9 +110,17 @@ from ._trader import (
 
 __all__ = [
     "AccountTrading",
+    "CONNECTION",
+    "ENABLE_TRADING",
+    "RAW",
+    "TRADING",
     "TradingAsked",
     "TradingEnabled",
     "TradingRead",
+    "TradingState",
+    "connection_pages",
+    "raw_records_page",
+    "trading_pages",
     "trading_read",
     "CANCELLED",
     "DONE_FOR_DAY",

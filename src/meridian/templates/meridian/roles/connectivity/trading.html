@@ -6,7 +6,12 @@
     only: no account's data. `venue` names the venue; `updates_label` and
     `updates_none` say how its orders are heard ("Orders read", "Not yet" by
     default). The vendor's nuance goes at the blocks `vendor_notices` and
-    `vendor_sections`. -#}
+    `vendor_sections`. From 0.32.0 the connection's badge (the agents'
+    demo-only guard, contract v26): Demo where the Environment setting says a
+    demo and the session reached the venue's demo host, Live where neither
+    does, and "Live (environment not confirmed)" where the two disagree; a
+    saved Environment this version refused; and "Sessions", each session's
+    latency (contract v27). -#}
 {% extends "meridian/base.html" %}
 {% import "meridian/kit.html" as kit %}
 {% import "meridian/roles/_rows.html" as om %}
@@ -15,39 +20,15 @@
 {% if data.credentials and not data.credentials|selectattr("set")|list and "Sample data" not in data.environment %}
 {{ om.next_step("No key yet", "Enter it in", "settings", "Settings") }}
 {% endif %}
+{% if data.environment_to_save %}<div class="notice warn" role="status">Environment holds "{{ data.environment_to_save }}", no longer offered: save it again in <a href="#settings" data-om-opens="settings">Settings</a>.</div>{% endif %}
+{% if data.badge %}<p class="hint">Connection {% if data.badge == "Demo" %}{{ kit.badge("Demo", "good") }}{% elif data.badge == "Live" %}{{ kit.badge("Live", "warn") }}{% else %}{{ kit.badge(data.badge, "bad") }}{% endif %} The session reached {{ venue|default("the venue") }}'s {{ data.reached_environment }} host; agents may place orders only on a Demo connection.</p>{% endif %}
 {% block vendor_notices %}{% endblock %}
+{% set trading = data %}
+{% include "meridian/roles/connectivity/_sections.html" %}
 <section class="panel">
-<h2>Environment</h2>
+<h2>Sessions</h2>
 <table class="one-line"><tbody>
-{{ om.row("Environment", data.environment) }}
-{% set key %}{% for each in data.credentials %}{{ each.label }}: {{ "set" if each.set else "not set" }}{% if not loop.last %}; {% endif %}{% endfor %}{% endset %}
-{{ om.row("Key", key|trim or "No key needed") }}
-{% if data.error %}{{ om.row("Last error", data.error) }}{% endif %}
-</tbody></table>
-</section>
-<section class="panel">
-<h2>Accounts</h2>
-{% if data.accounts %}
-<table class="one-line">
-<thead><tr><th>Venue account code</th><th>Trading</th><th class="wide-only">Order types</th><th class="wide-only">Mapped by its ems</th><th></th></tr></thead>
-<tbody>
-{% for row in data.accounts %}
-<tr><td><code>{{ row.venue_account_code }}</code></td><td>{{ "Enabled" if row.trading else "Read-only" }}</td><td class="wide-only">{{ row.order_types|join(", ") or "None" }}</td><td class="wide-only">{{ "Yes" if row.mapped else "No" }}</td>
-<td>{% if not row.trading and may_enable %}{{ kit.action(enable, "Enable trading", kind="primary", fields={"venue_account_code": row.venue_account_code}, label="Enable trading on " ~ row.venue_account_code) }}{% endif %}</td></tr>
-{% endfor %}
-</tbody></table>
-{% else %}
-<div class="empty-state"><strong>No account reached yet</strong><p>An account appears once {{ venue|default("the venue") }} has been asked with the key.</p></div>
-{% endif %}
-</section>
-<section class="panel">
-<h2>Placements</h2>
-<table class="one-line"><tbody>
-{{ om.row("Working", data.working) }}
-{{ om.row("Held back", data.held, "by a pause or a stop in force") }}
-{{ om.row("Outcome unknown", data.unknown, "asked about on each read, never sent again") }}
-{{ om.row("Orders last read", data.last_poll or "Not yet") }}
-{{ om.row(updates_label|default("Orders read"), data.updates or updates_none|default("Not yet")) }}
+{{ om.session_rows(data.session_latency or []) }}
 </tbody></table>
 </section>
 {% block vendor_sections %}{% endblock %}

@@ -6,16 +6,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from .._latency import SessionLatency
+from .._trading import Credential as Credential  # the data role's, re-exported
+from .._trading import TradingRead
 from ._reading import Endpoint
-
-
-@dataclass(frozen=True)
-class Credential:
-    """One credential as Connection's "Key" row shows it: its label, in the
-    vendor's words, and whether it is set -- never its value."""
-
-    label: str
-    set: bool
 
 
 @dataclass(frozen=True)
@@ -28,7 +21,8 @@ class ConnectionRead:
     last error; and the streaming sessions open, None for a source that
     does not stream. From 0.32.0 (contract v27) each open session's
     latency (`session_latency`, `roles.Latency.session_latency()`), the
-    Sessions section's rows; empty for none measured."""
+    Sessions section's rows; empty for none measured; and where the plugin
+    holds connectivity too, connectivity's Trading (`trading`)."""
 
     mode: str
     credentials: list[Credential] = field(default_factory=list)
@@ -40,6 +34,10 @@ class ConnectionRead:
     last_error: str = ""
     sessions: int | None = None
     session_latency: list[SessionLatency] = field(default_factory=list)
+    #: Where the plugin holds connectivity too (0.32.0; 457): its Trading
+    #: page's record, drawn as Connection's further sections, one page for
+    #: both roles (`connectivity.connection_pages`); None otherwise.
+    trading: TradingRead | None = None
 
 
 @dataclass(frozen=True)

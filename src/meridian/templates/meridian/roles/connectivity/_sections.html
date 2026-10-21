@@ -1,0 +1,41 @@
+{#- Connectivity's sections, as Trading draws them and, for a plugin holding
+    the data role too, Connection after its own (0.32.0; 457): "Environment",
+    "Accounts" and "Placements" of `trading`, a
+    meridian.roles.connectivity.TradingRead; "Enable trading" where
+    `may_enable`, posting to `enable`. -#}
+{% import "meridian/kit.html" as kit %}
+{% import "meridian/roles/_rows.html" as om %}
+<section class="panel">
+<h2>Environment</h2>
+<table class="one-line"><tbody>
+{{ om.row("Environment", trading.environment) }}
+{% set key %}{% for each in trading.credentials %}{{ each.label }}: {{ "set" if each.set else "not set" }}{% if not loop.last %}; {% endif %}{% endfor %}{% endset %}
+{{ om.row("Key", key|trim or "No key needed") }}
+{% if trading.error %}{{ om.row("Last error", trading.error) }}{% endif %}
+</tbody></table>
+</section>
+<section class="panel">
+<h2>Accounts</h2>
+{% if trading.accounts %}
+<table class="one-line">
+<thead><tr><th>Venue account code</th><th>Trading</th><th class="wide-only">Order types</th><th class="wide-only">Mapped by its ems</th><th></th></tr></thead>
+<tbody>
+{% for row in trading.accounts %}
+<tr><td><code>{{ row.venue_account_code }}</code></td><td>{{ "Enabled" if row.trading else "Read-only" }}</td><td class="wide-only">{{ row.order_types|join(", ") or "None" }}</td><td class="wide-only">{{ "Yes" if row.mapped else "No" }}</td>
+<td>{% if not row.trading and may_enable %}{{ kit.action(enable, "Enable trading", kind="primary", fields={"venue_account_code": row.venue_account_code}, label="Enable trading on " ~ row.venue_account_code) }}{% endif %}</td></tr>
+{% endfor %}
+</tbody></table>
+{% else %}
+<div class="empty-state"><strong>No account reached yet</strong><p>An account appears once {{ venue|default("the venue") }} has been asked with the key.</p></div>
+{% endif %}
+</section>
+<section class="panel">
+<h2>Placements</h2>
+<table class="one-line"><tbody>
+{{ om.row("Working", trading.working) }}
+{{ om.row("Held back", trading.held, "by a pause or a stop in force") }}
+{{ om.row("Outcome unknown", trading.unknown, "asked about on each read, never sent again") }}
+{{ om.row("Orders last read", trading.last_poll or "Not yet") }}
+{{ om.row(updates_label|default("Orders read"), trading.updates or updates_none|default("Not yet")) }}
+</tbody></table>
+</section>

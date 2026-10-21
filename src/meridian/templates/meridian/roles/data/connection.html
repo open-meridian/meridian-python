@@ -1,6 +1,7 @@
 {#- A data plugin's Connection (spec/plugin-pages-follow-their-role): notices,
     then "Key", "Limits and use", "Stream" and, from 0.32.0, "Sessions" (each
-    session's latency), then the vendor's sections.
+    session's latency), then, for a plugin holding connectivity too (457),
+    connectivity's sections of `data.trading`, then the vendor's sections.
     `data` is a meridian.roles.data.ConnectionRead, or the plugin's record
     extending it. -#}
 {% extends "meridian/base.html" %}
@@ -12,6 +13,9 @@
 <div class="notice info" role="status">Sample data: the plugin answers from recorded responses; the vendor is not called.</div>
 {% endif %}
 {% if data.last_error %}<div class="notice bad" role="alert">{{ data.last_error }}</div>{% endif %}
+{% if notice is defined and notice %}<div class="notice good" role="status">{{ notice }}</div>{% endif %}
+{% if data.trading and data.trading.environment_to_save %}<div class="notice warn" role="status">Environment holds "{{ data.trading.environment_to_save }}", no longer offered: save it again in <a href="#settings" data-om-opens="settings">Settings</a>.</div>{% endif %}
+{% if data.trading and data.trading.badge %}{% import "meridian/kit.html" as kit %}<p class="hint">Connection {% if data.trading.badge == "Demo" %}{{ kit.badge("Demo", "good") }}{% elif data.trading.badge == "Live" %}{{ kit.badge("Live", "warn") }}{% else %}{{ kit.badge(data.trading.badge, "bad") }}{% endif %} The session reached {{ venue|default("the venue") }}'s {{ data.trading.reached_environment }} host; agents may place orders only on a Demo connection.</p>{% endif %}
 {% block vendor_notices %}{% endblock %}
 {% for section in ["Key", "Limits and use", "Stream", "Sessions"] %}
 <section class="panel">
@@ -28,7 +32,7 @@
 {{ om.row("Last call", data.last_call_at or "None yet") }}
 {{ om.row("Last error", data.last_error or "None") }}
 {% elif section == "Sessions" %}
-{{ om.session_rows(data.session_latency or []) }}
+{{ om.session_rows(data.session_latency or (data.trading.session_latency if data.trading else [])) }}
 {% else %}
 {% if data.sessions is none %}
 {{ om.row("Streaming", "Does not stream") }}
@@ -40,5 +44,9 @@
 </tbody></table>
 </section>
 {% endfor %}
+{% if data.trading %}
+{% set trading = data.trading %}
+{% include "meridian/roles/connectivity/_sections.html" %}
+{% endif %}
 {% block vendor_sections %}{% endblock %}
 {% endblock %}

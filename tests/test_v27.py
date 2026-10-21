@@ -808,3 +808,109 @@ async def test_a_range_members_bounds_are_reported_with_its_group_and_events_kep
         clock = iter([0.0, 1.0, 2.0, 700.0, 701.0])
         assert await feed.keep_events(once=True, clock=lambda: next(clock)) in (0, 1)
         assert await feed.keep_events(once=True, clock=lambda: next(clock)) == 0
+
+
+# ── Shared pages: Trading, one Connection for both roles (457), raw records ─
+
+import re  # noqa: E402
+from dataclasses import dataclass as _dataclass  # noqa: E402
+from dataclasses import field as _field  # noqa: E402
+
+from meridian.roles import connectivity as _connectivity  # noqa: E402
+from meridian.roles import data as _data  # noqa: E402
+from meridian.testing import PageClient  # noqa: E402
+
+
+@_dataclass
+class _State:
+    trader: Any = None
+    venue: Any = None
+    scope: Any = _field(default_factory=meridian.AccountScope)
+    store: dict[str, Any] = _field(default_factory=dict)
+    values: dict[str, Any] = _field(default_factory=dict)
+
+
+def _rigged() -> tuple[RfqRig, _State]:
+    recorder = Recorder("dealers-1")
+    rig = RfqRig(recorder)
+    rig.trader.reached = (CODE, "OTHER-ACCT")
+    venue = rig.venue
+    venue.environment = "paper"  # type: ignore[attr-defined]
+    return rig, _State(trader=rig.trader, venue=venue, scope=rig.scope)
+
+
+def _words() -> dict[str, Any]:
+    return {
+        "venue": "Dealers",
+        "credentials": lambda: [_data.Credential("API key", True)],
+        "environment": lambda: "Paper (simulated money)",
+        "environment_setting": lambda: "paper",
+    }
+
+
+def test_the_trading_page_is_the_sdks_with_its_badge_its_acts_and_sessions() -> None:
+    rig, state = _rigged()
+    rig.latency.rtt("orders", 12_000_000)
+    pages = meridian.Pages("Dealers", kit="0.12.0")
+    _connectivity.trading_pages(pages, lambda: state, latency=lambda: rig.latency, **_words())
+    client = PageClient(pages, rig.recorder)
+    shown = client.get(_connectivity.TRADING, "admin").text
+    for said in ("Demo", "paper host", "<h2>Sessions</h2>", "Enable trading"):
+        assert said in shown, said
+    data = client.call_tool("read_trading", level="admin").data
+    assert (data["badge"], data["reached_environment"]) == ("Demo", "paper")
+    assert data["session_latency"][0]["session"] == "orders"
+    checked = client.call_tool(
+        "check_enable_trading", {"venue_account_code": "OTHER-ACCT"}, level="admin"
+    )
+    assert "Would enable trading on OTHER-ACCT" in checked.data["said"]
+    refused = client.call_tool(
+        "check_enable_trading", {"venue_account_code": "NOT-REACHED"}, level="admin"
+    )
+    assert refused.outcome == "refused"
+    enabled = client.call_tool(
+        "enable_trading", {"venue_account_code": "OTHER-ACCT"}, level="admin"
+    )
+    assert enabled.status == 200 and rig.trader.trading_on("OTHER-ACCT")
+
+
+def test_a_plugin_holding_data_and_connectivity_draws_one_connection() -> None:
+    rig, state = _rigged()
+    pages = meridian.Pages("Dealers", kit="0.12.0")
+
+    async def connection(request: Any) -> _data.ConnectionRead:
+        return _data.ConnectionRead(
+            mode="Sandbox", credentials=[_data.Credential("API key", True)]
+        )
+
+    _connectivity.connection_pages(pages, lambda: state, connection, **_words())
+    client = PageClient(pages, rig.recorder)
+    shown = client.get("/", "admin").text
+    sections = re.findall(r"<h2>([^<]*)</h2>", shown)
+    assert sections == [
+        "Key", "Limits and use", "Stream", "Sessions", "Environment", "Accounts", "Placements",
+    ]  # fmt: skip
+    data = client.call_tool("read_connection", level="admin").data
+    assert data["mode"] == "Sandbox" and data["trading"]["badge"] == "Demo"
+    assert (
+        client.call_tool(
+            "check_enable_trading", {"venue_account_code": "OTHER-ACCT"}, level="admin"
+        ).data["venue_account_code"]
+        == "OTHER-ACCT"
+    )
+    with pytest.raises(KeyError, match="no tool read_trading"):
+        client.call_tool("read_trading", level="admin")
+
+
+def test_raw_records_show_a_record_to_a_reader_of_its_mapped_account() -> None:
+    rig, state = _rigged()
+    state.store["trading/placed-1"] = {"client_order_id": "PLC-1"}
+    pages = meridian.Pages("Dealers", kit="0.12.0")
+    _connectivity.raw_records_page(pages, lambda: state, kinds=[], why="read in the book")
+    reader = PageClient(pages, rig.recorder, read=[testing.ACCOUNT])
+    shown = reader.get(_connectivity.RAW, "read", ref="trading/placed-1").text
+    assert "The record" in shown and "PLC-1" in shown
+    stranger = PageClient(pages, rig.recorder, read=["ACC-ELSEWHERE"])
+    assert (
+        "The record" not in stranger.get(_connectivity.RAW, "read", ref="trading/placed-1").text
+    )

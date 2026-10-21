@@ -5,7 +5,10 @@
     the declaration's `meridian.RecordKind`s, `stored` the plugin's
     `plugin.stored`, `past` the settings as delivered (each kind's
     `<kind>_past_window`), and `found`, where a row's reference was followed,
-    `plugin.find_record(key)`'s answer, with `key` the reference. -#}
+    `plugin.find_record(key)`'s answer, with `key` the reference. From 0.32.0
+    `record`, the raw record a row's reference names as the vendor sent it,
+    where the person may read its account (`connectivity.raw_records_page`
+    passes it). -#}
 {% extends "meridian/base.html" %}
 {% import "meridian/kit.html" as kit %}
 {% block content %}
@@ -37,5 +40,11 @@
 {{ kit.empty("No raw records kept", "This plugin declares no kind of raw record.") }}
 {% endif %}
 </section>
+{% if record is defined and record %}
+<section class="panel">
+<h2>The record</h2>
+<details open><summary><code>{{ key }}</code></summary><pre class="wrap">{{ record }}</pre></details>
+</section>
+{% endif %}
 {% block vendor_sections %}{% endblock %}
 {% endblock %}
