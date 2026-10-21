@@ -1,0 +1,123 @@
+# open-meridian 0.31.1 to 0.32.0: contract v27
+# (sdk-contract/the-placement-type-tca-and-fx-netting-contract;
+# sdk-contract/the-lake-holds-researchs-kinds, its rates slice;
+# sdk-contract/sessions-and-data-report-their-latency-contract; DESIGN27,
+# rulings 478 to 487). The SDK declares contract v27; nothing a plugin called
+# is removed, but every role's suite holds new cases a plugin's own suite
+# test must map, so a plugin is not verified until it does: breaking.
+from = "0.31.1"
+to = "0.32.0"
+summary = """
+The SDK declares contract v27 (meridian.SCHEMA_VERSION). The analytics
+component serves pnl version 2, realized P&L beside unrealized
+(analytics.measure("pnl", 2)), and execution_cost; a job takes a business
+date and a reporting currency, and is refused with no account, as the
+component refuses it. The reference computations round a quoted price once
+per unit to 18 places, invert and cross fiat legs through the deployment's
+pivots, and name each position's input price and each conversion leg.
+
+A data plugin records the lake's rates slice with meridian.roles.data.rates
+(fixings, averages, index levels and curves' points; `Feed`, `read_curve`);
+records each row's age at the edge, its feed delay, with a roles.Latency on
+its Wants (`Wants.latency`), and a stream's liveness (`Wants.liveness`); and
+declares a dataset's delay (DatasetDeclaration.declared_delay_ns). A
+DatasetLicence writes both derived_use and derived_use_terms (ruling 479).
+A connectivity plugin's Trader takes the placement types its venue takes,
+records the dealers' quotes on an RFQ placement and accepts the pick
+(VenueQuote; an adapter's placement_types, request_quotes, quotes and
+accept_quote), and records its session's latency; Trading, its acts and Raw
+records are the SDK's to declare (connectivity.trading_pages,
+raw_records_page), and a plugin holding the data role too draws one
+Connection for both (connectivity.connection_pages, 457). An ems checks its
+reference price's age before a placement (roles.ems.ReferenceCheck). An
+event-contract venue reports a range member's bounds with its group (ruling
+464) and its events with Feed.keep_events.
+
+The suites: the reading roles' reads-a-curve-for-a-date,
+hears-a-rate-recorded, hears-a-datasets-liveness and
+reads-an-accounts-execution-costs; the data suite's seven rates cases
+(about rates), records-a-datasets-liveness (about streams) and
+reports-its-feed-delay, its queries-the-lake-within-bounds now about trades;
+connectivity's records-a-dealers-quote-on-an-rfq-placement (about rfqs) and
+reports-a-sessions-round-trip; the ems's reports-its-pre-trade-checks-data-age
+and picks-a-quote-on-its-rfq-placement; the oms's
+sets-a-block-members-allocation-instruction; operations'
+reads-a-trade-dates-fx-close. A plugin's suite test maps each new case, or
+marks one it may not present with why: left by hand.
+
+`meridian plugin migrate` (CLI 0.1.47 and later) moves a base pinned by
+digest with its tag; run without it, this step moves a base pinned by digest
+at an older release to 0.32.0 and drops its digest, left by hand to pin
+again.
+"""
+breaking = true
+rewrite = "rewrite.py"
+
+[[rewrites]]
+rule = "base-digest-dropped"
+what = """the Dockerfile's base, pinned by digest at an older release of \
+plugin-python, moved to 0.32.0 with its digest dropped: the migration runs with no \
+network, so it cannot read 0.32.0's digest, and an old digest under a new tag would \
+build the old release while saying the new one"""
+
+[[by_hand]]
+rule = "base-digest"
+what = """the Dockerfile's base was pinned by digest, and the digest was dropped \
+when its tag moved"""
+instead = """pin it again: `ghcr.io/open-meridian/plugin-python:0.32.0@sha256:<digest>`, \
+the digest `docker buildx imagetools inspect ghcr.io/open-meridian/plugin-python:0.32.0` \
+names"""
+
+[[by_hand]]
+rule = "suite-cases-v27"
+what = """a test running a role's suite that contract v27 adds cases to: \
+reads-a-curve-for-a-date, hears-a-rate-recorded, hears-a-datasets-liveness and \
+reads-an-accounts-execution-costs (reporting, portfolio, compliance, signal, and the \
+last two of the ems, the oms and operations); the data suite's rates cases, \
+records-a-datasets-liveness and reports-its-feed-delay; connectivity's \
+records-a-dealers-quote-on-an-rfq-placement and reports-a-sessions-round-trip; the \
+ems's reports-its-pre-trade-checks-data-age and picks-a-quote-on-its-rfq-placement; \
+the oms's sets-a-block-members-allocation-instruction; operations' \
+reads-a-trade-dates-fx-close"""
+instead = """map each new case to the plugin's own producer -- a curve read with \
+rates.read_curve, a rate and a liveness heard (receive(rates_recorded=..., \
+liveness_recorded=roles.Liveness().heard)), costs read with list_execution_costs, \
+the feed delay or a session's round trip sent by a roles.Latency, the ems's check \
+with roles.ems.ReferenceCheck -- or, for a case about something the plugin's source \
+never presents (`about`: rates, streams, rfqs, trades), name it in not_presented with \
+why; meridian.roles.data.testing's PAIRS_NOT_PRESENTED and \
+EVENT_CONTRACTS_NOT_PRESENTED name a kind of venue's"""
+
+[[by_hand]]
+rule = "lake-query-without-trades"
+what = """a data plugin's suite test mapping queries-the-lake-within-bounds to a \
+bounded query (lake_query) while its catalogue declares no trades: from contract v27 \
+the case is about trades"""
+instead = """name it in not_presented, "it records no trades", rather than fake it; \
+a plugin recording trades keeps its producer"""
+
+[[by_hand]]
+rule = "trading-page-onto-sdk"
+what = """a connectivity plugin declaring Trading itself (read_trading, \
+enable_trading and check_enable_trading at /admin/connections), with its own \
+TradingRead extending the role's, and its own account_links.html and trading.html \
+over the role's: the SDK's from 0.32.0, as Alpaca and Tradier kept them"""
+instead = """call meridian.roles.connectivity.trading_pages(pages, current, venue=..., \
+credentials=..., environment=..., environment_setting=...) and raw_records_page(pages, \
+current, kinds=..., why=...); connectivity.TradingRead carries reached_environment, \
+badge and environment_to_save, and the role's templates draw the badge, the plain \
+link form and the record; or, holding the data role too, connection_pages (457)"""
+
+[[by_hand]]
+rule = "events-onto-sdk"
+what = """an event-contract plugin keeping its own events loop (a class reading \
+each served contract's event and calling Feed.report_event on a change): the SDK's \
+from 0.32.0"""
+instead = """run feed.keep_events() in its place, the Market answering event(ref)"""
+
+[[by_hand]]
+rule = "e2e-hidden-files"
+what = """an e2e workflow uploading the harness's logs from .e2e/ with \
+actions/upload-artifact and no include-hidden-files: v4 leaves a hidden directory \
+out, so a failure keeps no logs"""
+instead = """add `include-hidden-files: true` under the step's `with:`"""

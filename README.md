@@ -2,7 +2,7 @@
 
 The Python SDK for building [Open Meridian](https://open-meridian.com) plugins:
 the tools a trader has an AI agent build, and the bots and analytics a
-developer writes. Python 3.11 or newer. This is release 0.31.1; its reference
+developer writes. Python 3.11 or newer. This is release 0.32.0; its reference
 is at [open-meridian.dev](https://open-meridian.dev/api/python-sdk/).
 
 ## Start here
@@ -1795,7 +1795,7 @@ await plugin.receive(observations_wanted=lambda heard: wants.hear(heard, answer)
   `exposure` answers each bucket gross and net, each a `component`
   breakdown; `pnl` version 1 is Unrealized P&L, one `unrealized` component
   per bucket (realized P&L since the account opened is `pnl` version 2,
-  v27's: the reference computes it, and a v26 job cannot ask for it). A job answered later is heard on
+  served from 0.32.0, below). A job answered later is heard on
   `job_finished` (`plugin.receive(job_finished=jobs.heard)`) and caught up by
   sequence (`jobs.catch_up`).
 - **The reference computations** (`meridian.analytics.reference`): v26's
@@ -1843,6 +1843,84 @@ await plugin.receive(observations_wanted=lambda heard: wants.hear(heard, answer)
   (`VenueCharge`) and a fill's settlement date it states, awaits an async
   adapter, and dates a fill in its order's own zone: SnapTrade's trading,
   onto the SDK.
+
+### The placement type, TCA, rates, latency and liveness (contract v27; 0.32.0)
+
+0.32.0 declares contract v27 (`meridian.SCHEMA_VERSION`).
+
+- **The analytics component** serves `pnl` version 2, realized P&L since
+  the account opened beside unrealized (`analytics.measure("pnl", 2)`;
+  rulings 320 and 396), and `execution_cost` version 1, each execution
+  against the mid at its decision, arrival, placement arrival and fill, in
+  bps, side-adjusted, positive a cost, a quote past its 5-second bound never
+  imputed. A job takes a `business_date` and a `reporting_currency`, and is
+  refused with no account, as the component refuses it. The reference
+  computations round a quoted price once per unit to 18 places (rulings 453
+  and 486), invert a fiat leg the lake holds only the other way and cross one
+  it holds neither way through the deployment's pivots, USD's then EUR's
+  (rulings 462 and 483), never a token's; each answer names the business
+  date, each position's input price and each conversion leg; a lot's cost
+  the book does not record is `NOT_EVALUATED_REASON_COST_MISSING`, never
+  zero. Twelve pinned cases, four new.
+- **The rates slice** (`meridian.roles.data.rates`; ruling 345): a
+  publisher's fixings, averages, index levels and curves' points as `Rate`
+  rows -- a 3.87 per cent fixing is 3.87 `percent`, never a Money -- each
+  subject a referential record resolved by the identifiers it states, a
+  same-day revision the next version of its row key, a tenor not published
+  no row; a reader's curve for a date in tenor order (`read_curve`).
+
+  ```python
+  from meridian.roles.data import rates
+
+  feed = rates.Feed(plugin, "ust", wants=wants)
+  curve = await feed.subject(("symbol", "PAR_NOMINAL", "ust"), instrument_type="rate_curve")
+  rows = feed.curve(curve, "ust_par", "par_yield", {"1 Mo": "4.12", "10 Yr": "4.21"},
+                    business_date=day, published_ns=at, convention=rates.BOND_EQUIVALENT)
+  await feed.record("ust_par", rows)
+  ```
+- **Latency, data age and liveness** (`meridian.roles.Latency`; rulings 415
+  to 427): a histogram per session and metric and per dataset and hop,
+  HdrHistogram's layout at 2 significant digits, sent every 10 seconds with
+  `ReportLatency` with its counters, clock skew, liveness and the ceilings in
+  force (`meridian.session_ceilings()`, `ceilings_from`). A data plugin's
+  `Wants.latency` records each row's age at the edge, its feed delay, and
+  `Wants.liveness` a stream's heartbeat, which confirms the values in force
+  (`RecordLiveness`); a dataset declares its delay
+  (`DatasetDeclaration.declared_delay_ns`) and its admin its staleness
+  (`meridian.dataset_thresholds()`). A reader keeps the latest liveness heard
+  (`roles.Liveness`) for a value's confirmed time (`confirmed_ns`), and
+  `roles.in_session` reads a venue's trading sessions. Connection and
+  Trading show each session's latency in "Sessions" (`SessionLatency`).
+- **The placement type and RFQ quotes**: the Trader takes the placement
+  types its venue takes (an adapter's `placement_types`, on its catalogue;
+  any other rejected unsupported), records each dealer's quote on an RFQ
+  placement and each later outcome once (`VenueQuote`; an adapter's
+  `request_quotes`, `quotes`, `accept_quote`), accepts the quote its `ems`
+  picked once, and records its session's round trip, order acknowledgement
+  and fill delay. An `ems` checks its reference price's age before a
+  placement (`roles.ems.ReferenceCheck`): past the tighter of the dataset's
+  ceiling and its admin's own (`meridian.stale_reference_after()`), in
+  session, it holds the order with `HOLD_CAUSE_REFERENCE_PRICE_STALE` or
+  places it marked, as its admin chose (`meridian.stale_reference_action()`);
+  `roles.ems.open_quotes` offers an RFQ placement's quotes best first.
+- **Connectivity's pages** (`connectivity.trading_pages`,
+  `raw_records_page`): Trading with "Enable trading", the connection's badge
+  and Sessions, and Raw records, from Alpaca's and Tradier's; for a plugin
+  holding the data role too, one Connection for both roles
+  (`connection_pages`, 457).
+- **Event contracts**: a range member's floor, cap and unit reported with
+  its group (ruling 464); the events of the contracts served kept reported
+  (`Feed.keep_events`).
+- **The data suite**: seven rates cases (about `rates`), a stream's
+  liveness (about `streams`), every data plugin's feed delay; the lake's
+  bounded query is about trades, so a plugin recording none marks it not
+  presented. `data.testing` carries `rates_producers` and each kind's cases
+  never presented (`PAIRS_NOT_PRESENTED`, `EVENT_CONTRACTS_NOT_PRESENTED`).
+- **Smaller**: a licence writes both `derived_use` and `derived_use_terms`
+  (ruling 479); a venue-originated order is resolved by every identifier its
+  venue states (`VenueOrder.identifiers`, `.currency`); a rejected replace's
+  raw record names its venue account; a good-till-date order is asked with
+  its expiry (`Asked.expire_date`, `.expire_time_ns`).
 
 ## Moving a plugin to a new release
 
@@ -1914,6 +1992,7 @@ carries libcst.
 | 0.29.0 to 0.30.0: each role's common logic in the SDK, contract v25 unchanged: `meridian.roles.data` a package -- `Wants` (wants heard and declined by reason, standing wants, rows recorded in the lake's batches and counted, licences, a restart's gap read back once), `Venue`, `unconverted`, `asked`, the venue's reading (`number`, `json_decimal`, `Unread`, `Session`, `Health`, `Limits`, `Endpoint`), `served`, `want_rows`, `WantHeard`, `VenueConnection`; `meridian.roles.data.pairs` and `.event_contracts`, a venue's whole work by what it lists (`Feed`, `ProductMap`, `ContractMap`, their pages and templates); `meridian.roles.data.testing` (`Lake`, the suite's producers, `PairsChecks`, `EventContractsChecks`); `meridian.edge.RawStore`; `meridian.roles.connectivity` (`Sent`, `place_once`, `resolve_unanswered`, `report_status_not_mapped`, `execution_id`, `bust_id`, `fill_price`, `filled_in_book`, and the role's work: `Trader` over a `Venue`, `Watched`, `trading_read` and its template, `testing.Rig`); a connectivity role template; the role's Wants paged | a module copied from a sibling plugin (`market.py`, `products.py`, `contracts.py`, `raw.py`, `dgm.py`, saying "The same module in ... and ...") into a re-export of the SDK's names; a trading layer in SnapTrade 0.16.0's shape (`trading.py` defining `Trader`, `Noted`, `Venue`, `Watched`, `trading_files`) into a re-export of `meridian.roles.connectivity`, its `Trader` in the module's market zone | import from the SDK and delete the re-exports, constructing `Trader` with `market_zone=` and `Sent` for `Noted`; the Trading page: `trading_read` and the SDK's template; the trading test rig: a subclass of `testing.Rig`; the copied `page.py` and templates: the kind's builders and templates; the copied tests: one class of the SDK's checks; a copied `stream.py`: the plugin's own transport, handed to the feed; an assignment of a stream's `connect`: `retarget` it; the Makefile's suite-same: removed |
 | 0.30.0 to 0.31.0: the SDK declares contract v26: `meridian.analytics` (typed builders for a job, `Answer`, `Jobs`) and its reference computations, the `pricing` role (`roles.pricing.Pricer`) and template, event groups (`EventGroups`, `event_contracts.Feed.report_event`), the agents' guard (`environment(demo="paper")`, `reached_environment`, `connection_badge`, `Caller.agent_refused`), `query_lake` and `count_model_tokens`; custody's pages (`custody.account_pages`), a broker's listings (`roles.data.listings`) and the Trader's charges and stated settlement dates (ruling 213) | a base pinned by digest at an older release moved to 0.31.0, its digest dropped (offline) | pin the base's digest again; map each role suite's v26 cases; give a connectivity adapter its `environment`; move custody pages, a listings layer or a SnapTrade-shaped trader onto the SDK |
 | 0.31.0 to 0.31.1: a saved setting value that is no longer one of its choices, or not of its kind, is delivered unset rather than raised (`Settings.refused`, a typed class's `.refused`, `meridian.RefusedSetting`, `request.own_settings_refused`), a required one named missing and an environment so refused counted live by the guard; an event-contract venue's contract map keeps a range market's bounds; `event_contracts.Feed.stated_identifiers`, by which `EventContractsChecks` holds a record complete, and a record holding the venue's ticker alone named by it; the pricing template declares no storage; the templates' AGENTS.md on publishing to a registry and their pre-push hook's tag-push message | only the pins move | |
+| 0.31.1 to 0.32.0: the SDK declares contract v27: `pnl` version 2 and `execution_cost`, a job's business date and reporting currency, a job refused with no account; the reference rounding a quoted price per unit and inverting and crossing fiat legs; the rates slice (`roles.data.rates`); latency, data age and liveness (`roles.Latency`, `SessionLatency`, `Liveness`, `in_session`, `Wants.latency`, `Wants.liveness`, `declared_delay_ns`, and the settings `session_ceilings`, `dataset_thresholds`, `stale_reference_action`, `stale_reference_after`); the Trader's placement types and RFQ quotes, the `ems`'s reference check (`roles.ems`); connectivity's pages (`trading_pages`, `raw_records_page`, `connection_pages`); a range member's bounds and `Feed.keep_events`; `derived_use_terms`; the suites' v27 cases. Breaking | a base pinned by digest at an older release moved to 0.32.0, its digest dropped (offline) | pin the base's digest again; map each role suite's v27 cases; mark a data plugin's lake query not presented where it records no trades; move a plugin's own Trading page or events loop onto the SDK; add `include-hidden-files: true` to an e2e log upload |
 
 `tests/migrations/` holds the plugins the migrations are recorded for, as
 written and as their migration leaves them, and `make check-migrations` holds
