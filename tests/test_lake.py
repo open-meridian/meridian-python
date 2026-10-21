@@ -40,8 +40,10 @@ from meridian import (
 from meridian.edge import as_reported
 from meridian.plugin.v1 import operations_pb2 as ops
 from meridian.roles.data import backfill_restart
+from meridian.roles.data.testing import RATES_CASES, feed_delay, rates_producers
 from meridian.suites import Recorder, check, names, run, suite
 from order_path_cases import PRODUCERS
+from rates_cases import PUBLISHED, RATES
 
 INSTANCE = "data-coinbase-1"
 DAILY = f"{INSTANCE}:daily"
@@ -1086,7 +1088,37 @@ def producers(**mutations: bool) -> dict[str, object]:
         "reports-an-event-group": event_group(exhaustive=True),
         "reports-a-flag-the-venue-does-not-state": event_group(exhaustive=None),
         "queries-the-lake-within-bounds": PRODUCERS["queries-the-lake-within-bounds"],
+        # Contract v27: the rates slice, a stream's liveness and the feed delay.
+        **rates_producers(RATES, source="ust", now_ns=PUBLISHED),
+        "records-a-datasets-liveness": liveness,
+        "reports-its-feed-delay": feed_delay(recorded_with_latency),
     }
+
+
+async def liveness(recorder: Recorder) -> None:
+    """A stream's heartbeat with no price changed: the dataset's liveness."""
+    from meridian.roles import data
+
+    wants = data.Wants(recorder, ("live",), clock_ns=lambda: DAY)
+    assert await wants.liveness("live") == 0  # the recorder keeps nothing
+
+
+async def recorded_with_latency(recorder: Recorder, latency: object) -> None:
+    """A price recorded unasked, its age at the edge kept on the Wants."""
+    from meridian.roles import data
+
+    wants = data.Wants(recorder, ("daily",), clock_ns=lambda: DAY, latency=latency)
+    price = meridian.Price(
+        meta=meridian.ObservationMeta(
+            row_key="BTC-USD:1d:2026-10-08",
+            subjects=[ops.SubjectRef(entity_id=BTC)],
+            source=ops.Source(dataset=DAILY),
+            source_times=[meridian.SourceTime(kind="published", at_ns=DAY - 5_000_000_000)],
+        ),
+        kind="close",
+        price=meridian.Money(Decimal("62000.10"), "USD"),
+    )
+    await wants.record("prices", [price], "daily")
 
 
 def event_group(*, exhaustive: bool | None):  # type: ignore[no-untyped-def]
@@ -1116,13 +1148,19 @@ def event_group(*, exhaustive: bool | None):  # type: ignore[no-untyped-def]
     return produce
 
 
-def test_the_data_suite_is_carried_with_its_thirty_five_cases() -> None:
+def test_the_data_suite_is_carried_with_its_forty_four_cases() -> None:
     held = suite("data")
     assert held.since == "v18"
     # Contract v24 adds the two every role's suite holds, which the SDK answers;
     # v26 a third, the venue's event groups reported (two, about outcomes) and
-    # the lake's bounded query.
-    assert len(held.cases) == 35
+    # the lake's bounded query; v27 the rates slice's seven (about rates), a
+    # stream's liveness (about streams) and the feed delay, and the bounded
+    # query about trades.
+    assert len(held.cases) == 44
+    assert held.case("queries-the-lake-within-bounds").about == "trades"
+    assert {held.case(name).about for name in RATES_CASES} == {"rates"}
+    assert held.case("records-a-datasets-liveness").about == "streams"
+    assert held.case("reports-its-feed-delay").about == ""
     assert held.case("reports-an-event-group").about == "outcomes"
     assert held.case("reports-a-flag-the-venue-does-not-state").about == "outcomes"
     assert "a-want-recorded-against" in names("data")
@@ -1201,7 +1239,7 @@ V19_DATA_CASES = {
 def test_a_data_plugin_converting_exactly_passes_every_case_of_its_suite() -> None:
     report = run("data", producers(), instance_id="toy-1")
     assert report.passed, report.failures
-    assert len(report.passed_cases) == 35
+    assert len(report.passed_cases) == 44
     assert report.answered_by_sdk == [
         "hears-and-reads-a-replacement",
         "reads-the-template-catalogue",
@@ -1224,11 +1262,14 @@ def test_a_case_about_a_kind_the_plugin_never_publishes_may_be_not_presented() -
         for name in V19_DATA_CASES
     }
     never["a-daily-bar"] = "this source states no bars"
+    # Contract v27: the lake's bounded query is about trades, so a source
+    # recording none marks it not presented rather than faking it.
+    never["queries-the-lake-within-bounds"] = "it records no trades"
     mapped = {name: made for name, made in every.items() if name not in never}
     report = run("data", mapped, not_presented=never)
     assert report.passed, report.failures
     assert report.not_presented == never
-    assert len(report.passed_cases) == 35 - 9
+    assert len(report.passed_cases) == 44 - 10
 
 
 def test_a_case_about_a_field_the_source_never_states_may_be_not_presented() -> None:
@@ -1371,6 +1412,11 @@ def test_a_reading_role_hears_and_reads_as_its_suite_asks() -> None:
                     "runs-a-job-and-reads-its-answer",
                     "catches-up-finished-jobs",
                     "queries-the-lake-within-bounds",
+                    # Rates, liveness and execution costs (contract v27).
+                    "reads-a-curve-for-a-date",
+                    "hears-a-rate-recorded",
+                    "hears-a-datasets-liveness",
+                    "reads-an-accounts-execution-costs",
                 )
             },
         },

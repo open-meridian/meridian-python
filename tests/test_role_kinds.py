@@ -22,6 +22,8 @@ from fake_venues import NOW_NS, ContractsMarket, contracts_venue, pairs_venue
 from meridian.plugin.v1 import operations_pb2 as ops
 from meridian.roles.data import event_contracts, pairs
 from meridian.roles.data.testing import (
+    EVENT_CONTRACTS_NOT_PRESENTED,
+    PAIRS_NOT_PRESENTED,
     EventContractsChecks,
     Lake,
     event_contract_producers,
@@ -37,20 +39,20 @@ from meridian.testing import PageClient
 
 def test_a_pairs_venue_passes_every_case_it_presents() -> None:
     v = pairs_venue
-    report = run("data", pairs_producers(v), not_presented=v.NOT_PRESENTED, instance_id=v.VENUE)
+    skipped = {**PAIRS_NOT_PRESENTED, **v.NOT_PRESENTED}
+    report = run("data", pairs_producers(v), not_presented=skipped, instance_id=v.VENUE)
     assert report.passed, report.failures
-    assert len(report.passed_cases) == len(list(names("data"))) - len(v.NOT_PRESENTED)
-    assert set(names("data")) == set(pairs_producers(v)) | set(v.NOT_PRESENTED) | set(
-        ANSWERED_BY_SDK
-    )
+    assert len(report.passed_cases) == len(list(names("data"))) - len(skipped)
+    assert set(names("data")) == set(pairs_producers(v)) | set(skipped) | set(ANSWERED_BY_SDK)
 
 
 def test_an_event_contract_venue_passes_every_case_it_presents() -> None:
     v = contracts_venue
     made = event_contract_producers(v)
-    report = run("data", made, not_presented=v.NOT_PRESENTED, instance_id=v.VENUE)
+    skipped = {**EVENT_CONTRACTS_NOT_PRESENTED, **v.NOT_PRESENTED}
+    report = run("data", made, not_presented=skipped, instance_id=v.VENUE)
     assert report.passed, report.failures
-    assert set(names("data")) == set(made) | set(v.NOT_PRESENTED) | set(ANSWERED_BY_SDK)
+    assert set(names("data")) == set(made) | set(skipped) | set(ANSWERED_BY_SDK)
 
 
 @pytest.mark.parametrize(
@@ -402,7 +404,12 @@ def test_a_pairs_venues_pages_hold_the_roles_sections_and_its_own() -> None:
     asyncio.run(worked())
     client = PageClient(_pairs_pages(feed))
     connection = client.get("/", "admin").text
-    assert re.findall(r"<h2>([^<]*)</h2>", connection) == ["Key", "Limits and use", "Stream"]
+    assert re.findall(r"<h2>([^<]*)</h2>", connection) == [
+        "Key",
+        "Limits and use",
+        "Stream",
+        "Sessions",
+    ]
     assert "No key needed" in connection and "Venue" in connection
     shown = client.get("/datasets", "admin").text
     assert re.findall(r"<h2>([^<]*)</h2>", shown) == [

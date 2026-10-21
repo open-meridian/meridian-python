@@ -1,5 +1,6 @@
 {#- A data plugin's Connection (spec/plugin-pages-follow-their-role): notices,
-    then "Key", "Limits and use" and "Stream", then the vendor's sections.
+    then "Key", "Limits and use", "Stream" and, from 0.32.0, "Sessions" (each
+    session's latency), then the vendor's sections.
     `data` is a meridian.roles.data.ConnectionRead, or the plugin's record
     extending it. -#}
 {% extends "meridian/base.html" %}
@@ -12,7 +13,7 @@
 {% endif %}
 {% if data.last_error %}<div class="notice bad" role="alert">{{ data.last_error }}</div>{% endif %}
 {% block vendor_notices %}{% endblock %}
-{% for section in ["Key", "Limits and use", "Stream"] %}
+{% for section in ["Key", "Limits and use", "Stream", "Sessions"] %}
 <section class="panel">
 <h2>{{ section }}</h2>
 <table class="one-line"><tbody>
@@ -26,6 +27,8 @@
 {{ om.row("Calls", data.calls, (data.rate_limited ~ " rate-limited and waited out") if data.rate_limited else "") }}
 {{ om.row("Last call", data.last_call_at or "None yet") }}
 {{ om.row("Last error", data.last_error or "None") }}
+{% elif section == "Sessions" %}
+{{ om.session_rows(data.session_latency or []) }}
 {% else %}
 {% if data.sessions is none %}
 {{ om.row("Streaming", "Does not stream") }}

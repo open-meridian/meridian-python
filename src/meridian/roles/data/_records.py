@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from .._latency import SessionLatency
 from ._reading import Endpoint
 
 
@@ -25,7 +26,9 @@ class ConnectionRead:
     vendor's limit and this plugin's share, in words; calls since start and
     how many were rate-limited and waited out; the last call, ISO 8601; the
     last error; and the streaming sessions open, None for a source that
-    does not stream."""
+    does not stream. From 0.32.0 (contract v27) each open session's
+    latency (`session_latency`, `roles.Latency.session_latency()`), the
+    Sessions section's rows; empty for none measured."""
 
     mode: str
     credentials: list[Credential] = field(default_factory=list)
@@ -36,6 +39,7 @@ class ConnectionRead:
     last_call_at: str = ""
     last_error: str = ""
     sessions: int | None = None
+    session_latency: list[SessionLatency] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

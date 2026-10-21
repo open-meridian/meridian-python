@@ -747,7 +747,11 @@ class _Case:
         """The price of `subject` in one instrument: an FX rate is the price
         of one cash instrument in another, and a currency may be priced in
         several (EURUSD and EURCHF), each its own row."""
-        held = [p for p in self.market.get((subject, kind)) or [] if p.instrument_id == instrument_id]
+        held = [
+            p
+            for p in self.market.get((subject, kind)) or []
+            if p.instrument_id == instrument_id
+        ]
         return max(held, key=lambda p: (p.valid_at_ns, p.dataset)) if held else None
 
     def quoted_in(self, subject: str, kind: str) -> list[_Price]:
@@ -1672,7 +1676,9 @@ def _execution_cost(run: _Run, ref: Mapping[str, Any], definition: Definition) -
                     for q in case.market.get((execution["instrument_id"], "mid"), [])
                     if q.instrument_id == held and q.valid_at_ns <= moment
                 ]
-                quote = max(quotes, key=lambda q: (q.valid_at_ns, q.dataset)) if quotes else None
+                quote = (
+                    max(quotes, key=lambda q: (q.valid_at_ns, q.dataset)) if quotes else None
+                )
                 bound = bound_default
                 if quote is not None and quote.dataset in case.stale_after:
                     bound = min(bound, case.stale_after[quote.dataset])
@@ -1684,8 +1690,10 @@ def _execution_cost(run: _Run, ref: Mapping[str, Any], definition: Definition) -
                 cost = None
                 if not unanswered and quote is not None:
                     case.datasets.add(quote.dataset)
-                    exact = sign * (Fraction(price) - Fraction(quote.amount)) / Fraction(
-                        quote.amount
+                    exact = (
+                        sign
+                        * (Fraction(price) - Fraction(quote.amount))
+                        / Fraction(quote.amount)
                     )
                     cost = _bps(exact)
                     if in_base is not None:
@@ -1705,8 +1713,12 @@ def _execution_cost(run: _Run, ref: Mapping[str, Any], definition: Definition) -
                         if unanswered or quote is None
                         else _money_json(quote.amount, quote.instrument_id),
                         "benchmark_at_ns": str(0 if unanswered == NOT_MEASURED else moment),
-                        "benchmark_dataset": "" if unanswered or quote is None else quote.dataset,
-                        "benchmark_row_key": "" if unanswered or quote is None else quote.row_key,
+                        "benchmark_dataset": ""
+                        if unanswered or quote is None
+                        else quote.dataset,
+                        "benchmark_row_key": ""
+                        if unanswered or quote is None
+                        else quote.row_key,
                         "execution_price": _money_json(price, held),
                         "side": execution["side"],
                         "notional": _money_json(notional, held),

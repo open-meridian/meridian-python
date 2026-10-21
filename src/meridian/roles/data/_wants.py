@@ -48,8 +48,9 @@ BATCH = 500
 #: How many of the wants heard the Datasets page lists.
 RECENT = 200
 
-#: The rows `Wants.record` sends, by the operation's plural.
-KINDS = ("prices", "bars", "trades", "quotes", "outcomes")
+#: The rows `Wants.record` sends, by the operation's plural; from 0.32.0
+#: (contract v27) rates too.
+KINDS = ("prices", "bars", "trades", "quotes", "outcomes", "rates")
 
 
 @dataclass(frozen=True)
@@ -125,6 +126,13 @@ class Wants:
     reads_licences: bool = True
     #: Subjects whose restart's gap has been read back, once each per process.
     backfilled: set[str] = field(default_factory=set)
+    #: From 0.32.0 (contract v27): the plugin's `roles.Latency`, where it
+    #: keeps one -- each row recorded unasked or for a standing want has its
+    #: age at the `edge` hop recorded against its dataset, the feed delay;
+    #: a row pulled for a read of the past does not. `session` names the
+    #: session that carried them, for its Sessions row.
+    latency: Any = None
+    session: str = ""
 
     # ── Names ────────────────────────────────────────────────────────────
 
@@ -162,14 +170,17 @@ class Wants:
         want_id: str = "",
         overall: bool = True,
     ) -> int:
-        """Send `rows` -- `kind` one of prices, bars, trades, quotes and
-        outcomes -- in the lake's batches, against `want_id` where they
+        """Send `rows` -- `kind` one of prices, bars, trades, quotes,
+        outcomes and rates -- in the lake's batches, against `want_id` where they
         answer one (an outcome answers none), each answer counted to `key`;
         how many rows were sent. A refusal raises, the batches before it
         sent and counted."""
         if kind not in KINDS:
             raise ValueError(f"{kind!r} is not one of {', '.join(KINDS)}")
         call = getattr(self.plugin, f"record_{kind}")
+        if self.latency is not None and (not want_id or want_id in self.standing):
+            for row in rows:
+                self.latency.aged(self.dataset(key), "AGE_HOP_EDGE", row, self.session)
         sent = 0
         for start in range(0, len(rows), BATCH):
             batch = list(rows[start : start + BATCH])
@@ -180,6 +191,22 @@ class Wants:
             self.count(done, key, overall)
             sent += len(batch)
         return sent
+
+    async def liveness(self, key: str, alive_at_ns: int = 0, venue_id: str = "") -> int:
+        """A dataset's sign of life (contract v27, W10.4; ruling 418): its
+        source's heartbeat or poll, which confirms every value in force,
+        recorded once for the dataset `key` and the venue (`venue_id`, empty
+        for its consolidated view) -- never a row. How many the lake kept."""
+        done = await self.plugin.record_liveness(
+            liveness=[
+                ops.DatasetLiveness(
+                    dataset=self.dataset(key),
+                    venue_id=venue_id,
+                    alive_at_ns=alive_at_ns or self.clock_ns(),
+                )
+            ]
+        )
+        return int(getattr(done, "kept", 0))
 
     # ── Wants ────────────────────────────────────────────────────────────
 

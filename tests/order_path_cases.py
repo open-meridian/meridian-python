@@ -1273,6 +1273,127 @@ async def setting_and_session_disagree_counts_live(recorder: Recorder) -> None:
     await agent_placement_on_a_live_connection_refused(recorder)
 
 
+# ── Contract v27 ────────────────────────────────────────────────────────────
+
+PAR = "INS-01JAH000000000000000000PAR"
+PLACEMENT_RFQ = "PLC-01JAH0000000000000000RFQ"
+DEALER_A, DEALER_B = "VEN-01JAH0000000000000DEALA", "VEN-01JAH0000000000000DEALB"
+
+
+async def reads_a_curve_for_a_date(recorder: Recorder) -> None:
+    from meridian.roles.data import rates
+
+    await rates.read_curve(recorder, PAR, "2026-10-20")
+
+
+async def hears_a_rate_recorded(recorder: Recorder) -> None:
+    await hearing(("RatesRecorded", "rates_recorded", ops.RatesRecordedEvent(rate=ops.Rate())))(
+        recorder
+    )
+
+
+async def hears_a_datasets_liveness(recorder: Recorder) -> None:
+    from meridian.roles import Liveness
+
+    liveness = Liveness()
+    alive = ops.DatasetLiveness(dataset="oanda-1:live", alive_at_ns=1_792_300_000_000_000_000)
+    recorder.answer("LivenessRecorded", lambda _: ops.LivenessRecordedEvent(liveness=alive))
+    await recorder.receive(liveness_recorded=liveness.heard)
+    assert liveness.at("oanda-1:live") == alive.alive_at_ns
+
+
+async def reads_an_accounts_execution_costs(recorder: Recorder) -> None:
+    await recorder.list_execution_costs(account_id=ACCOUNT, trade_date="2026-10-20")
+
+
+async def reports_its_pre_trade_checks_data_age(recorder: Recorder) -> None:
+    """The `ems`'s reference price checked before placements over an
+    interval: its age at the `ems_check` hop recorded and sent."""
+    from meridian.roles import Latency, ems
+
+    now = 1_792_300_010_000_000_000
+    latency = Latency(recorder, clock_ns=lambda: now)
+    check = ems.ReferenceCheck(after_ns={"equity": 5_000_000_000}, latency=latency,
+                               clock_ns=lambda: now)  # fmt: skip
+    price = ops.Price(
+        meta=ops.ObservationMeta(
+            source=ops.Source(dataset="alpaca-1:live"),
+            source_times=[
+                ops.SourceTime(kind=ops.SOURCE_TIME_KIND_EVENT, at_ns=now - 2_000_000_000)
+            ],
+        )
+    )
+    assert check.stale(price, asset_class="equity") is None
+    await latency.report()
+
+
+async def picks_a_quote_on_its_rfq_placement(recorder: Recorder) -> None:
+    """Two dealers' quotes stand; a person picks the second best."""
+    from meridian.roles import ems
+
+    def quote(n: int, dealer: str, price: str) -> ops.PlacementQuote:
+        return ops.PlacementQuote(
+            quote_id=f"PQT-01JAH000000000000000000{n:03d}", dealer_id=dealer,
+            dealer_quote_id=f"Q{n}", side=ops.SIDE_SELL,
+            price=ops.Money(amount=meridian.operations._decimal(Decimal(price), "p"),
+                            currency_code="USD"),
+            received_at_ns=n, outcome=ops.PLACEMENT_QUOTE_OUTCOME_OPEN,
+        )  # fmt: skip
+
+    placement = ops.Placement(
+        placement_id=PLACEMENT_RFQ, placement_type=ops.PLACEMENT_TYPE_RFQ,
+        quotes=[quote(1, DEALER_A, "1.0852"), quote(2, DEALER_B, "1.0850")],
+    )  # fmt: skip
+    best, second = ems.open_quotes(placement)
+    assert best.dealer_id == DEALER_B
+    await recorder.pick_placement_quote(
+        placement_id=PLACEMENT_RFQ, quote_id=second.quote_id,
+        reason="The best dealer's settlement instructions are not on file",
+        acting_for=caller_header("write"),
+    )  # fmt: skip
+
+
+async def records_a_dealers_quote_on_an_rfq_placement(recorder: Recorder) -> None:
+    await recorder.report_placement_quote(
+        placement_id=PLACEMENT_RFQ,
+        dealer_id=DEALER_A,
+        dealer_quote_id="Q1",
+        side="sell",
+        price=meridian.Money(Decimal("1.0852"), "USD"),
+        quantity=Decimal(1_000_000),
+        received_at_ns=1_792_300_000_000_000_000,
+        valid_until_ns=1_792_300_015_000_000_000,
+        outcome="open",
+        raw_record=recorder.raw_record("rfq/quote/Q1"),
+    )
+
+
+async def reports_a_sessions_round_trip(recorder: Recorder) -> None:
+    from meridian.roles import Latency
+
+    latency = Latency(recorder)
+    latency.rtt("fix-order", 41_000_000)
+    latency.alive("fix-order")
+    await latency.report()
+
+
+async def sets_a_block_members_allocation_instruction(recorder: Recorder) -> None:
+    """Contract v27 (ruling 469): the `oms` moves part of a block member's
+    allocation to another account before booking."""
+    await recorder.set_allocation_instruction(
+        order_id=ORDER,
+        allocation_instruction=instruction(),
+        reason="Moved 40% to the sleeve the PM named",
+        acting_for=caller_header("write"),
+    )
+
+
+async def reads_a_trade_dates_fx_close(recorder: Recorder) -> None:
+    await recorder.list_prices(
+        subjects=[ops.SubjectRef(entity_id=EUR)], kinds=["close"], business_date="2026-10-20"
+    )
+
+
 PRODUCERS: dict[str, Producer] = {
     # Every role's settlement calendar reads.
     "reads-a-calendar": reads_a_calendar,
@@ -1456,4 +1577,16 @@ PRODUCERS: dict[str, Producer] = {
         agent_accept_to_a_new_order_on_a_live_connection_refused
     ),
     "setting-and-session-disagree-counts-live": setting_and_session_disagree_counts_live,
+    # Contract v27: rates, liveness, latency, execution costs, the RFQ's
+    # quotes, oms's allocation instruction and a trade date's FX close.
+    "reads-a-curve-for-a-date": reads_a_curve_for_a_date,
+    "hears-a-rate-recorded": hears_a_rate_recorded,
+    "hears-a-datasets-liveness": hears_a_datasets_liveness,
+    "reads-an-accounts-execution-costs": reads_an_accounts_execution_costs,
+    "reports-its-pre-trade-checks-data-age": reports_its_pre_trade_checks_data_age,
+    "picks-a-quote-on-its-rfq-placement": picks_a_quote_on_its_rfq_placement,
+    "records-a-dealers-quote-on-an-rfq-placement": records_a_dealers_quote_on_an_rfq_placement,
+    "reports-a-sessions-round-trip": reports_a_sessions_round_trip,
+    "sets-a-block-members-allocation-instruction": sets_a_block_members_allocation_instruction,
+    "reads-a-trade-dates-fx-close": reads_a_trade_dates_fx_close,
 }

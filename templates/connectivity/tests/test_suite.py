@@ -98,6 +98,7 @@ NOT_PRESENTED = {
     "re-reports-a-charge-on-the-accepted-placement": "the stand-in venue charges nothing",
     "reports-a-value-date-roll": "the stand-in venue rolls no spot position",
     "reports-a-give-up-rejected": "the stand-in venue clears every order it fills",
+    "records-a-dealers-quote-on-an-rfq-placement": "the stand-in venue takes no RFQ",
 }
 
 
@@ -179,6 +180,18 @@ async def caught_up(recorder: Recorder) -> None:
     await rig.poll()
 
 
+async def round_trip(recorder: Recorder) -> None:
+    """Contract v27: the session's latency over an interval -- each venue
+    call's round trip, a placement's acknowledgement -- sent as the SDK's
+    Trader recorded it."""
+    rig = Rig(recorder)
+    held = rig.placement()
+    rig.holds(held)
+    await rig.hear(held)
+    await rig.poll()
+    await rig.latency.report()
+
+
 PRODUCERS: dict[str, Producer] = {
     "acknowledges-a-placement-naming-it": placed(),
     "hears-no-placement-of-another-instance": another_instances,
@@ -200,6 +213,7 @@ PRODUCERS: dict[str, Producer] = {
     "catches-up-placements-after-a-loss": caught_up,
     "reads-the-instructions-in-force-on-start": started,
     "reports-a-symbol-it-cannot-resolve": renamed,
+    "reports-a-sessions-round-trip": round_trip,
 }
 
 
