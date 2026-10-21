@@ -114,12 +114,10 @@ DESIGN ?= ../meridian-design
 # pinned here by commit as the schema is pinned in pyproject.toml. Core's own
 # interop gate overrides this with its working tree, so a change to both lands
 # without either waiting on the other's push.
-# Core's pushed `v26` (contract v26), whose gate is green. Kept at v26 while
-# core's v27 builds: the SDK lands before core (schema, SDK, core, design),
-# and no test here encodes a domain message v27 adds; core's own interop gate
-# builds the tests against its v27 working tree (CORE_PROTO), and the pin
-# moves to core's pushed v27 when it lands.
-CORE_REV   := df15ccbf6f15e0facce90e98bd894bd0b4724078
+# Core's pushed `v27` (contract v27; draft open-meridian/meridian-core#50), its
+# proto/ the contract's as in its contract commit b7f5658, its local gate green
+# with this SDK as its SDK.
+CORE_REV   := cf48d5adf167c72b05de0448d0cab69bc6b6b199
 CORE_PROTO ?= https://github.com/open-meridian/meridian-core.git\#$(CORE_REV):proto
 # And meridian-schema's, which core's import, at the revision vendored here.
 SCHEMA_PROTO ?= https://github.com/open-meridian/meridian-schema.git\#$(SCHEMA_REV):proto
