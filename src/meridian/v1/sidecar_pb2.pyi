@@ -14,6 +14,121 @@ class ObservationMode(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     OBSERVATION_MODE_PUSH: _ClassVar[ObservationMode]
     OBSERVATION_MODE_STREAM: _ClassVar[ObservationMode]
 
+class AccessBasis(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    ACCESS_BASIS_UNSPECIFIED: _ClassVar[AccessBasis]
+    ACCESS_BASIS_LICENSED: _ClassVar[AccessBasis]
+    ACCESS_BASIS_OPEN: _ClassVar[AccessBasis]
+    ACCESS_BASIS_PUBLIC_DOMAIN: _ClassVar[AccessBasis]
+
+class Timeliness(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    TIMELINESS_UNSPECIFIED: _ClassVar[Timeliness]
+    TIMELINESS_REAL_TIME: _ClassVar[Timeliness]
+    TIMELINESS_DELAYED: _ClassVar[Timeliness]
+    TIMELINESS_END_OF_DAY: _ClassVar[Timeliness]
+    TIMELINESS_HISTORICAL: _ClassVar[Timeliness]
+
+class LicenceMeter(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    LICENCE_METER_UNSPECIFIED: _ClassVar[LicenceMeter]
+    LICENCE_METER_DISPLAY: _ClassVar[LicenceMeter]
+    LICENCE_METER_NON_DISPLAY: _ClassVar[LicenceMeter]
+    LICENCE_METER_ENTERPRISE: _ClassVar[LicenceMeter]
+
+class DisplayUnit(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    DISPLAY_UNIT_UNSPECIFIED: _ClassVar[DisplayUnit]
+    DISPLAY_UNIT_PERSON: _ClassVar[DisplayUnit]
+    DISPLAY_UNIT_DEVICE: _ClassVar[DisplayUnit]
+
+class CountBasis(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    COUNT_BASIS_UNSPECIFIED: _ClassVar[CountBasis]
+    COUNT_BASIS_SERVED: _ClassVar[CountBasis]
+    COUNT_BASIS_ENTITLED: _ClassVar[CountBasis]
+
+class ProfessionalDefinition(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    PROFESSIONAL_DEFINITION_UNSPECIFIED: _ClassVar[ProfessionalDefinition]
+    PROFESSIONAL_DEFINITION_STANDARD: _ClassVar[ProfessionalDefinition]
+    PROFESSIONAL_DEFINITION_VENDOR: _ClassVar[ProfessionalDefinition]
+
+class NonDisplayCategory(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    NON_DISPLAY_CATEGORY_UNSPECIFIED: _ClassVar[NonDisplayCategory]
+    NON_DISPLAY_CATEGORY_TRADING_PLATFORM: _ClassVar[NonDisplayCategory]
+    NON_DISPLAY_CATEGORY_AUTOMATED_TRADING: _ClassVar[NonDisplayCategory]
+    NON_DISPLAY_CATEGORY_INTERNAL: _ClassVar[NonDisplayCategory]
+    NON_DISPLAY_CATEGORY_FOR_CLIENTS: _ClassVar[NonDisplayCategory]
+
+class NonDisplayCount(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    NON_DISPLAY_COUNT_UNSPECIFIED: _ClassVar[NonDisplayCount]
+    NON_DISPLAY_COUNT_PER_PLUGIN: _ClassVar[NonDisplayCount]
+    NON_DISPLAY_COUNT_PER_CATEGORY: _ClassVar[NonDisplayCount]
+
+class EnterpriseReplaces(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    ENTERPRISE_REPLACES_UNSPECIFIED: _ClassVar[EnterpriseReplaces]
+    ENTERPRISE_REPLACES_DISPLAY_PROFESSIONAL: _ClassVar[EnterpriseReplaces]
+    ENTERPRISE_REPLACES_DISPLAY_NON_PROFESSIONAL: _ClassVar[EnterpriseReplaces]
+    ENTERPRISE_REPLACES_NON_DISPLAY: _ClassVar[EnterpriseReplaces]
+
+class EnterpriseForm(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    ENTERPRISE_FORM_UNSPECIFIED: _ClassVar[EnterpriseForm]
+    ENTERPRISE_FORM_FLAT: _ClassVar[EnterpriseForm]
+    ENTERPRISE_FORM_CAP: _ClassVar[EnterpriseForm]
+
+class EnterpriseScope(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    ENTERPRISE_SCOPE_UNSPECIFIED: _ClassVar[EnterpriseScope]
+    ENTERPRISE_SCOPE_DEPLOYMENT: _ClassVar[EnterpriseScope]
+
+class DerivedUse(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    DERIVED_USE_UNSPECIFIED: _ClassVar[DerivedUse]
+    DERIVED_USE_NOT_RESTRICTED: _ClassVar[DerivedUse]
+    DERIVED_USE_INTERNAL_ONLY: _ClassVar[DerivedUse]
+    DERIVED_USE_REDISTRIBUTION_NEEDS_LICENCE: _ClassVar[DerivedUse]
+
+class Redistribution(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    REDISTRIBUTION_UNSPECIFIED: _ClassVar[Redistribution]
+    REDISTRIBUTION_NOT_ALLOWED: _ClassVar[Redistribution]
+    REDISTRIBUTION_LICENCE_REQUIRED: _ClassVar[Redistribution]
+    REDISTRIBUTION_ALLOWED_WITH_ATTRIBUTION: _ClassVar[Redistribution]
+
+class OutsideComputation(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    OUTSIDE_COMPUTATION_UNSPECIFIED: _ClassVar[OutsideComputation]
+    OUTSIDE_COMPUTATION_ALLOWED: _ClassVar[OutsideComputation]
+    OUTSIDE_COMPUTATION_PER_REQUEST_NO_RETENTION: _ClassVar[OutsideComputation]
+    OUTSIDE_COMPUTATION_NOT_ALLOWED: _ClassVar[OutsideComputation]
+
+class ProhibitedUse(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    PROHIBITED_USE_UNSPECIFIED: _ClassVar[ProhibitedUse]
+    PROHIBITED_USE_MODEL_TRAINING: _ClassVar[ProhibitedUse]
+    PROHIBITED_USE_REPLICATE_SERVICE: _ClassVar[ProhibitedUse]
+    PROHIBITED_USE_INDEX_CREATION: _ClassVar[ProhibitedUse]
+
+class CopyrightClass(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    COPYRIGHT_CLASS_UNSPECIFIED: _ClassVar[CopyrightClass]
+    COPYRIGHT_CLASS_PUBLIC_DOMAIN: _ClassVar[CopyrightClass]
+    COPYRIGHT_CLASS_COPYRIGHT_CITATION_REQUIRED: _ClassVar[CopyrightClass]
+    COPYRIGHT_CLASS_COPYRIGHT_PREAPPROVAL_REQUIRED: _ClassVar[CopyrightClass]
+
+class ReportCadence(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    REPORT_CADENCE_UNSPECIFIED: _ClassVar[ReportCadence]
+    REPORT_CADENCE_NONE: _ClassVar[ReportCadence]
+    REPORT_CADENCE_MONTHLY: _ClassVar[ReportCadence]
+    REPORT_CADENCE_ANNUAL_DECLARATION: _ClassVar[ReportCadence]
+    REPORT_CADENCE_ON_CHANGE: _ClassVar[ReportCadence]
+
 class NotCarriedReason(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
     NOT_CARRIED_REASON_UNSPECIFIED: _ClassVar[NotCarriedReason]
@@ -159,6 +274,70 @@ OBSERVATION_MODE_UNSPECIFIED: ObservationMode
 OBSERVATION_MODE_PULL: ObservationMode
 OBSERVATION_MODE_PUSH: ObservationMode
 OBSERVATION_MODE_STREAM: ObservationMode
+ACCESS_BASIS_UNSPECIFIED: AccessBasis
+ACCESS_BASIS_LICENSED: AccessBasis
+ACCESS_BASIS_OPEN: AccessBasis
+ACCESS_BASIS_PUBLIC_DOMAIN: AccessBasis
+TIMELINESS_UNSPECIFIED: Timeliness
+TIMELINESS_REAL_TIME: Timeliness
+TIMELINESS_DELAYED: Timeliness
+TIMELINESS_END_OF_DAY: Timeliness
+TIMELINESS_HISTORICAL: Timeliness
+LICENCE_METER_UNSPECIFIED: LicenceMeter
+LICENCE_METER_DISPLAY: LicenceMeter
+LICENCE_METER_NON_DISPLAY: LicenceMeter
+LICENCE_METER_ENTERPRISE: LicenceMeter
+DISPLAY_UNIT_UNSPECIFIED: DisplayUnit
+DISPLAY_UNIT_PERSON: DisplayUnit
+DISPLAY_UNIT_DEVICE: DisplayUnit
+COUNT_BASIS_UNSPECIFIED: CountBasis
+COUNT_BASIS_SERVED: CountBasis
+COUNT_BASIS_ENTITLED: CountBasis
+PROFESSIONAL_DEFINITION_UNSPECIFIED: ProfessionalDefinition
+PROFESSIONAL_DEFINITION_STANDARD: ProfessionalDefinition
+PROFESSIONAL_DEFINITION_VENDOR: ProfessionalDefinition
+NON_DISPLAY_CATEGORY_UNSPECIFIED: NonDisplayCategory
+NON_DISPLAY_CATEGORY_TRADING_PLATFORM: NonDisplayCategory
+NON_DISPLAY_CATEGORY_AUTOMATED_TRADING: NonDisplayCategory
+NON_DISPLAY_CATEGORY_INTERNAL: NonDisplayCategory
+NON_DISPLAY_CATEGORY_FOR_CLIENTS: NonDisplayCategory
+NON_DISPLAY_COUNT_UNSPECIFIED: NonDisplayCount
+NON_DISPLAY_COUNT_PER_PLUGIN: NonDisplayCount
+NON_DISPLAY_COUNT_PER_CATEGORY: NonDisplayCount
+ENTERPRISE_REPLACES_UNSPECIFIED: EnterpriseReplaces
+ENTERPRISE_REPLACES_DISPLAY_PROFESSIONAL: EnterpriseReplaces
+ENTERPRISE_REPLACES_DISPLAY_NON_PROFESSIONAL: EnterpriseReplaces
+ENTERPRISE_REPLACES_NON_DISPLAY: EnterpriseReplaces
+ENTERPRISE_FORM_UNSPECIFIED: EnterpriseForm
+ENTERPRISE_FORM_FLAT: EnterpriseForm
+ENTERPRISE_FORM_CAP: EnterpriseForm
+ENTERPRISE_SCOPE_UNSPECIFIED: EnterpriseScope
+ENTERPRISE_SCOPE_DEPLOYMENT: EnterpriseScope
+DERIVED_USE_UNSPECIFIED: DerivedUse
+DERIVED_USE_NOT_RESTRICTED: DerivedUse
+DERIVED_USE_INTERNAL_ONLY: DerivedUse
+DERIVED_USE_REDISTRIBUTION_NEEDS_LICENCE: DerivedUse
+REDISTRIBUTION_UNSPECIFIED: Redistribution
+REDISTRIBUTION_NOT_ALLOWED: Redistribution
+REDISTRIBUTION_LICENCE_REQUIRED: Redistribution
+REDISTRIBUTION_ALLOWED_WITH_ATTRIBUTION: Redistribution
+OUTSIDE_COMPUTATION_UNSPECIFIED: OutsideComputation
+OUTSIDE_COMPUTATION_ALLOWED: OutsideComputation
+OUTSIDE_COMPUTATION_PER_REQUEST_NO_RETENTION: OutsideComputation
+OUTSIDE_COMPUTATION_NOT_ALLOWED: OutsideComputation
+PROHIBITED_USE_UNSPECIFIED: ProhibitedUse
+PROHIBITED_USE_MODEL_TRAINING: ProhibitedUse
+PROHIBITED_USE_REPLICATE_SERVICE: ProhibitedUse
+PROHIBITED_USE_INDEX_CREATION: ProhibitedUse
+COPYRIGHT_CLASS_UNSPECIFIED: CopyrightClass
+COPYRIGHT_CLASS_PUBLIC_DOMAIN: CopyrightClass
+COPYRIGHT_CLASS_COPYRIGHT_CITATION_REQUIRED: CopyrightClass
+COPYRIGHT_CLASS_COPYRIGHT_PREAPPROVAL_REQUIRED: CopyrightClass
+REPORT_CADENCE_UNSPECIFIED: ReportCadence
+REPORT_CADENCE_NONE: ReportCadence
+REPORT_CADENCE_MONTHLY: ReportCadence
+REPORT_CADENCE_ANNUAL_DECLARATION: ReportCadence
+REPORT_CADENCE_ON_CHANGE: ReportCadence
 NOT_CARRIED_REASON_UNSPECIFIED: NotCarriedReason
 NOT_CARRIED_REASON_NO_CONTRACT_MEANING: NotCarriedReason
 NOT_CARRIED_REASON_NOT_CONVERTED: NotCarriedReason
@@ -307,7 +486,7 @@ class ToolDeclaration(_message.Message):
     def __init__(self, name: _Optional[str] = ..., title: _Optional[str] = ..., description: _Optional[str] = ..., method: _Optional[str] = ..., path: _Optional[str] = ..., levels: _Optional[_Iterable[_Union[AccessLevel, str]]] = ..., reads: bool = ..., input_schema: _Optional[str] = ..., output_schema: _Optional[str] = ..., roles: _Optional[_Iterable[str]] = ..., checked_by: _Optional[str] = ..., accounts: _Optional[_Iterable[str]] = ..., made_on: _Optional[str] = ...) -> None: ...
 
 class PluginDeclaration(_message.Message):
-    __slots__ = ("secret_settings", "not_carried", "storage", "catalogue", "algorithms", "settings", "interface", "tools", "reads_external_accounts", "documentation", "affirmation_deadline")
+    __slots__ = ("secret_settings", "not_carried", "storage", "catalogue", "algorithms", "settings", "interface", "tools", "reads_external_accounts", "documentation", "affirmation_deadline", "pricing_models")
     SECRET_SETTINGS_FIELD_NUMBER: _ClassVar[int]
     NOT_CARRIED_FIELD_NUMBER: _ClassVar[int]
     STORAGE_FIELD_NUMBER: _ClassVar[int]
@@ -319,6 +498,7 @@ class PluginDeclaration(_message.Message):
     READS_EXTERNAL_ACCOUNTS_FIELD_NUMBER: _ClassVar[int]
     DOCUMENTATION_FIELD_NUMBER: _ClassVar[int]
     AFFIRMATION_DEADLINE_FIELD_NUMBER: _ClassVar[int]
+    PRICING_MODELS_FIELD_NUMBER: _ClassVar[int]
     secret_settings: _containers.RepeatedScalarFieldContainer[str]
     not_carried: _containers.RepeatedCompositeFieldContainer[NotCarried]
     storage: StorageDeclaration
@@ -330,7 +510,16 @@ class PluginDeclaration(_message.Message):
     reads_external_accounts: bool
     documentation: _containers.RepeatedCompositeFieldContainer[DocumentationSection]
     affirmation_deadline: int
-    def __init__(self, secret_settings: _Optional[_Iterable[str]] = ..., not_carried: _Optional[_Iterable[_Union[NotCarried, _Mapping]]] = ..., storage: _Optional[_Union[StorageDeclaration, _Mapping]] = ..., catalogue: _Optional[_Union[Catalogue, _Mapping]] = ..., algorithms: _Optional[_Iterable[_Union[AlgorithmDeclaration, _Mapping]]] = ..., settings: _Optional[_Iterable[_Union[SettingDeclaration, _Mapping]]] = ..., interface: _Optional[_Union[InterfaceDeclaration, _Mapping]] = ..., tools: _Optional[_Iterable[_Union[ToolDeclaration, _Mapping]]] = ..., reads_external_accounts: bool = ..., documentation: _Optional[_Iterable[_Union[DocumentationSection, _Mapping]]] = ..., affirmation_deadline: _Optional[int] = ...) -> None: ...
+    pricing_models: _containers.RepeatedCompositeFieldContainer[PricingModelDeclaration]
+    def __init__(self, secret_settings: _Optional[_Iterable[str]] = ..., not_carried: _Optional[_Iterable[_Union[NotCarried, _Mapping]]] = ..., storage: _Optional[_Union[StorageDeclaration, _Mapping]] = ..., catalogue: _Optional[_Union[Catalogue, _Mapping]] = ..., algorithms: _Optional[_Iterable[_Union[AlgorithmDeclaration, _Mapping]]] = ..., settings: _Optional[_Iterable[_Union[SettingDeclaration, _Mapping]]] = ..., interface: _Optional[_Union[InterfaceDeclaration, _Mapping]] = ..., tools: _Optional[_Iterable[_Union[ToolDeclaration, _Mapping]]] = ..., reads_external_accounts: bool = ..., documentation: _Optional[_Iterable[_Union[DocumentationSection, _Mapping]]] = ..., affirmation_deadline: _Optional[int] = ..., pricing_models: _Optional[_Iterable[_Union[PricingModelDeclaration, _Mapping]]] = ...) -> None: ...
+
+class PricingModelDeclaration(_message.Message):
+    __slots__ = ("model_id", "model_version")
+    MODEL_ID_FIELD_NUMBER: _ClassVar[int]
+    MODEL_VERSION_FIELD_NUMBER: _ClassVar[int]
+    model_id: str
+    model_version: int
+    def __init__(self, model_id: _Optional[str] = ..., model_version: _Optional[int] = ...) -> None: ...
 
 class DocumentationSection(_message.Message):
     __slots__ = ("name", "digest", "bytes")
@@ -357,7 +546,7 @@ class Catalogue(_message.Message):
     def __init__(self, datasets: _Optional[_Iterable[_Union[DatasetDeclaration, _Mapping]]] = ...) -> None: ...
 
 class DatasetDeclaration(_message.Message):
-    __slots__ = ("key", "vendor", "aggregator", "data_types", "modes", "cadence", "history", "licence_default", "day_time_zone", "day_end_minute", "venue_id", "calendar_id")
+    __slots__ = ("key", "vendor", "aggregator", "data_types", "modes", "cadence", "history", "licence_default", "day_time_zone", "day_end_minute", "venue_id", "calendar_id", "declared_delay_ns")
     KEY_FIELD_NUMBER: _ClassVar[int]
     VENDOR_FIELD_NUMBER: _ClassVar[int]
     AGGREGATOR_FIELD_NUMBER: _ClassVar[int]
@@ -370,6 +559,7 @@ class DatasetDeclaration(_message.Message):
     DAY_END_MINUTE_FIELD_NUMBER: _ClassVar[int]
     VENUE_ID_FIELD_NUMBER: _ClassVar[int]
     CALENDAR_ID_FIELD_NUMBER: _ClassVar[int]
+    DECLARED_DELAY_NS_FIELD_NUMBER: _ClassVar[int]
     key: str
     vendor: str
     aggregator: str
@@ -382,10 +572,11 @@ class DatasetDeclaration(_message.Message):
     day_end_minute: int
     venue_id: str
     calendar_id: str
-    def __init__(self, key: _Optional[str] = ..., vendor: _Optional[str] = ..., aggregator: _Optional[str] = ..., data_types: _Optional[_Iterable[str]] = ..., modes: _Optional[_Iterable[_Union[ObservationMode, str]]] = ..., cadence: _Optional[int] = ..., history: _Optional[int] = ..., licence_default: _Optional[_Union[DatasetLicence, _Mapping]] = ..., day_time_zone: _Optional[str] = ..., day_end_minute: _Optional[int] = ..., venue_id: _Optional[str] = ..., calendar_id: _Optional[str] = ...) -> None: ...
+    declared_delay_ns: int
+    def __init__(self, key: _Optional[str] = ..., vendor: _Optional[str] = ..., aggregator: _Optional[str] = ..., data_types: _Optional[_Iterable[str]] = ..., modes: _Optional[_Iterable[_Union[ObservationMode, str]]] = ..., cadence: _Optional[int] = ..., history: _Optional[int] = ..., licence_default: _Optional[_Union[DatasetLicence, _Mapping]] = ..., day_time_zone: _Optional[str] = ..., day_end_minute: _Optional[int] = ..., venue_id: _Optional[str] = ..., calendar_id: _Optional[str] = ..., declared_delay_ns: _Optional[int] = ...) -> None: ...
 
 class DatasetLicence(_message.Message):
-    __slots__ = ("dataset", "kept", "retention_days", "derived_use", "display", "default_fields", "personal_use", "updated_by", "updated_at_ns", "acting_through_delegation", "client_name", "note", "prepared_call_id")
+    __slots__ = ("dataset", "kept", "retention_days", "derived_use", "display", "default_fields", "personal_use", "updated_by", "updated_at_ns", "acting_through_delegation", "client_name", "note", "prepared_call_id", "terms_version", "access_basis", "timeliness", "delay_minutes", "delay_label", "underlying_source", "meters", "display_terms", "non_display", "enterprise", "derived_use_terms", "derived_multi_instrument_free", "derived_creation_is_non_display", "redistribution", "outside_computation", "prohibited_uses", "attribution_required", "attribution_text", "copyright_class", "no_more_restrictive_terms", "not_affiliated_notice", "report_cadence", "report_due_day")
     DATASET_FIELD_NUMBER: _ClassVar[int]
     KEPT_FIELD_NUMBER: _ClassVar[int]
     RETENTION_DAYS_FIELD_NUMBER: _ClassVar[int]
@@ -399,6 +590,29 @@ class DatasetLicence(_message.Message):
     CLIENT_NAME_FIELD_NUMBER: _ClassVar[int]
     NOTE_FIELD_NUMBER: _ClassVar[int]
     PREPARED_CALL_ID_FIELD_NUMBER: _ClassVar[int]
+    TERMS_VERSION_FIELD_NUMBER: _ClassVar[int]
+    ACCESS_BASIS_FIELD_NUMBER: _ClassVar[int]
+    TIMELINESS_FIELD_NUMBER: _ClassVar[int]
+    DELAY_MINUTES_FIELD_NUMBER: _ClassVar[int]
+    DELAY_LABEL_FIELD_NUMBER: _ClassVar[int]
+    UNDERLYING_SOURCE_FIELD_NUMBER: _ClassVar[int]
+    METERS_FIELD_NUMBER: _ClassVar[int]
+    DISPLAY_TERMS_FIELD_NUMBER: _ClassVar[int]
+    NON_DISPLAY_FIELD_NUMBER: _ClassVar[int]
+    ENTERPRISE_FIELD_NUMBER: _ClassVar[int]
+    DERIVED_USE_TERMS_FIELD_NUMBER: _ClassVar[int]
+    DERIVED_MULTI_INSTRUMENT_FREE_FIELD_NUMBER: _ClassVar[int]
+    DERIVED_CREATION_IS_NON_DISPLAY_FIELD_NUMBER: _ClassVar[int]
+    REDISTRIBUTION_FIELD_NUMBER: _ClassVar[int]
+    OUTSIDE_COMPUTATION_FIELD_NUMBER: _ClassVar[int]
+    PROHIBITED_USES_FIELD_NUMBER: _ClassVar[int]
+    ATTRIBUTION_REQUIRED_FIELD_NUMBER: _ClassVar[int]
+    ATTRIBUTION_TEXT_FIELD_NUMBER: _ClassVar[int]
+    COPYRIGHT_CLASS_FIELD_NUMBER: _ClassVar[int]
+    NO_MORE_RESTRICTIVE_TERMS_FIELD_NUMBER: _ClassVar[int]
+    NOT_AFFILIATED_NOTICE_FIELD_NUMBER: _ClassVar[int]
+    REPORT_CADENCE_FIELD_NUMBER: _ClassVar[int]
+    REPORT_DUE_DAY_FIELD_NUMBER: _ClassVar[int]
     dataset: str
     kept: bool
     retention_days: int
@@ -412,7 +626,64 @@ class DatasetLicence(_message.Message):
     client_name: str
     note: str
     prepared_call_id: str
-    def __init__(self, dataset: _Optional[str] = ..., kept: bool = ..., retention_days: _Optional[int] = ..., derived_use: bool = ..., display: bool = ..., default_fields: _Optional[_Iterable[str]] = ..., personal_use: bool = ..., updated_by: _Optional[str] = ..., updated_at_ns: _Optional[int] = ..., acting_through_delegation: _Optional[str] = ..., client_name: _Optional[str] = ..., note: _Optional[str] = ..., prepared_call_id: _Optional[str] = ...) -> None: ...
+    terms_version: str
+    access_basis: AccessBasis
+    timeliness: Timeliness
+    delay_minutes: int
+    delay_label: str
+    underlying_source: str
+    meters: _containers.RepeatedScalarFieldContainer[LicenceMeter]
+    display_terms: DisplayTerms
+    non_display: NonDisplayTerms
+    enterprise: EnterpriseTerms
+    derived_use_terms: DerivedUse
+    derived_multi_instrument_free: bool
+    derived_creation_is_non_display: bool
+    redistribution: Redistribution
+    outside_computation: OutsideComputation
+    prohibited_uses: _containers.RepeatedScalarFieldContainer[ProhibitedUse]
+    attribution_required: bool
+    attribution_text: str
+    copyright_class: CopyrightClass
+    no_more_restrictive_terms: bool
+    not_affiliated_notice: str
+    report_cadence: ReportCadence
+    report_due_day: int
+    def __init__(self, dataset: _Optional[str] = ..., kept: bool = ..., retention_days: _Optional[int] = ..., derived_use: bool = ..., display: bool = ..., default_fields: _Optional[_Iterable[str]] = ..., personal_use: bool = ..., updated_by: _Optional[str] = ..., updated_at_ns: _Optional[int] = ..., acting_through_delegation: _Optional[str] = ..., client_name: _Optional[str] = ..., note: _Optional[str] = ..., prepared_call_id: _Optional[str] = ..., terms_version: _Optional[str] = ..., access_basis: _Optional[_Union[AccessBasis, str]] = ..., timeliness: _Optional[_Union[Timeliness, str]] = ..., delay_minutes: _Optional[int] = ..., delay_label: _Optional[str] = ..., underlying_source: _Optional[str] = ..., meters: _Optional[_Iterable[_Union[LicenceMeter, str]]] = ..., display_terms: _Optional[_Union[DisplayTerms, _Mapping]] = ..., non_display: _Optional[_Union[NonDisplayTerms, _Mapping]] = ..., enterprise: _Optional[_Union[EnterpriseTerms, _Mapping]] = ..., derived_use_terms: _Optional[_Union[DerivedUse, str]] = ..., derived_multi_instrument_free: bool = ..., derived_creation_is_non_display: bool = ..., redistribution: _Optional[_Union[Redistribution, str]] = ..., outside_computation: _Optional[_Union[OutsideComputation, str]] = ..., prohibited_uses: _Optional[_Iterable[_Union[ProhibitedUse, str]]] = ..., attribution_required: bool = ..., attribution_text: _Optional[str] = ..., copyright_class: _Optional[_Union[CopyrightClass, str]] = ..., no_more_restrictive_terms: bool = ..., not_affiliated_notice: _Optional[str] = ..., report_cadence: _Optional[_Union[ReportCadence, str]] = ..., report_due_day: _Optional[int] = ...) -> None: ...
+
+class DisplayTerms(_message.Message):
+    __slots__ = ("unit", "count_basis", "professional_split", "professional_definition")
+    UNIT_FIELD_NUMBER: _ClassVar[int]
+    COUNT_BASIS_FIELD_NUMBER: _ClassVar[int]
+    PROFESSIONAL_SPLIT_FIELD_NUMBER: _ClassVar[int]
+    PROFESSIONAL_DEFINITION_FIELD_NUMBER: _ClassVar[int]
+    unit: DisplayUnit
+    count_basis: CountBasis
+    professional_split: bool
+    professional_definition: ProfessionalDefinition
+    def __init__(self, unit: _Optional[_Union[DisplayUnit, str]] = ..., count_basis: _Optional[_Union[CountBasis, str]] = ..., professional_split: bool = ..., professional_definition: _Optional[_Union[ProfessionalDefinition, str]] = ...) -> None: ...
+
+class NonDisplayTerms(_message.Message):
+    __slots__ = ("categories", "counts", "personal_exempt")
+    CATEGORIES_FIELD_NUMBER: _ClassVar[int]
+    COUNTS_FIELD_NUMBER: _ClassVar[int]
+    PERSONAL_EXEMPT_FIELD_NUMBER: _ClassVar[int]
+    categories: _containers.RepeatedScalarFieldContainer[NonDisplayCategory]
+    counts: NonDisplayCount
+    personal_exempt: bool
+    def __init__(self, categories: _Optional[_Iterable[_Union[NonDisplayCategory, str]]] = ..., counts: _Optional[_Union[NonDisplayCount, str]] = ..., personal_exempt: bool = ...) -> None: ...
+
+class EnterpriseTerms(_message.Message):
+    __slots__ = ("replaces", "form", "scope", "reporting_waived")
+    REPLACES_FIELD_NUMBER: _ClassVar[int]
+    FORM_FIELD_NUMBER: _ClassVar[int]
+    SCOPE_FIELD_NUMBER: _ClassVar[int]
+    REPORTING_WAIVED_FIELD_NUMBER: _ClassVar[int]
+    replaces: _containers.RepeatedScalarFieldContainer[EnterpriseReplaces]
+    form: EnterpriseForm
+    scope: EnterpriseScope
+    reporting_waived: bool
+    def __init__(self, replaces: _Optional[_Iterable[_Union[EnterpriseReplaces, str]]] = ..., form: _Optional[_Union[EnterpriseForm, str]] = ..., scope: _Optional[_Union[EnterpriseScope, str]] = ..., reporting_waived: bool = ...) -> None: ...
 
 class NotCarried(_message.Message):
     __slots__ = ("role", "scheme", "name", "reason")

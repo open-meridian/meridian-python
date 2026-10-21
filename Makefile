@@ -69,7 +69,7 @@ contract-diff:
 # fails when the two disagree, as core's check-codegen does for its bindings.
 # meridian-schema's pushed `v26` (contract v26; open-meridian/meridian-schema#4, at 309e093),
 # its gen/ and boundaries/ vendored here byte for byte.
-SCHEMA_REV := 309e093f3c875be57e1dfaab797a8fb85a1e996b
+SCHEMA_REV := f31ba7deecf1d9db475c95e0829d1813faff3448
 SCHEMA_REPO := https://github.com/open-meridian/meridian-schema.git
 SCRATCH     := .schema-scratch
 

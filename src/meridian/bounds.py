@@ -182,6 +182,9 @@ VENUE_RECORD_COUNTRY_CODE_LENGTH = Length(least=2, most=2)
 VENUE_RECORD_TIME_ZONE_LENGTH = Length(least=1, most=64)
 """meridian.v1.VenueRecord.time_zone: says the venue's local time"""
 
+TRADING_SESSION_END_MINUTE_RANGE = Range(least=0, most=1440, capped=False)
+"""meridian.v1.TradingSession.end_minute: says when the session ends"""
+
 SPOT_DATE_INPUTS_PAIR_COUNT = Count(least=2, most=2)
 """meridian.v1.SpotDateInputs.pair: names the pair"""
 
@@ -295,6 +298,30 @@ QUERY_LAKE_REQUEST_SUBJECTS_COUNT = Count(least=1, most=500)
 
 QUERY_LAKE_REQUEST_ROW_LIMIT_RANGE = Range(least=0, most=10000, capped=False)
 """meridian.v1.QueryLakeRequest.row_limit: caps the rows a query answers"""
+
+RATE_PERCENTILE_PERCENTILE_RANGE = Range(least=1, most=99, capped=False)
+"""meridian.v1.RatePercentile.percentile: says which percentile a value is"""
+
+RECORD_RATES_REQUEST_RATES_COUNT = Count(least=1, most=500)
+"""meridian.v1.RecordRatesRequest.rates: carries a batch of rates (W10.4)"""
+
+LIST_RATES_REQUEST_SUBJECTS_COUNT = Count(least=1, most=500)
+"""meridian.v1.ListRatesRequest.subjects: names the referential records a read
+is about (W10.6)"""
+
+LIST_RATES_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=True)
+"""meridian.v1.ListRatesRequest.page_size: bounds a page"""
+
+RECORD_LIVENESS_REQUEST_LIVENESS_COUNT = Count(least=1, most=500)
+"""meridian.v1.RecordLivenessRequest.liveness: carries a batch of liveness
+items (W10.4)"""
+
+LIST_EXECUTION_COSTS_REQUEST_EXECUTION_IDS_COUNT = Count(least=0, most=500)
+"""meridian.v1.ListExecutionCostsRequest.execution_ids: narrows a read to some
+executions"""
+
+LIST_EXECUTION_COSTS_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=True)
+"""meridian.v1.ListExecutionCostsRequest.page_size: bounds a page"""
 
 AS_REPORTED_SCHEME_LENGTH = Length(least=1, most=64)
 """meridian.v1.AsReported.scheme: says whose vocabulary a value as reported is
@@ -597,6 +624,18 @@ for a person reading the plugin's page"""
 HEARTBEAT_REQUEST_MODEL_TOKENS_COUNT = Count(least=0, most=64)
 """meridian.v1.HeartbeatRequest.model_tokens: reports the model tokens the
 plugin used since it started (W4.5; item 191)"""
+
+PLUGIN_DECLARATION_PRICING_MODELS_COUNT = Count(least=0, most=32)
+"""meridian.v1.PluginDeclaration.pricing_models: declares the model ids and
+versions a pricing plugin answers batches for (W12.3)"""
+
+PRICING_MODEL_DECLARATION_MODEL_VERSION_RANGE = Range(least=1, most=2147483647, capped=False)
+"""meridian.v1.PricingModelDeclaration.model_version: names the version of the
+model the version answers"""
+
+REPORT_LATENCY_REQUEST_SNAPSHOTS_COUNT = Count(least=1, most=500)
+"""meridian.v1.ReportLatencyRequest.snapshots: carries a plugin's latency and
+data-age snapshots to core's monitor (W4.16)"""
 
 RECORD_HOLDINGS_STATEMENT_REQUEST_PROVENANCE_COUNT = Count(least=0, most=32)
 """meridian.v1.RecordHoldingsStatementRequest.provenance: says where each value
