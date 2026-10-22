@@ -16,6 +16,7 @@ import asyncio
 import dataclasses
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from typing import Any
 
 import grpc
 import pytest
@@ -40,8 +41,11 @@ from meridian import (
 from meridian.edge import as_reported
 from meridian.plugin.v1 import operations_pb2 as ops
 from meridian.roles.data import backfill_restart
-from meridian.suites import Recorder, check, names, run, suite
+from meridian.roles.data.testing import RATES_CASES, rates_producers
+from meridian.suites import Recorder, check, names, suite
+from meridian.suites import run as run_suite
 from order_path_cases import PRODUCERS
+from rates_cases import PUBLISHED, RATES
 
 INSTANCE = "data-coinbase-1"
 DAILY = f"{INSTANCE}:daily"
@@ -1086,7 +1090,33 @@ def producers(**mutations: bool) -> dict[str, object]:
         "reports-an-event-group": event_group(exhaustive=True),
         "reports-a-flag-the-venue-does-not-state": event_group(exhaustive=None),
         "queries-the-lake-within-bounds": PRODUCERS["queries-the-lake-within-bounds"],
+        # Contract v27: the rates slice, a stream's liveness and the feed delay.
+        **rates_producers(RATES, source="ust", now_ns=PUBLISHED),
+        "records-a-datasets-liveness": liveness,
     }
+
+
+#: Ruling 518: the feed delay is about `latency` until v28, not presented by
+#: a v27 data plugin with why.
+LATENCY = {
+    "reports-its-feed-delay": "core receives ReportLatency from contract v28, ruling 515"
+}
+
+
+def run(role: str, producers: Any, **given: Any) -> Any:
+    """A suite as a v27 plugin runs it: the data suite's feed delay not
+    presented."""
+    skipped = dict(LATENCY) if role == "data" else {}
+    skipped.update(given.pop("not_presented", None) or {})
+    return run_suite(role, producers, not_presented=skipped, **given)
+
+
+async def liveness(recorder: Recorder) -> None:
+    """A stream's heartbeat with no price changed: the dataset's liveness."""
+    from meridian.roles import data
+
+    wants = data.Wants(recorder, ("live",), clock_ns=lambda: DAY)
+    assert await wants.liveness("live") == 0  # the recorder keeps nothing
 
 
 def event_group(*, exhaustive: bool | None):  # type: ignore[no-untyped-def]
@@ -1116,13 +1146,19 @@ def event_group(*, exhaustive: bool | None):  # type: ignore[no-untyped-def]
     return produce
 
 
-def test_the_data_suite_is_carried_with_its_thirty_five_cases() -> None:
+def test_the_data_suite_is_carried_with_its_forty_four_cases() -> None:
     held = suite("data")
     assert held.since == "v18"
     # Contract v24 adds the two every role's suite holds, which the SDK answers;
     # v26 a third, the venue's event groups reported (two, about outcomes) and
-    # the lake's bounded query.
-    assert len(held.cases) == 35
+    # the lake's bounded query; v27 the rates slice's seven (about rates), a
+    # stream's liveness (about streams) and the feed delay, and the bounded
+    # query about trades.
+    assert len(held.cases) == 44
+    assert held.case("queries-the-lake-within-bounds").about == "trades"
+    assert {held.case(name).about for name in RATES_CASES} == {"rates"}
+    assert held.case("records-a-datasets-liveness").about == "streams"
+    assert held.case("reports-its-feed-delay").about == "latency"  # until v28 (518)
     assert held.case("reports-an-event-group").about == "outcomes"
     assert held.case("reports-a-flag-the-venue-does-not-state").about == "outcomes"
     assert "a-want-recorded-against" in names("data")
@@ -1201,7 +1237,8 @@ V19_DATA_CASES = {
 def test_a_data_plugin_converting_exactly_passes_every_case_of_its_suite() -> None:
     report = run("data", producers(), instance_id="toy-1")
     assert report.passed, report.failures
-    assert len(report.passed_cases) == 35
+    assert len(report.passed_cases) == 44 - 1
+    assert report.not_presented == LATENCY
     assert report.answered_by_sdk == [
         "hears-and-reads-a-replacement",
         "reads-the-template-catalogue",
@@ -1224,11 +1261,14 @@ def test_a_case_about_a_kind_the_plugin_never_publishes_may_be_not_presented() -
         for name in V19_DATA_CASES
     }
     never["a-daily-bar"] = "this source states no bars"
+    # Contract v27: the lake's bounded query is about trades, so a source
+    # recording none marks it not presented rather than faking it.
+    never["queries-the-lake-within-bounds"] = "it records no trades"
     mapped = {name: made for name, made in every.items() if name not in never}
     report = run("data", mapped, not_presented=never)
     assert report.passed, report.failures
-    assert report.not_presented == never
-    assert len(report.passed_cases) == 35 - 9
+    assert report.not_presented == {**LATENCY, **never}
+    assert len(report.passed_cases) == 44 - 11
 
 
 def test_a_case_about_a_field_the_source_never_states_may_be_not_presented() -> None:
@@ -1238,7 +1278,7 @@ def test_a_case_about_a_field_the_source_never_states_may_be_not_presented() -> 
     mapped = {name: made for name, made in every.items() if name != "the-takers-side-stated"}
     report = run("data", mapped, not_presented={"the-takers-side-stated": why})
     assert report.passed, report.failures
-    assert report.not_presented == {"the-takers-side-stated": why}
+    assert report.not_presented == {**LATENCY, "the-takers-side-stated": why}
 
 
 def test_a_restart_that_does_not_read_its_last_trades_fails_the_suite() -> None:
@@ -1273,7 +1313,7 @@ def test_a_case_every_data_plugin_answers_is_never_not_presented_and_one_that_is
     assert "required" in report.failures["an-exact-price"]
     assert "required" in report.failures["a-want-recorded-against"]
     assert "says why" in report.failures["a-trade-recorded"]
-    assert report.not_presented == {}
+    assert report.not_presented == LATENCY
 
 
 def test_a_data_plugin_declining_a_subject_another_source_resolved_fails_the_suite() -> None:
@@ -1371,6 +1411,11 @@ def test_a_reading_role_hears_and_reads_as_its_suite_asks() -> None:
                     "runs-a-job-and-reads-its-answer",
                     "catches-up-finished-jobs",
                     "queries-the-lake-within-bounds",
+                    # Rates, liveness and execution costs (contract v27).
+                    "reads-a-curve-for-a-date",
+                    "hears-a-rate-recorded",
+                    "hears-a-datasets-liveness",
+                    "reads-an-accounts-execution-costs",
                 )
             },
         },

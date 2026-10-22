@@ -494,6 +494,41 @@ class PluginOperationsStub(object):
                 request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.QueryLakeParams.SerializeToString,
                 response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.QueryLakeResult.FromString,
                 _registered_method=True)
+        self.ReportLatency = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ReportLatency',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReportLatencyParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReportLatencyResult.FromString,
+                _registered_method=True)
+        self.RecordRates = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/RecordRates',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordRatesParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordRatesResult.FromString,
+                _registered_method=True)
+        self.ListRates = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ListRates',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListRatesParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListRatesResult.FromString,
+                _registered_method=True)
+        self.RecordLiveness = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/RecordLiveness',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordLivenessParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordLivenessResult.FromString,
+                _registered_method=True)
+        self.ListExecutionCosts = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ListExecutionCosts',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListExecutionCostsParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListExecutionCostsResult.FromString,
+                _registered_method=True)
+        self.ReportPlacementQuote = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ReportPlacementQuote',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReportPlacementQuoteParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReportPlacementQuoteResult.FromString,
+                _registered_method=True)
+        self.PickPlacementQuote = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/PickPlacementQuote',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.PickPlacementQuoteParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.PickPlacementQuoteResult.FromString,
+                _registered_method=True)
         self.Receive = channel.unary_stream(
                 '/meridian.plugin.v1.PluginOperations/Receive',
                 request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReceiveRequest.SerializeToString,
@@ -1148,6 +1183,55 @@ class PluginOperationsServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def ReportLatency(self, request, context):
+        """W4.16: platform.deployment.command.report-latency (command; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RecordRates(self, request, context):
+        """W10.4: platform.lake.command.record-rates (command; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListRates(self, request, context):
+        """W10.6: platform.lake.query.list-rates (query; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RecordLiveness(self, request, context):
+        """W10.4: platform.lake.command.record-liveness (command; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListExecutionCosts(self, request, context):
+        """W10.11: platform.lake.query.list-execution-costs (query; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ReportPlacementQuote(self, request, context):
+        """W11.40: platform.book.command.report-placement-quote (command; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def PickPlacementQuote(self, request, context):
+        """W11.41: platform.book.command.pick-placement-quote (command; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def Receive(self, request, context):
         """W4.3: every row this plugin's roles hear, within its read scope.
         """
@@ -1617,6 +1701,41 @@ def add_PluginOperationsServicer_to_server(servicer, server):
                     servicer.QueryLake,
                     request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.QueryLakeParams.FromString,
                     response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.QueryLakeResult.SerializeToString,
+            ),
+            'ReportLatency': grpc.unary_unary_rpc_method_handler(
+                    servicer.ReportLatency,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReportLatencyParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReportLatencyResult.SerializeToString,
+            ),
+            'RecordRates': grpc.unary_unary_rpc_method_handler(
+                    servicer.RecordRates,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordRatesParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordRatesResult.SerializeToString,
+            ),
+            'ListRates': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListRates,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListRatesParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListRatesResult.SerializeToString,
+            ),
+            'RecordLiveness': grpc.unary_unary_rpc_method_handler(
+                    servicer.RecordLiveness,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordLivenessParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordLivenessResult.SerializeToString,
+            ),
+            'ListExecutionCosts': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListExecutionCosts,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListExecutionCostsParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListExecutionCostsResult.SerializeToString,
+            ),
+            'ReportPlacementQuote': grpc.unary_unary_rpc_method_handler(
+                    servicer.ReportPlacementQuote,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReportPlacementQuoteParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReportPlacementQuoteResult.SerializeToString,
+            ),
+            'PickPlacementQuote': grpc.unary_unary_rpc_method_handler(
+                    servicer.PickPlacementQuote,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.PickPlacementQuoteParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.PickPlacementQuoteResult.SerializeToString,
             ),
             'Receive': grpc.unary_stream_rpc_method_handler(
                     servicer.Receive,
@@ -4108,6 +4227,195 @@ class PluginOperations(object):
             '/meridian.plugin.v1.PluginOperations/QueryLake',
             meridian_dot_plugin_dot_v1_dot_operations__pb2.QueryLakeParams.SerializeToString,
             meridian_dot_plugin_dot_v1_dot_operations__pb2.QueryLakeResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ReportLatency(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ReportLatency',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ReportLatencyParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ReportLatencyResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RecordRates(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/RecordRates',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordRatesParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordRatesResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListRates(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ListRates',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListRatesParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListRatesResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RecordLiveness(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/RecordLiveness',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordLivenessParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordLivenessResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListExecutionCosts(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ListExecutionCosts',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListExecutionCostsParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListExecutionCostsResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ReportPlacementQuote(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ReportPlacementQuote',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ReportPlacementQuoteParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ReportPlacementQuoteResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def PickPlacementQuote(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/PickPlacementQuote',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.PickPlacementQuoteParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.PickPlacementQuoteResult.FromString,
             options,
             channel_credentials,
             insecure,

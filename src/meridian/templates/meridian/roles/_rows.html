@@ -23,3 +23,19 @@
 {%- endif -%}
 {%- endif -%}
 {%- endmacro -%}
+
+{#- The Sessions section's rows (contract v27; spec/sessions-and-data-
+    report-their-latency-and-quality, "Session latency fields"): one line per
+    open session, a `meridian.roles.SessionLatency` -- its round trip at p99
+    over the last minute, the rest a tap away. -#}
+{%- macro ms(ns) -%}{{ "%.1f"|format(ns / 1000000) }} ms{%- endmacro -%}
+{%- macro session_rows(sessions) -%}
+{%- if not sessions -%}
+{{ row("Sessions", "None measured yet") }}
+{%- endif -%}
+{%- for s in sessions -%}
+{%- set value -%}{% if s.rtt.p99_ns %}RTT p99 {{ ms(s.rtt.p99_ns) }}{% else %}RTT not measured{% endif %}{%- endset -%}
+{%- set note -%}{{ s.transport }}{% if s.order_ack.p99_ns %} · order ack p99 {{ ms(s.order_ack.p99_ns) }}{% endif %}{% if s.fill_delay.p99_ns %} · fill delay p99 {{ ms(s.fill_delay.p99_ns) }}{% endif %}{% for f in s.feed_delay %} · {{ f.dataset }} feed delay p99 {{ ms(f.p99_ns) }}{% endfor %} · gaps {{ s.gaps }}, reconnects {{ s.reconnects }}, rate-limited {{ s.rate_limited }} in the last hour{% if s.backlog_peak %} · backlog peak {{ s.backlog_peak }}{% endif %}{% if s.ceiling and s.ceiling.rtt_p99_ns %} · ceiling {{ ms(s.ceiling.rtt_p99_ns) }}{% endif %}{%- endset -%}
+{{ row(s.session, value, note, name="sessions") }}
+{%- endfor -%}
+{%- endmacro -%}

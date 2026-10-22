@@ -100,7 +100,7 @@ def test_every_release_since_the_first_recorded_has_its_step() -> None:
         ("0.6.0", "0.6.1"),
         ("0.6.1", "0.7.0"),
     ]
-    assert (steps[-1].source, steps[-1].target) == ("0.31.0", "0.31.1")
+    assert (steps[-1].source, steps[-1].target) == ("0.31.1", "0.32.0")
     # A release that moves the version records its step, if only the pins.
     assert steps[-1].target == SDK
 
@@ -1405,3 +1405,72 @@ def test_a_trader_in_snaptrades_shape_is_left_to_move_onto_the_sdk() -> None:
     )
     result = migrate({"src/st/trading.py": copied}, "0.30.0", "0.31.0")
     assert left_by_hand(result) == [("trading-onto-sdk", "src/st/trading.py", 9)]
+
+
+# ── 0.31.1 to 0.32.0: contract v27 ───────────────────────────────────────
+
+
+def test_v27s_base_pinned_by_digest_drops_its_digest() -> None:
+    dockerfile = (
+        f"ARG BASE=ghcr.io/open-meridian/plugin-python:0.31.1@{_DIGEST}\nFROM ${{BASE}}\n"
+    )
+    result = migrate({"Dockerfile": dockerfile}, "0.31.1", "0.32.0")
+    assert result.files["Dockerfile"].splitlines()[0] == (
+        "ARG BASE=ghcr.io/open-meridian/plugin-python:0.32.0"
+    )
+    assert ("base-digest", "Dockerfile", 1) in left_by_hand(result)
+
+
+def test_a_role_suite_v27_adds_cases_to_and_a_faked_lake_query_are_left() -> None:
+    files = {
+        "tests/test_suite.py": (
+            'report = run("data", PRODUCERS, not_presented=NP)\n'
+            'PRODUCERS = {"queries-the-lake-within-bounds": lake_query("INS-1")}\n'
+        ),
+        "tests/test_desk.py": 'report = run("connectivity", PRODUCERS)\n',
+    }
+    result = migrate(files, "0.31.1", "0.32.0")
+    assert result.files == {}
+    assert sorted(left_by_hand(result)) == [
+        ("lake-query-without-trades", "tests/test_suite.py", 2),
+        ("suite-cases-v27", "tests/test_desk.py", 1),
+        ("suite-cases-v27", "tests/test_suite.py", 1),
+    ]
+
+
+def test_a_trading_page_and_an_events_loop_a_plugin_keeps_are_left_to_the_sdk() -> None:
+    page = (
+        '@pages.page(TRADING, "Trading", name="read_trading")\n'
+        "async def trading(request): ...\n"
+        '@pages.route(ENABLE, name="enable_trading")\n'
+        "async def enable(request): ...\n"
+    )
+    loop = (
+        "class Events:\n"
+        "    async def now(self, feed):\n"
+        "        event = feed.market.event(ref)\n"
+        "        await feed.report_event(event)\n"
+    )
+    result = migrate(
+        {"src/br/trading_page.py": page, "src/k/__main__.py": loop}, "0.31.1", "0.32.0"
+    )
+    assert sorted(left_by_hand(result)) == [
+        ("events-onto-sdk", "src/k/__main__.py", 1),
+        ("trading-page-onto-sdk", "src/br/trading_page.py", 1),
+    ]
+
+
+def test_an_e2e_log_upload_missing_hidden_files_is_left_to_add_them() -> None:
+    missing = (
+        "jobs:\n  e2e:\n    steps:\n      - uses: actions/upload-artifact@v4\n"
+        "        with:\n          path: .e2e/*.log\n      - run: echo done\n"
+    )
+    kept = missing.replace(
+        "path: .e2e/*.log", "path: .e2e/*.log\n          include-hidden-files: true"
+    )
+    result = migrate(
+        {".github/workflows/e2e.yaml": missing, ".github/workflows/other.yaml": kept},
+        "0.31.1",
+        "0.32.0",
+    )
+    assert left_by_hand(result) == [("e2e-hidden-files", ".github/workflows/e2e.yaml", 4)]

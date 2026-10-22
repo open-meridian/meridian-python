@@ -118,9 +118,12 @@ if TYPE_CHECKING:
 #: interface, tools and documentation by digest, held at registration to the
 #: version uploaded -- a break naming the identifiers that did not resolve, a
 #: venue resolved by its ID, and an operations plugin's affirmation deadline
-#: -- and a newer sidecar still admits it. Raised with every contract
-#: revision that adds something a plugin can depend on.
-SCHEMA_VERSION = "v26"
+#: -- and from v26 the analytics component, pricing, event groups and the
+#: agents' guard, and from v27 the placement type and RFQ quotes, execution
+#: costs, FX netting, realized P&L, the rates slice, latency, liveness and
+#: trading sessions -- and a newer sidecar still admits it. Raised with
+#: every contract revision that adds something a plugin can depend on.
+SCHEMA_VERSION = "v27"
 
 #: Where a sidecar listens. Loopback, always: a sidecar reachable from another
 #: host is a way around the boundary it exists to enforce.

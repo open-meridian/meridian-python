@@ -625,6 +625,11 @@ class Feed:
     last_trade: dict[str, Print] = field(default_factory=dict)
     #: The products on the stream, by their names on it.
     streams: dict[str, Mapped] = field(default_factory=dict)
+    #: The stream's last message, and the liveness last recorded (contract
+    #: v27): a message with no price changed still confirms the quotes in
+    #: force, recorded for the live dataset once a pass.
+    alive_ns: int = 0
+    liveness_ns: int = 0
     wants: Wants = field(init=False)
     stream: Streamer = field(init=False)
 
@@ -1302,7 +1307,8 @@ class Feed:
         """One message of the stream: its trades kept to send, each product's
         best bid and offer kept as its latest; sent at once where a batch is
         full, else by the next pass keeping current."""
-        for seen in self.market.heard(text, self.clock_ns()):
+        self.alive_ns = self.clock_ns()
+        for seen in self.market.heard(text, self.alive_ns):
             mapped = self.streams.get(seen.product)
             if mapped is None:
                 continue
@@ -1329,6 +1335,7 @@ class Feed:
     async def flush(self) -> None:
         """Send the trades heard, in batches, and each product's latest best bid
         and offer: at most once a pass, so a quote at most once a second."""
+        await self.alive()
         trades, self.pending_trades = self.pending_trades, []
         quotes, self.pending_quotes = list(self.pending_quotes.values()), {}
         if not trades and not quotes:
@@ -1341,6 +1348,21 @@ class Feed:
             # stream drops and opens again, so it is logged here.
             log.warning("%d trades and %d quotes not recorded: %s",
                         len(trades), len(quotes), refused)  # fmt: skip
+
+    async def alive(self) -> bool:
+        """The stream's sign of life since the last (contract v27; ruling
+        418): the live dataset's liveness, recorded for the venue once a
+        pass, which confirms every quote in force -- the venue sends only on
+        change. Whether it was recorded; a refusal is said, never raised."""
+        if self.alive_ns <= self.liveness_ns:
+            return False
+        self.liveness_ns = self.alive_ns
+        try:
+            await self.wants.liveness(LIVE, self.alive_ns, self.venue.venue_id)
+        except (MeridianError, ValueError) as refused:
+            log.warning("the stream's liveness not recorded: %s", refused)
+            return False
+        return True
 
     async def keep_streaming(
         self, sleep: Callable[[float], Awaitable[None]] = asyncio.sleep

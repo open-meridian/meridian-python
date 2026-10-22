@@ -19,9 +19,11 @@ per unit; `reference_model` is the built-in models' own computation
 (`meridian.analytics.reference`), so a plugin implementing a v26 model id
 equals the built-in implementation exactly on every input, as its suite's
 `equals-the-built-in-model` asks. A model raising for a unit leaves the
-whole batch unanswered: the component then answers a figure for display by
-the built-in model, saying so, and leaves a figure a compliance rule reads
-not evaluated (requirement 22) -- never a half-answered batch.
+whole batch unanswered -- never a half-answered batch: core marks each
+figure that needed it not evaluated,
+`NOT_EVALUATED_REASON_IMPLEMENTATION_UNAVAILABLE`, naming the
+implementation, and shows no figure from the built-in model in its place
+(requirement 22, as core answers it).
 
 **Sensitivities** are carried empty until a model declares one, from v28
 (the first release's §3 rule 4): a v26 plugin stays valid when they arrive.

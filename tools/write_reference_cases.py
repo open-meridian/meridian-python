@@ -42,6 +42,9 @@ WATERMARK = [{"partition": "P0", "sequence": "81234"}]
 
 USD = "INS-01J8XQ4M7K00000000CASHUSD"
 EUR = "INS-01J8XQ4M7K00000000CASHEUR"
+CHF = "INS-01J8XQ4M7K00000000CASHCHF"
+NESN = "INS-01J8XQ4M7K0000000000NESN"
+SAP = "INS-01J8XQ4M7K00000000000SAP"
 USDT = "INS-01J8XQ4M7K0000000000USDT"
 USDC = "INS-01J8XQ4M7K0000000000USDC"
 AAPL = "INS-01J8XQ4M7K0000000000AAPL"
@@ -65,6 +68,7 @@ def instrument(
     template: str = "",
     payout: tuple[str, str] | None = None,
     country: str = "",
+    code: str = "",
 ) -> dict[str, Any]:
     return {
         "instrument_id": instrument_id,
@@ -79,12 +83,15 @@ def instrument(
         "price_kind": kind,
         "payout": None if payout is None else {"amount": payout[0], "instrument_id": payout[1]},
         "country": country,
+        "currency_code": code,
     }
 
 
 def price(
     subject: str, kind: str, amount: str, currency: str, dataset: str, at: str = FRESH
 ) -> dict[str, Any]:
+    """A lake price at the as-of, with the row it came from (contract v27,
+    ruling 460): its row key, version and source time."""
     return {
         "subject_id": subject,
         "kind": kind,
@@ -92,6 +99,9 @@ def price(
         "instrument_id": currency,
         "dataset": dataset,
         "valid_at_ns": at,
+        "row_key": f"{dataset}/{subject}/{kind}",
+        "version": "1",
+        "source_ns": at,
     }
 
 
@@ -133,13 +143,17 @@ def inputs(**given: Any) -> dict[str, Any]:
         "outcomes": [],
         "event_groups": [],
         "stale_after_ns": {},
+        # Contract v27 (rulings 462 and 483): the deployment's pivot order,
+        # USD's then EUR's by default.
+        "fx_pivot_currencies": [USD, EUR],
     }
     base.update(given)
     return base
 
 
-CASH = instrument(USD, "cash", "cash", USD, template="TPL-cash")
-CASH_EUR = instrument(EUR, "cash", "cash", EUR, template="TPL-cash")
+CASH = instrument(USD, "cash", "cash", USD, template="TPL-cash", code="USD")
+CASH_EUR = instrument(EUR, "cash", "cash", EUR, template="TPL-cash", code="EUR")
+CASH_CHF = instrument(CHF, "cash", "cash", CHF, template="TPL-cash", code="CHF")
 CASH_USDT = instrument(USDT, "cash", "cash", USDT, template="TPL-cash")
 CASH_USDC = instrument(USDC, "cash", "cash", USDC, template="TPL-cash")
 
@@ -206,7 +220,7 @@ def valuation() -> dict[str, Any]:
 
 
 def realized_v2() -> dict[str, Any]:
-    """`pnl` version 2 (v27's, ruling 320; never asked of v26's component):
+    """`pnl` version 2 (served from contract v27; rulings 320 and 396):
     the valuation's accounts, each bucket's unrealized P&L from its open
     lots beside its realized P&L from the lots the book closed up to its
     watermark, since the account opened."""
@@ -223,6 +237,10 @@ def realized_v2() -> dict[str, Any]:
          "cost": "-1120.00", "sleeve": "hedge"},
         {"account_id": "ACC-2", "instrument_id": AAPL, "quantity": "1", "proceeds": "195.10",
          "cost": "200.00", "sleeve": "core"},
+        # A lot whose cost the book does not record (an opening balance
+        # stated without one): not evaluated, never zero (ruling 325).
+        {"account_id": "ACC-2", "instrument_id": AAPL, "quantity": "2", "proceeds": "390.00",
+         "cost": "", "sleeve": "core"},
     ]  # fmt: skip
     return given
 
@@ -478,6 +496,164 @@ def what_if() -> dict[str, Any]:
     )
 
 
+def past_18_places() -> dict[str, Any]:
+    """Contract v27 (rulings 453 and 486): a quoted price whose conversion
+    chain runs past 18 places, its value per unit rounded half to even to
+    18, its market value that times the quantity, exact -- an equity priced
+    in euros and a crypto asset priced in a stablecoin."""
+    return inputs(
+        job={"account_ids": ["ACC-1"], "measures": [measure("market_value", ("instrument",))],
+             "what_if": None},
+        accounts=[{"account_id": "ACC-1", "base_currency_instrument_id": USD}],
+        positions=[
+            position("ACC-1", SAP, "1000.5", "12000.00"),
+            position("ACC-1", BTC, "0.33333333", "20000.00"),
+        ],
+        instruments=[
+            CASH,
+            CASH_EUR,
+            CASH_USDT,
+            instrument(SAP, "quoted_price", "equity", EUR, "close", country="DE"),
+            instrument(BTC, "quoted_price", "crypto_asset", USDT, "close"),
+        ],
+        market=[
+            price(SAP, "close", "12.345678", EUR, "tiingo-1:daily"),
+            price(EUR, "close", "1.085012345678901234", USD, "ecb-1:fx"),
+            price(BTC, "close", "60000.123456789", USDT, "coinbase-1:daily"),
+            price(USDT, "close", "0.999812345678901235", USD, "coinbase-1:daily"),
+        ],
+    )  # fmt: skip
+
+
+def inverted_and_crossed() -> dict[str, Any]:
+    """Contract v27 (ruling 462): a euro account holding dollars, a US equity
+    and bitcoin priced in dollars, where the lake holds only EURUSD -- the
+    dollar leg inverted, bitcoin's own price kept and its dollar leg
+    inverted -- and a dollar account holding a Swiss equity and francs,
+    where the lake holds no CHF rate against the dollar either way: crossed
+    through the euro, the second pivot (the dollar being the base), its
+    franc leg inverted."""
+    return inputs(
+        job={"account_ids": ["ACC-EU", "ACC-US"],
+             "measures": [measure("market_value", ("instrument",))], "what_if": None},
+        accounts=[
+            {"account_id": "ACC-EU", "base_currency_instrument_id": EUR},
+            {"account_id": "ACC-US", "base_currency_instrument_id": USD},
+        ],
+        positions=[
+            position("ACC-EU", USD, "2500.00", "2300.00"),
+            position("ACC-EU", AAPL, "10", "2000.00"),
+            position("ACC-EU", BTC, "0.5", "28000.00"),
+            position("ACC-US", NESN, "40", "4100.00"),
+            position("ACC-US", CHF, "1000.00", "1100.00"),
+        ],
+        instruments=[
+            CASH,
+            CASH_EUR,
+            CASH_CHF,
+            instrument(AAPL, "quoted_price", "equity", USD, "close", country="US"),
+            instrument(BTC, "quoted_price", "crypto_asset", USD, "close"),
+            instrument(NESN, "quoted_price", "equity", CHF, "close", country="CH"),
+        ],
+        market=[
+            price(AAPL, "close", "227.50", USD, "alpaca-1:daily"),
+            price(BTC, "close", "60000.50", USD, "coinbase-1:daily"),
+            price(NESN, "close", "98.76", CHF, "tiingo-1:daily"),
+            price(EUR, "close", "1.0850", USD, "fed-board-1:daily"),
+            price(EUR, "close", "0.9412", CHF, "ecb-1:fx"),
+        ],
+    )  # fmt: skip
+
+
+def reporting_currency() -> dict[str, Any]:
+    """Contract v27 (ruling 459): a dollar account's figures in a reporting
+    currency, the euro, its leg the lake's EURUSD inverted; Unrealized P&L
+    beside its market value, weights left unconverted."""
+    given = inputs(
+        job={"account_ids": ["ACC-1"], "reporting_currency": EUR,
+             "measures": [measure("market_value"), measure("pnl"),
+                          measure("concentration", ("instrument",))], "what_if": None},
+        accounts=[{"account_id": "ACC-1", "base_currency_instrument_id": USD}],
+        positions=[position("ACC-1", USD, "5000.00", "5000.00"),
+                   position("ACC-1", AAPL, "10", "2000.00")],
+        instruments=[CASH, CASH_EUR,
+                     instrument(AAPL, "quoted_price", "equity", USD, "close", country="US")],
+        market=[price(AAPL, "close", "227.50", USD, "alpaca-1:daily"),
+                price(EUR, "close", "1.0850", USD, "fed-board-1:daily")],
+    )  # fmt: skip
+    return given
+
+
+def execution_costs() -> dict[str, Any]:
+    """Contract v27 (W12.1's `execution_cost`; the gaps spec's C1 to C10):
+    an order bought in two fills and a euro-priced sale, each against the
+    mid at its decision, arrival, placement arrival and fill -- a quote past
+    the 5-second bound unanswered `NO_QUOTE`, never imputed; a fill on no
+    placement accepted to a new order with no decision or arrival time
+    `NOT_MEASURED`; fees apart in bps of notional -- and each account's
+    notional-weighted mean per benchmark, in its base."""
+    t0 = 1792299000000000000
+    s = 1_000_000_000
+
+    def at(seconds: float) -> str:
+        return str(t0 + int(seconds * s))
+
+    def execution(n: int, **given: Any) -> dict[str, Any]:
+        base: dict[str, Any] = {
+            "execution_id": f"EXE-01JAH000000000000000000{n:03d}",
+            "order_id": "ORD-01JAH0000000000000000001",
+            "placement_id": "PLC-01JAH0000000000000000001",
+            "account_id": "ACC-1",
+            "instrument_id": AAPL,
+            "side": "SIDE_BUY",
+            "price": {"amount": "227.55", "instrument_id": USD},
+            "quantity": "100",
+            "executed_at_ns": at(30),
+            "time_precision": "TIME_PRECISION_NANOSECOND",
+            "liquidity_indicator": "LIQUIDITY_INDICATOR_REMOVED",
+            "venue_id": "VEN-01JAH00000000000000XNAS",
+            "fees": None,
+            "financing": None,
+            "reject_count": 0,
+            "time_to_fill_ns": str(25 * s),
+            "decision_at_ns": at(0),
+            "arrival_at_ns": at(5),
+            "placement_arrival_at_ns": at(6),
+        }
+        base.update(given)
+        return base
+
+    return inputs(
+        job={"account_ids": ["ACC-1"], "measures": [measure("execution_cost")],
+             "what_if": None},
+        accounts=[{"account_id": "ACC-1", "base_currency_instrument_id": USD}],
+        instruments=[CASH, CASH_EUR,
+                     instrument(AAPL, "quoted_price", "equity", USD, "close", country="US"),
+                     instrument(SAP, "quoted_price", "equity", EUR, "close", country="DE")],
+        market=[
+            # The decision's quote is 8 seconds stale: unanswered.
+            price(AAPL, "mid", "227.10", USD, "alpaca-1:quotes", at=at(-8)),
+            price(AAPL, "mid", "227.20", USD, "alpaca-1:quotes", at=at(4)),
+            price(AAPL, "mid", "227.30", USD, "alpaca-1:quotes", at=at(5.5)),
+            price(AAPL, "mid", "227.50", USD, "alpaca-1:quotes", at=at(29)),
+            price(AAPL, "mid", "227.60", USD, "alpaca-1:quotes", at=at(44)),
+            price(SAP, "mid", "120.10", EUR, "tiingo-1:quotes", at=at(29)),
+            price(EUR, "close", "1.0850", USD, "fed-board-1:daily"),
+        ],
+        executions=[
+            execution(1, fees={"amount": "1.25", "instrument_id": USD}),
+            execution(2, price={"amount": "227.65", "instrument_id": USD}, quantity="50",
+                      executed_at_ns=at(45), time_to_fill_ns=str(40 * s), reject_count=1),
+            # Accepted to a new order: no decision, arrival or placement time.
+            execution(3, order_id="ORD-01JAH0000000000000000002", placement_id="",
+                      instrument_id=SAP, side="SIDE_SELL",
+                      price={"amount": "120.00", "instrument_id": EUR}, quantity="30",
+                      decision_at_ns="0", arrival_at_ns="0", placement_arrival_at_ns="0",
+                      time_to_fill_ns="0", venue_id="VEN-01JAH00000000000000XETR"),
+        ],
+    )  # fmt: skip
+
+
 CASES = {
     "valuation": (valuation, "v26's universe valued: net, gross, broken down, weights and P&L"),
     "stale-and-unconverted": (stale, "a stale price and a missing conversion, never zero"),
@@ -487,6 +663,10 @@ CASES = {
     "historical-var-and-es": (historical, "500 days by full revaluation, gaps carried, events beside"),
     "what-if": (what_if, "a pre-trade what-if beside the base"),
     "pnl-v2-realized": (realized_v2, "pnl version 2 (v27): unrealized beside realized since the account opened"),
+    "quoted-price-past-18-places": (past_18_places, "a quoted price's chain past 18 places, rounded once per unit (v27)"),
+    "inverted-and-crossed": (inverted_and_crossed, "fiat legs inverted and crossed through a pivot (v27)"),
+    "reporting-currency": (reporting_currency, "an account's figures in a reporting currency (v27)"),
+    "execution-cost": (execution_costs, "execution costs against the standard benchmarks (v27)"),
 }
 
 

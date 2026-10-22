@@ -25,6 +25,7 @@ from zoneinfo import ZoneInfo
 from ...client import AccountScope, VenueAccountMap, VenueAccountMapping
 from ...plugin.v1 import operations_pb2 as ops
 from ...suites import Recorder
+from .._latency import Latency
 from ._bookkeeping import Sent
 from ._trader import Trader, Venue, Watched
 
@@ -80,6 +81,7 @@ def placement(
     strategy: ops.StrategyInstruction | None = None,
     venue_order_id: str = "",
     limit: str = "230.00",
+    placement_type: ops.PlacementType = ops.PLACEMENT_TYPE_UNSPECIFIED,
 ) -> ops.Placement:
     """A placement as the book delivers it to the connectivity plugin
     `instance`, in the account its `ems` mapped to `code`."""
@@ -95,6 +97,7 @@ def placement(
         time_in_force=tif,
         status=ops.PlacementStatus(state=state),
         venue_order_id=venue_order_id,
+        placement_type=placement_type,
     )
     if strategy is not None:
         held.strategy.CopyFrom(strategy)
@@ -175,7 +178,12 @@ class Rig:
     broker (`connect`), trading enabled on its account; the book's answers
     (ListOrders, ResolveInstrument, ComputeDate, ReportExecution) as the
     recorder gives them. `after_poll` is where a venue streaming its trade
-    updates delivers what a poll's steps made."""
+    updates delivers what a poll's steps made. From 0.32.0 (contract v27)
+    the Trader records its session's latency into `latency`, which a test
+    reads (`rig.latency.session_latency()`, `rig.latency.snapshots()`);
+    0.32.0's `Latency.report` sends nothing until contract v28 (ruling 515),
+    and the suite's `reports-a-sessions-round-trip`, about `latency`, is not
+    presented until then (ruling 518)."""
 
     #: The plugin's instance, the venue account code its fake broker holds,
     #: and the source its symbols are named by.
@@ -207,6 +215,7 @@ class Rig:
         self.orders: list[ops.Order] = []
         self.executions: list[ops.Execution] = []
         self.minted = 0
+        self.latency = Latency(recorder, clock_ns=lambda: int(clock().timestamp() * 1e9))
         recorder.answer("ListOrders", self._listed)
         recorder.answer(
             "ResolveInstrument",
@@ -237,6 +246,7 @@ class Rig:
             scope=lambda: self.scope,
             watched=self.watched,
             market_zone=self.market_zone,
+            latency=self.latency,
         )
         # As a running plugin's, past its start.
         trader.started.set()

@@ -60,7 +60,8 @@ import asyncio
 import contextlib
 import re
 import sys
-from collections.abc import Awaitable, Callable
+import time
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import replace
 from datetime import date, timedelta
 from decimal import Decimal
@@ -78,9 +79,11 @@ from ._wants import Standing
 __all__ = [
     "BITCOIN",
     "OTHER",
+    "EVENT_CONTRACTS_NOT_PRESENTED",
     "EventContractsChecks",
     "Instruments",
     "Lake",
+    "PAIRS_NOT_PRESENTED",
     "PairsChecks",
     "event_contract_producers",
     "held",
@@ -88,6 +91,8 @@ __all__ = [
     "hear",
     "pairs_producers",
     "payout",
+    "RATES_CASES",
+    "rates_producers",
     "wanted",
 ]
 
@@ -214,9 +219,11 @@ _RESULTS: dict[str, Any] = {
     "trade": ops.RecordTradesResult,
     "quote": ops.RecordQuotesResult,
     "outcome": ops.RecordOutcomesResult,
+    "rate": ops.RecordRatesResult,
 }
 _FIELDS = {"RecordPrices": "prices", "RecordBars": "bars", "RecordTrades": "trades",
-           "RecordQuotes": "quotes", "RecordOutcomes": "outcomes"}  # fmt: skip
+           "RecordQuotes": "quotes", "RecordOutcomes": "outcomes",
+           "RecordRates": "rates"}  # fmt: skip
 
 
 class Lake(Recorder):
@@ -231,7 +238,7 @@ class Lake(Recorder):
         self.instruments = Instruments().answering(self)
         for row, kind in (("RecordPrices", "price"), ("RecordBars", "bar"),
                           ("RecordTrades", "trade"), ("RecordQuotes", "quote"),
-                          ("RecordOutcomes", "outcome")):  # fmt: skip
+                          ("RecordOutcomes", "outcome"), ("RecordRates", "rate")):  # fmt: skip
             self.answer(row, self._recording(row, kind))
 
     def _recording(self, row: str, kind: str) -> Callable[[Any], Any]:
@@ -256,6 +263,8 @@ class Lake(Recorder):
             return tuple(amount(f) for f in ("open", "high", "low", "close")) + (
                 as_decimal(row.volume),
             )
+        if kind == "rate":
+            return (as_decimal(row.value.value), row.value.unit, row.preliminary)
         if kind == "outcome":
             return (row.determination, row.stage, as_decimal(row.settlement_value.amount),
                     row.settled_at_ns, row.determination_as_reported.code)  # fmt: skip
@@ -360,6 +369,75 @@ def lake_query(subject: str, kind: str = "prices") -> Producer:
         )
 
     return produce
+
+
+#: The cases a kind of venue never presents unless its module maps them
+#: (contract v27): a pairs or event-contract venue publishes no rates; an
+#: event-contract venue polls rather than streams, and records no trades;
+#: and every plugin's feed delay, about `latency` until v28 (ruling 518).
+_RATES = (
+    "a-rate-fixing",
+    "a-same-day-revision",
+    "a-curve-for-a-date",
+    "a-tenor-not-published",
+    "two-conventions-one-tenor",
+    "an-index-level",
+    "a-curve-point-from-another-source",
+)
+#: Why a case about `latency` is not presented in contract v27 (ruling 518).
+_LATENCY_NOT_YET = "core receives ReportLatency from contract v28, ruling 515"
+PAIRS_NOT_PRESENTED = {
+    **{case: "a pairs venue publishes no rates" for case in _RATES},
+    "reports-its-feed-delay": _LATENCY_NOT_YET,
+}
+EVENT_CONTRACTS_NOT_PRESENTED = {
+    **{case: "an event-contract venue publishes no rates" for case in _RATES},
+    "records-a-datasets-liveness": "it polls its venue each second; it streams nothing",
+    "queries-the-lake-within-bounds": "it records no trades",
+    "reports-its-feed-delay": _LATENCY_NOT_YET,
+}
+
+
+#: The rates cases of the data suite (contract v27), each about `rates`.
+RATES_CASES = _RATES
+
+
+def rates_producers(
+    cases: Mapping[str, Callable[[Any, Instruments], Awaitable[None]]],
+    *,
+    source: str,
+    now_ns: int = 0,
+    day_zone: str = "UTC",
+) -> dict[str, Producer]:
+    """The data suite's rates cases (contract v27; ruling 345) for a plugin
+    built on `meridian.roles.data.rates`: each case its own conversion of
+    its publisher's recorded answer for the case, given a `rates.Feed` over
+    the lake as a test stands it in (`Lake`, which records a row key's
+    next version as a restatement) and the instrument store resolving its
+    subjects (`Instruments`, where it holds the curves and rates as
+    referential records). `cases` maps a case's name to
+    `async def case(feed, instruments)`; a case the publisher never
+    presents is named in the plugin's `NOT_PRESENTED`, with why."""
+    from . import rates
+
+    unknown = sorted(set(cases) - set(RATES_CASES))
+    if unknown:
+        raise ValueError(f"{unknown} are not the data suite's rates cases {RATES_CASES}")
+
+    def made(case: Callable[[Any, Instruments], Awaitable[None]]) -> Producer:
+        async def produce(recorder: Recorder) -> None:
+            store = Instruments().answering(recorder)
+            feed = rates.Feed(
+                recorder,
+                source,
+                day_zone=day_zone,
+                clock_ns=(lambda: now_ns) if now_ns else time.time_ns,
+            )
+            await case(feed, store)
+
+        return produce
+
+    return {name: made(case) for name, case in cases.items()}
 
 
 def pairs_producers(venue: Any, **mutations: Any) -> dict[str, Producer]:
@@ -529,7 +607,14 @@ def pairs_producers(venue: Any, **mutations: Any) -> dict[str, Producer]:
             (pairs.LIVE, QUOTE) if case == "a-quote-recorded" else (pairs.TRADES, TRADE)
         )
         made[case] = streamed(message, key, data_type)
-    return {case: produce for case, produce in made.items() if case not in venue.NOT_PRESENTED}
+    # Contract v27: a quote streamed is the stream's sign of life, recorded
+    # as the live dataset's liveness; a trade streamed, its age at the edge.
+    if "a-quote-recorded" in venue.STREAM_CASES:
+        made["records-a-datasets-liveness"] = streamed(
+            venue.STREAM_CASES["a-quote-recorded"], pairs.LIVE, QUOTE
+        )
+    skipped = {**PAIRS_NOT_PRESENTED, **venue.NOT_PRESENTED}
+    return {case: produce for case, produce in made.items() if case not in skipped}
 
 
 def event_contract_producers(venue: Any, **mutations: Any) -> dict[str, Producer]:
@@ -628,7 +713,6 @@ def event_contract_producers(venue: Any, **mutations: Any) -> dict[str, Producer
         "a-quote-recorded": live(venue.BASE, QUOTE),
         "a-one-sided-quote": live(venue.ONE_SIDED, QUOTE),
         "reads-its-datasets-licences": licences,
-        "queries-the-lake-within-bounds": lake_query("INS-suite-1"),
     }
 
     def grouped(event: Any) -> Producer | None:
@@ -660,7 +744,8 @@ def event_contract_producers(venue: Any, **mutations: Any) -> dict[str, Producer
         "records-a-partial-payout": outcome(venue.PARTIAL),
     }
     made.update({name: each for name, each in outcomes.items() if each is not None})
-    return {name: made[name] for name in made if name not in venue.NOT_PRESENTED}
+    skipped = {**EVENT_CONTRACTS_NOT_PRESENTED, **venue.NOT_PRESENTED}
+    return {name: made[name] for name in made if name not in skipped}
 
 
 # ── What every data plugin's pages hold ─────────────────────────────────
@@ -771,34 +856,39 @@ class PairsChecks(_PageChecks):
     def lake(self) -> Lake:
         return Lake(self.venue.VENUE)
 
+    def not_presented(self) -> dict[str, str]:
+        """The cases the venue never presents: its module's `NOT_PRESENTED`,
+        over those its kind never does (contract v27)."""
+        return {**PAIRS_NOT_PRESENTED, **self.venue.NOT_PRESENTED}
+
     # ── The suite ───────────────────────────────────────────────────────
 
     def test_every_case_is_mapped_or_said_not_presented_with_why(self) -> None:
         made = pairs_producers(self.venue)
-        presented = set(self.venue.NOT_PRESENTED)
+        presented = set(self.not_presented())
         assert set(names("data")) == set(made) | presented | set(ANSWERED_BY_SDK)
         assert not set(made) & presented
-        assert all(why.strip() for why in self.venue.NOT_PRESENTED.values())
+        assert all(why.strip() for why in self.not_presented().values())
 
     def test_every_case_the_venue_presents_passes_unchanged(self) -> None:
         v = self.venue
         made = pairs_producers(v)
-        report = run("data", made, not_presented=v.NOT_PRESENTED, instance_id=v.VENUE)
+        report = run("data", made, not_presented=self.not_presented(), instance_id=v.VENUE)
         assert report.passed, report.failures
-        expected = len(list(names("data"))) - len(self.venue.NOT_PRESENTED)
+        expected = len(list(names("data"))) - len(self.not_presented())
         assert len(report.passed_cases) == expected
         assert report.answered_by_sdk == list(ANSWERED_BY_SDK)
 
     def test_only_a_case_the_venue_cannot_present_is_not_presented(self) -> None:
         about = {case.name: case.about or case.about_field for case in suite("data").cases}
-        assert all(about[case] for case in self.venue.NOT_PRESENTED), "about data or a field"
+        assert all(about[case] for case in self.not_presented()), "about data or a field"
         sides = {"the-makers-side-inverted", "the-takers-side-stated"}
-        assert len(sides & set(self.venue.NOT_PRESENTED)) == 1, "one side or the other"
+        assert len(sides & set(self.not_presented())) == 1, "one side or the other"
 
     def _fails(self, case: str, **mutations: Any) -> bool:
         v = self.venue
         made = pairs_producers(v, **mutations)
-        report = run("data", made, not_presented=v.NOT_PRESENTED, instance_id=v.VENUE)
+        report = run("data", made, not_presented=self.not_presented(), instance_id=v.VENUE)
         return case in report.failures
 
     def test_a_candle_read_through_a_float_fails_the_suite(self) -> None:
@@ -816,7 +906,7 @@ class PairsChecks(_PageChecks):
 
     def _side_case(self) -> str:
         return next(case for case in ("the-takers-side-stated", "the-makers-side-inverted")
-                    if case not in self.venue.NOT_PRESENTED)  # fmt: skip
+                    if case not in self.not_presented())  # fmt: skip
 
     def test_the_side_passed_through_fails_the_suite_where_it_is_the_makers(self) -> None:
         failed = self._fails(self._side_case(), aggressor=lambda feed, seen: seen.side)
@@ -1475,7 +1565,12 @@ class PairsChecks(_PageChecks):
     def test_each_page_holds_the_roles_sections_in_its_order(self) -> None:
         self.ran()
         client = PageClient(self.venue.page.pages)
-        assert _sections(client.get("/", "admin").text) == ["Key", "Limits and use", "Stream"]
+        assert _sections(client.get("/", "admin").text) == [
+            "Key",
+            "Limits and use",
+            "Stream",
+            "Sessions",
+        ]
         assert _sections(client.get("/datasets", "admin").text) == [
             "Served", "Wants", "Subjects", self.venue.page.TITLE,
         ]  # fmt: skip
@@ -1567,32 +1662,37 @@ class EventContractsChecks(_PageChecks):
     def _amounts(rows: list[Any], kind: int) -> list[str]:
         return [str(as_decimal(r.price.amount)) for r in rows if r.kind == kind]
 
+    def not_presented(self) -> dict[str, str]:
+        """The cases the venue never presents: its module's `NOT_PRESENTED`,
+        over those its kind never does (contract v27)."""
+        return {**EVENT_CONTRACTS_NOT_PRESENTED, **self.venue.NOT_PRESENTED}
+
     # ── The suite ───────────────────────────────────────────────────────
 
     def test_every_case_is_mapped_or_said_not_presented_with_why(self) -> None:
         made = event_contract_producers(self.venue)
-        presented = set(self.venue.NOT_PRESENTED)
+        presented = set(self.not_presented())
         assert set(names("data")) == set(made) | presented | set(ANSWERED_BY_SDK)
         assert not set(made) & presented
-        assert all(why.strip() for why in self.venue.NOT_PRESENTED.values())
+        assert all(why.strip() for why in self.not_presented().values())
 
     def test_only_a_case_about_a_kind_never_published_is_not_presented(self) -> None:
         about = {case.name: case.about or case.about_field for case in suite("data").cases}
-        assert all(about[name] for name in self.venue.NOT_PRESENTED), "a required case skipped"
-        assert "reads-its-datasets-licences" not in self.venue.NOT_PRESENTED
+        assert all(about[name] for name in self.not_presented()), "a required case skipped"
+        assert "reads-its-datasets-licences" not in self.not_presented()
 
     def test_every_case_the_venue_presents_passes_unchanged(self) -> None:
         v = self.venue
         made = event_contract_producers(v)
-        report = run("data", made, not_presented=v.NOT_PRESENTED, instance_id=v.VENUE)
+        report = run("data", made, not_presented=self.not_presented(), instance_id=v.VENUE)
         assert report.passed, report.failures
-        expected = len(list(names("data"))) - len(self.venue.NOT_PRESENTED)
+        expected = len(list(names("data"))) - len(self.not_presented())
         assert len(report.passed_cases) == expected
 
     def _fails(self, case: str, **mutations: Any) -> bool:
         v = self.venue
         made = event_contract_producers(v, **mutations)
-        report = run("data", made, not_presented=v.NOT_PRESENTED, instance_id=v.VENUE)
+        report = run("data", made, not_presented=self.not_presented(), instance_id=v.VENUE)
         return case in report.failures
 
     def test_a_price_read_through_a_float_fails_the_suite(self) -> None:
@@ -2096,7 +2196,12 @@ class EventContractsChecks(_PageChecks):
     def test_each_page_holds_the_roles_sections_in_its_order(self) -> None:
         self.ran()
         client = PageClient(self.venue.page.pages)
-        assert _sections(client.get("/", "admin").text) == ["Key", "Limits and use", "Stream"]
+        assert _sections(client.get("/", "admin").text) == [
+            "Key",
+            "Limits and use",
+            "Stream",
+            "Sessions",
+        ]
         assert _sections(client.get("/datasets", "admin").text) == [
             "Served", "Wants", "Subjects", self.venue.page.TITLE,
         ]  # fmt: skip

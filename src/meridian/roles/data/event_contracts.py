@@ -80,10 +80,12 @@ resolve holds the report back: a group missing a member would misstate it.
 A range market's bounds are the member's (A4): `Contract.floor` and
 `Contract.cap`, each a `Bound` (a Decimal and whether it is inclusive --
 Kalshi's `greater` false, `greater_or_equal` true), and `bound_unit`, kept
-in the contract map with each value's exact text (0.31.1). The contract
-carries them as the binary event contract template's fields on the member's
-own record, which only the `reference` role offers (OfferTemplateFields): a
-data plugin has no operation that sends them, so they reach no row yet.
+in the contract map with each value's exact text (0.31.1). From 0.32.0
+(contract v27, ruling 464) `report_event` sends each range member's floor,
+cap and unit with the group (`member_bounds`), which the instrument record
+takes as values offered; a person's value wins. `keep_events` reports the
+events of the contracts served -- read once first served and every ten
+minutes, reported on a change -- for a `Market` answering `event(ref)`.
 
 Every role reads groups through `EventGroups` (re-exported here and as
 `meridian.EventGroups`): the versions read and heard, and the one in force
@@ -107,7 +109,17 @@ from typing import Any, Protocol
 
 from ...errors import NotGranted
 from ...figures import Figure
-from ...operations import Money, ObservationMeta, Outcome, Price, Quote, SourceTime, as_money
+from ...operations import (
+    EventContractBound,
+    EventGroupMemberBound,
+    Money,
+    ObservationMeta,
+    Outcome,
+    Price,
+    Quote,
+    SourceTime,
+    as_money,
+)
 from ...plugin.v1 import operations_pb2 as ops
 from . import figures as role_figures
 from ._groups import EventGroups, flag, stated
@@ -158,6 +170,9 @@ OUTCOMES = "outcomes"
 PRICE, QUOTE = "meridian.v1.Price", "meridian.v1.Quote"
 #: The live dataset's pace: each subject at most once a second.
 LIVE_EVERY_SECONDS = 1.0
+#: How soon an event first served is read, and how often each is read again
+#: (`Feed.keep_events`, 0.32.0), in seconds.
+EVENTS_FIRST_SECONDS, EVENTS_EVERY_SECONDS = 15.0, 600.0
 #: How often a contract past its close, its final stage not yet recorded,
 #: is read again for its determination.
 OUTCOME_EVERY_SECONDS = 60.0
@@ -567,6 +582,10 @@ class Feed:
     #: Contracts whose stated determination did not read, counted once each.
     unreadable: set[str] = field(default_factory=set)
     wants: Wants = field(init=False)
+    #: When each event was last read, and what was last reported of each
+    #: (`keep_events`, 0.32.0).
+    _events_read_at: dict[str, float] = field(default_factory=dict, init=False)
+    _events_reported: dict[str, tuple[object, ...]] = field(default_factory=dict, init=False)
 
     def __post_init__(self) -> None:
         self.wants = Wants(self.plugin, (LIVE, OUTCOMES), clock_ns=self.clock_ns)
@@ -651,12 +670,25 @@ class Feed:
         a member does not resolve or the venue is not held: a group missing
         a member would misstate it."""
         members: list[str] = []
+        bounds: list[EventGroupMemberBound] = []
         for code in event.members:
             member = await self.member_id(code)
             if not member:
                 log.info("event %s held back: its member %s does not resolve", event.ref, code)
                 return None
             members.append(member)
+            contract = await self.contract(code)
+            if contract is not None and (contract.floor or contract.cap):
+                # Contract v27 (ruling 464): each range member's bounds as
+                # the venue states them, offered for its record.
+                bounds.append(
+                    EventGroupMemberBound(
+                        instrument_id=member,
+                        floor=_offered(contract.floor),
+                        cap=_offered(contract.cap),
+                        bound_unit=contract.bound_unit,
+                    )
+                )
         venue = await self.venue_id()
         if not venue:
             return None
@@ -670,8 +702,57 @@ class Feed:
             series_id=event.series,
             valid_from_ns=event.valid_from_ns or self.clock_ns(),
             raw_record=self.plugin.raw_record(event.raw_key) if event.raw_key else None,
+            member_bounds=bounds,
         )
         return answer
+
+    async def keep_events(
+        self,
+        sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+        *,
+        clock: Callable[[], float] = time.monotonic,
+        once: bool = False,
+    ) -> int:
+        """Report the events of the contracts served, until cancelled (0.32.0;
+        the loop Kalshi's and Polymarket's plugins each kept): each event --
+        a served contract's `market` -- read once its contract is first
+        served and again every `EVENTS_EVERY_SECONDS`, and reported
+        (`report_event`) where it is new or the venue states it otherwise
+        than as last reported; one held back, a member not resolving, read
+        again on the next pass. A pass every `EVENTS_FIRST_SECONDS`; a
+        failure said, never raised. The `Market` answers `event(ref)`, an
+        `Event` or None; one that does not reports none. `once` makes one
+        pass and answers how many events it reported."""
+        reported = 0
+        while True:
+            try:
+                reported += await self._events_pass(clock)
+            except Exception as failed:  # noqa: BLE001 - said, and read again on the next pass
+                log.warning("events not reported: %s", failed)
+            if once:
+                return reported
+            await sleep(EVENTS_FIRST_SECONDS)
+
+    async def _events_pass(self, clock: Callable[[], float]) -> int:
+        read = getattr(self.market, "event", None)
+        if not callable(read):
+            return 0
+        sent = 0
+        refs = {m.contract.market for m in self.contracts.mapped() if m.contract.market}
+        for ref in sorted(refs):
+            at = self._events_read_at.get(ref)
+            if at is not None and clock() - at < EVENTS_EVERY_SECONDS:
+                continue
+            self._events_read_at[ref] = clock()
+            event = await asyncio.to_thread(read, ref)
+            if event is None or self._events_reported.get(event.ref) == _event_said(event):
+                continue
+            if await self.report_event(event) is None:
+                del self._events_read_at[ref]  # held back: read again on the next pass
+                continue
+            self._events_reported[event.ref] = _event_said(event)
+            sent += 1
+        return sent
 
     # ── Resolving ────────────────────────────────────────────────────────
 
@@ -1258,6 +1339,25 @@ class Feed:
             except Exception as failed:  # noqa: BLE001 - said, and tried again next time
                 log.warning("keeping current stopped this time: %s", failed)
             await sleep(LIVE_EVERY_SECONDS)
+
+
+def _offered(bound: Bound | None) -> EventContractBound | None:
+    return (
+        None
+        if bound is None
+        else EventContractBound(value=bound.value, inclusive=bound.inclusive)
+    )
+
+
+def _event_said(event: Event) -> tuple[object, ...]:
+    """What a venue states of an event that a new version would change."""
+    return (
+        event.members,
+        event.mutually_exclusive,
+        event.exhaustive,
+        event.series,
+        event.title,
+    )
 
 
 def _grouped(wants: Iterable[Standing]) -> list[tuple[str, tuple[int, ...], list[str]]]:

@@ -67,9 +67,10 @@ contract-diff:
 # PyPI depends on nothing by URL (PyPI refuses that) and a plugin installs one
 # thing. `make vendor-schema` moves the copy to SCHEMA_REV; `check-vendored`
 # fails when the two disagree, as core's check-codegen does for its bindings.
-# meridian-schema's pushed `v26` (contract v26; open-meridian/meridian-schema#4, at 309e093),
-# its gen/ and boundaries/ vendored here byte for byte.
-SCHEMA_REV := 309e093f3c875be57e1dfaab797a8fb85a1e996b
+# meridian-schema's pushed `v27` (contract v27, DESIGN27; open-meridian/meridian-schema#5,
+# at 4069608, ruling 518; on main since #5's merge, 71ad182), its gen/ and
+# boundaries/ vendored here byte for byte.
+SCHEMA_REV := 40696086ac6edc48f95b5148aa219556bea3fcfc
 SCHEMA_REPO := https://github.com/open-meridian/meridian-schema.git
 SCRATCH     := .schema-scratch
 
@@ -114,8 +115,9 @@ DESIGN ?= ../meridian-design
 # pinned here by commit as the schema is pinned in pyproject.toml. Core's own
 # interop gate overrides this with its working tree, so a change to both lands
 # without either waiting on the other's push.
-# Core's pushed `v26` (contract v26), whose gate is green.
-CORE_REV   := df15ccbf6f15e0facce90e98bd894bd0b4724078
+# Core's final `v27` (contract v27; open-meridian/meridian-core#50), its proto/
+# the contract's as in its contract commit b7f5658.
+CORE_REV   := 12564b21d7922c238663048262643d1b302b317a
 CORE_PROTO ?= https://github.com/open-meridian/meridian-core.git\#$(CORE_REV):proto
 # And meridian-schema's, which core's import, at the revision vendored here.
 SCHEMA_PROTO ?= https://github.com/open-meridian/meridian-schema.git\#$(SCHEMA_REV):proto

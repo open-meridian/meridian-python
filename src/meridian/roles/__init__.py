@@ -45,8 +45,51 @@ From 0.31.0 (contract v26) `pricing` holds a pricing plugin's work
 (`Pricer`): each batch the analytics component routes to it answered whole,
 the built-in models' own computation for a v26 model id (`reference_model`),
 and the batches still waiting read after a restart.
+
+From 0.32.0 (contract v27) the roles share the latency track's recorders
+(spec/sessions-and-data-report-their-latency-and-quality): `Latency`, a
+histogram per session and metric and per dataset and hop, sent every 10
+seconds (`ReportLatency`), and each open session's `SessionLatency` for
+the connection page's Sessions section; `Liveness`, the latest heartbeat
+heard per dataset, and `confirmed_ns`, a value's confirmed time; and
+`in_session`, a moment in a venue's `TradingSessions`. `data` gains the
+rates slice (`data.rates`) and records its edge age and liveness;
+`connectivity` its session's round trip, order acknowledgement and fill
+delay, the placement types its venue takes and the dealers' quotes on an
+RFQ placement; and `ems`, the `ems`'s check of its reference price's age
+and its RFQ placement's quotes.
 """
 
-from . import connectivity, custody, data, operations, pricing, reporting
+from . import connectivity, custody, data, ems, operations, pricing, reporting
+from ._latency import (
+    FeedDelay,
+    Histogram,
+    Latency,
+    Liveness,
+    Percentiles,
+    SessionCeilings,
+    SessionLatency,
+    confirmed_ns,
+    in_session,
+    source_ns,
+)
 
-__all__ = ["connectivity", "custody", "data", "operations", "pricing", "reporting"]
+__all__ = [
+    "FeedDelay",
+    "Histogram",
+    "Latency",
+    "Liveness",
+    "Percentiles",
+    "SessionCeilings",
+    "SessionLatency",
+    "confirmed_ns",
+    "connectivity",
+    "custody",
+    "data",
+    "ems",
+    "in_session",
+    "operations",
+    "pricing",
+    "reporting",
+    "source_ns",
+]

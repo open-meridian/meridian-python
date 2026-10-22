@@ -460,7 +460,10 @@ def reading(role: str) -> dict[str, object]:
 
 @pytest.mark.parametrize("role", ["signal", "ems"])
 def test_a_reader_of_trades_and_quotes_passes_its_suite(role: str) -> None:
-    report = run(role, reading(role))
+    # Ruling 518: the ems's data age is about `latency`, not presented in v27.
+    why = "core receives ReportLatency from contract v28, ruling 515"
+    skipped = {c.name: why for c in suite(role).cases if c.about == "latency"}
+    report = run(role, reading(role), not_presented=skipped)
     assert report.passed, report.failures
 
 
@@ -479,7 +482,7 @@ def test_the_ems_suite_is_carried_with_its_six_cases_and_v22s() -> None:
     # venue-originated fill's accept and DK, and from v24 the two every-role
     # cases and the escape hatch's read; v26 an event group heard and read, the
     # agents' guard read and its five cases, and the lake's bounded query.
-    assert len(held.cases) == 35
+    assert len(held.cases) == 39  # v27: liveness, data age, costs, the RFQ's pick
     assert "places-at-a-linked-connectivity-plugin" in [case.name for case in held.cases]
 
 

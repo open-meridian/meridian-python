@@ -322,6 +322,188 @@ def account_currency(
     )
 
 
+# ── Latency's settings (contract v27; spec/sessions-and-data-report-their-
+# latency-and-quality, "Settings", rulings 360, 361, 368 and 420) ──────────
+
+#: `session_ceilings`' columns after the connection and session: each a
+#: ceiling in milliseconds or a count, 0 or empty for none.
+SESSION_CEILING_COLUMNS = (
+    ("rtt_p99", "RTT p99", "ms", "rtt_p99_ns"),
+    ("order_ack_p99", "Order ack p99", "ms", "order_ack_p99_ns"),
+    ("fill_delay_p99", "Fill delay p99", "ms", "fill_delay_p99_ns"),
+    ("feed_delay_p99", "Feed delay p99", "ms", "feed_delay_p99_ns"),
+    ("clock_skew_max", "Clock skew max", "ms", "clock_skew_max_ns"),
+    ("gaps_per_hour", "Gaps per hour", "", "gaps_per_hour"),
+    ("reconnects_per_hour", "Reconnects per hour", "", "reconnects_per_hour"),
+    ("backlog_max", "Backlog max", "", "backlog_max"),
+)
+
+
+def session_ceilings(
+    *, defaults: Sequence[Mapping[str, Any]] = (), roles: Sequence[str] = ()
+) -> Any:
+    """A data or connectivity plugin's ceilings per connection and session
+    (rulings 360 and 361): `session_ceilings`, a typed table labelled
+    "Session ceilings", the plugin admin's, each row a connection, a
+    session and its ceilings -- the round trip's, the venue's order
+    acknowledgement's and fill delay's and the feed delay's p99 and the
+    clock skew's most, in milliseconds, and gaps and reconnects an hour and
+    the send backlog's most -- 0 or empty for none. They travel with every
+    snapshot (`ceilings_from`), since core never reads a plugin's settings
+    to judge a breach. `defaults` are the plugin's own rows."""
+    del defaults  # a table's default rows are the plugin's to offer on its page
+    return Setting(
+        "session_ceilings",
+        list,
+        label="Session ceilings",
+        description=(
+            "Each session's ceilings, beyond which a breach opens a notice: round trip, "
+            "order acknowledgement, fill delay and feed delay at p99 and the clock skew, "
+            "in milliseconds; gaps and reconnects an hour; the send backlog. Empty for none."
+        ),
+        columns=(
+            Column(
+                "connection",
+                label="Connection",
+                description="The connection, as the plugin names it",
+            ),
+            Column(
+                "session",
+                label="Session",
+                description=(
+                    "The session, as the plugin names it; empty for every session of the "
+                    "connection"
+                ),
+            ),
+            *(
+                Column(
+                    name,
+                    kind="integer",
+                    label=label,
+                    description=f"In {unit}" if unit else "A count",
+                )
+                for name, label, unit, _ in SESSION_CEILING_COLUMNS
+            ),
+        ),
+        roles=roles,
+    )
+
+
+def ceilings_from(rows: Sequence[Mapping[str, Any]]) -> Any:
+    """`session_ceilings`' rows as `Latency`'s `ceilings`: a session's row
+    (its own, else its connection's with no session named), as the wire's
+    `LatencyCeilings`, milliseconds made nanoseconds; None for a session no
+    row covers."""
+    from .plugin.v1 import operations_pb2 as ops
+
+    def ceilings(session: str) -> Any:
+        own = [r for r in rows if str(r.get("session") or "") == session]
+        every = [r for r in rows if not str(r.get("session") or "")]
+        found = own or every
+        if not found:
+            return None
+        row = found[0]
+        given: dict[str, int] = {}
+        for name, _, unit, field_name in SESSION_CEILING_COLUMNS:
+            value = row.get(name)
+            if value in (None, ""):
+                continue
+            number = int(value)
+            given[field_name] = number * 1_000_000 if unit == "ms" else number
+        return ops.LatencyCeilings(**given)
+
+    return ceilings
+
+
+def dataset_thresholds(*, roles: Sequence[str] = ()) -> Any:
+    """A data plugin admin's staleness per dataset (rulings 368 and 369):
+    `dataset_thresholds`, a typed table labelled "Dataset thresholds", each
+    row a dataset, its asset class (the default's origin) and its
+    `stale_after` in seconds, which the lake reads by its fixed name and
+    answers on `DatasetRef.stale_after_ns`. Its declared delay is the
+    catalogue's (`DatasetDeclaration.declared_delay_ns`), never set here."""
+    return Setting(
+        "dataset_thresholds",
+        list,
+        label="Dataset thresholds",
+        description=(
+            "How old each dataset's values may be, counted in session, before a reader "
+            "treats them as stale. A delayed dataset is judged against its declared delay "
+            "plus this."
+        ),
+        columns=(
+            Column(
+                "dataset",
+                label="Dataset",
+                required=True,
+                description="One of this plugin's datasets, by its key",
+            ),
+            Column(
+                "asset_class", label="Asset class", description="Where its default came from"
+            ),
+            Column(
+                "stale_after",
+                kind="integer",
+                label="Stale after",
+                required=True,
+                description="In seconds",
+            ),
+        ),
+        roles=roles,
+    )
+
+
+def stale_reference_action(*, roles: Sequence[str] = ()) -> Any:
+    """An `ems` admin's choice past the reference price's ceiling (ruling
+    420): `stale_reference_action`, `refuse` -- the order held -- or `warn`
+    -- the placement sent and marked -- within what the deployment admin
+    permits, `refuse` by default."""
+    return Setting(
+        "stale_reference_action",
+        str,
+        label="Stale reference action",
+        default="refuse",
+        description=(
+            "What the desk does when a reference price is past its ceiling at the "
+            "pre-trade check: refuse holds the order; warn sends it and marks the placement."
+        ),
+        choices=(Choice("refuse", "Refuse"), Choice("warn", "Warn")),
+        roles=roles,
+    )
+
+
+def stale_reference_after(*, roles: Sequence[str] = ()) -> Any:
+    """An `ems` admin's own ceiling per asset class (ruling 420):
+    `stale_reference_after`, a typed table labelled "Stale reference after",
+    each row an asset class and a ceiling in seconds, tighter than the
+    dataset's only (`roles.ems.after_ns`)."""
+    return Setting(
+        "stale_reference_after",
+        list,
+        label="Stale reference after",
+        description=(
+            "The desk's own ceiling for a reference price's age, per asset class, in "
+            "seconds. Only tighter than the dataset's applies."
+        ),
+        columns=(
+            Column(
+                "asset_class",
+                label="Asset class",
+                required=True,
+                description="equity, fx, crypto_asset and the rest",
+            ),
+            Column(
+                "after_seconds",
+                kind="integer",
+                label="After",
+                required=True,
+                description="In seconds",
+            ),
+        ),
+        roles=roles,
+    )
+
+
 class Typed:
     """The base a class decorated `@meridian.settings` is given: its
     declaration, each field's label, and the settings missing."""

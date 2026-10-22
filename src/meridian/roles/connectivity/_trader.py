@@ -196,7 +196,10 @@ def moment(value: Any) -> datetime | None:
 
 @dataclass(frozen=True)
 class Asked:
-    """A placement as the venue is asked to place it."""
+    """A placement as the venue is asked to place it; from 0.32.0 a
+    good-till-date order's expiry, its order's `expire_date` (ISO 8601, in
+    the venue's day) and `expire_time_ns` for good-till-time, empty and 0
+    for any other."""
 
     placement_id: str
     symbol: str
@@ -206,6 +209,8 @@ class Asked:
     quantity: Decimal
     limit: Decimal | None = None
     stop: Decimal | None = None
+    expire_date: str = ""
+    expire_time_ns: int = 0
 
 
 @dataclass(frozen=True)
@@ -248,6 +253,13 @@ class VenueOrder:
     # The listing market's zone where the venue states one for the order
     # (0.31.0): its fills' trade dates fall in it, else in the Trader's.
     market_zone: tzinfo | None = None
+    #: Every identifier the venue states for the order's instrument beside
+    #: its symbol -- a FIGI, an ISIN -- and the currency (ISO 4217) it
+    #: states its price in (0.32.0): a venue-originated order's instrument
+    #: is resolved by all of them, never by the symbol alone, and its fills
+    #: priced in the stated currency, else the record's.
+    identifiers: tuple[ops.Identifier, ...] = ()
+    currency: str = ""
 
 
 @dataclass(frozen=True)
@@ -276,6 +288,26 @@ class Fill:
     at: datetime | None
 
 
+@dataclass(frozen=True)
+class VenueQuote:
+    """One dealer's quote on the firm's RFQ, as the adapter read it (0.32.0;
+    contract v27, W11.40): the dealer by its code at the venue, the dealer's
+    own quote ID (FIX QuoteID, 117), the side it quoted in the venue's words
+    (its offer to a buyer, its bid to a seller), its price and quantity,
+    when it was received and until when it stands (ValidUntilTime, 62), and
+    whether it is `open`, `expired` or `withdrawn`."""
+
+    dealer: str
+    dealer_quote_id: str
+    side: str
+    price: Decimal
+    quantity: Decimal | None = None
+    received_at: datetime | None = None
+    valid_until: datetime | None = None
+    status: str = "open"
+    raw_key: str = ""
+
+
 class Venue(Protocol):
     """What the Trader asks of a venue (venue.py).
 
@@ -286,6 +318,13 @@ class Venue(Protocol):
     before 0.31.0 reports none."""
 
     #: The venue's statuses by their category; any other is not mapped.
+    #: From 0.32.0 (contract v27) an adapter may answer
+    #: `placement_types(code)`, the placement types the venue takes beside
+    #: DMA (`ops.PLACEMENT_TYPE_*`); and, where it takes RFQs,
+    #: `request_quotes(code, asked)` (the request's ID and its raw record's
+    #: key), `quotes(code, request_id)` (each `VenueQuote` and the raw
+    #: record's key) and `accept_quote(code, request_id, quote, asked)` (the
+    #: order the acceptance made, as `place` answers it).
     #: An adapter may also answer `charges(code)` (a list of `VenueCharge`)
     #: and `stated_settlement(code, order, traded)` (the settlement date the
     #: venue states for an order's fill, "" for none); the Trader asks
@@ -357,6 +396,14 @@ class Worked:
     adopted: bool = False
     # How many polls its charges have been looked for, since it ended.
     charge_polls: int = 0
+    # An RFQ placement (contract v27): the venue's request, each dealer's
+    # quote recorded, by its quote ID, its outcome as last recorded, and the
+    # quote the `ems` picked, once accepted.
+    rfq_request: str = ""
+    quotes: dict[str, str] = field(default_factory=dict)
+    outcomes: dict[str, int] = field(default_factory=dict)
+    accepted: str = ""
+    asked: Asked | None = None
 
 
 @dataclass
@@ -502,8 +549,17 @@ class Trader:
         price_places: int = PRICE_PLACES,
         default_currency: str = "USD",
         charged: Sent | None = None,
+        latency: Any = None,
+        session: str = "orders",
     ) -> None:
         self._plugin = plugin
+        #: From 0.32.0 (contract v27): the plugin's `roles.Latency`, where it
+        #: keeps one, and the name of the session its venue calls make --
+        #: each call's duration its round trip, a placement sent to the
+        #: venue's answer its order acknowledgement, a fill's venue time to
+        #: its reading its fill delay.
+        self.latency = latency
+        self.session = session
         #: The charges reported, each once, by charge and placement.
         self.charged = charged if charged is not None else Sent(None)
         #: The accounts first watched in the poll under way: what their
@@ -534,9 +590,12 @@ class Trader:
         #: said once in the log.
         self.history: set[str] = set()
         self.watermark: ops.Watermark | None = None
-        self.published: dict[str, tuple[Catalogue, str]] = {}
+        self.published: dict[str, tuple[Catalogue, str, tuple[int, ...]]] = {}
         #: The accounts the key reached when last asked, by their codes.
         self.reached: tuple[str, ...] = ()
+        #: Each RFQ dealer's venue master ID by its code at the venue, ""
+        #: where the deployment holds none (contract v27).
+        self._dealers: dict[str, str] = {}
         self.shown = Shown()
         self._lock = asyncio.Lock()
         #: Set once it has read the book on start: a placement heard before
@@ -551,9 +610,18 @@ class Trader:
     async def _call(self, work: Callable[..., Any], *args: Any) -> Any:
         """A venue's call: awaited where the adapter's client is async (from
         0.31.0), else off the loop, since its client blocks."""
-        if inspect.iscoroutinefunction(work):
-            return await work(*args)
-        return await asyncio.to_thread(work, *args)
+        started = self._clock_ns()
+        try:
+            if inspect.iscoroutinefunction(work):
+                return await work(*args)
+            return await asyncio.to_thread(work, *args)
+        finally:
+            if self.latency is not None:
+                self.latency.rtt(self.session, self._clock_ns() - started)
+                self.latency.alive(self.session)
+
+    def _clock_ns(self) -> int:
+        return _ns(self._now())
 
     def _raw(self, key: str) -> ops.RawRecordRef:
         reference: ops.RawRecordRef = self._plugin.raw_record(key or "unkept")
@@ -639,7 +707,7 @@ class Trader:
                 worked.carried = filled_in_book(
                     placement.placement_id, executions, besides=worked.venue_order_id
                 )
-            worked.unanswered = not worked.venue_order_id
+            worked.unanswered = not worked.venue_order_id and not worked.rfq_request
             self.working[placement.placement_id] = worked
             self.decided.add(placement.placement_id)
             log.info("working %s again: %s filled", placement.placement_id, worked.filled)
@@ -649,6 +717,8 @@ class Trader:
             and placement.placement_id not in self.working
         ):
             await self.on_queued(placement, order)
+        if worked is not None and worked.rfq_request:
+            await self._picked(placement, worked)
         if worked is not None:
             await self._asked_to_change(placement, order, worked)
 
@@ -835,7 +905,7 @@ class Trader:
             # Sent before this process: asked about, never sent again.
             worked = await self._worked(placement, order)
             if worked is not None:
-                worked.unanswered = True
+                worked.unanswered = not worked.rfq_request
                 self.working[pid] = worked
                 self.decided.add(pid)
             return
@@ -872,6 +942,10 @@ class Trader:
             currency=found.instrument.currency or self.default_currency,
             symbol=symbol,
         )
+        if placement.placement_type == ops.PLACEMENT_TYPE_RFQ:
+            await self._request_quotes(venue, worked, asked)
+            return
+        sent_at = self._clock_ns()
         placed = await place_once(
             self._plugin,
             self._sent,
@@ -879,6 +953,8 @@ class Trader:
             lambda: self._call(venue.place, code, asked),
             source=venue.source,
         )
+        if placed.state == "placed" and self.latency is not None:
+            self.latency.order_ack(self.session, self._clock_ns() - sent_at)
         if placed.state == "unknown":
             worked.unanswered = True
             self.working[pid] = worked
@@ -890,10 +966,27 @@ class Trader:
         self.working[pid] = worked
         await self._report_status(venue, worked, record, key)
 
+    def placement_types(self, venue: Venue, code: str) -> tuple[int, ...]:
+        """The placement types the venue takes on an account (contract v27,
+        W11.20): DMA, and those its adapter states; none on a read-only
+        account."""
+        if not self.trading_on(code):
+            return ()
+        stated = getattr(venue, "placement_types", None)
+        extra = tuple(stated(code)) if callable(stated) else ()
+        return tuple(sorted({ops.PLACEMENT_TYPE_DMA, *extra}))
+
     def _unsupported(self, venue: Venue, placement: ops.Placement, order: ops.Order) -> str:
         code = placement.venue_account_code
         if not self.trading_on(code):
             return "trading is not enabled on the account: it is read-only"
+        kind = placement.placement_type or ops.PLACEMENT_TYPE_DMA
+        if kind not in self.placement_types(venue, code):
+            return "the account's catalogue lists no such placement type"
+        if kind == ops.PLACEMENT_TYPE_RFQ and not callable(
+            getattr(venue, "request_quotes", None)
+        ):
+            return "the venue takes no request for quote from this plugin"
         if placement.HasField("strategy") and placement.strategy.kind:
             return "the venue works no strategy for the platform: the ems works strategies"
         if order.side not in venue.sides:
@@ -939,7 +1032,7 @@ class Trader:
         if order is None or venue is None:
             return None
         found = await self._plugin.resolve_instrument(instrument_id=order.instrument_id)
-        return Worked(
+        worked = Worked(
             placement_id=placement.placement_id,
             order_id=order.order_id,
             code=placement.venue_account_code,
@@ -949,6 +1042,190 @@ class Trader:
             venue_order_id=placement.venue_order_id,
             symbol=symbol_of(found.instrument, venue.source) if found.found else "",
         )
+        if placement.placement_type == ops.PLACEMENT_TYPE_RFQ:
+            # An RFQ worked again (contract v27): its request by the tag it
+            # was sent with, and the quotes the book holds.
+            worked.rfq_request = placement.placement_id
+            worked.quotes = {q.dealer_quote_id: q.quote_id for q in placement.quotes}
+            worked.outcomes = {q.quote_id: int(q.outcome) for q in placement.quotes}
+            worked.accepted = placement.picked_quote_id if placement.venue_order_id else ""
+        return worked
+
+    # ── An RFQ placement (contract v27, W11.40, W11.41) ────────────────
+
+    async def _request_quotes(self, venue: Venue, worked: Worked, asked: Asked) -> None:
+        """The firm's RFQ sent once, as a placement is (`place_once`); its
+        quotes read on each poll and recorded on the placement."""
+        worked.asked = asked
+        requested = await place_once(
+            self._plugin,
+            self._sent,
+            worked.placement_id,
+            lambda: self._call(venue.request_quotes, worked.code, asked),  # type: ignore[attr-defined]
+            source=venue.source,
+        )
+        if requested.state == "unknown":
+            # Its quotes are read by the placement's ID, the tag it was sent
+            # with; the request is never sent again.
+            worked.rfq_request = worked.placement_id
+            self.working[worked.placement_id] = worked
+            return
+        if requested.state != "placed":
+            return
+        worked.rfq_request = str(requested.answer or worked.placement_id)
+        self.working[worked.placement_id] = worked
+        await self._quotes(venue, worked)
+
+    async def _dealer(self, venue: Venue, dealer: str) -> str:
+        """A dealer's venue master ID, by its code at the venue; reported
+        missing, once, where the deployment holds none."""
+        held = self._dealers.get(dealer)
+        if held is not None:
+            return held
+        identifier = ops.Identifier(scheme="symbol", value=dealer, source=venue.source)
+        now = _ns(self._now())
+        found = await self._plugin.resolve_venue(identifiers=[identifier], as_of_ns=now)
+        venue_id = found.venue.venue_id if found.found else ""
+        if not venue_id:
+            await self._plugin.report_missing_venue(
+                source=venue.source,
+                identifiers=[identifier],
+                as_of_ns=now,
+                reason=found.miss_reason or ops.MISS_REASON_NOT_FOUND,
+                observed_at_ns=now,
+            )
+        self._dealers[dealer] = venue_id
+        return venue_id
+
+    async def _quotes(self, venue: Venue, worked: Worked) -> None:
+        """The dealers' quotes on an RFQ placement as the venue states them
+        now: each new one recorded open, and each later outcome -- expired,
+        withdrawn -- recorded once (W11.40). A quote whose dealer the
+        deployment does not hold is not recorded, its dealer reported."""
+        read = getattr(venue, "quotes", None)
+        if not callable(read) or worked.accepted or worked.ended:
+            return
+        try:
+            quotes, key = await self._call(read, worked.code, worked.rfq_request)
+        except (VenueRefused, VenueUnanswered) as failed:
+            log.warning("%s: the quotes were not read: %s", worked.placement_id, failed)
+            return
+        outcome_of = {
+            "open": ops.PLACEMENT_QUOTE_OUTCOME_OPEN,
+            "expired": ops.PLACEMENT_QUOTE_OUTCOME_EXPIRED,
+            "withdrawn": ops.PLACEMENT_QUOTE_OUTCOME_WITHDRAWN,
+        }
+        for quote in quotes:
+            outcome = outcome_of.get(quote.status)
+            if outcome is None:
+                log.warning(
+                    "%s: a quote's status %r is not mapped", worked.placement_id, quote.status
+                )
+                continue
+            quote_id = worked.quotes.get(quote.dealer_quote_id, "")
+            if quote_id and worked.outcomes.get(quote_id) == outcome:
+                continue
+            raw = self._raw(quote.raw_key or key)
+            if quote_id:
+                await self._plugin.report_placement_quote(
+                    placement_id=worked.placement_id,
+                    quote_id=quote_id,
+                    outcome=outcome,
+                    raw_record=raw,
+                    idempotency_key=f"quote:{quote_id}:{outcome}",
+                )
+                worked.outcomes[quote_id] = outcome
+                continue
+            dealer_id = await self._dealer(venue, quote.dealer)
+            side = venue.sides_said.get(quote.side, 0)
+            if not dealer_id or not side:
+                continue
+            done = await self._plugin.report_placement_quote(
+                placement_id=worked.placement_id,
+                dealer_id=dealer_id,
+                dealer_quote_id=quote.dealer_quote_id,
+                side=side,
+                price=Money(quote.price, worked.currency),
+                quantity=quote.quantity,
+                received_at_ns=_ns(quote.received_at or self._now()),
+                valid_until_ns=_ns(quote.valid_until) if quote.valid_until else 0,
+                outcome=outcome,
+                raw_record=raw,
+                idempotency_key=f"quote:{worked.placement_id}:{quote.dealer_quote_id}",
+            )
+            minted = next(
+                (
+                    q.quote_id
+                    for q in done.placement.quotes
+                    if q.dealer_quote_id == quote.dealer_quote_id
+                ),
+                "",
+            )
+            if minted:
+                worked.quotes[quote.dealer_quote_id] = minted
+                worked.outcomes[minted] = outcome
+
+    async def _picked(self, placement: ops.Placement, worked: Worked) -> None:
+        """The quote its `ems` picked (W11.41): the acceptance sent once, the
+        order it made worked as any placement's, the picked quote recorded
+        accepted and every other open one not picked."""
+        venue = self._venue()
+        accept = getattr(venue, "accept_quote", None) if venue is not None else None
+        picked = placement.picked_quote_id
+        if not picked or worked.accepted or venue is None or not callable(accept):
+            return
+        dealer_quote_id = next((d for d, q in worked.quotes.items() if q == picked), "")
+        quote = next((q for q in placement.quotes if q.quote_id == picked), None)
+        if not dealer_quote_id and quote is not None:
+            dealer_quote_id = quote.dealer_quote_id
+        if not dealer_quote_id or quote is None:
+            return
+        worked.accepted = picked
+        asked = worked.asked
+        if asked is None:
+            order = await self._order_of(placement)
+            if order is None:
+                return
+            asked = _asked(placement, order, worked.symbol)
+        said = VenueQuote(
+            dealer=quote.dealer_id,
+            dealer_quote_id=dealer_quote_id,
+            side=venue.sides.get(quote.side, ""),
+            price=as_decimal(quote.price.amount),
+            quantity=as_decimal(quote.quantity) if quote.HasField("quantity") else None,
+        )
+        try:
+            record, key = await self._call(accept, worked.code, worked.rfq_request, said, asked)
+        except VenueRefused as refused:
+            await self._plugin.report_placement_quote(
+                placement_id=worked.placement_id,
+                quote_id=picked,
+                outcome=ops.PLACEMENT_QUOTE_OUTCOME_EXPIRED,
+                raw_record=self._raw(refused.raw_key),
+                idempotency_key=f"quote:{picked}:refused",
+            )
+            return
+        except VenueUnanswered:
+            worked.unanswered = True
+            return
+        await self._plugin.report_placement_quote(
+            placement_id=worked.placement_id,
+            quote_id=picked,
+            outcome=ops.PLACEMENT_QUOTE_OUTCOME_ACCEPTED,
+            raw_record=self._raw(key),
+            idempotency_key=f"quote:{picked}:accepted",
+        )
+        for other in placement.quotes:
+            if other.quote_id != picked and other.outcome == ops.PLACEMENT_QUOTE_OUTCOME_OPEN:
+                await self._plugin.report_placement_quote(
+                    placement_id=worked.placement_id,
+                    quote_id=other.quote_id,
+                    outcome=ops.PLACEMENT_QUOTE_OUTCOME_NOT_PICKED,
+                    raw_record=self._raw(key),
+                    idempotency_key=f"quote:{other.quote_id}:not-picked",
+                )
+        worked.venue_order_id = record.order_id
+        await self._report_status(venue, worked, record, key)
 
     # ── Changing: a cancel or a replace ─────────────────────────────────
 
@@ -1051,8 +1328,16 @@ class Trader:
         if not why and tif not in offered.get(order.order_type, ()):
             why = "the account's catalogue lists no such time in force for the order type"
         if why:
+            # Its raw record names the venue account (0.32.0), as a
+            # placement's rejection does.
             key = await self._call(
-                venue.keep, "offered", {"call": "stating what the venue offers", "why": why}
+                venue.keep,
+                "offered",
+                {
+                    "call": "stating what the venue offers",
+                    "why": why,
+                    "venue_account_code": worked.code,
+                },
             )
             log.info("%s: the replace was rejected unsupported: %s", worked.placement_id, why)
             await self._plugin.report_placement(
@@ -1154,6 +1439,9 @@ class Trader:
                     log.warning("%s: the orders were not read: %s", code, failed)
                     continue
                 await self._read_orders(venue, code, orders, key)
+            for worked in list(self.working.values()):
+                if worked.rfq_request and not worked.accepted:
+                    await self._quotes(venue, worked)
             await self._charges(venue)
             self.shown = Shown(
                 working=sum(1 for w in self.working.values() if not w.ended),
@@ -1258,7 +1546,9 @@ class Trader:
         if record.filled == held.filled:
             return
         at = record.filled_at or record.updated_at or self._now()
-        if not held.instrument_id and not await self._originated_instrument(venue, held, at):
+        if not held.instrument_id and not await self._originated_instrument(
+            venue, held, at, record
+        ):
             return
         if not held.side:
             log.warning(
@@ -1325,12 +1615,25 @@ class Trader:
         )
 
     async def _originated_instrument(
-        self, venue: Venue, held: Originated, at: datetime
+        self, venue: Venue, held: Originated, at: datetime, order: VenueOrder | None = None
     ) -> bool:
-        """The record a venue-originated order's symbol names, and its
-        currency; reported missing, once, where it names none."""
-        identifiers = [ops.Identifier(scheme="symbol", value=held.symbol, source=venue.source)]
-        found = await self._plugin.resolve_identifier(identifiers=identifiers, as_of_ns=_ns(at))
+        """The record a venue-originated order names, by every identifier
+        the venue states -- its FIGI and the rest beside its symbol -- and
+        the currency it states (0.32.0; SnapTrade's, restored in its own
+        code at 0.31.0), each fill priced in that currency, else the
+        record's; reported missing, once, where they name none."""
+        stated = list(order.identifiers) if order is not None else []
+        identifiers = [*stated]
+        if held.symbol:
+            identifiers.append(
+                ops.Identifier(scheme="symbol", value=held.symbol, source=venue.source)
+            )
+        if not identifiers:
+            return False
+        currency = order.currency if order is not None else ""
+        found = await self._plugin.resolve_identifier(
+            identifiers=identifiers, as_of_ns=_ns(at), stated_currency=currency
+        )
         if not (found.found and found.instrument_id):
             if not held.missing:
                 held.missing = True
@@ -1343,6 +1646,9 @@ class Trader:
                 )
             return False
         held.instrument_id = str(found.instrument_id)
+        if currency:
+            held.currency = currency
+            return True
         record = await self._plugin.resolve_instrument(instrument_id=held.instrument_id)
         held.currency = (
             record.instrument.currency if record.found else ""
@@ -1596,6 +1902,8 @@ class Trader:
                 )
             return
         worked.waiting = False
+        if self.latency is not None and kind == ops.EXECUTION_KIND_VENUE_REPORTED:
+            self.latency.fill_delay(self.session, self._clock_ns() - _ns(at))
         derived = execution_id(worked.venue_order_id, own)
         done = await self._plugin.report_execution(
             placement_id=worked.placement_id,
@@ -1823,7 +2131,8 @@ class Trader:
         environment = str(getattr(venue, "environment", "") or "")
         for code in sorted(await self._reached(venue)):
             offered = self.catalogue_of(venue, code)
-            said = (offered, environment)
+            types = self.placement_types(venue, code)
+            said = (offered, environment, types)
             if code in self.published and self.published[code] == said:
                 continue
             await self._plugin.report_venue_catalogue(
@@ -1842,6 +2151,9 @@ class Trader:
                         )
                         for each, tifs in offered
                     ],
+                    # The placement types it takes (contract v27, W11.20):
+                    # DMA and those its adapter states; none read-only.
+                    placement_types=[ops.PlacementType.Name(t) for t in types],
                 )
             )
             self.published[code] = said
@@ -1909,6 +2221,8 @@ def _asked(placement: ops.Placement, order: ops.Order, symbol: str) -> Asked:
         quantity=as_decimal(placement.quantity),
         limit=None if price is None else as_decimal(price.amount),
         stop=None if stop is None else as_decimal(stop.amount),
+        expire_date=order.expire_date,
+        expire_time_ns=int(order.expire_time_ns),
     )
 
 

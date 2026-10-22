@@ -356,17 +356,42 @@ class DatasetLicence:
     derived data may be made and shown, the fields readable by default by
     their dictionary entries (none for every field), and whether its terms
     are one person's. Records what the vendor's terms say, never whether a
-    deployment meets them."""
+    deployment meets them.
+
+    From 0.32.0 (contract v27, ruling 479) the derived-data answer is one of
+    three, `derived_use_terms` -- `not_restricted`, `internal_only` or
+    `redistribution_needs_licence` -- and a v27 writer sets both it and the
+    boolean `derived_use`, deprecated for one release: given the boolean
+    alone, the terms are `not_restricted` for true and `internal_only` for
+    false, as a reader reads it; given the terms alone, the boolean is true
+    but for `internal_only`; given both, they agree or the licence is
+    refused."""
 
     kept: bool = False
     retention_days: int = 0
-    derived_use: bool = False
+    derived_use: bool | None = None
     display: bool = False
     default_fields: Sequence[str] = ()
     personal_use: bool = False
+    derived_use_terms: str = ""
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "default_fields", tuple(self.default_fields))
+        terms = str(self.derived_use_terms or "").strip().lower()
+        terms = terms.removeprefix("derived_use_")
+        words = ("not_restricted", "internal_only", "redistribution_needs_licence")
+        if terms and terms not in words:
+            raise ValueError(f"a licence's derived_use_terms is one of {', '.join(words)}")
+        if not terms:
+            terms = "not_restricted" if self.derived_use else "internal_only"
+        flag = terms != "internal_only"
+        if self.derived_use is not None and bool(self.derived_use) != flag:
+            raise ValueError(
+                f"a licence's derived_use {self.derived_use} disagrees with its "
+                f"derived_use_terms {terms}: a v27 writer sets both alike (ruling 479)"
+            )
+        object.__setattr__(self, "derived_use_terms", terms)
+        object.__setattr__(self, "derived_use", flag)
         bound = DATASET_LICENCE_RETENTION_DAYS_RANGE
         if not bound.admits(self.retention_days):
             raise ValueError(f"a licence's retention_days is {bound.least} to {bound.most}")
@@ -385,7 +410,11 @@ class DatasetLicence:
         return sidecar_pb2.DatasetLicence(
             kept=self.kept,
             retention_days=self.retention_days,
-            derived_use=self.derived_use,
+            derived_use=bool(self.derived_use),
+            derived_use_terms=cast(
+                Any,
+                sidecar_pb2.DerivedUse.Value("DERIVED_USE_" + self.derived_use_terms.upper()),
+            ),
             display=self.display,
             default_fields=list(self.default_fields),
             personal_use=self.personal_use,
@@ -396,6 +425,7 @@ class DatasetLicence:
             "kept": self.kept,
             "retention_days": self.retention_days,
             "derived_use": self.derived_use,
+            "derived_use_terms": self.derived_use_terms,
             "display": self.display,
             "default_fields": list(self.default_fields),
             "personal_use": self.personal_use,
@@ -421,7 +451,10 @@ class DatasetDeclaration:
     settlement calendar its business dates follow, its `CAL-` ID (W10.1,
     contract v22; carried from SDK 0.28.0), empty for none: the lake flags a
     daily value dated on a day it says is closed, and refuses nothing by
-    it."""
+    it. `declared_delay_ns` (contract v27, rulings 368, 369 and 382) is how
+    far behind real time the vendor serves it, 0 for real time: its
+    staleness and edge age are judged against the delay plus the ceiling,
+    one dataset per timeliness."""
 
     key: str
     vendor: str
@@ -435,6 +468,7 @@ class DatasetDeclaration:
     day_end_minute: int = 0
     venue_id: str = ""
     calendar_id: str = ""
+    declared_delay_ns: int = 0
 
     def __post_init__(self) -> None:
         from .operations import _enum
@@ -505,6 +539,12 @@ class DatasetDeclaration:
                 f"{at}'s venue_id {self.venue_id!r} is no venue master ID (VEN-): a MIC or "
                 "a vendor's code is resolved to one first (resolve_venue)"
             )
+        if (
+            isinstance(self.declared_delay_ns, bool)
+            or not isinstance(self.declared_delay_ns, int)
+            or self.declared_delay_ns < 0
+        ):
+            raise ValueError(f"{at}'s declared_delay_ns is 0 or more nanoseconds")
         if self.calendar_id and not self.calendar_id.startswith("CAL-"):
             raise ValueError(
                 f"{at}'s calendar_id {self.calendar_id!r} is no calendar's ID (CAL-): the "
@@ -527,6 +567,7 @@ class DatasetDeclaration:
             day_end_minute=self.day_end_minute,
             venue_id=self.venue_id,
             calendar_id=self.calendar_id,
+            declared_delay_ns=self.declared_delay_ns,
         )
 
     def _to_json(self) -> dict[str, Any]:
@@ -551,6 +592,7 @@ class DatasetDeclaration:
             "day_end_minute": self.day_end_minute,
             "venue_id": self.venue_id,
             "calendar_id": self.calendar_id,
+            "declared_delay_ns": self.declared_delay_ns,
         }
 
 

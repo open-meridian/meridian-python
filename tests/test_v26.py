@@ -42,7 +42,7 @@ AAPL = "INS-01J8XQ4M7K0000000000AAPL"
 
 
 def test_the_schema_is_contract_v26() -> None:
-    assert meridian.SCHEMA_VERSION == "v26"
+    assert meridian.SCHEMA_VERSION == "v27"
     fields = sidecar_pb2.CallerClaims.DESCRIPTOR.fields_by_name
     assert "demo_connectivity_instance_ids" in fields
     assert "model_tokens" in sidecar_pb2.HeartbeatRequest.DESCRIPTOR.fields_by_name
@@ -127,6 +127,11 @@ def test_the_reference_cases_are_pinned() -> None:
         "historical-var-and-es",
         "what-if",
         "pnl-v2-realized",
+        # Contract v27's (tests/test_v27.py).
+        "quoted-price-past-18-places",
+        "inverted-and-crossed",
+        "reporting-currency",
+        "execution-cost",
     }
 
 
@@ -136,8 +141,10 @@ def test_each_reference_case_is_canonical_and_answers_as_pinned(path: Path) -> N
     answer = reference.compute(case["inputs"])
     assert answer.to_json() == case["answer"], f"{path.name}: tools/write_reference_cases.py"
     assert answer.answer_hash == answer_hash(case["inputs"])
-    # The wire's mirror carries it whole, and reads back to the same JSON.
-    assert analytics.answer_json(analytics.answer_message(case["answer"])) == case["answer"]
+    # The wire's mirror carries it whole, and reads back to the same JSON;
+    # an execution_cost job's rows are the lake's (W10.11), never the answer's.
+    on_the_wire = {k: v for k, v in case["answer"].items() if k != "execution_costs"}
+    assert analytics.answer_json(analytics.answer_message(case["answer"])) == on_the_wire
 
 
 def _figures(name: str, definition: str) -> list[dict[str, Any]]:
@@ -257,9 +264,12 @@ def test_pnl_v1_is_unrealized_alone_and_v2_adds_realized() -> None:
     assert reference.definition_of("pnl", 1).parameters == (
         ("unrealized", "market_value_less_open_lots_cost"),
     )
-    with pytest.raises(ValueError, match="pnl v2 is not served in contract v26.*v27"):
-        analytics.measure("pnl", 2)
-    with pytest.raises(ValueError, match="exposure v2 is not served in contract v26; v1 is$"):
+    assert analytics.measure("pnl", 2).version == 2
+    with pytest.raises(ValueError, match="pnl v3 is not served in contract v27; up to v2 is$"):
+        analytics.measure("pnl", 3)
+    with pytest.raises(
+        ValueError, match="exposure v2 is not served in contract v27; up to v1 is$"
+    ):
         analytics.measure("exposure", 2)
 
 

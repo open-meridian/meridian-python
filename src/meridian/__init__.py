@@ -287,13 +287,18 @@ from . import (
 )
 from ._settings import (
     account_currency,
+    ceilings_from,
     connection_badge,
+    dataset_thresholds,
     environment,
     is_demo,
     reached_environment,
     sample_data,
+    session_ceilings,
     setting,
     settings,
+    stale_reference_action,
+    stale_reference_after,
 )
 from .asgi import CallerMiddleware
 from .client import (
@@ -700,6 +705,11 @@ __all__ = [
     "WhatIf",
     "WhatIfTrade",
     "account_currency",
+    "ceilings_from",
+    "dataset_thresholds",
+    "session_ceilings",
+    "stale_reference_action",
+    "stale_reference_after",
     "analytics",
     "connection_badge",
     "is_demo",
