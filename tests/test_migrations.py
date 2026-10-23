@@ -100,7 +100,7 @@ def test_every_release_since_the_first_recorded_has_its_step() -> None:
         ("0.6.0", "0.6.1"),
         ("0.6.1", "0.7.0"),
     ]
-    assert (steps[-1].source, steps[-1].target) == ("0.32.0", "0.32.1")
+    assert (steps[-1].source, steps[-1].target) == ("0.32.1", "0.32.2")
     # A release that moves the version records its step, if only the pins.
     assert steps[-1].target == SDK
 

@@ -514,6 +514,45 @@ async def test_a_wants_rows_carry_their_edge_age_and_a_heartbeat_its_liveness() 
     )
 
 
+def test_a_licence_writes_its_attribution_and_redistribution_terms() -> None:
+    """0.32.2: the v27 wire's attribution, redistribution, copyright class and
+    no-more-restrictive-terms answers, by the wire's names."""
+    from meridian.v1 import sidecar_pb2
+
+    cited = meridian.DatasetLicence(
+        kept=True,
+        redistribution="allowed_with_attribution",
+        attribution_required=True,
+        attribution_text="Source: Federal Reserve Bank of New York",
+        copyright_class="COPYRIGHT_CLASS_COPYRIGHT_CITATION_REQUIRED",
+        no_more_restrictive_terms=True,
+    )
+    wire = cited._wire()
+    assert wire.redistribution == sidecar_pb2.REDISTRIBUTION_ALLOWED_WITH_ATTRIBUTION
+    assert wire.copyright_class == sidecar_pb2.COPYRIGHT_CLASS_COPYRIGHT_CITATION_REQUIRED
+    assert wire.attribution_required and wire.no_more_restrictive_terms
+    assert wire.attribution_text == "Source: Federal Reserve Bank of New York"
+    said = cited._to_json()
+    assert (said["redistribution"], said["copyright_class"]) == (
+        "allowed_with_attribution", "copyright_citation_required",
+    )  # fmt: skip
+    plain = meridian.DatasetLicence(kept=True)._wire()
+    assert (plain.redistribution, plain.copyright_class, plain.attribution_required) == (
+        sidecar_pb2.REDISTRIBUTION_UNSPECIFIED, sidecar_pb2.COPYRIGHT_CLASS_UNSPECIFIED, False,
+    )  # fmt: skip
+    with pytest.raises(ValueError, match="redistribution is one of"):
+        meridian.DatasetLicence(redistribution="sometimes")
+    with pytest.raises(ValueError, match="copyright_class is one of"):
+        meridian.DatasetLicence(copyright_class="private")
+    declared = meridian.DatasetDeclaration(
+        key="sofr", vendor="NY Fed", data_types=["meridian.v1.Rate"], modes=["pull"],
+        licence_default=meridian.DatasetLicence(copyright_class="public_domain"),
+    )  # fmt: skip
+    assert declared._wire().licence_default.copyright_class == (
+        sidecar_pb2.COPYRIGHT_CLASS_PUBLIC_DOMAIN
+    )
+
+
 def test_a_licence_sets_both_derived_use_answers_and_a_dataset_its_delay() -> None:
     from meridian.v1 import sidecar_pb2
 
@@ -919,7 +958,7 @@ def test_a_plugin_holding_data_and_connectivity_draws_one_connection() -> None:
     shown = client.get("/", "admin").text
     sections = re.findall(r"<h2>([^<]*)</h2>", shown)
     assert sections == [
-        "Key", "Limits and use", "Stream", "Sessions", "Environment", "Accounts", "Placements",
+        "Key", "Limits and use", "Stream", "Environment", "Accounts", "Placements",
     ]  # fmt: skip
     data = client.call_tool("read_connection", level="admin").data
     assert data["mode"] == "Sandbox" and data["trading"]["badge"] == "Demo"
@@ -931,6 +970,41 @@ def test_a_plugin_holding_data_and_connectivity_draws_one_connection() -> None:
     )
     with pytest.raises(KeyError, match="no tool read_trading"):
         client.call_tool("read_trading", level="admin")
+
+
+def test_connections_sessions_section_shows_only_once_a_session_is_measured() -> None:
+    """0.32.2: a polled data plugin's Connection draws no "Sessions" (never
+    "None measured yet"); one with a measured session draws it, beside
+    connectivity's sections where the plugin holds both."""
+    polled = meridian.Pages("Rates", kit="0.12.0")
+
+    @polled.page(
+        "/", "Connection", levels="admin", answers=_data.ConnectionRead, name="read_connection"
+    )
+    def read(request: meridian.Request) -> meridian.Response:
+        return polled.answer(
+            "meridian/roles/data/connection.html", _data.ConnectionRead("Live")
+        )
+
+    shown = PageClient(polled).get("/", "admin").text
+    assert re.findall(r"<h2>([^<]*)</h2>", shown) == ["Key", "Limits and use", "Stream"]
+    assert "None measured yet" not in shown
+
+    rig, state = _rigged()
+    rig.latency.rtt("orders", 12_000_000)
+    merged = meridian.Pages("Dealers", kit="0.12.0")
+
+    async def connection(request: Any) -> _data.ConnectionRead:
+        return _data.ConnectionRead(mode="Sandbox", sessions=1)
+
+    _connectivity.connection_pages(
+        merged, lambda: state, connection, latency=lambda: rig.latency, **_words()
+    )
+    shown = PageClient(merged, rig.recorder).get("/", "admin").text
+    assert re.findall(r"<h2>([^<]*)</h2>", shown) == [
+        "Key", "Limits and use", "Stream", "Sessions", "Environment", "Accounts", "Placements",
+    ]  # fmt: skip
+    assert "RTT p99" in shown
 
 
 def test_raw_records_show_a_record_to_a_reader_of_its_mapped_account() -> None:

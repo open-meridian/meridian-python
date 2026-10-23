@@ -1,0 +1,18 @@
+# open-meridian 0.32.1 to 0.32.2: nothing a plugin calls changed shape, so
+# only the pins move.
+from = "0.32.1"
+to = "0.32.2"
+summary = """
+Four fixes the first rates plugins found. A data plugin's Connection draws its
+Sessions section only once a session is measured, so a polled plugin's page
+no longer shows "None measured yet" and needs no workaround of its own. The
+testing Recorder answers RecordRates with its count, as it does prices, so a
+plugin's tests need not answer it. DatasetLicence writes the v27 wire's
+redistribution, attribution_required, attribution_text, copyright_class and
+no_more_restrictive_terms. RATES_NOT_PRESENTED no longer names
+records-a-datasets-liveness: a polled rates plugin recording each poll as its
+dataset's liveness presents it, and one recording none adds it to its own not
+presented, with why. Nothing a plugin calls changed shape, so
+`meridian plugin migrate` moves the pins and changes no code.
+"""
+breaking = false

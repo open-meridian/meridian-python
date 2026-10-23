@@ -365,7 +365,19 @@ class DatasetLicence:
     alone, the terms are `not_restricted` for true and `internal_only` for
     false, as a reader reads it; given the terms alone, the boolean is true
     but for `internal_only`; given both, they agree or the licence is
-    refused."""
+    refused.
+
+    From 0.32.2 the attribution and redistribution terms the v27 wire
+    carries, by the wire's names: `redistribution` -- `not_allowed`,
+    `licence_required` or `allowed_with_attribution`, empty for not stated;
+    `attribution_required`, whether `attribution_text` travels with the data;
+    `attribution_text`, a template such as "Source: central bank statistics",
+    shown on every page that shows the dataset, in exports and in every MCP
+    answer carrying its fields (ruling 386); `copyright_class` --
+    `public_domain`, `copyright_citation_required` or
+    `copyright_preapproval_required`, empty for not stated, one class per
+    dataset; and `no_more_restrictive_terms`, whether the vendor forbids
+    adding restrictions downstream."""
 
     kept: bool = False
     retention_days: int = 0
@@ -374,9 +386,25 @@ class DatasetLicence:
     default_fields: Sequence[str] = ()
     personal_use: bool = False
     derived_use_terms: str = ""
+    redistribution: str = ""
+    attribution_required: bool = False
+    attribution_text: str = ""
+    copyright_class: str = ""
+    no_more_restrictive_terms: bool = False
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "default_fields", tuple(self.default_fields))
+        for name, prefix, words in (
+            ("redistribution", "redistribution_",
+             ("not_allowed", "licence_required", "allowed_with_attribution")),
+            ("copyright_class", "copyright_class_",
+             ("public_domain", "copyright_citation_required",
+              "copyright_preapproval_required")),
+        ):  # fmt: skip
+            said = str(getattr(self, name) or "").strip().lower().removeprefix(prefix)
+            if said and said not in words:
+                raise ValueError(f"a licence's {name} is one of {', '.join(words)}")
+            object.__setattr__(self, name, said)
         terms = str(self.derived_use_terms or "").strip().lower()
         terms = terms.removeprefix("derived_use_")
         words = ("not_restricted", "internal_only", "redistribution_needs_licence")
@@ -418,6 +446,21 @@ class DatasetLicence:
             display=self.display,
             default_fields=list(self.default_fields),
             personal_use=self.personal_use,
+            redistribution=cast(
+                Any,
+                sidecar_pb2.Redistribution.Value(
+                    "REDISTRIBUTION_" + (self.redistribution or "unspecified").upper()
+                ),
+            ),
+            attribution_required=self.attribution_required,
+            attribution_text=self.attribution_text,
+            copyright_class=cast(
+                Any,
+                sidecar_pb2.CopyrightClass.Value(
+                    "COPYRIGHT_CLASS_" + (self.copyright_class or "unspecified").upper()
+                ),
+            ),
+            no_more_restrictive_terms=self.no_more_restrictive_terms,
         )
 
     def _to_json(self) -> dict[str, Any]:
@@ -429,6 +472,11 @@ class DatasetLicence:
             "display": self.display,
             "default_fields": list(self.default_fields),
             "personal_use": self.personal_use,
+            "redistribution": self.redistribution,
+            "attribution_required": self.attribution_required,
+            "attribution_text": self.attribution_text,
+            "copyright_class": self.copyright_class,
+            "no_more_restrictive_terms": self.no_more_restrictive_terms,
         }
 
 

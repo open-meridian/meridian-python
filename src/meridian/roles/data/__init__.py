@@ -90,7 +90,8 @@ stream's heartbeat with no price
 changed, or a poll, is the dataset's liveness (`Wants.liveness`,
 `RecordLiveness`), which confirms the values in force; Connection's
 "Sessions" section shows each session's `SessionLatency`
-(`ConnectionRead.session_latency`). A dataset declares its delay
+(`ConnectionRead.session_latency`), drawn only once a session is measured
+(0.32.2): a polled plugin's Connection has none. A dataset declares its delay
 (`DatasetDeclaration.declared_delay_ns`) and its admin its staleness
 (`meridian.dataset_thresholds()`), and the plugin admin its ceilings
 (`meridian.session_ceilings()`).

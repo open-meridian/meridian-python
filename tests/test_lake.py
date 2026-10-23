@@ -40,8 +40,12 @@ from meridian import (
 )
 from meridian.edge import as_reported
 from meridian.plugin.v1 import operations_pb2 as ops
-from meridian.roles.data import backfill_restart
-from meridian.roles.data.testing import RATES_CASES, RATES_NOT_PRESENTED, rates_producers
+from meridian.roles.data import backfill_restart, rates
+from meridian.roles.data.testing import (
+    RATES_CASES,
+    RATES_NOT_PRESENTED,
+    rates_producers,
+)
 from meridian.suites import Recorder, check, names, suite
 from meridian.suites import run as run_suite
 from order_path_cases import PRODUCERS
@@ -1203,12 +1207,43 @@ def test_a_rates_only_data_plugin_passes_the_suite_with_prices_not_presented() -
             "asks-for-a-settlement-date",
         )
     }
-    mapped = {**answered, **rates_producers(RATES, source="ust", now_ns=PUBLISHED)}
+
+    async def polled(recorder: Recorder) -> None:
+        # 0.32.2: each poll is the dataset's liveness, which a polled rates
+        # plugin records (as ny-fed does), so it presents the case.
+        feed = rates.Feed(recorder, "ust", clock_ns=lambda: PUBLISHED)
+        await recorder.record_liveness(
+            liveness=[ops.DatasetLiveness(dataset=feed.dataset("par"), alive_at_ns=PUBLISHED)]
+        )
+
+    mapped = {
+        **answered,
+        **rates_producers(RATES, source="ust", now_ns=PUBLISHED),
+        "records-a-datasets-liveness": polled,
+    }
+    assert "records-a-datasets-liveness" not in RATES_NOT_PRESENTED
     report = run_suite("data", mapped, not_presented=RATES_NOT_PRESENTED)
     assert report.passed, report.failures
     assert report.not_presented["an-exact-price"] == "it records rates, never prices"
     assert report.not_presented["a-want-recorded-against"] == "it records rates, never prices"
-    assert set(report.passed_cases) >= set(RATES_CASES)
+    assert set(report.passed_cases) >= {*RATES_CASES, "records-a-datasets-liveness"}
+
+
+def test_the_recorder_answers_a_batch_of_rates_with_its_count() -> None:
+    """0.32.2: the SDK's Recorder answers RecordRates as it does prices, so
+    a rates plugin's tests need not answer it themselves."""
+
+    async def answered() -> Any:
+        feed = rates.Feed(Recorder(INSTANCE), "ust", clock_ns=lambda: PUBLISHED)
+        rows = [
+            feed.rate("INS-PAR", "ust_par", "par_yield", value, tenor=tenor,
+                      business_date="2026-10-20", series="PAR")
+            for tenor, value in (("1 Mo", "4.12"), ("10 Yr", "4.21"))
+        ]  # fmt: skip
+        return await feed.plugin.record_rates(rates=rows)
+
+    answer = asyncio.run(answered())
+    assert isinstance(answer, ops.RecordRatesResult) and answer.recorded == 2
 
 
 async def test_an_outcome_is_recorded_at_its_determined_or_its_final_stage() -> None:

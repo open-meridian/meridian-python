@@ -404,11 +404,11 @@ def test_a_pairs_venues_pages_hold_the_roles_sections_and_its_own() -> None:
     asyncio.run(worked())
     client = PageClient(_pairs_pages(feed))
     connection = client.get("/", "admin").text
+    # A polled venue has no session: no "Sessions" section (0.32.2).
     assert re.findall(r"<h2>([^<]*)</h2>", connection) == [
         "Key",
         "Limits and use",
         "Stream",
-        "Sessions",
     ]
     assert "No key needed" in connection and "Venue" in connection
     shown = client.get("/datasets", "admin").text

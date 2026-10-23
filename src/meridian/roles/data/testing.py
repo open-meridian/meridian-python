@@ -402,9 +402,11 @@ _NO_PRICES = "it records rates, never prices"
 #: What a plugin recording only rates never presents (0.32.1; ruling 537):
 #: every data case about a price -- `an-exact-price` and
 #: `a-want-recorded-against` about `closes` from contract v27's ruling 537 --
-#: a trade, a quote or an outcome; a stream's liveness, a rates publisher
-#: being polled; and the feed delay, about `latency` until v28. A plugin
-#: maps what its publisher does present, rates and wants among them.
+#: a trade, a quote or an outcome; and the feed delay, about `latency` until
+#: v28. A plugin maps what its publisher does present, rates and wants among
+#: them. From 0.32.2 `records-a-datasets-liveness` is not listed: a polled
+#: plugin recording each poll as its dataset's liveness presents it; one
+#: recording none names it itself, with why.
 RATES_NOT_PRESENTED = {
     **{
         case: _NO_PRICES
@@ -447,7 +449,6 @@ RATES_NOT_PRESENTED = {
             "reports-a-flag-the-venue-does-not-state",
         )
     },
-    "records-a-datasets-liveness": "it polls its publisher; it streams nothing",
     "reports-its-feed-delay": _LATENCY_NOT_YET,
 }
 
@@ -1619,12 +1620,13 @@ class PairsChecks(_PageChecks):
     def test_each_page_holds_the_roles_sections_in_its_order(self) -> None:
         self.ran()
         client = PageClient(self.venue.page.pages)
+        # "Sessions" only once a session is measured (0.32.2).
+        measured = client.call_tool("read_connection", level="admin").data["session_latency"]
         assert _sections(client.get("/", "admin").text) == [
             "Key",
             "Limits and use",
             "Stream",
-            "Sessions",
-        ]
+        ] + (["Sessions"] if measured else [])
         assert _sections(client.get("/datasets", "admin").text) == [
             "Served", "Wants", "Subjects", self.venue.page.TITLE,
         ]  # fmt: skip
@@ -2250,12 +2252,13 @@ class EventContractsChecks(_PageChecks):
     def test_each_page_holds_the_roles_sections_in_its_order(self) -> None:
         self.ran()
         client = PageClient(self.venue.page.pages)
+        # "Sessions" only once a session is measured (0.32.2).
+        measured = client.call_tool("read_connection", level="admin").data["session_latency"]
         assert _sections(client.get("/", "admin").text) == [
             "Key",
             "Limits and use",
             "Stream",
-            "Sessions",
-        ]
+        ] + (["Sessions"] if measured else [])
         assert _sections(client.get("/datasets", "admin").text) == [
             "Served", "Wants", "Subjects", self.venue.page.TITLE,
         ]  # fmt: skip

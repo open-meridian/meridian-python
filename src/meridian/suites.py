@@ -271,9 +271,10 @@ class Recorder(Operations):
     provisional `LCL-suite-n`, minted only where the resolve states the
     minimum a record needs and otherwise not found), a link made, no
     accounts to link to; from contract v18 a batch of prices or bars (from v19
-    of trades or quotes) recorded whole, a venue resolved to a record this
-    recorder names, a want declined, a read answering nothing. `raw_record`
-    and `note_not_carried` behave as a plugin's do. Use `answer` to answer a
+    of trades or quotes, from SDK 0.32.2 of rates) recorded whole, a venue
+    resolved to a record this recorder names, a want declined, a read
+    answering nothing. `raw_record` and `note_not_carried` behave as a
+    plugin's do. Use `answer` to answer a
     row otherwise, and to give a row the plugin hears what is delivered on
     it."""
 
@@ -400,6 +401,8 @@ def _ordinary(row: str, params: Any, n: int, *, provisional: bool = False) -> Me
         return ops.RecordTradesResult(recorded=len(params.trades))
     if row == "RecordQuotes":
         return ops.RecordQuotesResult(recorded=len(params.quotes))
+    if row == "RecordRates":
+        return ops.RecordRatesResult(recorded=len(params.rates))
     if row == "ResolveVenue":
         return ops.ResolveVenueResult(
             found=True, venue=ops.VenueRecord(venue_id=f"VEN-suite-{n}")
