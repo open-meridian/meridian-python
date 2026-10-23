@@ -92,6 +92,7 @@ __all__ = [
     "pairs_producers",
     "payout",
     "RATES_CASES",
+    "RATES_NOT_PRESENTED",
     "rates_producers",
     "wanted",
 ]
@@ -394,6 +395,59 @@ EVENT_CONTRACTS_NOT_PRESENTED = {
     **{case: "an event-contract venue publishes no rates" for case in _RATES},
     "records-a-datasets-liveness": "it polls its venue each second; it streams nothing",
     "queries-the-lake-within-bounds": "it records no trades",
+    "reports-its-feed-delay": _LATENCY_NOT_YET,
+}
+#: Why a rates-only plugin never presents a case about prices (ruling 537).
+_NO_PRICES = "it records rates, never prices"
+#: What a plugin recording only rates never presents (0.32.1; ruling 537):
+#: every data case about a price -- `an-exact-price` and
+#: `a-want-recorded-against` about `closes` from contract v27's ruling 537 --
+#: a trade, a quote or an outcome; a stream's liveness, a rates publisher
+#: being polled; and the feed delay, about `latency` until v28. A plugin
+#: maps what its publisher does present, rates and wants among them.
+RATES_NOT_PRESENTED = {
+    **{
+        case: _NO_PRICES
+        for case in (
+            "a-daily-close",
+            "the-forming-day-restated",
+            "an-exact-price",
+            "a-daily-bar",
+            "an-fx-rate",
+            "a-stablecoin-quote",
+            "a-venue-resolved",
+            "a-venue-not-held",
+            "a-want-recorded-against",
+            "a-subject-another-source-resolved",
+        )
+    },
+    **{
+        case: "it records rates, never trades"
+        for case in (
+            "a-trade-recorded",
+            "the-takers-side-stated",
+            "the-makers-side-inverted",
+            "a-condition-converted",
+            "a-condition-not-converted",
+            "a-trade-withdrawn",
+            "a-standing-want-streamed",
+            "a-restarts-gap-backfilled",
+            "queries-the-lake-within-bounds",
+        )
+    },
+    "a-quote-recorded": "it records rates, never quotes",
+    "a-one-sided-quote": "it records rates, never quotes",
+    **{
+        case: "it records rates, never an event contract's outcome"
+        for case in (
+            "records-an-outcome",
+            "restates-a-disputed-outcome",
+            "records-a-partial-payout",
+            "reports-an-event-group",
+            "reports-a-flag-the-venue-does-not-state",
+        )
+    },
+    "records-a-datasets-liveness": "it polls its publisher; it streams nothing",
     "reports-its-feed-delay": _LATENCY_NOT_YET,
 }
 
