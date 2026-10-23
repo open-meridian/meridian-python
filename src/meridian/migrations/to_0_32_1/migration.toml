@@ -1,0 +1,14 @@
+# open-meridian 0.32.0 to 0.32.1: nothing a plugin calls changed shape, so
+# only the pins move.
+from = "0.32.0"
+to = "0.32.1"
+summary = """
+Two data suite cases, an-exact-price and a-want-recorded-against, are about
+closes (ruling 537; meridian-schema bc31b00), so a data plugin recording rates
+and no prices names them not presented, with why: "it records rates, never
+prices". meridian.roles.data.testing.RATES_NOT_PRESENTED names every case a
+rates-only plugin never presents, those two among them; a plugin recording
+prices maps them as before. Nothing a plugin calls changed shape, so
+`meridian plugin migrate` moves the pins and changes no code.
+"""
+breaking = false

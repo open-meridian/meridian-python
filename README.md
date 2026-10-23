@@ -2,7 +2,7 @@
 
 The Python SDK for building [Open Meridian](https://open-meridian.com) plugins:
 the tools a trader has an AI agent build, and the bots and analytics a
-developer writes. Python 3.11 or newer. This is release 0.32.0; its reference
+developer writes. Python 3.11 or newer. This is release 0.32.1; its reference
 is at [open-meridian.dev](https://open-meridian.dev/api/python-sdk/).
 
 ## Start here
@@ -1844,7 +1844,7 @@ await plugin.receive(observations_wanted=lambda heard: wants.hear(heard, answer)
   adapter, and dates a fill in its order's own zone: SnapTrade's trading,
   onto the SDK.
 
-### The placement type, TCA, rates, latency and liveness (contract v27; 0.32.0)
+### The placement type, TCA, rates, latency and liveness (contract v27; 0.32.0 and 0.32.1)
 
 0.32.0 declares contract v27 (`meridian.SCHEMA_VERSION`).
 
@@ -1923,6 +1923,11 @@ await plugin.receive(observations_wanted=lambda heard: wants.hear(heard, answer)
   bounded query is about trades, so a plugin recording none marks it not
   presented. `data.testing` carries `rates_producers` and each kind's cases
   never presented (`PAIRS_NOT_PRESENTED`, `EVENT_CONTRACTS_NOT_PRESENTED`).
+  From 0.32.1 (ruling 537) `an-exact-price` and `a-want-recorded-against`
+  are about `closes`, so a plugin recording rates and no prices names them
+  not presented, "it records rates, never prices";
+  `RATES_NOT_PRESENTED` names every case a rates-only plugin never
+  presents.
 - **Smaller**: a licence writes both `derived_use` and `derived_use_terms`
   (ruling 479); a venue-originated order is resolved by every identifier its
   venue states (`VenueOrder.identifiers`, `.currency`); a rejected replace's
@@ -2000,6 +2005,7 @@ carries libcst.
 | 0.30.0 to 0.31.0: the SDK declares contract v26: `meridian.analytics` (typed builders for a job, `Answer`, `Jobs`) and its reference computations, the `pricing` role (`roles.pricing.Pricer`) and template, event groups (`EventGroups`, `event_contracts.Feed.report_event`), the agents' guard (`environment(demo="paper")`, `reached_environment`, `connection_badge`, `Caller.agent_refused`), `query_lake` and `count_model_tokens`; custody's pages (`custody.account_pages`), a broker's listings (`roles.data.listings`) and the Trader's charges and stated settlement dates (ruling 213) | a base pinned by digest at an older release moved to 0.31.0, its digest dropped (offline) | pin the base's digest again; map each role suite's v26 cases; give a connectivity adapter its `environment`; move custody pages, a listings layer or a SnapTrade-shaped trader onto the SDK |
 | 0.31.0 to 0.31.1: a saved setting value that is no longer one of its choices, or not of its kind, is delivered unset rather than raised (`Settings.refused`, a typed class's `.refused`, `meridian.RefusedSetting`, `request.own_settings_refused`), a required one named missing and an environment so refused counted live by the guard; an event-contract venue's contract map keeps a range market's bounds; `event_contracts.Feed.stated_identifiers`, by which `EventContractsChecks` holds a record complete, and a record holding the venue's ticker alone named by it; the pricing template declares no storage; the templates' AGENTS.md on publishing to a registry and their pre-push hook's tag-push message | only the pins move | |
 | 0.31.1 to 0.32.0: the SDK declares contract v27: `pnl` version 2 and `execution_cost`, a job's business date and reporting currency, a job refused with no account; the reference rounding a quoted price per unit and inverting and crossing fiat legs; the rates slice (`roles.data.rates`); latency and data age recorded, not yet reported (ReportLatency from contract v28), and liveness recorded (`roles.Latency`, `SessionLatency`, `Liveness`, `in_session`, `Wants.latency`, `Wants.liveness`, `declared_delay_ns`, and the settings `session_ceilings`, `dataset_thresholds`, `stale_reference_action`, `stale_reference_after`); the Trader's placement types and RFQ quotes, the `ems`'s reference check (`roles.ems`); connectivity's pages (`trading_pages`, `raw_records_page`, `connection_pages`); a range member's bounds and `Feed.keep_events`; `derived_use_terms`; the suites' v27 cases. Breaking | a base pinned by digest at an older release moved to 0.32.0, its digest dropped (offline) | pin the base's digest again; map each role suite's v27 cases; mark a data plugin's lake query not presented where it records no trades; move a plugin's own Trading page or events loop onto the SDK; add `include-hidden-files: true` to an e2e log upload |
+| 0.32.0 to 0.32.1: the data suite's `an-exact-price` and `a-want-recorded-against` are about `closes` (ruling 537), so a plugin recording rates and no prices names them not presented, "it records rates, never prices"; `meridian.roles.data.testing.RATES_NOT_PRESENTED` names every case a rates-only plugin never presents | only the pins move | |
 
 `tests/migrations/` holds the plugins the migrations are recorded for, as
 written and as their migration leaves them, and `make check-migrations` holds

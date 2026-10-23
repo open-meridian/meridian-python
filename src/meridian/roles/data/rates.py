@@ -41,6 +41,13 @@ priority.
 **Reading** (`read_curve`): a curve's points for a business date, every
 page read, in tenor order.
 
+**The data suite** (0.32.1; ruling 537): a plugin recording rates and no
+prices maps the rates cases (`data.testing.rates_producers`) and the cases
+every data plugin answers, and names the rest not presented with why --
+`data.testing.RATES_NOT_PRESENTED`, among them `an-exact-price` and
+`a-want-recorded-against`, about `closes`: "it records rates, never
+prices".
+
 **Tenors** (`tenor`, `tenor_label`): a publisher's label -- `1 Mo`, `13
 WEEKS`, `10 Yr`, `3M`, `ON` -- as the wire's `Tenor`, a count and a unit; a
 fractional tenor is refused, for the plugin to name its maturity instead.

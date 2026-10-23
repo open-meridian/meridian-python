@@ -41,7 +41,7 @@ from meridian import (
 from meridian.edge import as_reported
 from meridian.plugin.v1 import operations_pb2 as ops
 from meridian.roles.data import backfill_restart
-from meridian.roles.data.testing import RATES_CASES, rates_producers
+from meridian.roles.data.testing import RATES_CASES, RATES_NOT_PRESENTED, rates_producers
 from meridian.suites import Recorder, check, names, suite
 from meridian.suites import run as run_suite
 from order_path_cases import PRODUCERS
@@ -1168,7 +1168,9 @@ def test_the_data_suite_is_carried_with_its_forty_four_cases() -> None:
     assert len(later) == 8
     assert {case.about for case in later} == {"trades", "quotes"}
     assert held.case("an-fx-rate").about == "a currency's rate against another currency"
-    assert held.case("an-exact-price").about == ""
+    assert held.case("an-exact-price").about == "closes"  # ruling 537
+    assert held.case("a-want-recorded-against").about == "closes"
+
     # Contract v20: a field a source may never state, and a restart's gap.
     assert held.case("the-takers-side-stated").about_field == "meridian.v1.Trade.aggressor"
     assert held.case("a-restarts-gap-backfilled").about == "trades"
@@ -1182,6 +1184,31 @@ def test_the_data_suite_is_carried_with_its_forty_four_cases() -> None:
     assert held.case("records-an-outcome").about == "outcomes"
     assert held.case("records-a-partial-payout").about == "outcomes"
     assert held.case("restates-a-disputed-outcome").about == "disputed outcomes"
+
+
+def test_a_rates_only_data_plugin_passes_the_suite_with_prices_not_presented() -> None:
+    """Ruling 537: a plugin recording rates and no prices maps the rates
+    cases and the cases every data plugin answers, and names every case about
+    a price -- an-exact-price and a-want-recorded-against among them, about
+    closes -- not presented: "it records rates, never prices"."""
+    every = producers()
+    answered = {
+        name: every[name]
+        for name in (
+            "an-asset-that-does-not-resolve",
+            "a-subject-declined",
+            "a-standing-want-withdrawn",
+            "reads-its-datasets-licences",
+            "reads-a-calendar",
+            "asks-for-a-settlement-date",
+        )
+    }
+    mapped = {**answered, **rates_producers(RATES, source="ust", now_ns=PUBLISHED)}
+    report = run_suite("data", mapped, not_presented=RATES_NOT_PRESENTED)
+    assert report.passed, report.failures
+    assert report.not_presented["an-exact-price"] == "it records rates, never prices"
+    assert report.not_presented["a-want-recorded-against"] == "it records rates, never prices"
+    assert set(report.passed_cases) >= set(RATES_CASES)
 
 
 async def test_an_outcome_is_recorded_at_its_determined_or_its_final_stage() -> None:
@@ -1299,19 +1326,19 @@ def test_a_case_every_data_plugin_answers_is_never_not_presented_and_one_that_is
     mapped = {
         name: made
         for name, made in every.items()
-        if name not in {"an-exact-price", "a-want-recorded-against", "a-trade-recorded"}
+        if name not in {"a-subject-declined", "reads-its-datasets-licences", "a-trade-recorded"}
     }
     report = run(
         "data",
         mapped,
         not_presented={
-            "an-exact-price": "this source rounds",
-            "a-want-recorded-against": "this source is never asked",
+            "a-subject-declined": "this source declines nothing",
+            "reads-its-datasets-licences": "this source is never licensed",
             "a-trade-recorded": " ",
         },
     )
-    assert "required" in report.failures["an-exact-price"]
-    assert "required" in report.failures["a-want-recorded-against"]
+    assert "required" in report.failures["a-subject-declined"]
+    assert "required" in report.failures["reads-its-datasets-licences"]
     assert "says why" in report.failures["a-trade-recorded"]
     assert report.not_presented == LATENCY
 
