@@ -46,7 +46,10 @@ prices maps the rates cases (`data.testing.rates_producers`) and the cases
 every data plugin answers, and names the rest not presented with why --
 `data.testing.RATES_NOT_PRESENTED`, among them `an-exact-price` and
 `a-want-recorded-against`, about `closes`: "it records rates, never
-prices".
+prices". From 0.32.2 a plugin recording each poll as its dataset's
+liveness (`Wants.liveness`, or `record_liveness` where it keeps no
+`Wants`) presents `records-a-datasets-liveness`, which the list no longer
+names; one recording none adds it, with why.
 
 **Tenors** (`tenor`, `tenor_label`): a publisher's label -- `1 Mo`, `13
 WEEKS`, `10 Yr`, `3M`, `ON` -- as the wire's `Tenor`, a count and a unit; a

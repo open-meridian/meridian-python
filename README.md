@@ -2,7 +2,7 @@
 
 The Python SDK for building [Open Meridian](https://open-meridian.com) plugins:
 the tools a trader has an AI agent build, and the bots and analytics a
-developer writes. Python 3.11 or newer. This is release 0.32.1; its reference
+developer writes. Python 3.11 or newer. This is release 0.32.2; its reference
 is at [open-meridian.dev](https://open-meridian.dev/api/python-sdk/).
 
 ## Start here
@@ -1844,7 +1844,7 @@ await plugin.receive(observations_wanted=lambda heard: wants.hear(heard, answer)
   adapter, and dates a fill in its order's own zone: SnapTrade's trading,
   onto the SDK.
 
-### The placement type, TCA, rates, latency and liveness (contract v27; 0.32.0 and 0.32.1)
+### The placement type, TCA, rates, latency and liveness (contract v27; 0.32.0 to 0.32.2)
 
 0.32.0 declares contract v27 (`meridian.SCHEMA_VERSION`).
 
@@ -1896,7 +1896,9 @@ await plugin.receive(observations_wanted=lambda heard: wants.hear(heard, answer)
   (`meridian.dataset_thresholds()`). A reader keeps the latest liveness heard
   (`roles.Liveness`) for a value's confirmed time (`confirmed_ns`), and
   `roles.in_session` reads a venue's trading sessions. Connection and
-  Trading show each session's latency in "Sessions" (`SessionLatency`).
+  Trading show each session's latency in "Sessions" (`SessionLatency`);
+  from 0.32.2 a data plugin's Connection draws "Sessions" only once a
+  session is measured, so a polled plugin's page has none.
 - **The placement type and RFQ quotes**: the Trader takes the placement
   types its venue takes (an adapter's `placement_types`, on its catalogue;
   any other rejected unsupported), records each dealer's quote on an RFQ
@@ -1927,9 +1929,14 @@ await plugin.receive(observations_wanted=lambda heard: wants.hear(heard, answer)
   are about `closes`, so a plugin recording rates and no prices names them
   not presented, "it records rates, never prices";
   `RATES_NOT_PRESENTED` names every case a rates-only plugin never
-  presents.
+  presents. From 0.32.2 it no longer names `records-a-datasets-liveness`:
+  a polled plugin recording each poll as its dataset's liveness presents
+  it, and one recording none adds it, with why. The testing `Recorder`
+  answers `RecordRates` with its count, as it does prices.
 - **Smaller**: a licence writes both `derived_use` and `derived_use_terms`
-  (ruling 479); a venue-originated order is resolved by every identifier its
+  (ruling 479), and from 0.32.2 the wire's `redistribution`,
+  `attribution_required`, `attribution_text`, `copyright_class` and
+  `no_more_restrictive_terms` (`DatasetLicence`); a venue-originated order is resolved by every identifier its
   venue states (`VenueOrder.identifiers`, `.currency`); a rejected replace's
   raw record names its venue account; a good-till-date order is asked with
   its expiry (`Asked.expire_date`, `.expire_time_ns`).
@@ -2006,6 +2013,7 @@ carries libcst.
 | 0.31.0 to 0.31.1: a saved setting value that is no longer one of its choices, or not of its kind, is delivered unset rather than raised (`Settings.refused`, a typed class's `.refused`, `meridian.RefusedSetting`, `request.own_settings_refused`), a required one named missing and an environment so refused counted live by the guard; an event-contract venue's contract map keeps a range market's bounds; `event_contracts.Feed.stated_identifiers`, by which `EventContractsChecks` holds a record complete, and a record holding the venue's ticker alone named by it; the pricing template declares no storage; the templates' AGENTS.md on publishing to a registry and their pre-push hook's tag-push message | only the pins move | |
 | 0.31.1 to 0.32.0: the SDK declares contract v27: `pnl` version 2 and `execution_cost`, a job's business date and reporting currency, a job refused with no account; the reference rounding a quoted price per unit and inverting and crossing fiat legs; the rates slice (`roles.data.rates`); latency and data age recorded, not yet reported (ReportLatency from contract v28), and liveness recorded (`roles.Latency`, `SessionLatency`, `Liveness`, `in_session`, `Wants.latency`, `Wants.liveness`, `declared_delay_ns`, and the settings `session_ceilings`, `dataset_thresholds`, `stale_reference_action`, `stale_reference_after`); the Trader's placement types and RFQ quotes, the `ems`'s reference check (`roles.ems`); connectivity's pages (`trading_pages`, `raw_records_page`, `connection_pages`); a range member's bounds and `Feed.keep_events`; `derived_use_terms`; the suites' v27 cases. Breaking | a base pinned by digest at an older release moved to 0.32.0, its digest dropped (offline) | pin the base's digest again; map each role suite's v27 cases; mark a data plugin's lake query not presented where it records no trades; move a plugin's own Trading page or events loop onto the SDK; add `include-hidden-files: true` to an e2e log upload |
 | 0.32.0 to 0.32.1: the data suite's `an-exact-price` and `a-want-recorded-against` are about `closes` (ruling 537), so a plugin recording rates and no prices names them not presented, "it records rates, never prices"; `meridian.roles.data.testing.RATES_NOT_PRESENTED` names every case a rates-only plugin never presents | only the pins move | |
+| 0.32.1 to 0.32.2: a data plugin's Connection draws "Sessions" only once a session is measured; the testing `Recorder` answers `RecordRates`; `DatasetLicence` writes `redistribution`, `attribution_required`, `attribution_text`, `copyright_class` and `no_more_restrictive_terms`; `RATES_NOT_PRESENTED` no longer names `records-a-datasets-liveness`, which a plugin recording no liveness adds itself | only the pins move | |
 
 `tests/migrations/` holds the plugins the migrations are recorded for, as
 written and as their migration leaves them, and `make check-migrations` holds

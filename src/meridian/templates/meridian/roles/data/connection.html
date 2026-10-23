@@ -1,6 +1,7 @@
 {#- A data plugin's Connection (spec/plugin-pages-follow-their-role): notices,
     then "Key", "Limits and use", "Stream" and, from 0.32.0, "Sessions" (each
-    session's latency), then, for a plugin holding connectivity too (457),
+    session's latency; from 0.32.2 only once a session is measured, so a
+    polled plugin's page has none), then, for a plugin holding connectivity too (457),
     connectivity's sections of `data.trading` beside them where the screen is
     wide enough, its key said once, then the vendor's sections.
     `data` is a meridian.roles.data.ConnectionRead, or the plugin's record
@@ -19,7 +20,8 @@
 {% if data.trading and data.trading.badge %}{% import "meridian/kit.html" as kit %}<p class="hint">Connection {% if data.trading.badge == "Demo" %}{{ kit.badge("Demo", "good") }}{% elif data.trading.badge == "Live" %}{{ kit.badge("Live", "warn") }}{% else %}{{ kit.badge(data.trading.badge, "bad") }}{% endif %} The session reached {{ venue|default("the venue") }}'s {{ data.trading.reached_environment }} host; agents may place orders only on a Demo connection.</p>{% endif %}
 {% block vendor_notices %}{% endblock %}
 {% if data.trading %}<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,28rem),1fr));gap:0 1rem;align-items:start"><div>{% endif %}
-{% for section in ["Key", "Limits and use", "Stream", "Sessions"] %}
+{% set measured = data.session_latency or (data.trading.session_latency if data.trading else []) %}
+{% for section in ["Key", "Limits and use", "Stream"] + (["Sessions"] if measured else []) %}
 <section class="panel">
 <h2>{{ section }}</h2>
 <table class="one-line"><tbody>
@@ -34,7 +36,7 @@
 {{ om.row("Last call", data.last_call_at or "None yet") }}
 {{ om.row("Last error", data.last_error or "None") }}
 {% elif section == "Sessions" %}
-{{ om.session_rows(data.session_latency or (data.trading.session_latency if data.trading else [])) }}
+{{ om.session_rows(measured) }}
 {% else %}
 {% if data.sessions is none %}
 {{ om.row("Streaming", "Does not stream") }}

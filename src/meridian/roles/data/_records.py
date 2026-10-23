@@ -21,7 +21,8 @@ class ConnectionRead:
     last error; and the streaming sessions open, None for a source that
     does not stream. From 0.32.0 (contract v27) each open session's
     latency (`session_latency`, `roles.Latency.session_latency()`), the
-    Sessions section's rows; empty for none measured; and where the plugin
+    Sessions section's rows; empty for none measured, when the page draws
+    no Sessions section (0.32.2), as for a plugin that polls; and where the plugin
     holds connectivity too, connectivity's Trading (`trading`)."""
 
     mode: str
