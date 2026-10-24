@@ -1929,7 +1929,7 @@ await plugin.receive(observations_wanted=lambda heard: wants.hear(heard, answer)
   Sessions once measured; `?tab=`), so each fits one screen, "Enable
   trading" answering on Trading and `read_connection` still answering
   every section. An account's "Enable trading" column shows only where a
-  button does, sized to it.
+  button does, sized to it, and Raw records' record wraps within its box.
 - **Event contracts**: a range member's floor, cap and unit reported with
   its group (ruling 464); the events of the contracts served kept reported
   (`Feed.keep_events`); from 0.32.3 the venue's optional deadline to

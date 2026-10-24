@@ -1086,6 +1086,8 @@ def test_raw_records_show_a_record_to_a_reader_of_its_mapped_account() -> None:
     reader = PageClient(pages, rig.recorder, read=[testing.ACCOUNT])
     shown = reader.get(_connectivity.RAW, "read", ref="trading/placed-1").text
     assert "The record" in shown and "PLC-1" in shown
+    # 0.32.3: wrapped within its box, never sideways (the kit styles no pre).
+    assert '<pre style="margin:0;white-space:pre-wrap;overflow-wrap:anywhere;' in shown
     stranger = PageClient(pages, rig.recorder, read=["ACC-ELSEWHERE"])
     assert (
         "The record" not in stranger.get(_connectivity.RAW, "read", ref="trading/placed-1").text
