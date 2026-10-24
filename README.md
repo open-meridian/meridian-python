@@ -1867,7 +1867,12 @@ await plugin.receive(observations_wanted=lambda heard: wants.hear(heard, answer)
   rows -- a 3.87 per cent fixing is 3.87 `percent`, never a Money -- each
   subject a referential record resolved by the identifiers it states, a
   same-day revision the next version of its row key, a tenor not published
-  no row; a reader's curve for a date in tenor order (`read_curve`).
+  no row; a reader's curve for a date in tenor order (`read_curve`). Every
+  rate carries its convention, an index level the convention of the rate it
+  compounds (the SOFR Index `rates.MONEY_MARKET`): from 0.32.3 `Feed.rate`
+  refuses one with none, before the lake does; and a subject missed is
+  asked again the same day after 5, then 15, then every 60 minutes, its
+  miss reported once a day.
 
   ```python
   from meridian.roles.data import rates
@@ -1919,7 +1924,12 @@ await plugin.receive(observations_wanted=lambda heard: wants.hear(heard, answer)
   `raw_records_page`): Trading with "Enable trading", the connection's badge
   and Sessions, and Raw records, from Alpaca's and Tradier's; for a plugin
   holding the data role too, one Connection for both roles
-  (`connection_pages`, 457).
+  (`connection_pages`, 457), from 0.32.3 one group at a time under a tab
+  row of its sections' titles (Key, Limits and use, Stream, Trading, and
+  Sessions once measured; `?tab=`), so each fits one screen, "Enable
+  trading" answering on Trading and `read_connection` still answering
+  every section. An account's "Enable trading" column shows only where a
+  button does, sized to it.
 - **Event contracts**: a range member's floor, cap and unit reported with
   its group (ruling 464); the events of the contracts served kept reported
   (`Feed.keep_events`); from 0.32.3 the venue's optional deadline to
@@ -2023,7 +2033,7 @@ carries libcst.
 | 0.31.1 to 0.32.0: the SDK declares contract v27: `pnl` version 2 and `execution_cost`, a job's business date and reporting currency, a job refused with no account; the reference rounding a quoted price per unit and inverting and crossing fiat legs; the rates slice (`roles.data.rates`); latency and data age recorded, not yet reported (ReportLatency from contract v28), and liveness recorded (`roles.Latency`, `SessionLatency`, `Liveness`, `in_session`, `Wants.latency`, `Wants.liveness`, `declared_delay_ns`, and the settings `session_ceilings`, `dataset_thresholds`, `stale_reference_action`, `stale_reference_after`); the Trader's placement types and RFQ quotes, the `ems`'s reference check (`roles.ems`); connectivity's pages (`trading_pages`, `raw_records_page`, `connection_pages`); a range member's bounds and `Feed.keep_events`; `derived_use_terms`; the suites' v27 cases. Breaking | a base pinned by digest at an older release moved to 0.32.0, its digest dropped (offline) | pin the base's digest again; map each role suite's v27 cases; mark a data plugin's lake query not presented where it records no trades; move a plugin's own Trading page or events loop onto the SDK; add `include-hidden-files: true` to an e2e log upload |
 | 0.32.0 to 0.32.1: the data suite's `an-exact-price` and `a-want-recorded-against` are about `closes` (ruling 537), so a plugin recording rates and no prices names them not presented, "it records rates, never prices"; `meridian.roles.data.testing.RATES_NOT_PRESENTED` names every case a rates-only plugin never presents | only the pins move | |
 | 0.32.1 to 0.32.2: a data plugin's Connection draws "Sessions" only once a session is measured; the testing `Recorder` answers `RecordRates`; `DatasetLicence` writes `redistribution`, `attribution_required`, `attribution_text`, `copyright_class` and `no_more_restrictive_terms`; `RATES_NOT_PRESENTED` no longer names `records-a-datasets-liveness`, which a plugin recording no liveness adds itself | only the pins move | |
-| 0.32.2 to 0.32.3: a listings feed records its live dataset's liveness (`heard` notes it, `flush` records it once a pass); an event contract's `Resolution.challenge_ends_at_ns` reaches the `Outcome`; `DatasetLicence` writes `not_affiliated_notice`. Set the licence fields 0.32.2 and 0.32.3 added only on core 0.1.311 or later | only the pins move | |
+| 0.32.2 to 0.32.3: a listings feed records its live dataset's liveness (`heard` notes it, `flush` records it once a pass); an event contract's `Resolution.challenge_ends_at_ns` reaches the `Outcome`; `DatasetLicence` writes `not_affiliated_notice`; `rates.Feed.rate` refuses a rate with no convention (an index level takes its compounded rate's) and a subject missed is asked again the same day; the merged Connection draws one group at a time under a tab row. Set the licence fields 0.32.2 and 0.32.3 added only on core 0.1.311 or later | only the pins move; a rate built with no convention now raises, so give it one | |
 
 `tests/migrations/` holds the plugins the migrations are recorded for, as
 written and as their migration leaves them, and `make check-migrations` holds

@@ -237,16 +237,60 @@ async def test_a_rate_not_held_is_reported_once_a_day_and_not_recorded() -> None
     assert asked.stated_asset_class == ops.ASSET_CLASS_REFERENTIAL
 
 
+def test_a_rate_with_no_convention_is_refused_at_the_plugin() -> None:
+    """0.32.3: `Rate.convention` is never unset (the lake refuses a rate with
+    none, of every kind); `Feed.rate` refuses one before the lake, naming
+    what an index level takes."""
+    feed = rates.Feed(Recorder("rates-1"), "nyfed", clock_ns=lambda: PUBLISHED)
+    level = rates.index_level("1.18752336", base="2018-04-02=1.00000000")
+    with pytest.raises(ValueError, match="has no convention.*rates.MONEY_MARKET"):
+        feed.rate("INS-SOFRINDEX", "nyfed_rates", "index_level", level, business_date=DAY)
+    row = feed.rate("INS-SOFRINDEX", "nyfed_rates", "index_level", level, business_date=DAY,
+                    convention=rates.MONEY_MARKET)  # fmt: skip
+    assert row.convention == rates.MONEY_MARKET
+
+
+async def test_a_subject_missed_is_asked_again_the_same_day_after_a_backoff() -> None:
+    """0.32.3: a subject missed at start (the store not yet holding it) is
+    asked again after 5, then 15, then every 60 minutes, the miss reported
+    once a day."""
+    now = [PUBLISHED]
+    recorder = Recorder("rates-1")
+    asked: list[int] = []
+    held = {"yes": False}
+
+    def resolve(params: Any) -> Any:
+        asked.append(now[0])
+        if held["yes"]:
+            return ops.ResolveIdentifierResult(found=True, instrument_id="INS-SOFR")
+        return ops.ResolveIdentifierResult(found=False)
+
+    recorder.answer("ResolveIdentifier", resolve)
+    feed = rates.Feed(recorder, "nyfed", clock_ns=lambda: now[0])
+    sofr = ("symbol", "SOFR", "nyfed")
+    minute = 60 * 10**9
+    for after, expected in ((0, 1), (4, 1), (5, 2), (19, 2), (20, 3), (79, 3), (80, 4),
+                            (139, 4), (140, 5)):  # fmt: skip
+        now[0] = PUBLISHED + after * minute
+        assert await feed.subject(sofr) == ""
+        assert len(asked) == expected, after
+    assert len(recorder.on("ReportMissingInstrument")) == 1, "reported once a day"
+    held["yes"] = True
+    now[0] = PUBLISHED + 200 * minute
+    assert await feed.subject(sofr) == "INS-SOFR"
+
+
 def test_a_rates_row_key_stays_within_the_contracts_128_characters() -> None:
     feed = rates.Feed(Recorder("rates-1"), "fred", clock_ns=lambda: PUBLISHED)
     subject = "INS-01JAH000000000000000000PAR"
     short = feed.rate(
-        subject, "fred_public", "par_yield", "4.21", tenor="10Y", business_date=DAY
-    )
-    assert short.meta.row_key == f"fred:par_yield:10Y:-:{DAY}@{subject}"
+        subject, "fred_public", "par_yield", "4.21", tenor="10Y", business_date=DAY,
+        convention=rates.BOND_EQUIVALENT,
+    )  # fmt: skip
+    assert short.meta.row_key == f"fred:par_yield:10Y:act_act:compounded/2:{DAY}@{subject}"
     long = [
         feed.rate(subject, "fred_public", "par_yield", value, tenor="10Y", business_date=DAY,
-                  series="A_VERY_LONG_SERIES_NAME_" * 6)
+                  convention=rates.BOND_EQUIVALENT, series="A_VERY_LONG_SERIES_NAME_" * 6)
         for value in ("4.21", "4.22")
     ]  # fmt: skip
     keys = {row.meta.row_key for row in long}
@@ -960,12 +1004,28 @@ def test_a_plugin_holding_data_and_connectivity_draws_one_connection() -> None:
 
     _connectivity.connection_pages(pages, lambda: state, connection, **_words())
     client = PageClient(pages, rig.recorder)
-    shown = client.get("/", "admin").text
-    sections = re.findall(r"<h2>([^<]*)</h2>", shown)
-    assert sections == [
-        "Key", "Limits and use", "Stream", "Environment", "Accounts", "Placements",
-    ]  # fmt: skip
+    # 0.32.3: a tab row of the sections' own titles, one group at a time,
+    # each within one screen; Key where none is asked.
+    tabbed = {
+        None: ["Key"],
+        "key": ["Key"],
+        "limits-and-use": ["Limits and use"],
+        "stream": ["Stream"],
+        "trading": ["Environment", "Accounts", "Placements"],
+        "nothing-such": ["Key"],
+    }
+    for tab, expected in tabbed.items():
+        shown = client.get("/", "admin", **({"tab": tab} if tab else {})).text
+        assert re.findall(r"<h2>([^<]*)</h2>", shown) == expected, tab
+        assert re.findall(r'<a class="tab[^"]*" href="\?tab=([^"]+)"', shown) == [
+            "key", "limits-and-use", "stream", "trading",
+        ]  # fmt: skip
+        assert len(re.findall(r'aria-current="page"', shown)) == 1
+    trading = client.get("/", "admin", tab="trading").text
+    # The action column only where a button shows, sized to it.
+    assert '<th style="width:10rem"></th>' in trading and "Enable trading" in trading
     data = client.call_tool("read_connection", level="admin").data
+    assert data["trading"]["accounts"] and "session_latency" in data, "every section"
     assert data["mode"] == "Sandbox" and data["trading"]["badge"] == "Demo"
     assert (
         client.call_tool(
@@ -975,12 +1035,15 @@ def test_a_plugin_holding_data_and_connectivity_draws_one_connection() -> None:
     )
     with pytest.raises(KeyError, match="no tool read_trading"):
         client.call_tool("read_trading", level="admin")
+    # "Enable trading" answers on the Trading tab.
+    enabled = client.post("/enable-trading", "admin", {"venue_account_code": "OTHER-ACCT"}).text
+    assert re.findall(r"<h2>([^<]*)</h2>", enabled) == ["Environment", "Accounts", "Placements"]
 
 
 def test_connections_sessions_section_shows_only_once_a_session_is_measured() -> None:
     """0.32.2: a polled data plugin's Connection draws no "Sessions" (never
-    "None measured yet"); one with a measured session draws it, beside
-    connectivity's sections where the plugin holds both."""
+    "None measured yet"), and no tab row (0.32.3); one with a measured
+    session draws it, a tab of its own where the plugin holds both."""
     polled = meridian.Pages("Rates", kit="0.12.0")
 
     @polled.page(
@@ -993,7 +1056,7 @@ def test_connections_sessions_section_shows_only_once_a_session_is_measured() ->
 
     shown = PageClient(polled).get("/", "admin").text
     assert re.findall(r"<h2>([^<]*)</h2>", shown) == ["Key", "Limits and use", "Stream"]
-    assert "None measured yet" not in shown
+    assert "None measured yet" not in shown and 'class="tabs"' not in shown
 
     rig, state = _rigged()
     rig.latency.rtt("orders", 12_000_000)
@@ -1005,10 +1068,13 @@ def test_connections_sessions_section_shows_only_once_a_session_is_measured() ->
     _connectivity.connection_pages(
         merged, lambda: state, connection, latency=lambda: rig.latency, **_words()
     )
-    shown = PageClient(merged, rig.recorder).get("/", "admin").text
-    assert re.findall(r"<h2>([^<]*)</h2>", shown) == [
-        "Key", "Limits and use", "Stream", "Sessions", "Environment", "Accounts", "Placements",
+    client = PageClient(merged, rig.recorder)
+    shown = client.get("/", "admin").text
+    assert re.findall(r'href="\?tab=([^"]+)"', shown) == [
+        "key", "limits-and-use", "stream", "trading", "sessions",
     ]  # fmt: skip
+    shown = client.get("/", "admin", tab="sessions").text
+    assert re.findall(r"<h2>([^<]*)</h2>", shown) == ["Sessions"]
     assert "RTT p99" in shown
 
 

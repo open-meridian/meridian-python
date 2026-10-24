@@ -23,11 +23,14 @@
 {% if trading.accounts %}
 <table class="one-line">
 {% set full = not merged|default(false) %}
-<thead><tr><th>Venue account code</th><th>Trading</th>{% if full %}<th class="wide-only">Order types</th><th class="wide-only">Mapped by its ems</th>{% endif %}<th></th></tr></thead>
+{#- The action column only where a button shows, its width its button's
+    (0.32.3), so at a phone's width the button is never clipped. -#}
+{% set acts = may_enable and trading.accounts|rejectattr("trading")|list %}
+<thead><tr><th>Venue account code</th><th>Trading</th>{% if full %}<th class="wide-only">Order types</th><th class="wide-only">Mapped by its ems</th>{% endif %}{% if acts %}<th style="width:10rem"></th>{% endif %}</tr></thead>
 <tbody>
 {% for row in trading.accounts %}
 <tr><td><code>{{ row.venue_account_code }}</code></td><td>{{ "Enabled" if row.trading else "Read-only" }}</td>{% if full %}<td class="wide-only">{{ row.order_types|join(", ") or "None" }}</td><td class="wide-only">{{ "Yes" if row.mapped else "No" }}</td>{% endif %}
-<td>{% if not row.trading and may_enable %}{{ kit.action(enable, "Enable trading", kind="primary", fields={"venue_account_code": row.venue_account_code}, label="Enable trading on " ~ row.venue_account_code) }}{% endif %}</td></tr>
+{% if acts %}<td>{% if not row.trading %}{{ kit.action(enable, "Enable trading", kind="primary", fields={"venue_account_code": row.venue_account_code}, label="Enable trading on " ~ row.venue_account_code) }}{% endif %}</td>{% endif %}</tr>
 {% endfor %}
 </tbody></table>
 {% else %}
