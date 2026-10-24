@@ -540,6 +540,11 @@ def test_a_licence_writes_its_attribution_and_redistribution_terms() -> None:
     assert (plain.redistribution, plain.copyright_class, plain.attribution_required) == (
         sidecar_pb2.REDISTRIBUTION_UNSPECIFIED, sidecar_pb2.COPYRIGHT_CLASS_UNSPECIFIED, False,
     )  # fmt: skip
+    notice = "This product uses the vendor's data but is not endorsed by it."
+    noticed = meridian.DatasetLicence(not_affiliated_notice=notice)
+    assert noticed._wire().not_affiliated_notice == notice  # 0.32.3
+    assert noticed._to_json()["not_affiliated_notice"] == notice
+    assert meridian.DatasetLicence()._wire().not_affiliated_notice == ""
     with pytest.raises(ValueError, match="redistribution is one of"):
         meridian.DatasetLicence(redistribution="sometimes")
     with pytest.raises(ValueError, match="copyright_class is one of"):

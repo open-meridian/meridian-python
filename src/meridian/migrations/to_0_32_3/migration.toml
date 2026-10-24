@@ -1,0 +1,17 @@
+# open-meridian 0.32.2 to 0.32.3: nothing a plugin calls changed shape, so
+# only the pins move.
+from = "0.32.2"
+to = "0.32.3"
+summary = """
+Three small additions. A listings feed (meridian.roles.data.listings, which
+the Alpaca and Tradier plugins subclass) records its live dataset's liveness
+as a pairs feed does: `heard` notes when the stream last spoke, and `flush`
+records RecordLiveness for the consolidated view once a pass when a message
+was heard since the last. An event-contract Resolution carries the venue's
+optional challenge_ends_at_ns through to the Outcome recorded, unset by
+default. DatasetLicence writes not_affiliated_notice. A plugin sets the
+licence fields 0.32.2 and 0.32.3 added only on core 0.1.311 or later: an
+earlier v27 core refuses its registration. Nothing a plugin calls changed
+shape, so `meridian plugin migrate` moves the pins and changes no code.
+"""
+breaking = false

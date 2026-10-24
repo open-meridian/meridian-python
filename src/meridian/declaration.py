@@ -377,7 +377,10 @@ class DatasetLicence:
     `public_domain`, `copyright_citation_required` or
     `copyright_preapproval_required`, empty for not stated, one class per
     dataset; and `no_more_restrictive_terms`, whether the vendor forbids
-    adding restrictions downstream."""
+    adding restrictions downstream. From 0.32.3 `not_affiliated_notice`, the
+    notice as the vendor words it, shown with the terms. A deployment's core
+    takes a declaration setting any of these from core 0.1.311; an earlier
+    v27 core refuses its registration."""
 
     kept: bool = False
     retention_days: int = 0
@@ -391,6 +394,7 @@ class DatasetLicence:
     attribution_text: str = ""
     copyright_class: str = ""
     no_more_restrictive_terms: bool = False
+    not_affiliated_notice: str = ""
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "default_fields", tuple(self.default_fields))
@@ -461,6 +465,7 @@ class DatasetLicence:
                 ),
             ),
             no_more_restrictive_terms=self.no_more_restrictive_terms,
+            not_affiliated_notice=self.not_affiliated_notice,
         )
 
     def _to_json(self) -> dict[str, Any]:
@@ -477,6 +482,7 @@ class DatasetLicence:
             "attribution_text": self.attribution_text,
             "copyright_class": self.copyright_class,
             "no_more_restrictive_terms": self.no_more_restrictive_terms,
+            "not_affiliated_notice": self.not_affiliated_notice,
         }
 
 
