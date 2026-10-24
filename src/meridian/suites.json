@@ -520,6 +520,33 @@
               }
             }
           ]
+        },
+        {
+          "name": "reads-a-derived-series",
+          "since": "v28",
+          "given": "the plugin needs a year of a signal plugin's IV30 for an underlying",
+          "expect": [
+            {
+              "row": "ListDerivedSeries",
+              "fields": {
+                "subjects": "<set>",
+                "series": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "reads-a-saved-scenario-set",
+          "since": "v28",
+          "given": "the plugin needs a saved scenario set to name it in a job",
+          "expect": [
+            {
+              "row": "ListScenarios",
+              "fields": {
+                "row_keys": "<set>"
+              }
+            }
+          ]
         }
       ]
     },
@@ -1204,7 +1231,6 @@
         {
           "name": "reports-a-sessions-round-trip",
           "since": "v27",
-          "about": "latency",
           "given": "the plugin's session to its venue is open for 10 seconds",
           "expect": [
             {
@@ -1217,6 +1243,43 @@
                     "histogram": "<set>"
                   }
                 ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "reports-an-expiry",
+          "since": "v28",
+          "given": "the broker session reports an option expired worthless",
+          "expect": [
+            {
+              "row": "RecordLifecycleEvent",
+              "fields": {
+                "event": {
+                  "kind": "LIFECYCLE_EVENT_KIND_EXPIRY",
+                  "quantity": "<set>",
+                  "event_date": "<set>"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "reports-a-package-fill",
+          "since": "v28",
+          "given": "the venue fills a two-leg package",
+          "expect": [
+            {
+              "row": "ReportExecution",
+              "fields": {
+                "multi_leg_reporting_type": "MULTI_LEG_REPORTING_TYPE_PACKAGE"
+              }
+            },
+            {
+              "row": "ReportExecution",
+              "fields": {
+                "multi_leg_reporting_type": "MULTI_LEG_REPORTING_TYPE_LEG",
+                "package_execution_id": "<set>"
               }
             }
           ]
@@ -2246,6 +2309,26 @@
               }
             }
           ]
+        },
+        {
+          "name": "reports-an-assignment",
+          "since": "v28",
+          "given": "the broker reports a short call assigned in an account the plugin links",
+          "expect": [
+            {
+              "row": "RecordLifecycleEvent",
+              "fields": {
+                "event": {
+                  "account_id": "<set>",
+                  "instrument_id": "<set>",
+                  "kind": "LIFECYCLE_EVENT_KIND_ASSIGNMENT",
+                  "quantity": "<set>",
+                  "event_date": "<set>",
+                  "deliveries": "<set>"
+                }
+              }
+            }
+          ]
         }
       ]
     },
@@ -3140,7 +3223,6 @@
         {
           "name": "reports-its-feed-delay",
           "since": "v27",
-          "about": "latency",
           "given": "the plugin parses its source's messages for 10 seconds",
           "expect": [
             {
@@ -3152,6 +3234,329 @@
                     "hop": "AGE_HOP_EDGE",
                     "metric": "LATENCY_METRIC_AGE",
                     "histogram": "<set>"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "records-a-chains-series",
+          "since": "v28",
+          "given": "the plugin lists an underlying's option series from its source",
+          "expect": [
+            {
+              "row": "RecordSeries",
+              "fields": {
+                "series": [
+                  {
+                    "meta": {
+                      "subjects": "<set>",
+                      "series_key": "<set>"
+                    },
+                    "template_id": "<set>",
+                    "fields": "<set>"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "records-open-interest",
+          "since": "v28",
+          "given": "the source publishes a series' open interest for the trading date",
+          "expect": [
+            {
+              "row": "RecordStatistics",
+              "fields": {
+                "statistics": [
+                  {
+                    "meta": {
+                      "business_date": "<set>"
+                    },
+                    "kind": "STATISTIC_KIND_OPEN_INTEREST",
+                    "value": "<set>"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "a-chain-row-is-never-resolved",
+          "since": "v28",
+          "given": "the plugin records quotes for a chain of series it does not hold",
+          "expect": [
+            {
+              "row": "RecordQuotes",
+              "fields": {
+                "quotes": [
+                  {
+                    "meta": {
+                      "series_key": "<set>"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": "ResolveIdentifier",
+              "sends": false
+            }
+          ]
+        },
+        {
+          "name": "a-filing-recorded",
+          "since": "v28",
+          "given": "the source accepts an 8-K for a filer the plugin keeps current",
+          "expect": [
+            {
+              "row": "RecordFilings",
+              "fields": {
+                "filings": [
+                  {
+                    "filing": {
+                      "accession_number": "<set>",
+                      "form": "<set>"
+                    },
+                    "kind": "<set>",
+                    "filed_date": "<set>"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "a-fact-restated",
+          "since": "v28",
+          "given": "a later filing reports a different value for a fact already recorded",
+          "expect": [
+            {
+              "row": "RecordReportedFacts",
+              "fields": {
+                "facts": [
+                  {
+                    "concept": "<set>",
+                    "period_end": "<set>",
+                    "filing": "<set>"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "a-fact-confirmed",
+          "since": "v28",
+          "given": "a later filing repeats a fact's value",
+          "expect": [
+            {
+              "row": "RecordReportedFacts",
+              "fields": {
+                "facts": [
+                  {
+                    "concept": "<set>",
+                    "filing": "<set>"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "a-complete-holdings-report",
+          "since": "v28",
+          "given": "a manager files a 13F",
+          "expect": [
+            {
+              "row": "RecordHoldingsReports",
+              "fields": {
+                "reports": [
+                  {
+                    "kind": "HOLDINGS_REPORT_KIND_FORM_13F",
+                    "complete": true,
+                    "report_date": "<set>"
+                  }
+                ]
+              }
+            },
+            {
+              "row": "RecordHoldings",
+              "fields": {
+                "holdings": [
+                  {
+                    "report_row_key": "<set>"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "a-cusip-used-as-key",
+          "since": "v28",
+          "given": "a 13F row names a security by CUSIP only",
+          "expect": [
+            {
+              "row": "ResolveIdentifier",
+              "fields": {
+                "identifiers": "<set>"
+              }
+            },
+            {
+              "row": "RecordHoldings",
+              "fields": {
+                "holdings": [
+                  {
+                    "meta": {
+                      "subjects": "<set>"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "a-stake-crossed",
+          "since": "v28",
+          "given": "a holder files a 13D and then its amendment",
+          "expect": [
+            {
+              "row": "RecordHoldingsReports",
+              "fields": {
+                "reports": [
+                  {
+                    "kind": "HOLDINGS_REPORT_KIND_SCHEDULE_13D"
+                  }
+                ]
+              }
+            },
+            {
+              "row": "RecordHoldings",
+              "fields": {
+                "holdings": [
+                  {
+                    "percent_of_class": "<set>"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "a-dividend-declared",
+          "since": "v28",
+          "given": "an 8-K exhibit declares a cash dividend with its dates",
+          "expect": [
+            {
+              "row": "RecordCorporateActions",
+              "fields": {
+                "actions": [
+                  {
+                    "kind": "CORPORATE_ACTION_KIND_CASH_DIVIDEND",
+                    "amount_per_share": "<set>",
+                    "ex_date": "<set>",
+                    "rule": "<set>"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "a-rating-action",
+          "since": "v28",
+          "given": "an agency's 17g-7 history lists an issuer rating affirmed",
+          "expect": [
+            {
+              "row": "RecordRatingActions",
+              "fields": {
+                "actions": [
+                  {
+                    "rating_class": "<set>",
+                    "action": "<set>"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "resolves-a-filer",
+          "since": "v28",
+          "given": "a filing names a filer by its CIK",
+          "expect": [
+            {
+              "row": "ResolveCompany",
+              "fields": {
+                "identifiers": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "a-crossed-quote-is-recorded-invalid",
+          "since": "v28",
+          "given": "the source sends a quote whose bid is above its ask beyond the dataset's tolerance",
+          "expect": [
+            {
+              "row": "RecordQuotes",
+              "fields": {
+                "quotes": [
+                  {
+                    "meta": {
+                      "quality": "QUALITY_STATE_INVALID",
+                      "quality_reasons": [
+                        "QUALITY_REASON_CROSSED_QUOTE"
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "a-duplicate-is-recorded-suspicious",
+          "since": "v28",
+          "given": "the source sends the same quote again under a new sequence number",
+          "expect": [
+            {
+              "row": "RecordQuotes",
+              "fields": {
+                "quotes": [
+                  {
+                    "meta": {
+                      "quality": "QUALITY_STATE_SUSPICIOUS",
+                      "quality_reasons": [
+                        "QUALITY_REASON_DUPLICATE"
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "rows-after-a-gap-are-suspicious",
+          "since": "v28",
+          "given": "the source's sequence skips, then resyncs",
+          "expect": [
+            {
+              "row": "RecordQuotes",
+              "fields": {
+                "quotes": [
+                  {
+                    "meta": {
+                      "quality": "QUALITY_STATE_SUSPICIOUS",
+                      "quality_reasons": [
+                        "QUALITY_REASON_SEQUENCE_GAP"
+                      ]
+                    }
                   }
                 ]
               }
@@ -3693,7 +4098,6 @@
         {
           "name": "reports-its-pre-trade-checks-data-age",
           "since": "v27",
-          "about": "latency",
           "given": "the plugin checks reference prices before placements over 10 seconds",
           "expect": [
             {
@@ -3736,6 +4140,50 @@
                 "placement_id": "<set>",
                 "quote_id": "<set>"
               }
+            }
+          ]
+        },
+        {
+          "name": "asks-for-a-series-it-wants-to-order",
+          "since": "v28",
+          "given": "the plugin wants to propose an order on a listed series the deployment does not hold",
+          "expect": [
+            {
+              "row": "RequestSeriesRecords",
+              "fields": {
+                "series": [
+                  {
+                    "series_key": "<set>",
+                    "underlying_instrument_id": "<set>",
+                    "cause": "SERIES_REQUEST_CAUSE_ORDER"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "reads-an-underlyings-chain",
+          "since": "v28",
+          "given": "the plugin needs the listed series of an underlying for one expiration",
+          "expect": [
+            {
+              "row": "ListSeries",
+              "fields": {
+                "subjects": "<set>",
+                "expiration_from": "<set>",
+                "expiration_to": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "reads-the-stale-reference-actions-permitted",
+          "since": "v28",
+          "given": "the plugin is about to place on a reference price past its ceiling",
+          "expect": [
+            {
+              "row": "ReadStaleReferenceActionsPermitted"
             }
           ]
         }
@@ -4285,6 +4733,40 @@
               }
             }
           ]
+        },
+        {
+          "name": "asks-for-a-series-it-wants-to-order",
+          "since": "v28",
+          "given": "the plugin wants to propose an order on a listed series the deployment does not hold",
+          "expect": [
+            {
+              "row": "RequestSeriesRecords",
+              "fields": {
+                "series": [
+                  {
+                    "series_key": "<set>",
+                    "underlying_instrument_id": "<set>",
+                    "cause": "SERIES_REQUEST_CAUSE_ORDER"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "reads-an-underlyings-chain",
+          "since": "v28",
+          "given": "the plugin needs the listed series of an underlying for one expiration",
+          "expect": [
+            {
+              "row": "ListSeries",
+              "fields": {
+                "subjects": "<set>",
+                "expiration_from": "<set>",
+                "expiration_to": "<set>"
+              }
+            }
+          ]
         }
       ]
     },
@@ -4701,6 +5183,45 @@
               }
             }
           ]
+        },
+        {
+          "name": "releases-an-unreported-expiry",
+          "since": "v28",
+          "given": "a proposed expiry has no report by the morning after and the statement no longer shows the position",
+          "expect": [
+            {
+              "row": "ReleaseLifecycleEvent",
+              "fields": {
+                "event_id": "<set>",
+                "note": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "reads-an-accounts-lifecycle-events",
+          "since": "v28",
+          "given": "the plugin needs an account's exercises, assignments and expiries for a week",
+          "expect": [
+            {
+              "row": "ListLifecycleEvents",
+              "fields": {
+                "account_id": "<set>",
+                "from_date": "<set>",
+                "to_date": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "hears-a-lifecycle-event-recorded",
+          "since": "v28",
+          "given": "the book records an assignment in an account within the plugin's scope",
+          "expect": [
+            {
+              "row": "LifecycleEventRecorded"
+            }
+          ]
         }
       ]
     },
@@ -5111,6 +5632,208 @@
               "fields": {
                 "account_id": "<set>",
                 "trade_date": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "asks-for-a-series-it-wants-to-order",
+          "since": "v28",
+          "given": "the plugin wants to propose an order on a listed series the deployment does not hold",
+          "expect": [
+            {
+              "row": "RequestSeriesRecords",
+              "fields": {
+                "series": [
+                  {
+                    "series_key": "<set>",
+                    "underlying_instrument_id": "<set>",
+                    "cause": "SERIES_REQUEST_CAUSE_ORDER"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "reads-an-underlyings-chain",
+          "since": "v28",
+          "given": "the plugin needs the listed series of an underlying for one expiration",
+          "expect": [
+            {
+              "row": "ListSeries",
+              "fields": {
+                "subjects": "<set>",
+                "expiration_from": "<set>",
+                "expiration_to": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "reads-open-interest-for-a-chain",
+          "since": "v28",
+          "given": "the plugin needs the prior night's open interest of an underlying's chain",
+          "expect": [
+            {
+              "row": "ListStatistics",
+              "fields": {
+                "subjects": "<set>",
+                "kinds": [
+                  "STATISTIC_KIND_OPEN_INTEREST"
+                ],
+                "all_series": true
+              }
+            }
+          ]
+        },
+        {
+          "name": "hears-a-statistic-recorded",
+          "since": "v28",
+          "given": "the lake records open interest for a series of an underlying the plugin asked for",
+          "expect": [
+            {
+              "row": "StatisticsRecorded"
+            }
+          ]
+        },
+        {
+          "name": "reads-an-accounts-lifecycle-events",
+          "since": "v28",
+          "given": "the plugin needs an account's exercises, assignments and expiries for a week",
+          "expect": [
+            {
+              "row": "ListLifecycleEvents",
+              "fields": {
+                "account_id": "<set>",
+                "from_date": "<set>",
+                "to_date": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "hears-a-lifecycle-event-recorded",
+          "since": "v28",
+          "given": "the book records an assignment in an account within the plugin's scope",
+          "expect": [
+            {
+              "row": "LifecycleEventRecorded"
+            }
+          ]
+        },
+        {
+          "name": "proposes-a-package",
+          "since": "v28",
+          "given": "the plugin proposes a vertical spread",
+          "expect": [
+            {
+              "row": "ProposeOrder",
+              "fields": {
+                "legs": [
+                  {
+                    "instrument_id": "<set>",
+                    "side": "<set>",
+                    "ratio": "<set>",
+                    "position_effect": "<set>"
+                  }
+                ],
+                "quantity": "<set>",
+                "limit_price": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "reads-a-derived-series",
+          "since": "v28",
+          "given": "the plugin needs a year of a signal plugin's IV30 for an underlying",
+          "expect": [
+            {
+              "row": "ListDerivedSeries",
+              "fields": {
+                "subjects": "<set>",
+                "series": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "reads-a-saved-scenario-set",
+          "since": "v28",
+          "given": "the plugin needs a saved scenario set to name it in a job",
+          "expect": [
+            {
+              "row": "ListScenarios",
+              "fields": {
+                "row_keys": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "reads-a-companys-filings",
+          "since": "v28",
+          "given": "the plugin needs a company's 8-K report dates",
+          "expect": [
+            {
+              "row": "ListFilings",
+              "fields": {
+                "subjects": "<set>",
+                "kinds": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "reads-reported-facts",
+          "since": "v28",
+          "given": "the plugin needs a company's reported EPS history",
+          "expect": [
+            {
+              "row": "ListReportedFacts",
+              "fields": {
+                "subjects": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "reads-who-holds-a-security",
+          "since": "v28",
+          "given": "the plugin needs a security's 13F holders for a quarter",
+          "expect": [
+            {
+              "row": "ListHoldings",
+              "fields": {
+                "subjects": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "reads-declared-dividends",
+          "since": "v28",
+          "given": "the plugin needs an equity's declared dividends ahead",
+          "expect": [
+            {
+              "row": "ListCorporateActions",
+              "fields": {
+                "subjects": "<set>",
+                "kinds": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "reads-a-rating-history",
+          "since": "v28",
+          "given": "the plugin needs an issuer's rating history",
+          "expect": [
+            {
+              "row": "ListRatingActions",
+              "fields": {
+                "subjects": "<set>"
               }
             }
           ]
@@ -5700,6 +6423,172 @@
               }
             }
           ]
+        },
+        {
+          "name": "reads-open-interest-for-a-chain",
+          "since": "v28",
+          "given": "the plugin needs the prior night's open interest of an underlying's chain",
+          "expect": [
+            {
+              "row": "ListStatistics",
+              "fields": {
+                "subjects": "<set>",
+                "kinds": [
+                  "STATISTIC_KIND_OPEN_INTEREST"
+                ],
+                "all_series": true
+              }
+            }
+          ]
+        },
+        {
+          "name": "hears-a-statistic-recorded",
+          "since": "v28",
+          "given": "the lake records open interest for a series of an underlying the plugin asked for",
+          "expect": [
+            {
+              "row": "StatisticsRecorded"
+            }
+          ]
+        },
+        {
+          "name": "reads-an-accounts-lifecycle-events",
+          "since": "v28",
+          "given": "the plugin needs an account's exercises, assignments and expiries for a week",
+          "expect": [
+            {
+              "row": "ListLifecycleEvents",
+              "fields": {
+                "account_id": "<set>",
+                "from_date": "<set>",
+                "to_date": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "hears-a-lifecycle-event-recorded",
+          "since": "v28",
+          "given": "the book records an assignment in an account within the plugin's scope",
+          "expect": [
+            {
+              "row": "LifecycleEventRecorded"
+            }
+          ]
+        },
+        {
+          "name": "reads-a-derived-series",
+          "since": "v28",
+          "given": "the plugin needs a year of a signal plugin's IV30 for an underlying",
+          "expect": [
+            {
+              "row": "ListDerivedSeries",
+              "fields": {
+                "subjects": "<set>",
+                "series": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "reads-a-saved-scenario-set",
+          "since": "v28",
+          "given": "the plugin needs a saved scenario set to name it in a job",
+          "expect": [
+            {
+              "row": "ListScenarios",
+              "fields": {
+                "row_keys": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "reads-a-companys-filings",
+          "since": "v28",
+          "given": "the plugin needs a company's 8-K report dates",
+          "expect": [
+            {
+              "row": "ListFilings",
+              "fields": {
+                "subjects": "<set>",
+                "kinds": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "reads-reported-facts",
+          "since": "v28",
+          "given": "the plugin needs a company's reported EPS history",
+          "expect": [
+            {
+              "row": "ListReportedFacts",
+              "fields": {
+                "subjects": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "reads-who-holds-a-security",
+          "since": "v28",
+          "given": "the plugin needs a security's 13F holders for a quarter",
+          "expect": [
+            {
+              "row": "ListHoldings",
+              "fields": {
+                "subjects": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "reads-declared-dividends",
+          "since": "v28",
+          "given": "the plugin needs an equity's declared dividends ahead",
+          "expect": [
+            {
+              "row": "ListCorporateActions",
+              "fields": {
+                "subjects": "<set>",
+                "kinds": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "reads-a-rating-history",
+          "since": "v28",
+          "given": "the plugin needs an issuer's rating history",
+          "expect": [
+            {
+              "row": "ListRatingActions",
+              "fields": {
+                "subjects": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "hears-a-filing-recorded",
+          "since": "v28",
+          "given": "the lake records a filing for a company the plugin asked for",
+          "expect": [
+            {
+              "row": "FilingsRecorded"
+            }
+          ]
+        },
+        {
+          "name": "hears-a-dividend-declared",
+          "since": "v28",
+          "given": "the lake records a declared dividend for an equity the plugin asked for",
+          "expect": [
+            {
+              "row": "CorporateActionsRecorded"
+            }
+          ]
         }
       ]
     },
@@ -5781,6 +6670,49 @@
               "fields": {
                 "instrument_ids": "<set>"
               }
+            }
+          ]
+        },
+        {
+          "name": "proposes-an-exercise-by-exception",
+          "since": "v28",
+          "given": "an option held long expires in the money by more than $0.01",
+          "expect": [
+            {
+              "row": "ProposeLifecycleEvents",
+              "fields": {
+                "events": [
+                  {
+                    "kind": "LIFECYCLE_EVENT_KIND_EXERCISE",
+                    "proposal_basis": "<set>"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "reads-an-accounts-lifecycle-events",
+          "since": "v28",
+          "given": "the plugin needs an account's exercises, assignments and expiries for a week",
+          "expect": [
+            {
+              "row": "ListLifecycleEvents",
+              "fields": {
+                "account_id": "<set>",
+                "from_date": "<set>",
+                "to_date": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "hears-a-lifecycle-event-recorded",
+          "since": "v28",
+          "given": "the book records an assignment in an account within the plugin's scope",
+          "expect": [
+            {
+              "row": "LifecycleEventRecorded"
             }
           ]
         }
@@ -6185,6 +7117,243 @@
               "fields": {
                 "account_id": "<set>",
                 "trade_date": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "asks-for-a-series-it-wants-to-order",
+          "since": "v28",
+          "given": "the plugin wants to propose an order on a listed series the deployment does not hold",
+          "expect": [
+            {
+              "row": "RequestSeriesRecords",
+              "fields": {
+                "series": [
+                  {
+                    "series_key": "<set>",
+                    "underlying_instrument_id": "<set>",
+                    "cause": "SERIES_REQUEST_CAUSE_ORDER"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "reads-an-underlyings-chain",
+          "since": "v28",
+          "given": "the plugin needs the listed series of an underlying for one expiration",
+          "expect": [
+            {
+              "row": "ListSeries",
+              "fields": {
+                "subjects": "<set>",
+                "expiration_from": "<set>",
+                "expiration_to": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "reads-open-interest-for-a-chain",
+          "since": "v28",
+          "given": "the plugin needs the prior night's open interest of an underlying's chain",
+          "expect": [
+            {
+              "row": "ListStatistics",
+              "fields": {
+                "subjects": "<set>",
+                "kinds": [
+                  "STATISTIC_KIND_OPEN_INTEREST"
+                ],
+                "all_series": true
+              }
+            }
+          ]
+        },
+        {
+          "name": "hears-a-statistic-recorded",
+          "since": "v28",
+          "given": "the lake records open interest for a series of an underlying the plugin asked for",
+          "expect": [
+            {
+              "row": "StatisticsRecorded"
+            }
+          ]
+        },
+        {
+          "name": "records-a-derived-series",
+          "since": "v28",
+          "given": "the plugin computes an underlying's 30-day constant-maturity IV at the close",
+          "expect": [
+            {
+              "row": "RecordDerivedSeries",
+              "fields": {
+                "values": [
+                  {
+                    "series": "<set>",
+                    "value": "<set>",
+                    "rule": "<set>",
+                    "inputs": "<set>"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "saves-a-scenario-set",
+          "since": "v28",
+          "given": "a person saves the grid's price-by-date axes on the plugin's page",
+          "expect": [
+            {
+              "row": "RecordScenarios",
+              "fields": {
+                "scenarios": [
+                  {
+                    "scenario_set": {
+                      "axes": "<set>"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "reads-a-derived-series",
+          "since": "v28",
+          "given": "the plugin needs a year of a signal plugin's IV30 for an underlying",
+          "expect": [
+            {
+              "row": "ListDerivedSeries",
+              "fields": {
+                "subjects": "<set>",
+                "series": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "reads-a-saved-scenario-set",
+          "since": "v28",
+          "given": "the plugin needs a saved scenario set to name it in a job",
+          "expect": [
+            {
+              "row": "ListScenarios",
+              "fields": {
+                "row_keys": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "reads-a-companys-filings",
+          "since": "v28",
+          "given": "the plugin needs a company's 8-K report dates",
+          "expect": [
+            {
+              "row": "ListFilings",
+              "fields": {
+                "subjects": "<set>",
+                "kinds": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "reads-reported-facts",
+          "since": "v28",
+          "given": "the plugin needs a company's reported EPS history",
+          "expect": [
+            {
+              "row": "ListReportedFacts",
+              "fields": {
+                "subjects": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "reads-who-holds-a-security",
+          "since": "v28",
+          "given": "the plugin needs a security's 13F holders for a quarter",
+          "expect": [
+            {
+              "row": "ListHoldings",
+              "fields": {
+                "subjects": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "reads-declared-dividends",
+          "since": "v28",
+          "given": "the plugin needs an equity's declared dividends ahead",
+          "expect": [
+            {
+              "row": "ListCorporateActions",
+              "fields": {
+                "subjects": "<set>",
+                "kinds": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "reads-a-rating-history",
+          "since": "v28",
+          "given": "the plugin needs an issuer's rating history",
+          "expect": [
+            {
+              "row": "ListRatingActions",
+              "fields": {
+                "subjects": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "hears-a-filing-recorded",
+          "since": "v28",
+          "given": "the lake records a filing for a company the plugin asked for",
+          "expect": [
+            {
+              "row": "FilingsRecorded"
+            }
+          ]
+        },
+        {
+          "name": "hears-a-dividend-declared",
+          "since": "v28",
+          "given": "the lake records a declared dividend for an equity the plugin asked for",
+          "expect": [
+            {
+              "row": "CorporateActionsRecorded"
+            }
+          ]
+        },
+        {
+          "name": "escalates-an-outlier",
+          "since": "v28",
+          "given": "a close lies far outside the plugin's robust baseline for its subject",
+          "expect": [
+            {
+              "row": "RecordQualityAssessments",
+              "fields": {
+                "assessments": [
+                  {
+                    "dataset": "<set>",
+                    "row_key": "<set>",
+                    "version": "<set>",
+                    "state": "QUALITY_STATE_INVALID",
+                    "reasons": [
+                      "QUALITY_REASON_PRICE_OUTLIER"
+                    ]
+                  }
+                ]
               }
             }
           ]

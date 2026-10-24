@@ -270,6 +270,12 @@ class PreparedCallState(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     PREPARED_CALL_STATE_DISCARDED: _ClassVar[PreparedCallState]
     PREPARED_CALL_STATE_WITHDRAWN: _ClassVar[PreparedCallState]
     PREPARED_CALL_STATE_LAPSED: _ClassVar[PreparedCallState]
+
+class DataUse(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    DATA_USE_UNSPECIFIED: _ClassVar[DataUse]
+    DATA_USE_PERSONAL: _ClassVar[DataUse]
+    DATA_USE_COMMERCIAL: _ClassVar[DataUse]
 OBSERVATION_MODE_UNSPECIFIED: ObservationMode
 OBSERVATION_MODE_PULL: ObservationMode
 OBSERVATION_MODE_PUSH: ObservationMode
@@ -438,6 +444,9 @@ PREPARED_CALL_STATE_CHANGED: PreparedCallState
 PREPARED_CALL_STATE_DISCARDED: PreparedCallState
 PREPARED_CALL_STATE_WITHDRAWN: PreparedCallState
 PREPARED_CALL_STATE_LAPSED: PreparedCallState
+DATA_USE_UNSPECIFIED: DataUse
+DATA_USE_PERSONAL: DataUse
+DATA_USE_COMMERCIAL: DataUse
 
 class RegisterRequest(_message.Message):
     __slots__ = ("schema_version", "interface", "settings", "reads_external_accounts", "declaration", "tools")
@@ -576,7 +585,7 @@ class DatasetDeclaration(_message.Message):
     def __init__(self, key: _Optional[str] = ..., vendor: _Optional[str] = ..., aggregator: _Optional[str] = ..., data_types: _Optional[_Iterable[str]] = ..., modes: _Optional[_Iterable[_Union[ObservationMode, str]]] = ..., cadence: _Optional[int] = ..., history: _Optional[int] = ..., licence_default: _Optional[_Union[DatasetLicence, _Mapping]] = ..., day_time_zone: _Optional[str] = ..., day_end_minute: _Optional[int] = ..., venue_id: _Optional[str] = ..., calendar_id: _Optional[str] = ..., declared_delay_ns: _Optional[int] = ...) -> None: ...
 
 class DatasetLicence(_message.Message):
-    __slots__ = ("dataset", "kept", "retention_days", "derived_use", "display", "default_fields", "personal_use", "updated_by", "updated_at_ns", "acting_through_delegation", "client_name", "note", "prepared_call_id", "terms_version", "access_basis", "timeliness", "delay_minutes", "delay_label", "underlying_source", "meters", "display_terms", "non_display", "enterprise", "derived_use_terms", "derived_multi_instrument_free", "derived_creation_is_non_display", "redistribution", "outside_computation", "prohibited_uses", "attribution_required", "attribution_text", "copyright_class", "no_more_restrictive_terms", "not_affiliated_notice", "report_cadence", "report_due_day")
+    __slots__ = ("dataset", "kept", "retention_days", "derived_use", "display", "default_fields", "personal_use", "updated_by", "updated_at_ns", "acting_through_delegation", "client_name", "note", "prepared_call_id", "terms_version", "access_basis", "timeliness", "delay_minutes", "delay_label", "underlying_source", "meters", "display_terms", "non_display", "enterprise", "derived_use_terms", "derived_multi_instrument_free", "derived_creation_is_non_display", "redistribution", "outside_computation", "prohibited_uses", "attribution_required", "attribution_text", "copyright_class", "no_more_restrictive_terms", "not_affiliated_notice", "report_cadence", "report_due_day", "eligibility")
     DATASET_FIELD_NUMBER: _ClassVar[int]
     KEPT_FIELD_NUMBER: _ClassVar[int]
     RETENTION_DAYS_FIELD_NUMBER: _ClassVar[int]
@@ -613,6 +622,7 @@ class DatasetLicence(_message.Message):
     NOT_AFFILIATED_NOTICE_FIELD_NUMBER: _ClassVar[int]
     REPORT_CADENCE_FIELD_NUMBER: _ClassVar[int]
     REPORT_DUE_DAY_FIELD_NUMBER: _ClassVar[int]
+    ELIGIBILITY_FIELD_NUMBER: _ClassVar[int]
     dataset: str
     kept: bool
     retention_days: int
@@ -649,7 +659,8 @@ class DatasetLicence(_message.Message):
     not_affiliated_notice: str
     report_cadence: ReportCadence
     report_due_day: int
-    def __init__(self, dataset: _Optional[str] = ..., kept: bool = ..., retention_days: _Optional[int] = ..., derived_use: bool = ..., display: bool = ..., default_fields: _Optional[_Iterable[str]] = ..., personal_use: bool = ..., updated_by: _Optional[str] = ..., updated_at_ns: _Optional[int] = ..., acting_through_delegation: _Optional[str] = ..., client_name: _Optional[str] = ..., note: _Optional[str] = ..., prepared_call_id: _Optional[str] = ..., terms_version: _Optional[str] = ..., access_basis: _Optional[_Union[AccessBasis, str]] = ..., timeliness: _Optional[_Union[Timeliness, str]] = ..., delay_minutes: _Optional[int] = ..., delay_label: _Optional[str] = ..., underlying_source: _Optional[str] = ..., meters: _Optional[_Iterable[_Union[LicenceMeter, str]]] = ..., display_terms: _Optional[_Union[DisplayTerms, _Mapping]] = ..., non_display: _Optional[_Union[NonDisplayTerms, _Mapping]] = ..., enterprise: _Optional[_Union[EnterpriseTerms, _Mapping]] = ..., derived_use_terms: _Optional[_Union[DerivedUse, str]] = ..., derived_multi_instrument_free: bool = ..., derived_creation_is_non_display: bool = ..., redistribution: _Optional[_Union[Redistribution, str]] = ..., outside_computation: _Optional[_Union[OutsideComputation, str]] = ..., prohibited_uses: _Optional[_Iterable[_Union[ProhibitedUse, str]]] = ..., attribution_required: bool = ..., attribution_text: _Optional[str] = ..., copyright_class: _Optional[_Union[CopyrightClass, str]] = ..., no_more_restrictive_terms: bool = ..., not_affiliated_notice: _Optional[str] = ..., report_cadence: _Optional[_Union[ReportCadence, str]] = ..., report_due_day: _Optional[int] = ...) -> None: ...
+    eligibility: DataEligibility
+    def __init__(self, dataset: _Optional[str] = ..., kept: bool = ..., retention_days: _Optional[int] = ..., derived_use: bool = ..., display: bool = ..., default_fields: _Optional[_Iterable[str]] = ..., personal_use: bool = ..., updated_by: _Optional[str] = ..., updated_at_ns: _Optional[int] = ..., acting_through_delegation: _Optional[str] = ..., client_name: _Optional[str] = ..., note: _Optional[str] = ..., prepared_call_id: _Optional[str] = ..., terms_version: _Optional[str] = ..., access_basis: _Optional[_Union[AccessBasis, str]] = ..., timeliness: _Optional[_Union[Timeliness, str]] = ..., delay_minutes: _Optional[int] = ..., delay_label: _Optional[str] = ..., underlying_source: _Optional[str] = ..., meters: _Optional[_Iterable[_Union[LicenceMeter, str]]] = ..., display_terms: _Optional[_Union[DisplayTerms, _Mapping]] = ..., non_display: _Optional[_Union[NonDisplayTerms, _Mapping]] = ..., enterprise: _Optional[_Union[EnterpriseTerms, _Mapping]] = ..., derived_use_terms: _Optional[_Union[DerivedUse, str]] = ..., derived_multi_instrument_free: bool = ..., derived_creation_is_non_display: bool = ..., redistribution: _Optional[_Union[Redistribution, str]] = ..., outside_computation: _Optional[_Union[OutsideComputation, str]] = ..., prohibited_uses: _Optional[_Iterable[_Union[ProhibitedUse, str]]] = ..., attribution_required: bool = ..., attribution_text: _Optional[str] = ..., copyright_class: _Optional[_Union[CopyrightClass, str]] = ..., no_more_restrictive_terms: bool = ..., not_affiliated_notice: _Optional[str] = ..., report_cadence: _Optional[_Union[ReportCadence, str]] = ..., report_due_day: _Optional[int] = ..., eligibility: _Optional[_Union[DataEligibility, _Mapping]] = ...) -> None: ...
 
 class DisplayTerms(_message.Message):
     __slots__ = ("unit", "count_basis", "professional_split", "professional_definition")
@@ -1388,3 +1399,15 @@ class CallAsServiceAccountReply(_message.Message):
     prepared_call_id: str
     answer_json: str
     def __init__(self, outcome: _Optional[str] = ..., prepared_call_id: _Optional[str] = ..., answer_json: _Optional[str] = ...) -> None: ...
+
+class DataEligibility(_message.Message):
+    __slots__ = ("uses", "buyer_revenue_below", "buyer_revenue_at_least", "buyer_revenue_currency_code")
+    USES_FIELD_NUMBER: _ClassVar[int]
+    BUYER_REVENUE_BELOW_FIELD_NUMBER: _ClassVar[int]
+    BUYER_REVENUE_AT_LEAST_FIELD_NUMBER: _ClassVar[int]
+    BUYER_REVENUE_CURRENCY_CODE_FIELD_NUMBER: _ClassVar[int]
+    uses: _containers.RepeatedScalarFieldContainer[DataUse]
+    buyer_revenue_below: Decimal
+    buyer_revenue_at_least: Decimal
+    buyer_revenue_currency_code: str
+    def __init__(self, uses: _Optional[_Iterable[_Union[DataUse, str]]] = ..., buyer_revenue_below: _Optional[_Union[Decimal, _Mapping]] = ..., buyer_revenue_at_least: _Optional[_Union[Decimal, _Mapping]] = ..., buyer_revenue_currency_code: _Optional[str] = ...) -> None: ...

@@ -55,6 +55,34 @@ magnitude below 10 to this power (decisions/023)."""
 MEASURE_DEFINITION_SCALE_RANGE = Range(least=0, most=18, capped=False)
 """meridian.v1.MeasureDefinition.scale: states the scale values are rounded to"""
 
+JOB_CHAINS_COUNT = Count(least=0, most=64)
+"""meridian.v1.Job.chains: names chains a job prices (contract v28)"""
+
+CHAIN_REF_SERIES_KEYS_COUNT = Count(least=0, most=500)
+"""meridian.v1.ChainRef.series_keys: names series of the chain"""
+
+SCENARIO_NAME_LENGTH = Length(least=1, most=200)
+"""meridian.v1.Scenario.name: names a scenario"""
+
+SCENARIO_SHOCKS_COUNT = Count(least=0, most=64)
+"""meridian.v1.Scenario.shocks: carries the shocks applied together"""
+
+SCENARIO_SET_NAME_LENGTH = Length(least=1, most=200)
+"""meridian.v1.ScenarioSet.name: names a scenario set"""
+
+SCENARIO_SET_AXES_COUNT = Count(least=1, most=4)
+"""meridian.v1.ScenarioSet.axes: names the axes the set's points are generated
+from (ruling 582)"""
+
+SCENARIO_AXIS_NAME_LENGTH = Length(least=1, most=64)
+"""meridian.v1.ScenarioAxis.name: names an axis"""
+
+SCENARIO_AXIS_STEPS_COUNT = Count(least=1, most=32)
+"""meridian.v1.ScenarioAxis.steps: lists an axis's steps in order"""
+
+SHOCK_BUCKETS_COUNT = Count(least=0, most=32)
+"""meridian.v1.Shock.buckets: states a bucketed shock's values"""
+
 LIST_POSITIONS_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=True)
 """meridian.v1.ListPositionsRequest.page_size: bounds a page"""
 
@@ -101,6 +129,29 @@ LIST_BOOKINGS_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=True)
 
 LIST_ALERTS_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=True)
 """meridian.v1.ListAlertsRequest.page_size: bounds a page (approved 2026-10-14)"""
+
+LIFECYCLE_EVENT_DELIVERIES_COUNT = Count(least=0, most=16)
+"""meridian.v1.LifecycleEvent.deliveries: states what changed hands on physical
+delivery"""
+
+LIFECYCLE_EVENT_EXTERNAL_EVENT_ID_LENGTH = Length(least=0, most=200)
+"""meridian.v1.LifecycleEvent.external_event_id: carries the broker's own
+identifier for the event"""
+
+RECORD_LIFECYCLE_EVENT_REQUEST_IDEMPOTENCY_KEY_LENGTH = Length(least=0, most=128)
+"""meridian.v1.RecordLifecycleEventRequest.idempotency_key: makes a resend of
+one report apply once"""
+
+PROPOSE_LIFECYCLE_EVENTS_REQUEST_EVENTS_COUNT = Count(least=1, most=500)
+"""meridian.v1.ProposeLifecycleEventsRequest.events: carries the events
+servicing expects (W9.17)"""
+
+RELEASE_LIFECYCLE_EVENT_REQUEST_NOTE_LENGTH = Length(least=1, most=2000)
+"""meridian.v1.ReleaseLifecycleEventRequest.note: says why the proposal is
+booked with no report"""
+
+LIST_LIFECYCLE_EVENTS_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=True)
+"""meridian.v1.ListLifecycleEventsRequest.page_size: bounds a page"""
 
 ACCOUNT_RECORD_CUSTODIAN_LENGTH = Length(least=0, most=200)
 """meridian.v1.AccountRecord.custodian: says where the account is held, for a
@@ -197,6 +248,38 @@ for (W1.22)"""
 
 LIST_EVENT_GROUPS_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=False)
 """meridian.v1.ListEventGroupsRequest.page_size: bounds a page"""
+
+LISTED_OPTION_OPTION_ROOT_LENGTH = Length(least=1, most=6)
+"""meridian.v1.ListedOption.option_root: names the series' root (ruling 575)"""
+
+LISTED_OPTION_CONTRACT_MONTH_LENGTH = Length(least=6, most=6)
+"""meridian.v1.ListedOption.contract_month: states a future option's contract
+month (FIX MaturityMonthYear, 200)"""
+
+FUTURE_CONTRACT_PRODUCT_CODE_LENGTH = Length(least=1, most=12)
+"""meridian.v1.FutureContract.product_code: names the exchange's product
+(ruling 575)"""
+
+FUTURE_CONTRACT_CONTRACT_MONTH_LENGTH = Length(least=6, most=6)
+"""meridian.v1.FutureContract.contract_month: states the contract month (FIX
+MaturityMonthYear, 200; approved 573)"""
+
+MODEL_BINDING_MODEL_VERSION_RANGE = Range(least=1, most=1000, capped=False)
+"""meridian.v1.ModelBinding.model_version: names the model's version"""
+
+REQUEST_SERIES_RECORDS_REQUEST_SERIES_COUNT = Count(least=1, most=500)
+"""meridian.v1.RequestSeriesRecordsRequest.series: names the series wanted
+(W3.31)"""
+
+REQUEST_SERIES_RECORDS_REQUEST_NOTE_LENGTH = Length(least=0, most=2000)
+"""meridian.v1.RequestSeriesRecordsRequest.note: says why"""
+
+SERIES_WANT_SERIES_KEY_COUNT = Count(least=1, most=2)
+"""meridian.v1.SeriesWant.series_key: names the series by its key"""
+
+RESOLVE_COMPANY_REQUEST_IDENTIFIERS_COUNT = Count(least=0, most=4)
+"""meridian.v1.ResolveCompanyRequest.identifiers: names a company by its open
+identifiers"""
 
 OBSERVATION_META_ROW_KEY_LENGTH = Length(least=1, most=128)
 """meridian.v1.ObservationMeta.row_key: names one observation, so recording it
@@ -322,6 +405,148 @@ executions"""
 
 LIST_EXECUTION_COSTS_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=True)
 """meridian.v1.ListExecutionCostsRequest.page_size: bounds a page"""
+
+OBSERVATION_META_SERIES_KEY_COUNT = Count(least=0, most=2)
+"""meridian.v1.ObservationMeta.series_key: keys a chain row by its series
+without minting it (ruling 561)"""
+
+LISTED_SERIES_FIELDS_COUNT = Count(least=1, most=64)
+"""meridian.v1.ListedSeries.fields: carries the series' terms as its source
+lists them"""
+
+RECORD_SERIES_REQUEST_SERIES_COUNT = Count(least=1, most=500)
+"""meridian.v1.RecordSeriesRequest.series: carries a batch of listed series
+(W10.4)"""
+
+LIST_SERIES_REQUEST_SUBJECTS_COUNT = Count(least=1, most=64)
+"""meridian.v1.ListSeriesRequest.subjects: names the underlyings whose chains
+are read"""
+
+LIST_SERIES_REQUEST_SERIES_KEYS_COUNT = Count(least=0, most=500)
+"""meridian.v1.ListSeriesRequest.series_keys: asks for chain rows by series
+(contract v28)"""
+
+LIST_SERIES_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=True)
+"""meridian.v1.ListSeriesRequest.page_size: bounds a page"""
+
+RECORD_STATISTICS_REQUEST_STATISTICS_COUNT = Count(least=1, most=500)
+"""meridian.v1.RecordStatisticsRequest.statistics: carries a batch of
+statistics (W10.4)"""
+
+LIST_STATISTICS_REQUEST_SUBJECTS_COUNT = Count(least=1, most=64)
+"""meridian.v1.ListStatisticsRequest.subjects: names the instruments or
+underlyings read"""
+
+LIST_STATISTICS_REQUEST_SERIES_KEYS_COUNT = Count(least=0, most=500)
+"""meridian.v1.ListStatisticsRequest.series_keys: asks for chain rows by series
+(contract v28)"""
+
+LIST_STATISTICS_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=True)
+"""meridian.v1.ListStatisticsRequest.page_size: bounds a page"""
+
+LIST_QUOTES_REQUEST_SERIES_KEYS_COUNT = Count(least=0, most=500)
+"""meridian.v1.ListQuotesRequest.series_keys: asks for chain rows by series
+(contract v28)"""
+
+LIST_TRADES_REQUEST_SERIES_KEYS_COUNT = Count(least=0, most=500)
+"""meridian.v1.ListTradesRequest.series_keys: asks for chain rows by series
+(contract v28)"""
+
+DERIVED_SERIES_SERIES_LENGTH = Length(least=1, most=64)
+"""meridian.v1.DerivedSeries.series: names the plugin's series"""
+
+DERIVED_SERIES_INPUTS_COUNT = Count(least=1, most=32)
+"""meridian.v1.DerivedSeries.inputs: names what the value was derived from"""
+
+RECORD_DERIVED_SERIES_REQUEST_VALUES_COUNT = Count(least=1, most=500)
+"""meridian.v1.RecordDerivedSeriesRequest.values: carries a batch of derived
+values (W10.4)"""
+
+LIST_DERIVED_SERIES_REQUEST_SUBJECTS_COUNT = Count(least=1, most=64)
+"""meridian.v1.ListDerivedSeriesRequest.subjects: names the subjects read"""
+
+SAVED_SCENARIO_DESCRIPTION_LENGTH = Length(least=0, most=2000)
+"""meridian.v1.SavedScenario.description: says what the scenario is for"""
+
+RECORD_SCENARIOS_REQUEST_SCENARIOS_COUNT = Count(least=1, most=50)
+"""meridian.v1.RecordScenariosRequest.scenarios: carries scenarios to save
+(W12.8)"""
+
+FILING_REF_ACCESSION_NUMBER_LENGTH = Length(least=1, most=32)
+"""meridian.v1.FilingRef.accession_number: names the filing a value came from
+(shared addition 5)"""
+
+FILING_REF_FORM_LENGTH = Length(least=1, most=32)
+"""meridian.v1.FilingRef.form: says the form as reported"""
+
+RECORD_FILINGS_REQUEST_FILINGS_COUNT = Count(least=1, most=500)
+"""meridian.v1.RecordFilingsRequest.filings: carries a batch of filings (W10.4)"""
+
+LIST_FILINGS_REQUEST_SUBJECTS_COUNT = Count(least=1, most=64)
+"""meridian.v1.ListFilingsRequest.subjects: names the subjects read"""
+
+LIST_FILINGS_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=True)
+"""meridian.v1.ListFilingsRequest.page_size: bounds a page"""
+
+REPORTED_FACT_CONCEPT_LENGTH = Length(least=1, most=256)
+"""meridian.v1.ReportedFact.concept: names the fact's concept"""
+
+REPORTED_FACT_DIMENSIONS_COUNT = Count(least=0, most=16)
+"""meridian.v1.ReportedFact.dimensions: qualifies the fact by its dimensions"""
+
+RECORD_REPORTED_FACTS_REQUEST_FACTS_COUNT = Count(least=1, most=500)
+"""meridian.v1.RecordReportedFactsRequest.facts: carries a batch of reported
+facts (W10.4)"""
+
+LIST_REPORTED_FACTS_REQUEST_SUBJECTS_COUNT = Count(least=1, most=64)
+"""meridian.v1.ListReportedFactsRequest.subjects: names the subjects read"""
+
+LIST_REPORTED_FACTS_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=True)
+"""meridian.v1.ListReportedFactsRequest.page_size: bounds a page"""
+
+RECORD_HOLDINGS_REPORTS_REQUEST_REPORTS_COUNT = Count(least=1, most=500)
+"""meridian.v1.RecordHoldingsReportsRequest.reports: carries a batch of
+holdings reports (W10.4)"""
+
+RECORD_HOLDINGS_REQUEST_HOLDINGS_COUNT = Count(least=1, most=500)
+"""meridian.v1.RecordHoldingsRequest.holdings: carries a batch of holdings
+(W10.4)"""
+
+LIST_HOLDINGS_REQUEST_SUBJECTS_COUNT = Count(least=1, most=64)
+"""meridian.v1.ListHoldingsRequest.subjects: names the subjects read"""
+
+LIST_HOLDINGS_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=True)
+"""meridian.v1.ListHoldingsRequest.page_size: bounds a page"""
+
+RECORD_CORPORATE_ACTIONS_REQUEST_ACTIONS_COUNT = Count(least=1, most=500)
+"""meridian.v1.RecordCorporateActionsRequest.actions: carries a batch of
+announced corporate actions (W10.4)"""
+
+LIST_CORPORATE_ACTIONS_REQUEST_SUBJECTS_COUNT = Count(least=1, most=64)
+"""meridian.v1.ListCorporateActionsRequest.subjects: names the subjects read"""
+
+LIST_CORPORATE_ACTIONS_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=True)
+"""meridian.v1.ListCorporateActionsRequest.page_size: bounds a page"""
+
+RATING_ACTION_RATING_LENGTH = Length(least=0, most=32)
+"""meridian.v1.RatingAction.rating: states the rating as reported"""
+
+RATING_ACTION_RATING_CLASS_LENGTH = Length(least=1, most=64)
+"""meridian.v1.RatingAction.rating_class: states the rating's class as reported"""
+
+RECORD_RATING_ACTIONS_REQUEST_ACTIONS_COUNT = Count(least=1, most=500)
+"""meridian.v1.RecordRatingActionsRequest.actions: carries a batch of rating
+actions (W10.4)"""
+
+LIST_RATING_ACTIONS_REQUEST_SUBJECTS_COUNT = Count(least=1, most=64)
+"""meridian.v1.ListRatingActionsRequest.subjects: names the subjects read"""
+
+LIST_RATING_ACTIONS_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=True)
+"""meridian.v1.ListRatingActionsRequest.page_size: bounds a page"""
+
+RECORD_QUALITY_ASSESSMENTS_REQUEST_ASSESSMENTS_COUNT = Count(least=1, most=500)
+"""meridian.v1.RecordQualityAssessmentsRequest.assessments: carries a batch of
+assessments (W10.12)"""
 
 AS_REPORTED_SCHEME_LENGTH = Length(least=1, most=64)
 """meridian.v1.AsReported.scheme: says whose vocabulary a value as reported is
@@ -636,6 +861,10 @@ model the version answers"""
 REPORT_LATENCY_REQUEST_SNAPSHOTS_COUNT = Count(least=1, most=500)
 """meridian.v1.ReportLatencyRequest.snapshots: carries a plugin's latency and
 data-age snapshots to core's monitor (W4.16)"""
+
+DATA_ELIGIBILITY_BUYER_REVENUE_CURRENCY_CODE_LENGTH = Length(least=0, most=3)
+"""meridian.v1.DataEligibility.buyer_revenue_currency_code: names the currency
+both buyer-revenue thresholds are in"""
 
 RECORD_HOLDINGS_STATEMENT_REQUEST_PROVENANCE_COUNT = Count(least=0, most=32)
 """meridian.v1.RecordHoldingsStatementRequest.provenance: says where each value

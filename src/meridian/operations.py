@@ -35,11 +35,21 @@ from .bounds import (
     DECIMAL_DIGITS,
     DECIMAL_SCALE,
     RECORD_BARS_REQUEST_BARS_COUNT,
+    RECORD_CORPORATE_ACTIONS_REQUEST_ACTIONS_COUNT,
+    RECORD_DERIVED_SERIES_REQUEST_VALUES_COUNT,
+    RECORD_FILINGS_REQUEST_FILINGS_COUNT,
+    RECORD_HOLDINGS_REPORTS_REQUEST_REPORTS_COUNT,
+    RECORD_HOLDINGS_REQUEST_HOLDINGS_COUNT,
     RECORD_LIVENESS_REQUEST_LIVENESS_COUNT,
     RECORD_OUTCOMES_REQUEST_OUTCOMES_COUNT,
     RECORD_PRICES_REQUEST_PRICES_COUNT,
+    RECORD_QUALITY_ASSESSMENTS_REQUEST_ASSESSMENTS_COUNT,
     RECORD_QUOTES_REQUEST_QUOTES_COUNT,
     RECORD_RATES_REQUEST_RATES_COUNT,
+    RECORD_RATING_ACTIONS_REQUEST_ACTIONS_COUNT,
+    RECORD_REPORTED_FACTS_REQUEST_FACTS_COUNT,
+    RECORD_SERIES_REQUEST_SERIES_COUNT,
+    RECORD_STATISTICS_REQUEST_STATISTICS_COUNT,
     RECORD_TRADES_REQUEST_TRADES_COUNT,
     REPORT_LATENCY_REQUEST_SNAPSHOTS_COUNT,
     Count,
@@ -1010,6 +1020,7 @@ class Leg:
     instrument_id: str = ""
     side: ops.Side | str | None = None
     ratio: Decimal | int
+    position_effect: ops.PositionEffect | str | None = None
 
 
 def _leg(value: Leg, name: str) -> ops.Leg:
@@ -1020,6 +1031,7 @@ def _leg(value: Leg, name: str) -> ops.Leg:
         instrument_id=value.instrument_id,
         side=_enum(ops.Side, value.side, f"{name}.side"),
         ratio=_decimal(value.ratio, f"{name}.ratio"),
+        position_effect=_enum(ops.PositionEffect, value.position_effect, f"{name}.position_effect"),
     )
 
 
@@ -1770,7 +1782,7 @@ class ObservationMeta:
     naming its path, as a request's own field is."""
 
     row_key: str = ""
-    subjects: Sequence[ops.SubjectRef] = ()
+    subjects: Sequence[SubjectRef] = ()
     source: ops.Source | None = None
     valid_from_ns: int = 0
     valid_until_ns: int = 0
@@ -1783,6 +1795,9 @@ class ObservationMeta:
     raw: ops.RawRecordRef | None = None
     unconverted: Sequence[ops.AsReported] = ()
     closed_day: DateCheck | None = None
+    series_key: Sequence[ops.Identifier] = ()
+    quality: ops.QualityState | str | None = None
+    quality_reasons: Sequence[ops.QualityReason | str] = ()
 
 
 def _observation_meta(value: ObservationMeta, name: str) -> ops.ObservationMeta:
@@ -1791,7 +1806,7 @@ def _observation_meta(value: ObservationMeta, name: str) -> ops.ObservationMeta:
         raise TypeError(f"{name} is a meridian.ObservationMeta, not {type(value).__name__}")
     return ops.ObservationMeta(
         row_key=value.row_key,
-        subjects=list(value.subjects),
+        subjects=[_subject_ref(each, f"{name}.subjects[{i}]") for i, each in enumerate(value.subjects)],
         source=value.source,
         valid_from_ns=value.valid_from_ns,
         valid_until_ns=value.valid_until_ns,
@@ -1804,6 +1819,31 @@ def _observation_meta(value: ObservationMeta, name: str) -> ops.ObservationMeta:
         raw=value.raw,
         unconverted=list(value.unconverted),
         closed_day=None if value.closed_day is None else _date_check(value.closed_day, f"{name}.closed_day"),
+        series_key=list(value.series_key),
+        quality=_enum(ops.QualityState, value.quality, f"{name}.quality"),
+        quality_reasons=[_enum(ops.QualityReason, each, f"{name}.quality_reasons[{i}]") for i, each in enumerate(value.quality_reasons)],
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class SubjectRef:
+    """One entity a row is about.
+
+    The SDK's form of the wire's SubjectRef: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    entity_id: str = ""
+    role: ops.SubjectRole | str | None = None
+
+
+def _subject_ref(value: SubjectRef, name: str) -> ops.SubjectRef:
+    """A SubjectRef as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, SubjectRef):
+        raise TypeError(f"{name} is a meridian.SubjectRef, not {type(value).__name__}")
+    return ops.SubjectRef(
+        entity_id=value.entity_id,
+        role=_enum(ops.SubjectRole, value.role, f"{name}.role"),
     )
 
 
@@ -1879,6 +1919,7 @@ class Trade:
     aggressor: ops.Aggressor | str | None = None
     source_sequence: int = 0
     cancelled: bool = False
+    quote_at_trade: QuoteAtTrade | None = None
 
 
 def _trade(value: Trade, name: str) -> ops.Trade:
@@ -1893,6 +1934,7 @@ def _trade(value: Trade, name: str) -> ops.Trade:
         aggressor=_enum(ops.Aggressor, value.aggressor, f"{name}.aggressor"),
         source_sequence=value.source_sequence,
         cancelled=value.cancelled,
+        quote_at_trade=None if value.quote_at_trade is None else _quote_at_trade(value.quote_at_trade, f"{name}.quote_at_trade"),
     )
 
 
@@ -1944,6 +1986,37 @@ def _eligibility(value: Eligibility, name: str) -> ops.Eligibility:
         open=_enum(ops.Eligible, value.open, f"{name}.open"),
         close=_enum(ops.Eligible, value.close, f"{name}.close"),
         volume=_enum(ops.Eligible, value.volume, f"{name}.volume"),
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class QuoteAtTrade:
+    """Contract v28 (Trade.quote_at_trade): carries the quote in force when
+    the print happened (G9; approved 573).
+
+    The SDK's form of the wire's QuoteAtTrade: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    bid: Money | None = None
+    ask: Money | None = None
+    bid_quantity: Decimal | int | None = None
+    ask_quantity: Decimal | int | None = None
+    source_time_ns: int = 0
+    as_last_received: bool = False
+
+
+def _quote_at_trade(value: QuoteAtTrade, name: str) -> ops.QuoteAtTrade:
+    """A QuoteAtTrade as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, QuoteAtTrade):
+        raise TypeError(f"{name} is a meridian.QuoteAtTrade, not {type(value).__name__}")
+    return ops.QuoteAtTrade(
+        bid=None if value.bid is None else _money(value.bid, f"{name}.bid"),
+        ask=None if value.ask is None else _money(value.ask, f"{name}.ask"),
+        bid_quantity=None if value.bid_quantity is None else _decimal(value.bid_quantity, f"{name}.bid_quantity"),
+        ask_quantity=None if value.ask_quantity is None else _decimal(value.ask_quantity, f"{name}.ask_quantity"),
+        source_time_ns=value.source_time_ns,
+        as_last_received=value.as_last_received,
     )
 
 
@@ -2027,6 +2100,9 @@ class Job:
     what_if: WhatIf | None = None
     business_date: date | str = ""
     reporting_currency: str = ""
+    chains: Sequence[ops.ChainRef] = ()
+    scenario_set: ScenarioSet | None = None
+    scenario_ref: ops.ScenarioRef | None = None
 
 
 def _job(value: Job, name: str) -> ops.Job:
@@ -2040,6 +2116,9 @@ def _job(value: Job, name: str) -> ops.Job:
         what_if=None if value.what_if is None else _what_if(value.what_if, f"{name}.what_if"),
         business_date=_date(value.business_date, f"{name}.business_date"),
         reporting_currency=value.reporting_currency,
+        chains=list(value.chains),
+        scenario_set=None if value.scenario_set is None else _scenario_set(value.scenario_set, f"{name}.scenario_set"),
+        scenario_ref=value.scenario_ref,
     )
 
 
@@ -2093,6 +2172,126 @@ def _what_if_trade(value: WhatIfTrade, name: str) -> ops.WhatIfTrade:
 
 
 @dataclass(frozen=True, kw_only=True)
+class ScenarioSet:
+    """Contract v28 (Job.scenario_set): carries a scenario set inline,
+    unsaved (the one-API spec's Q20).
+
+    The SDK's form of the wire's ScenarioSet: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    name: str = ""
+    axes: Sequence[ScenarioAxis] = ()
+
+
+def _scenario_set(value: ScenarioSet, name: str) -> ops.ScenarioSet:
+    """A ScenarioSet as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, ScenarioSet):
+        raise TypeError(f"{name} is a meridian.ScenarioSet, not {type(value).__name__}")
+    return ops.ScenarioSet(
+        name=value.name,
+        axes=[_scenario_axis(each, f"{name}.axes[{i}]") for i, each in enumerate(value.axes)],
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class ScenarioAxis:
+    """Contract v28 (ScenarioSet.axes): names the axes the set's points are
+    generated from (ruling 582).
+
+    The SDK's form of the wire's ScenarioAxis: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    name: str = ""
+    steps: Sequence[Scenario] = ()
+
+
+def _scenario_axis(value: ScenarioAxis, name: str) -> ops.ScenarioAxis:
+    """A ScenarioAxis as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, ScenarioAxis):
+        raise TypeError(f"{name} is a meridian.ScenarioAxis, not {type(value).__name__}")
+    return ops.ScenarioAxis(
+        name=value.name,
+        steps=[_scenario(each, f"{name}.steps[{i}]") for i, each in enumerate(value.steps)],
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class Scenario:
+    """Contract v28 (ScenarioAxis.steps): lists an axis's steps in order.
+
+    The SDK's form of the wire's Scenario: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    name: str = ""
+    shocks: Sequence[Shock] = ()
+
+
+def _scenario(value: Scenario, name: str) -> ops.Scenario:
+    """A Scenario as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, Scenario):
+        raise TypeError(f"{name} is a meridian.Scenario, not {type(value).__name__}")
+    return ops.Scenario(
+        name=value.name,
+        shocks=[_shock(each, f"{name}.shocks[{i}]") for i, each in enumerate(value.shocks)],
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class Shock:
+    """Contract v28 (Scenario.shocks): carries the shocks applied together.
+
+    The SDK's form of the wire's Shock: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    object: ops.ShockObject | str | None = None
+    target: ops.ShockTarget | None = None
+    form: ops.ShockForm | str | None = None
+    unit: ops.ShockUnit | str | None = None
+    value: Decimal | int | None = None
+    buckets: Sequence[ShockBucket] = ()
+
+
+def _shock(value: Shock, name: str) -> ops.Shock:
+    """A Shock as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, Shock):
+        raise TypeError(f"{name} is a meridian.Shock, not {type(value).__name__}")
+    return ops.Shock(
+        object=_enum(ops.ShockObject, value.object, f"{name}.object"),
+        target=value.target,
+        form=_enum(ops.ShockForm, value.form, f"{name}.form"),
+        unit=_enum(ops.ShockUnit, value.unit, f"{name}.unit"),
+        value=None if value.value is None else _decimal(value.value, f"{name}.value"),
+        buckets=[_shock_bucket(each, f"{name}.buckets[{i}]") for i, each in enumerate(value.buckets)],
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class ShockBucket:
+    """Contract v28 (Shock.buckets): states a bucketed shock's values.
+
+    The SDK's form of the wire's ShockBucket: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    tenor: Tenor | None = None
+    value: Decimal | int
+
+
+def _shock_bucket(value: ShockBucket, name: str) -> ops.ShockBucket:
+    """A ShockBucket as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, ShockBucket):
+        raise TypeError(f"{name} is a meridian.ShockBucket, not {type(value).__name__}")
+    return ops.ShockBucket(
+        tenor=None if value.tenor is None else _tenor(value.tenor, f"{name}.tenor"),
+        value=_decimal(value.value, f"{name}.value"),
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
 class PricedUnit:
     """PricedUnit.
 
@@ -2129,6 +2328,9 @@ class ScenarioKey:
     kind: ops.ScenarioKind | str | None = None
     business_date: date | str = ""
     outcome_instrument_id: str = ""
+    scenario_row_key: str = ""
+    scenario_version: int = 0
+    axis_positions: Sequence[int] = ()
 
 
 def _scenario_key(value: ScenarioKey, name: str) -> ops.ScenarioKey:
@@ -2139,6 +2341,9 @@ def _scenario_key(value: ScenarioKey, name: str) -> ops.ScenarioKey:
         kind=_enum(ops.ScenarioKind, value.kind, f"{name}.kind"),
         business_date=_date(value.business_date, f"{name}.business_date"),
         outcome_instrument_id=value.outcome_instrument_id,
+        scenario_row_key=value.scenario_row_key,
+        scenario_version=value.scenario_version,
+        axis_positions=list(value.axis_positions),
     )
 
 
@@ -2373,6 +2578,433 @@ def _rate_percentile(value: RatePercentile, name: str) -> ops.RatePercentile:
     return ops.RatePercentile(
         percentile=value.percentile,
         value=_decimal(value.value, f"{name}.value"),
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class SeriesWant:
+    """Contract v28 (RequestSeriesRecordsRequest.series): names the series
+    wanted (W3.31).
+
+    The SDK's form of the wire's SeriesWant: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    series_key: Sequence[ops.Identifier] = ()
+    underlying_instrument_id: str = ""
+    cause: ops.SeriesRequestCause | str | None = None
+
+
+def _series_want(value: SeriesWant, name: str) -> ops.SeriesWant:
+    """A SeriesWant as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, SeriesWant):
+        raise TypeError(f"{name} is a meridian.SeriesWant, not {type(value).__name__}")
+    return ops.SeriesWant(
+        series_key=list(value.series_key),
+        underlying_instrument_id=value.underlying_instrument_id,
+        cause=_enum(ops.SeriesRequestCause, value.cause, f"{name}.cause"),
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class ListedSeries:
+    """Contract v28: a listed option or future series as its source lists
+    it: its key, its underlying and its terms as the template's fields,
+    never minting it (contract v28).
+
+    The SDK's form of the wire's ListedSeries: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    meta: ObservationMeta | None = None
+    template_id: str = ""
+    template_version: str = ""
+    fields: Sequence[TemplateFieldValue] = ()
+    instrument_id: str = ""
+
+
+def _listed_series(value: ListedSeries, name: str) -> ops.ListedSeries:
+    """A ListedSeries as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, ListedSeries):
+        raise TypeError(f"{name} is a meridian.ListedSeries, not {type(value).__name__}")
+    return ops.ListedSeries(
+        meta=None if value.meta is None else _observation_meta(value.meta, f"{name}.meta"),
+        template_id=value.template_id,
+        template_version=value.template_version,
+        fields=[_template_field_value(each, f"{name}.fields[{i}]") for i, each in enumerate(value.fields)],
+        instrument_id=value.instrument_id,
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class Statistic:
+    """Contract v28: a value per contract per trading date as its source
+    publishes it: open interest, volume, block volume (contract v28).
+
+    The SDK's form of the wire's Statistic: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    meta: ObservationMeta | None = None
+    kind: ops.StatisticKind | str | None = None
+    value: UnitValue | None = None
+
+
+def _statistic(value: Statistic, name: str) -> ops.Statistic:
+    """A Statistic as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, Statistic):
+        raise TypeError(f"{name} is a meridian.Statistic, not {type(value).__name__}")
+    return ops.Statistic(
+        meta=None if value.meta is None else _observation_meta(value.meta, f"{name}.meta"),
+        kind=_enum(ops.StatisticKind, value.kind, f"{name}.kind"),
+        value=None if value.value is None else _unit_value(value.value, f"{name}.value"),
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class LifecycleEvent:
+    """Contract v28: a listed option's exercise, assignment or expiry, or a
+    future's day of settlement variation, reported, proposed or released,
+    each its own record (contract v28, W9.16 to W9.19).
+
+    The SDK's form of the wire's LifecycleEvent: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    event_id: str = ""
+    account_id: str = ""
+    instrument_id: str = ""
+    kind: ops.LifecycleEventKind | str | None = None
+    state: ops.LifecycleEventState | str | None = None
+    quantity: Decimal | int
+    event_date: date | str = ""
+    deliveries: Sequence[LifecycleDelivery] = ()
+    cash: Money | None = None
+    settlement_price: Money | None = None
+    external_event_id: str = ""
+    answers_event_id: str = ""
+    proposal_basis: Money | None = None
+    raw_record: ops.RawRecordRef | None = None
+    last_change: ops.JournalRef | None = None
+
+
+def _lifecycle_event(value: LifecycleEvent, name: str) -> ops.LifecycleEvent:
+    """A LifecycleEvent as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, LifecycleEvent):
+        raise TypeError(f"{name} is a meridian.LifecycleEvent, not {type(value).__name__}")
+    return ops.LifecycleEvent(
+        event_id=value.event_id,
+        account_id=value.account_id,
+        instrument_id=value.instrument_id,
+        kind=_enum(ops.LifecycleEventKind, value.kind, f"{name}.kind"),
+        state=_enum(ops.LifecycleEventState, value.state, f"{name}.state"),
+        quantity=_decimal(value.quantity, f"{name}.quantity"),
+        event_date=_date(value.event_date, f"{name}.event_date"),
+        deliveries=[_lifecycle_delivery(each, f"{name}.deliveries[{i}]") for i, each in enumerate(value.deliveries)],
+        cash=None if value.cash is None else _money(value.cash, f"{name}.cash"),
+        settlement_price=None if value.settlement_price is None else _money(value.settlement_price, f"{name}.settlement_price"),
+        external_event_id=value.external_event_id,
+        answers_event_id=value.answers_event_id,
+        proposal_basis=None if value.proposal_basis is None else _money(value.proposal_basis, f"{name}.proposal_basis"),
+        raw_record=value.raw_record,
+        last_change=value.last_change,
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class LifecycleDelivery:
+    """Contract v28 (LifecycleEvent.deliveries): states what changed hands
+    on physical delivery.
+
+    The SDK's form of the wire's LifecycleDelivery: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    instrument_id: str = ""
+    quantity: Decimal | int
+    price: Money | None = None
+
+
+def _lifecycle_delivery(value: LifecycleDelivery, name: str) -> ops.LifecycleDelivery:
+    """A LifecycleDelivery as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, LifecycleDelivery):
+        raise TypeError(f"{name} is a meridian.LifecycleDelivery, not {type(value).__name__}")
+    return ops.LifecycleDelivery(
+        instrument_id=value.instrument_id,
+        quantity=_decimal(value.quantity, f"{name}.quantity"),
+        price=None if value.price is None else _money(value.price, f"{name}.price"),
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class DerivedSeries:
+    """Contract v28: one value of a signal plugin's own series, naming its
+    rule and inputs, never presented as a publisher's figure (contract v28).
+
+    The SDK's form of the wire's DerivedSeries: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    meta: ObservationMeta | None = None
+    series: str = ""
+    value: UnitValue | None = None
+    rule: ops.MeasureRef | None = None
+    inputs: Sequence[ops.DerivedInput] = ()
+
+
+def _derived_series(value: DerivedSeries, name: str) -> ops.DerivedSeries:
+    """A DerivedSeries as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, DerivedSeries):
+        raise TypeError(f"{name} is a meridian.DerivedSeries, not {type(value).__name__}")
+    return ops.DerivedSeries(
+        meta=None if value.meta is None else _observation_meta(value.meta, f"{name}.meta"),
+        series=value.series,
+        value=None if value.value is None else _unit_value(value.value, f"{name}.value"),
+        rule=value.rule,
+        inputs=list(value.inputs),
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class SavedScenario:
+    """Contract v28: a scenario or scenario set a signal plugin saved, each
+    change the next version of its key (contract v28, W12.8).
+
+    The SDK's form of the wire's SavedScenario: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    meta: ObservationMeta | None = None
+    scenario: Scenario | None = None
+    scenario_set: ScenarioSet | None = None
+    description: str = ""
+
+
+def _saved_scenario(value: SavedScenario, name: str) -> ops.SavedScenario:
+    """A SavedScenario as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, SavedScenario):
+        raise TypeError(f"{name} is a meridian.SavedScenario, not {type(value).__name__}")
+    return ops.SavedScenario(
+        meta=None if value.meta is None else _observation_meta(value.meta, f"{name}.meta"),
+        scenario=None if value.scenario is None else _scenario(value.scenario, f"{name}.scenario"),
+        scenario_set=None if value.scenario_set is None else _scenario_set(value.scenario_set, f"{name}.scenario_set"),
+        description=value.description,
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class Filing:
+    """Contract v28: a filing as its publisher accepted it, keyed by
+    accession, its documents kept at the edge (contract v28).
+
+    The SDK's form of the wire's Filing: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    meta: ObservationMeta | None = None
+    filing: ops.FilingRef | None = None
+    kind: ops.FilingKind | str | None = None
+    items: Sequence[str] = ()
+    period_of_report: date | str = ""
+    filed_date: date | str = ""
+
+
+def _filing(value: Filing, name: str) -> ops.Filing:
+    """A Filing as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, Filing):
+        raise TypeError(f"{name} is a meridian.Filing, not {type(value).__name__}")
+    return ops.Filing(
+        meta=None if value.meta is None else _observation_meta(value.meta, f"{name}.meta"),
+        filing=value.filing,
+        kind=_enum(ops.FilingKind, value.kind, f"{name}.kind"),
+        items=list(value.items),
+        period_of_report=_date(value.period_of_report, f"{name}.period_of_report"),
+        filed_date=_date(value.filed_date, f"{name}.filed_date"),
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class ReportedFact:
+    """Contract v28: a value a filer reported for a concept and period, each
+    later filing's different value the next version (contract v28).
+
+    The SDK's form of the wire's ReportedFact: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    meta: ObservationMeta | None = None
+    concept: str = ""
+    amount: Money | None = None
+    value: UnitValue | None = None
+    period_start: date | str = ""
+    period_end: date | str = ""
+    dimensions: Sequence[ops.FactDimension] = ()
+    filing: ops.FilingRef | None = None
+
+
+def _reported_fact(value: ReportedFact, name: str) -> ops.ReportedFact:
+    """A ReportedFact as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, ReportedFact):
+        raise TypeError(f"{name} is a meridian.ReportedFact, not {type(value).__name__}")
+    return ops.ReportedFact(
+        meta=None if value.meta is None else _observation_meta(value.meta, f"{name}.meta"),
+        concept=value.concept,
+        amount=None if value.amount is None else _money(value.amount, f"{name}.amount"),
+        value=None if value.value is None else _unit_value(value.value, f"{name}.value"),
+        period_start=_date(value.period_start, f"{name}.period_start"),
+        period_end=_date(value.period_end, f"{name}.period_end"),
+        dimensions=list(value.dimensions),
+        filing=value.filing,
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class HoldingsReport:
+    """Contract v28: a holder's report of its holdings as of a date,
+    complete or not (contract v28).
+
+    The SDK's form of the wire's HoldingsReport: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    meta: ObservationMeta | None = None
+    kind: ops.HoldingsReportKind | str | None = None
+    report_date: date | str = ""
+    complete: bool = False
+    filing: ops.FilingRef | None = None
+
+
+def _holdings_report(value: HoldingsReport, name: str) -> ops.HoldingsReport:
+    """A HoldingsReport as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, HoldingsReport):
+        raise TypeError(f"{name} is a meridian.HoldingsReport, not {type(value).__name__}")
+    return ops.HoldingsReport(
+        meta=None if value.meta is None else _observation_meta(value.meta, f"{name}.meta"),
+        kind=_enum(ops.HoldingsReportKind, value.kind, f"{name}.kind"),
+        report_date=_date(value.report_date, f"{name}.report_date"),
+        complete=value.complete,
+        filing=value.filing,
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class Holding:
+    """Contract v28: one holding of a holdings report (contract v28).
+
+    The SDK's form of the wire's Holding: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    meta: ObservationMeta | None = None
+    report_row_key: str = ""
+    quantity: UnitValue | None = None
+    market_value: Money | None = None
+    percent_of_class: UnitValue | None = None
+
+
+def _holding(value: Holding, name: str) -> ops.Holding:
+    """A Holding as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, Holding):
+        raise TypeError(f"{name} is a meridian.Holding, not {type(value).__name__}")
+    return ops.Holding(
+        meta=None if value.meta is None else _observation_meta(value.meta, f"{name}.meta"),
+        report_row_key=value.report_row_key,
+        quantity=None if value.quantity is None else _unit_value(value.quantity, f"{name}.quantity"),
+        market_value=None if value.market_value is None else _money(value.market_value, f"{name}.market_value"),
+        percent_of_class=None if value.percent_of_class is None else _unit_value(value.percent_of_class, f"{name}.percent_of_class"),
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class CorporateActionAnnounced:
+    """Contract v28: a corporate action as announced, a declared dividend in
+    v28: market data, never a servicing event (contract v28).
+
+    The SDK's form of the wire's CorporateActionAnnounced: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    meta: ObservationMeta | None = None
+    kind: ops.CorporateActionKind | str | None = None
+    amount_per_share: Money
+    declared_date: date | str = ""
+    ex_date: date | str = ""
+    record_date: date | str = ""
+    payment_date: date | str = ""
+    rule: ops.MeasureRef | None = None
+    filing: ops.FilingRef | None = None
+
+
+def _corporate_action_announced(value: CorporateActionAnnounced, name: str) -> ops.CorporateActionAnnounced:
+    """A CorporateActionAnnounced as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, CorporateActionAnnounced):
+        raise TypeError(f"{name} is a meridian.CorporateActionAnnounced, not {type(value).__name__}")
+    return ops.CorporateActionAnnounced(
+        meta=None if value.meta is None else _observation_meta(value.meta, f"{name}.meta"),
+        kind=_enum(ops.CorporateActionKind, value.kind, f"{name}.kind"),
+        amount_per_share=_money(value.amount_per_share, f"{name}.amount_per_share"),
+        declared_date=_date(value.declared_date, f"{name}.declared_date"),
+        ex_date=_date(value.ex_date, f"{name}.ex_date"),
+        record_date=_date(value.record_date, f"{name}.record_date"),
+        payment_date=_date(value.payment_date, f"{name}.payment_date"),
+        rule=value.rule,
+        filing=value.filing,
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class RatingAction:
+    """Contract v28: a rating agency's action on a rating, from its
+    published history (contract v28).
+
+    The SDK's form of the wire's RatingAction: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    meta: ObservationMeta | None = None
+    rating: str = ""
+    rating_class: str = ""
+    action: ops.RatingActionKind | str | None = None
+
+
+def _rating_action(value: RatingAction, name: str) -> ops.RatingAction:
+    """A RatingAction as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, RatingAction):
+        raise TypeError(f"{name} is a meridian.RatingAction, not {type(value).__name__}")
+    return ops.RatingAction(
+        meta=None if value.meta is None else _observation_meta(value.meta, f"{name}.meta"),
+        rating=value.rating,
+        rating_class=value.rating_class,
+        action=_enum(ops.RatingActionKind, value.action, f"{name}.action"),
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class QualityAssessment:
+    """Contract v28: a signal plugin's escalation of one row version's
+    quality, its own record, never a rewrite (contract v28, W10.12).
+
+    The SDK's form of the wire's QualityAssessment: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    dataset: str = ""
+    row_key: str = ""
+    version: int = 0
+    state: ops.QualityState | str | None = None
+    reasons: Sequence[ops.QualityReason | str] = ()
+
+
+def _quality_assessment(value: QualityAssessment, name: str) -> ops.QualityAssessment:
+    """A QualityAssessment as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, QualityAssessment):
+        raise TypeError(f"{name} is a meridian.QualityAssessment, not {type(value).__name__}")
+    return ops.QualityAssessment(
+        dataset=value.dataset,
+        row_key=value.row_key,
+        version=value.version,
+        state=_enum(ops.QualityState, value.state, f"{name}.state"),
+        reasons=[_enum(ops.QualityReason, each, f"{name}.reasons[{i}]") for i, each in enumerate(value.reasons)],
     )
 
 
@@ -3049,6 +3681,7 @@ class Operations:
         block_member_order_ids: Sequence[str] = (),
         net_member_order_ids: Sequence[str] = (),
         value_date: date | str = "",
+        position_effect: ops.PositionEffect | str | None = None,
         acting_for: str | None = None,
     ) -> ops.ProposeOrderResult:
         """W11.1: W11.1. For a person or a service account; by `portfolio`, the `oms`, or an (stable)."""
@@ -3091,6 +3724,7 @@ class Operations:
             block_member_order_ids=list(block_member_order_ids),
             net_member_order_ids=list(net_member_order_ids),
             value_date=_date(value_date, "value_date"),
+            position_effect=_enum(ops.PositionEffect, position_effect, "position_effect"),
             acting_for=_assertion(acting_for),
         )
         return await self._operate(self._operations().ProposeOrder, params)
@@ -3374,6 +4008,8 @@ class Operations:
         venue_order_id: str = "",
         venue_client_order_id: str = "",
         cross_rate_source: ops.CrossRateSource | str | None = None,
+        multi_leg_reporting_type: ops.MultiLegReportingType | str | None = None,
+        package_execution_id: str = "",
         acting_for: str | None = None,
     ) -> ops.ReportExecutionResult:
         """W11.11: W11.11. A fact by a connectivity plugin; or, for a person, a manual or (stable)."""
@@ -3413,6 +4049,8 @@ class Operations:
             venue_order_id=venue_order_id,
             venue_client_order_id=venue_client_order_id,
             cross_rate_source=_enum(ops.CrossRateSource, cross_rate_source, "cross_rate_source"),
+            multi_leg_reporting_type=_enum(ops.MultiLegReportingType, multi_leg_reporting_type, "multi_leg_reporting_type"),
+            package_execution_id=package_execution_id,
             acting_for=_assertion(acting_for),
         )
         return await self._operate(self._operations().ReportExecution, params)
@@ -4067,7 +4705,7 @@ class Operations:
     async def list_prices(
         self,
         *,
-        subjects: Sequence[ops.SubjectRef] = (),
+        subjects: Sequence[SubjectRef] = (),
         kinds: Sequence[ops.PriceKind | str] = (),
         sources: ops.SourceChoice | None = None,
         at_ns: int = 0,
@@ -4080,7 +4718,7 @@ class Operations:
     ) -> ops.ListPricesResult:
         """W10.6: Prices for subjects, at one of: the latest in force at a valid time (preview)."""
         params = ops.ListPricesParams(
-            subjects=list(subjects),
+            subjects=[_subject_ref(each, f"subjects[{i}]") for i, each in enumerate(subjects)],
             kinds=[_enum(ops.PriceKind, value, "kinds") for value in kinds],
             sources=sources,
             at_ns=at_ns,
@@ -4096,7 +4734,7 @@ class Operations:
     async def list_bars(
         self,
         *,
-        subjects: Sequence[ops.SubjectRef] = (),
+        subjects: Sequence[SubjectRef] = (),
         interval_ns: int = 0,
         sources: ops.SourceChoice | None = None,
         at_ns: int = 0,
@@ -4109,7 +4747,7 @@ class Operations:
     ) -> ops.ListBarsResult:
         """W10.6: Bars for subjects, at a valid time, a business date or a range, as a (preview)."""
         params = ops.ListBarsParams(
-            subjects=list(subjects),
+            subjects=[_subject_ref(each, f"subjects[{i}]") for i, each in enumerate(subjects)],
             interval_ns=interval_ns,
             sources=sources,
             at_ns=at_ns,
@@ -4125,7 +4763,7 @@ class Operations:
     async def list_trades(
         self,
         *,
-        subjects: Sequence[ops.SubjectRef] = (),
+        subjects: Sequence[SubjectRef] = (),
         sources: ops.SourceChoice | None = None,
         valid_from_ns: int = 0,
         valid_until_ns: int = 0,
@@ -4134,10 +4772,12 @@ class Operations:
         page_size: int = 0,
         cursor: str = "",
         latest_recorded: bool = False,
+        series_keys: Sequence[ops.Identifier] = (),
+        all_series: bool = False,
     ) -> ops.ListTradesResult:
         """W10.6: Trades for subjects (contract v19): a valid-time range, from inclusive to (preview)."""
         params = ops.ListTradesParams(
-            subjects=list(subjects),
+            subjects=[_subject_ref(each, f"subjects[{i}]") for i, each in enumerate(subjects)],
             sources=sources,
             valid_from_ns=valid_from_ns,
             valid_until_ns=valid_until_ns,
@@ -4146,13 +4786,15 @@ class Operations:
             page_size=page_size,
             cursor=cursor,
             latest_recorded=latest_recorded,
+            series_keys=list(series_keys),
+            all_series=all_series,
         )
         return await self._operate(self._operations().ListTrades, params)
 
     async def list_quotes(
         self,
         *,
-        subjects: Sequence[ops.SubjectRef] = (),
+        subjects: Sequence[SubjectRef] = (),
         sources: ops.SourceChoice | None = None,
         at_ns: int = 0,
         valid_from_ns: int = 0,
@@ -4160,10 +4802,12 @@ class Operations:
         as_of_ns: int = 0,
         page_size: int = 0,
         cursor: str = "",
+        series_keys: Sequence[ops.Identifier] = (),
+        all_series: bool = False,
     ) -> ops.ListQuotesResult:
         """W10.6: Quotes for subjects (contract v19), at one of: the latest in force at a (preview)."""
         params = ops.ListQuotesParams(
-            subjects=list(subjects),
+            subjects=[_subject_ref(each, f"subjects[{i}]") for i, each in enumerate(subjects)],
             sources=sources,
             at_ns=at_ns,
             valid_from_ns=valid_from_ns,
@@ -4171,19 +4815,21 @@ class Operations:
             as_of_ns=as_of_ns,
             page_size=page_size,
             cursor=cursor,
+            series_keys=list(series_keys),
+            all_series=all_series,
         )
         return await self._operate(self._operations().ListQuotes, params)
 
     async def list_outcomes(
         self,
         *,
-        subjects: Sequence[ops.SubjectRef] = (),
+        subjects: Sequence[SubjectRef] = (),
         after_watermark: ops.Watermark | None = None,
         as_of_ns: int = 0,
     ) -> ops.ListOutcomesResult:
         """W10.6: Outcomes for event contracts' instruments (contract v23): the version in (preview)."""
         params = ops.ListOutcomesParams(
-            subjects=list(subjects),
+            subjects=[_subject_ref(each, f"subjects[{i}]") for i, each in enumerate(subjects)],
             after_watermark=after_watermark,
             as_of_ns=as_of_ns,
         )
@@ -4193,14 +4839,14 @@ class Operations:
         self,
         *,
         want_id: str = "",
-        subjects: Sequence[ops.SubjectRef] = (),
+        subjects: Sequence[SubjectRef] = (),
         reason: ops.UnansweredReason | str | None = None,
         acting_for: str | None = None,
     ) -> ops.DeclineWantResult:
         """W10.7: What a data plugin cannot serve of a want, per subject, with its reason. It (preview)."""
         params = ops.DeclineWantParams(
             want_id=want_id,
-            subjects=list(subjects),
+            subjects=[_subject_ref(each, f"subjects[{i}]") for i, each in enumerate(subjects)],
             reason=_enum(ops.UnansweredReason, reason, "reason"),
             acting_for=_assertion(acting_for),
         )
@@ -4347,7 +4993,7 @@ class Operations:
         self,
         *,
         kind: str = "",
-        subjects: Sequence[ops.SubjectRef] = (),
+        subjects: Sequence[SubjectRef] = (),
         sources: ops.SourceChoice | None = None,
         valid_from_ns: int = 0,
         valid_until_ns: int = 0,
@@ -4360,7 +5006,7 @@ class Operations:
         """W10.10: One read-only query over one of the lake's kinds, within the asking (preview)."""
         params = ops.QueryLakeParams(
             kind=kind,
-            subjects=list(subjects),
+            subjects=[_subject_ref(each, f"subjects[{i}]") for i, each in enumerate(subjects)],
             sources=sources,
             valid_from_ns=valid_from_ns,
             valid_until_ns=valid_until_ns,
@@ -4405,7 +5051,7 @@ class Operations:
     async def list_rates(
         self,
         *,
-        subjects: Sequence[ops.SubjectRef] = (),
+        subjects: Sequence[SubjectRef] = (),
         kinds: Sequence[ops.RateKind | str] = (),
         tenors: Sequence[Tenor] = (),
         sources: ops.SourceChoice | None = None,
@@ -4420,7 +5066,7 @@ class Operations:
     ) -> ops.ListRatesResult:
         """W10.6: Rates for subjects (W10.6), at one of: the latest in force at a valid (preview)."""
         params = ops.ListRatesParams(
-            subjects=list(subjects),
+            subjects=[_subject_ref(each, f"subjects[{i}]") for i, each in enumerate(subjects)],
             kinds=[_enum(ops.RateKind, value, "kinds") for value in kinds],
             tenors=[_tenor(each, f"tenors[{i}]") for i, each in enumerate(tenors)],
             sources=sources,
@@ -4528,6 +5174,508 @@ class Operations:
         )
         return await self._operate(self._operations().PickPlacementQuote, params)
 
+    async def request_series_records(
+        self,
+        *,
+        series: Sequence[SeriesWant] = (),
+        note: str = "",
+        acting_for: str | None = None,
+    ) -> ops.RequestSeriesRecordsResult:
+        """W3.31: Contract v28 (W3.31): RequestSeriesRecords's request (preview)."""
+        params = ops.RequestSeriesRecordsParams(
+            series=[_series_want(each, f"series[{i}]") for i, each in enumerate(series)],
+            note=note,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().RequestSeriesRecords, params)
+
+    async def record_series(
+        self,
+        *,
+        series: Sequence[ListedSeries] = (),
+        want_id: str = "",
+        acting_for: str | None = None,
+    ) -> ops.RecordSeriesResult:
+        """W10.4: Contract v28 (W10.4): RecordSeries's request (preview)."""
+        _batch(series, RECORD_SERIES_REQUEST_SERIES_COUNT, "series")
+        params = ops.RecordSeriesParams(
+            series=[_listed_series(each, f"series[{i}]") for i, each in enumerate(series)],
+            want_id=want_id,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().RecordSeries, params)
+
+    async def list_series(
+        self,
+        *,
+        subjects: Sequence[SubjectRef] = (),
+        instrument_type: ops.InstrumentType | str | None = None,
+        expiration_from: date | str = "",
+        expiration_to: date | str = "",
+        series_keys: Sequence[ops.Identifier] = (),
+        sources: ops.SourceChoice | None = None,
+        as_of_ns: int = 0,
+        page_size: int = 0,
+        cursor: str = "",
+    ) -> ops.ListSeriesResult:
+        """W10.6: Contract v28 (W10.6): ListSeries's request (preview)."""
+        params = ops.ListSeriesParams(
+            subjects=[_subject_ref(each, f"subjects[{i}]") for i, each in enumerate(subjects)],
+            instrument_type=_enum(ops.InstrumentType, instrument_type, "instrument_type"),
+            expiration_from=_date(expiration_from, "expiration_from"),
+            expiration_to=_date(expiration_to, "expiration_to"),
+            series_keys=list(series_keys),
+            sources=sources,
+            as_of_ns=as_of_ns,
+            page_size=page_size,
+            cursor=cursor,
+        )
+        return await self._operate(self._operations().ListSeries, params)
+
+    async def record_statistics(
+        self,
+        *,
+        statistics: Sequence[Statistic] = (),
+        want_id: str = "",
+        acting_for: str | None = None,
+    ) -> ops.RecordStatisticsResult:
+        """W10.4: Contract v28 (W10.4): RecordStatistics's request (preview)."""
+        _batch(statistics, RECORD_STATISTICS_REQUEST_STATISTICS_COUNT, "statistics")
+        params = ops.RecordStatisticsParams(
+            statistics=[_statistic(each, f"statistics[{i}]") for i, each in enumerate(statistics)],
+            want_id=want_id,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().RecordStatistics, params)
+
+    async def list_statistics(
+        self,
+        *,
+        subjects: Sequence[SubjectRef] = (),
+        kinds: Sequence[ops.StatisticKind | str] = (),
+        business_date: date | str = "",
+        from_date: date | str = "",
+        to_date: date | str = "",
+        series_keys: Sequence[ops.Identifier] = (),
+        all_series: bool = False,
+        sources: ops.SourceChoice | None = None,
+        as_of_ns: int = 0,
+        page_size: int = 0,
+        cursor: str = "",
+    ) -> ops.ListStatisticsResult:
+        """W10.6: Contract v28 (W10.6): ListStatistics's request (preview)."""
+        params = ops.ListStatisticsParams(
+            subjects=[_subject_ref(each, f"subjects[{i}]") for i, each in enumerate(subjects)],
+            kinds=[_enum(ops.StatisticKind, value, "kinds") for value in kinds],
+            business_date=_date(business_date, "business_date"),
+            from_date=_date(from_date, "from_date"),
+            to_date=_date(to_date, "to_date"),
+            series_keys=list(series_keys),
+            all_series=all_series,
+            sources=sources,
+            as_of_ns=as_of_ns,
+            page_size=page_size,
+            cursor=cursor,
+        )
+        return await self._operate(self._operations().ListStatistics, params)
+
+    async def record_lifecycle_event(
+        self,
+        *,
+        event: LifecycleEvent | None = None,
+        idempotency_key: str = "",
+        acting_for: str | None = None,
+    ) -> ops.RecordLifecycleEventResult:
+        """W9.16: Contract v28 (W9.16): RecordLifecycleEvent's request (preview)."""
+        params = ops.RecordLifecycleEventParams(
+            event=None if event is None else _lifecycle_event(event, "event"),
+            idempotency_key=idempotency_key,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().RecordLifecycleEvent, params)
+
+    async def propose_lifecycle_events(
+        self,
+        *,
+        events: Sequence[LifecycleEvent] = (),
+        acting_for: str | None = None,
+    ) -> ops.ProposeLifecycleEventsResult:
+        """W9.17: Contract v28 (W9.17): ProposeLifecycleEvents's request (preview)."""
+        params = ops.ProposeLifecycleEventsParams(
+            events=[_lifecycle_event(each, f"events[{i}]") for i, each in enumerate(events)],
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().ProposeLifecycleEvents, params)
+
+    async def release_lifecycle_event(
+        self,
+        *,
+        event_id: str = "",
+        note: str = "",
+        acting_for: str | None = None,
+    ) -> ops.ReleaseLifecycleEventResult:
+        """W9.18: Contract v28 (W9.18): ReleaseLifecycleEvent's request (preview)."""
+        params = ops.ReleaseLifecycleEventParams(
+            event_id=event_id,
+            note=note,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().ReleaseLifecycleEvent, params)
+
+    async def list_lifecycle_events(
+        self,
+        *,
+        account_id: str = "",
+        instrument_id: str = "",
+        kinds: Sequence[ops.LifecycleEventKind | str] = (),
+        from_date: date | str = "",
+        to_date: date | str = "",
+        since: ops.Watermark | None = None,
+        page_size: int = 0,
+        cursor: str = "",
+    ) -> ops.ListLifecycleEventsResult:
+        """W9.19: Contract v28 (W9.19): ListLifecycleEvents's request (preview)."""
+        params = ops.ListLifecycleEventsParams(
+            account_id=account_id,
+            instrument_id=instrument_id,
+            kinds=[_enum(ops.LifecycleEventKind, value, "kinds") for value in kinds],
+            from_date=_date(from_date, "from_date"),
+            to_date=_date(to_date, "to_date"),
+            since=since,
+            page_size=page_size,
+            cursor=cursor,
+        )
+        return await self._operate(self._operations().ListLifecycleEvents, params)
+
+    async def record_derived_series(
+        self,
+        *,
+        values: Sequence[DerivedSeries] = (),
+        acting_for: str | None = None,
+    ) -> ops.RecordDerivedSeriesResult:
+        """W10.4: Contract v28 (W10.4): RecordDerivedSeries's request (preview)."""
+        _batch(values, RECORD_DERIVED_SERIES_REQUEST_VALUES_COUNT, "values")
+        params = ops.RecordDerivedSeriesParams(
+            values=[_derived_series(each, f"values[{i}]") for i, each in enumerate(values)],
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().RecordDerivedSeries, params)
+
+    async def list_derived_series(
+        self,
+        *,
+        subjects: Sequence[SubjectRef] = (),
+        series: Sequence[str] = (),
+        from_date: date | str = "",
+        to_date: date | str = "",
+    ) -> ops.ListDerivedSeriesResult:
+        """W10.6: Contract v28 (W10.6): ListDerivedSeries's request (preview)."""
+        params = ops.ListDerivedSeriesParams(
+            subjects=[_subject_ref(each, f"subjects[{i}]") for i, each in enumerate(subjects)],
+            series=list(series),
+            from_date=_date(from_date, "from_date"),
+            to_date=_date(to_date, "to_date"),
+        )
+        return await self._operate(self._operations().ListDerivedSeries, params)
+
+    async def record_scenarios(
+        self,
+        *,
+        scenarios: Sequence[SavedScenario] = (),
+        acting_for: str | None = None,
+    ) -> ops.RecordScenariosResult:
+        """W12.8: Contract v28 (W12.8): RecordScenarios's request (preview)."""
+        params = ops.RecordScenariosParams(
+            scenarios=[_saved_scenario(each, f"scenarios[{i}]") for i, each in enumerate(scenarios)],
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().RecordScenarios, params)
+
+    async def list_scenarios(
+        self,
+        *,
+        row_keys: Sequence[str] = (),
+        version: int = 0,
+    ) -> ops.ListScenariosResult:
+        """W12.8: Contract v28 (W12.8): ListScenarios's request (preview)."""
+        params = ops.ListScenariosParams(
+            row_keys=list(row_keys),
+            version=version,
+        )
+        return await self._operate(self._operations().ListScenarios, params)
+
+    async def resolve_company(
+        self,
+        *,
+        company_id: str = "",
+        identifiers: Sequence[ops.Identifier] = (),
+        as_of_ns: int = 0,
+    ) -> ops.ResolveCompanyResult:
+        """W3.32: Contract v28 (W3.32): ResolveCompany's request (preview)."""
+        params = ops.ResolveCompanyParams(
+            company_id=company_id,
+            identifiers=list(identifiers),
+            as_of_ns=as_of_ns,
+        )
+        return await self._operate(self._operations().ResolveCompany, params)
+
+    async def record_filings(
+        self,
+        *,
+        filings: Sequence[Filing] = (),
+        want_id: str = "",
+        acting_for: str | None = None,
+    ) -> ops.RecordFilingsResult:
+        """W10.4: Contract v28 (W10.4): RecordFilings's request (preview)."""
+        _batch(filings, RECORD_FILINGS_REQUEST_FILINGS_COUNT, "filings")
+        params = ops.RecordFilingsParams(
+            filings=[_filing(each, f"filings[{i}]") for i, each in enumerate(filings)],
+            want_id=want_id,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().RecordFilings, params)
+
+    async def list_filings(
+        self,
+        *,
+        subjects: Sequence[SubjectRef] = (),
+        from_date: date | str = "",
+        to_date: date | str = "",
+        kinds: Sequence[ops.FilingKind | str] = (),
+        published_as_of_ns: int = 0,
+        sources: ops.SourceChoice | None = None,
+        as_of_ns: int = 0,
+        page_size: int = 0,
+        cursor: str = "",
+        after_watermark: ops.Watermark | None = None,
+    ) -> ops.ListFilingsResult:
+        """W10.6: Contract v28 (W10.6): ListFilings's request (preview)."""
+        params = ops.ListFilingsParams(
+            subjects=[_subject_ref(each, f"subjects[{i}]") for i, each in enumerate(subjects)],
+            from_date=_date(from_date, "from_date"),
+            to_date=_date(to_date, "to_date"),
+            kinds=[_enum(ops.FilingKind, value, "kinds") for value in kinds],
+            published_as_of_ns=published_as_of_ns,
+            sources=sources,
+            as_of_ns=as_of_ns,
+            page_size=page_size,
+            cursor=cursor,
+            after_watermark=after_watermark,
+        )
+        return await self._operate(self._operations().ListFilings, params)
+
+    async def record_reported_facts(
+        self,
+        *,
+        facts: Sequence[ReportedFact] = (),
+        want_id: str = "",
+        acting_for: str | None = None,
+    ) -> ops.RecordReportedFactsResult:
+        """W10.4: Contract v28 (W10.4): RecordReportedFacts's request (preview)."""
+        _batch(facts, RECORD_REPORTED_FACTS_REQUEST_FACTS_COUNT, "facts")
+        params = ops.RecordReportedFactsParams(
+            facts=[_reported_fact(each, f"facts[{i}]") for i, each in enumerate(facts)],
+            want_id=want_id,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().RecordReportedFacts, params)
+
+    async def list_reported_facts(
+        self,
+        *,
+        subjects: Sequence[SubjectRef] = (),
+        from_date: date | str = "",
+        to_date: date | str = "",
+        published_as_of_ns: int = 0,
+        sources: ops.SourceChoice | None = None,
+        as_of_ns: int = 0,
+        page_size: int = 0,
+        cursor: str = "",
+        concepts: Sequence[str] = (),
+    ) -> ops.ListReportedFactsResult:
+        """W10.6: Contract v28 (W10.6): ListReportedFacts's request (preview)."""
+        params = ops.ListReportedFactsParams(
+            subjects=[_subject_ref(each, f"subjects[{i}]") for i, each in enumerate(subjects)],
+            from_date=_date(from_date, "from_date"),
+            to_date=_date(to_date, "to_date"),
+            published_as_of_ns=published_as_of_ns,
+            sources=sources,
+            as_of_ns=as_of_ns,
+            page_size=page_size,
+            cursor=cursor,
+            concepts=list(concepts),
+        )
+        return await self._operate(self._operations().ListReportedFacts, params)
+
+    async def record_holdings_reports(
+        self,
+        *,
+        reports: Sequence[HoldingsReport] = (),
+        want_id: str = "",
+        acting_for: str | None = None,
+    ) -> ops.RecordHoldingsReportsResult:
+        """W10.4: Contract v28 (W10.4): RecordHoldingsReports's request (preview)."""
+        _batch(reports, RECORD_HOLDINGS_REPORTS_REQUEST_REPORTS_COUNT, "reports")
+        params = ops.RecordHoldingsReportsParams(
+            reports=[_holdings_report(each, f"reports[{i}]") for i, each in enumerate(reports)],
+            want_id=want_id,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().RecordHoldingsReports, params)
+
+    async def record_holdings(
+        self,
+        *,
+        holdings: Sequence[Holding] = (),
+        want_id: str = "",
+        acting_for: str | None = None,
+    ) -> ops.RecordHoldingsResult:
+        """W10.4: Contract v28 (W10.4): RecordHoldings's request (preview)."""
+        _batch(holdings, RECORD_HOLDINGS_REQUEST_HOLDINGS_COUNT, "holdings")
+        params = ops.RecordHoldingsParams(
+            holdings=[_holding(each, f"holdings[{i}]") for i, each in enumerate(holdings)],
+            want_id=want_id,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().RecordHoldings, params)
+
+    async def list_holdings(
+        self,
+        *,
+        subjects: Sequence[SubjectRef] = (),
+        from_date: date | str = "",
+        to_date: date | str = "",
+        kinds: Sequence[ops.HoldingsReportKind | str] = (),
+        published_as_of_ns: int = 0,
+        sources: ops.SourceChoice | None = None,
+        as_of_ns: int = 0,
+        page_size: int = 0,
+        cursor: str = "",
+    ) -> ops.ListHoldingsResult:
+        """W10.6: Contract v28 (W10.6): ListHoldings's request (preview)."""
+        params = ops.ListHoldingsParams(
+            subjects=[_subject_ref(each, f"subjects[{i}]") for i, each in enumerate(subjects)],
+            from_date=_date(from_date, "from_date"),
+            to_date=_date(to_date, "to_date"),
+            kinds=[_enum(ops.HoldingsReportKind, value, "kinds") for value in kinds],
+            published_as_of_ns=published_as_of_ns,
+            sources=sources,
+            as_of_ns=as_of_ns,
+            page_size=page_size,
+            cursor=cursor,
+        )
+        return await self._operate(self._operations().ListHoldings, params)
+
+    async def record_corporate_actions(
+        self,
+        *,
+        actions: Sequence[CorporateActionAnnounced] = (),
+        want_id: str = "",
+        acting_for: str | None = None,
+    ) -> ops.RecordCorporateActionsResult:
+        """W10.4: Contract v28 (W10.4): RecordCorporateActions's request (preview)."""
+        _batch(actions, RECORD_CORPORATE_ACTIONS_REQUEST_ACTIONS_COUNT, "actions")
+        params = ops.RecordCorporateActionsParams(
+            actions=[_corporate_action_announced(each, f"actions[{i}]") for i, each in enumerate(actions)],
+            want_id=want_id,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().RecordCorporateActions, params)
+
+    async def list_corporate_actions(
+        self,
+        *,
+        subjects: Sequence[SubjectRef] = (),
+        from_date: date | str = "",
+        to_date: date | str = "",
+        kinds: Sequence[ops.CorporateActionKind | str] = (),
+        published_as_of_ns: int = 0,
+        sources: ops.SourceChoice | None = None,
+        as_of_ns: int = 0,
+        page_size: int = 0,
+        cursor: str = "",
+        after_watermark: ops.Watermark | None = None,
+    ) -> ops.ListCorporateActionsResult:
+        """W10.6: Contract v28 (W10.6): ListCorporateActions's request (preview)."""
+        params = ops.ListCorporateActionsParams(
+            subjects=[_subject_ref(each, f"subjects[{i}]") for i, each in enumerate(subjects)],
+            from_date=_date(from_date, "from_date"),
+            to_date=_date(to_date, "to_date"),
+            kinds=[_enum(ops.CorporateActionKind, value, "kinds") for value in kinds],
+            published_as_of_ns=published_as_of_ns,
+            sources=sources,
+            as_of_ns=as_of_ns,
+            page_size=page_size,
+            cursor=cursor,
+            after_watermark=after_watermark,
+        )
+        return await self._operate(self._operations().ListCorporateActions, params)
+
+    async def record_rating_actions(
+        self,
+        *,
+        actions: Sequence[RatingAction] = (),
+        want_id: str = "",
+        acting_for: str | None = None,
+    ) -> ops.RecordRatingActionsResult:
+        """W10.4: Contract v28 (W10.4): RecordRatingActions's request (preview)."""
+        _batch(actions, RECORD_RATING_ACTIONS_REQUEST_ACTIONS_COUNT, "actions")
+        params = ops.RecordRatingActionsParams(
+            actions=[_rating_action(each, f"actions[{i}]") for i, each in enumerate(actions)],
+            want_id=want_id,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().RecordRatingActions, params)
+
+    async def list_rating_actions(
+        self,
+        *,
+        subjects: Sequence[SubjectRef] = (),
+        from_date: date | str = "",
+        to_date: date | str = "",
+        kinds: Sequence[ops.RatingActionKind | str] = (),
+        published_as_of_ns: int = 0,
+        sources: ops.SourceChoice | None = None,
+        as_of_ns: int = 0,
+        page_size: int = 0,
+        cursor: str = "",
+    ) -> ops.ListRatingActionsResult:
+        """W10.6: Contract v28 (W10.6): ListRatingActions's request (preview)."""
+        params = ops.ListRatingActionsParams(
+            subjects=[_subject_ref(each, f"subjects[{i}]") for i, each in enumerate(subjects)],
+            from_date=_date(from_date, "from_date"),
+            to_date=_date(to_date, "to_date"),
+            kinds=[_enum(ops.RatingActionKind, value, "kinds") for value in kinds],
+            published_as_of_ns=published_as_of_ns,
+            sources=sources,
+            as_of_ns=as_of_ns,
+            page_size=page_size,
+            cursor=cursor,
+        )
+        return await self._operate(self._operations().ListRatingActions, params)
+
+    async def record_quality_assessments(
+        self,
+        *,
+        assessments: Sequence[QualityAssessment] = (),
+        acting_for: str | None = None,
+    ) -> ops.RecordQualityAssessmentsResult:
+        """W10.12: Contract v28 (W10.12): RecordQualityAssessments's request (preview)."""
+        _batch(assessments, RECORD_QUALITY_ASSESSMENTS_REQUEST_ASSESSMENTS_COUNT, "assessments")
+        params = ops.RecordQualityAssessmentsParams(
+            assessments=[_quality_assessment(each, f"assessments[{i}]") for i, each in enumerate(assessments)],
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().RecordQualityAssessments, params)
+
+    async def read_stale_reference_actions_permitted(
+        self,
+    ) -> ops.ReadStaleReferenceActionsPermittedResult:
+        """W6.38: W6.38: the setting read, by an ems plugin before it places on a stale (preview)."""
+        params = ops.ReadStaleReferenceActionsPermittedParams(
+        )
+        return await self._operate(self._operations().ReadStaleReferenceActionsPermitted, params)
+
     async def receive(
         self,
         *,
@@ -4552,6 +5700,7 @@ class Operations:
         price_batch: Callable[[Heard[ops.PriceBatchRequest]], Awaitable[None]] | None = None,
         job_finished: Callable[[Heard[ops.JobFinishedEvent]], Awaitable[None]] | None = None,
         event_group_changed: Callable[[Heard[ops.EventGroup]], Awaitable[None]] | None = None,
+        lifecycle_event_recorded: Callable[[Heard[ops.LifecycleEventRecordedEvent]], Awaitable[None]] | None = None,
         prices_recorded: Callable[[Heard[ops.PricesRecordedEvent]], Awaitable[None]] | None = None,
         bars_recorded: Callable[[Heard[ops.BarsRecordedEvent]], Awaitable[None]] | None = None,
         observations_wanted: Callable[[Heard[ops.ObservationsWantedEvent]], Awaitable[None]] | None = None,
@@ -4562,6 +5711,9 @@ class Operations:
         outcomes_recorded: Callable[[Heard[ops.OutcomesRecordedEvent]], Awaitable[None]] | None = None,
         rates_recorded: Callable[[Heard[ops.RatesRecordedEvent]], Awaitable[None]] | None = None,
         liveness_recorded: Callable[[Heard[ops.LivenessRecordedEvent]], Awaitable[None]] | None = None,
+        statistics_recorded: Callable[[Heard[ops.StatisticsRecordedEvent]], Awaitable[None]] | None = None,
+        filings_recorded: Callable[[Heard[ops.FilingsRecordedEvent]], Awaitable[None]] | None = None,
+        corporate_actions_recorded: Callable[[Heard[ops.CorporateActionsRecordedEvent]], Awaitable[None]] | None = None,
         seed: bool = True,
         subjects: Sequence[str] = (),
     ) -> None:
@@ -4600,6 +5752,7 @@ class Operations:
             "PriceBatch": price_batch,
             "JobFinished": job_finished,
             "EventGroupChanged": event_group_changed,
+            "LifecycleEventRecorded": lifecycle_event_recorded,
             "PricesRecorded": prices_recorded,
             "BarsRecorded": bars_recorded,
             "ObservationsWanted": observations_wanted,
@@ -4610,6 +5763,9 @@ class Operations:
             "OutcomesRecorded": outcomes_recorded,
             "RatesRecorded": rates_recorded,
             "LivenessRecorded": liveness_recorded,
+            "StatisticsRecorded": statistics_recorded,
+            "FilingsRecorded": filings_recorded,
+            "CorporateActionsRecorded": corporate_actions_recorded,
         }
         await self._receive(
             {row: handler for row, handler in handlers.items() if handler is not None},
@@ -4866,6 +6022,19 @@ DELIVERED: tuple[DeliveredRow, ...] = (
         record_journal="last_change",
         record_account=("account_id",),
     ),
+    DeliveredRow(
+        name="LifecycleEventRecorded",
+        step="W9.19",
+        arm="lifecycle_event_recorded",
+        message=ops.LifecycleEventRecordedEvent,
+        account=("event", "account_id"),
+        caught_up_by="list_lifecycle_events",
+        account_param="account_id",
+        records="events",
+        within="event",
+        record_journal="last_change",
+        record_account=("account_id",),
+    ),
 )
 
 
@@ -5012,6 +6181,15 @@ CONFLATED: tuple[ConflatedRow, ...] = (
         records="",
         within="",
     ),
+    ConflatedRow(
+        name="StatisticsRecorded",
+        step="W10.5",
+        arm="statistics_recorded",
+        message=ops.StatisticsRecordedEvent,
+        caught_up_by="list_statistics",
+        records="statistics",
+        within="statistic",
+    ),
 )
 
 #: Every row a plugin's roles may hear in full, never conflated (contract
@@ -5035,5 +6213,23 @@ UNCONFLATED: tuple[ConflatedRow, ...] = (
         caught_up_by="list_outcomes",
         records="outcomes",
         within="outcome",
+    ),
+    ConflatedRow(
+        name="FilingsRecorded",
+        step="W10.5",
+        arm="filings_recorded",
+        message=ops.FilingsRecordedEvent,
+        caught_up_by="list_filings",
+        records="filings",
+        within="filing",
+    ),
+    ConflatedRow(
+        name="CorporateActionsRecorded",
+        step="W10.5",
+        arm="corporate_actions_recorded",
+        message=ops.CorporateActionsRecordedEvent,
+        caught_up_by="list_corporate_actions",
+        records="actions",
+        within="action",
     ),
 )
