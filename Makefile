@@ -115,9 +115,9 @@ DESIGN ?= ../meridian-design
 # pinned here by commit as the schema is pinned in pyproject.toml. Core's own
 # interop gate overrides this with its working tree, so a change to both lands
 # without either waiting on the other's push.
-# Core's final `v27` (contract v27; open-meridian/meridian-core#50), its proto/
-# the contract's as in its contract commit b7f5658.
-CORE_REV   := 12564b21d7922c238663048262643d1b302b317a
+# Core's main after open-meridian/meridian-core#51 (ruling 545): v27's proto/
+# with LicenceList.administrators, conductor-to-store only, which no plugin meets.
+CORE_REV   := 6d346b370f908be3aa299adc3e43af09d2d3b6c0
 CORE_PROTO ?= https://github.com/open-meridian/meridian-core.git\#$(CORE_REV):proto
 # And meridian-schema's, which core's import, at the revision vendored here.
 SCHEMA_PROTO ?= https://github.com/open-meridian/meridian-schema.git\#$(SCHEMA_REV):proto
