@@ -37,7 +37,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ...errors import MeridianError, NotGranted
-from ...operations import Trade
+from ...operations import SubjectRef, Trade
 from ...plugin.v1 import operations_pb2 as ops
 from ._reading import Unread
 
@@ -237,7 +237,7 @@ class Wants:
         for reason, subjects in sorted(by_reason.items()):
             await self.plugin.decline_want(
                 want_id=want_id,
-                subjects=[ops.SubjectRef(entity_id=s) for s in subjects],
+                subjects=[SubjectRef(entity_id=s) for s in subjects],
                 reason=reason,
             )
             self.counts.declined += len(subjects)
@@ -346,7 +346,7 @@ async def backfill_restart(plugin: Any, subjects: Sequence[str], history: Histor
     Answers how many trades were sent."""
     sent = 0
     for start in range(0, len(subjects), BATCH):
-        asked_for = [ops.SubjectRef(entity_id=each) for each in subjects[start : start + BATCH]]
+        asked_for = [SubjectRef(entity_id=each) for each in subjects[start : start + BATCH]]
         cursor = ""
         while True:
             answer = await plugin.list_trades(

@@ -38,7 +38,7 @@ def _price(key: str) -> meridian.Price:
     return meridian.Price(
         meta=meridian.ObservationMeta(
             row_key=key,
-            subjects=[ops.SubjectRef(entity_id="INS-1")],
+            subjects=[meridian.SubjectRef(entity_id="INS-1")],
             source=ops.Source(dataset="data:live"),
             valid_from_ns=NOW,
         ),
@@ -91,7 +91,7 @@ async def test_rows_kept_apart_count_to_their_dataset_alone() -> None:
     outcome = meridian.Outcome(
         meta=meridian.ObservationMeta(
             row_key="X:outcome",
-            subjects=[ops.SubjectRef(entity_id="INS-1")],
+            subjects=[meridian.SubjectRef(entity_id="INS-1")],
             source=ops.Source(dataset="data:outcomes"),
             valid_from_ns=NOW,
         ),
@@ -206,7 +206,7 @@ async def test_a_restarts_gap_is_read_once_per_subject_and_counted() -> None:
     missed = meridian.Trade(
         meta=meridian.ObservationMeta(
             row_key="P:t:2",
-            subjects=[ops.SubjectRef(entity_id="INS-1")],
+            subjects=[meridian.SubjectRef(entity_id="INS-1")],
             source=ops.Source(dataset="data:trades"),
             valid_from_ns=NOW,
         ),

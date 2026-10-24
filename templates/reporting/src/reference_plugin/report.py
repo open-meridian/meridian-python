@@ -231,7 +231,7 @@ class Report:
         100 rows: one bounded query, cut and said so past the limit."""
         return await self.plugin.query_lake(
             kind="prices",
-            subjects=[ops.SubjectRef(entity_id=subject)],
+            subjects=[meridian.SubjectRef(entity_id=subject)],
             fields=["meridian.v1.Price.price"],
             row_limit=100,
         )

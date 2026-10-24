@@ -91,6 +91,7 @@ from ...operations import (
     RateConvention,
     RatePercentile,
     SourceTime,
+    SubjectRef,
     Tenor,
     UnitValue,
 )
@@ -379,7 +380,7 @@ class Feed:
         return Rate(
             meta=ObservationMeta(
                 row_key=row_key,
-                subjects=[ops.SubjectRef(entity_id=subject)],
+                subjects=[SubjectRef(entity_id=subject)],
                 source=ops.Source(dataset=self.dataset(key)),
                 valid_from_ns=valid_from,
                 valid_until_ns=valid_until,
@@ -450,7 +451,7 @@ async def read_curve(
     cursor = ""
     while True:
         page = await plugin.list_rates(
-            subjects=[ops.SubjectRef(entity_id=subject)],
+            subjects=[SubjectRef(entity_id=subject)],
             kinds=list(kinds),
             tenors=[tenor(t) for t in tenors],
             sources=sources,

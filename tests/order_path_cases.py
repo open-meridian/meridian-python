@@ -722,7 +722,7 @@ OUTCOME_HEARD = (
 
 async def hears_and_reads_an_outcome(recorder: Recorder) -> None:
     await hearing(OUTCOME_HEARD)(recorder)
-    await recorder.list_outcomes(subjects=[ops.SubjectRef(entity_id=EVENT_CONTRACT)])
+    await recorder.list_outcomes(subjects=[meridian.SubjectRef(entity_id=EVENT_CONTRACT)])
 
 
 # ── Contract v24: booking, the escape hatch, one ID ─────────────────────────
@@ -1200,7 +1200,7 @@ def queries_the_lake(kind: str, field: str) -> Producer:
     async def produce(recorder: Recorder) -> None:
         await recorder.query_lake(
             kind=kind,
-            subjects=[ops.SubjectRef(entity_id=AAPL)],
+            subjects=[meridian.SubjectRef(entity_id=AAPL)],
             fields=[field],
             row_limit=100,
         )
@@ -1360,7 +1360,7 @@ async def sets_a_block_members_allocation_instruction(recorder: Recorder) -> Non
 
 async def reads_a_trade_dates_fx_close(recorder: Recorder) -> None:
     await recorder.list_prices(
-        subjects=[ops.SubjectRef(entity_id=EUR)], kinds=["close"], business_date="2026-10-20"
+        subjects=[meridian.SubjectRef(entity_id=EUR)], kinds=["close"], business_date="2026-10-20"
     )
 
 

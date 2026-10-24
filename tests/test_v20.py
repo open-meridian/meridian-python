@@ -687,7 +687,10 @@ async def test_a_restart_reads_its_last_trades_and_records_the_gap_in_batches() 
         return [
             meridian.Trade(
                 meta=meridian.ObservationMeta(
-                    row_key=f"k{n}", subjects=list(last.meta.subjects)
+                    row_key=f"k{n}",
+                    subjects=[
+                        meridian.SubjectRef(entity_id=s.entity_id) for s in last.meta.subjects
+                    ],
                 ),
                 price=meridian.Money(1, "USD"),
                 quantity=1,

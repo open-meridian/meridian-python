@@ -102,6 +102,7 @@ from ...operations import (
     Price,
     Quote,
     SourceTime,
+    SubjectRef,
     Trade,
     TradeAttributes,
 )
@@ -939,7 +940,7 @@ class Feed:
     ) -> ObservationMeta:
         return ObservationMeta(
             row_key=row_key,
-            subjects=[ops.SubjectRef(entity_id=mapped.base_id)],
+            subjects=[SubjectRef(entity_id=mapped.base_id)],
             source=ops.Source(dataset=self.dataset(key), venue_id=self.venue.venue_id),
             valid_from_ns=valid_from_ns,
             valid_until_ns=valid_until_ns,

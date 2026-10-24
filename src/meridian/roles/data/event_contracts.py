@@ -118,6 +118,7 @@ from ...operations import (
     Price,
     Quote,
     SourceTime,
+    SubjectRef,
     as_money,
 )
 from ...plugin.v1 import operations_pb2 as ops
@@ -1057,7 +1058,7 @@ class Feed:
         times = [SourceTime(kind="event", at_ns=seen.at_ns)] if seen.stated else []
         return ObservationMeta(
             row_key=row_key[:128],
-            subjects=[ops.SubjectRef(entity_id=mapped.subject)],
+            subjects=[SubjectRef(entity_id=mapped.subject)],
             source=ops.Source(dataset=self.dataset(LIVE), venue_id=self.venue.venue_id),
             valid_from_ns=seen.at_ns,
             source_times=times,
@@ -1199,7 +1200,7 @@ class Feed:
         row = Outcome(
             meta=ObservationMeta(
                 row_key=f"{contract.code}:outcome"[:128],
-                subjects=[ops.SubjectRef(entity_id=mapped.subject)],
+                subjects=[SubjectRef(entity_id=mapped.subject)],
                 source=ops.Source(dataset=self.dataset(OUTCOMES), venue_id=self.venue.venue_id),
                 valid_from_ns=at,
                 source_times=[SourceTime(kind="event", at_ns=at)] if stated else [],

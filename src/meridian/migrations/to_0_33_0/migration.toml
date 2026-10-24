@@ -1,0 +1,67 @@
+# open-meridian 0.32.3 to 0.33.0: contract v28
+# (sdk-contract/listed-options-and-futures-contract;
+# sdk-contract/the-common-scenario-format-contract; the filings slice of
+# sdk-contract/the-lake-holds-researchs-kinds;
+# sdk-contract/lake-observations-carry-quality-states-contract; the latency
+# remainder of sdk-contract/sessions-and-data-report-their-latency-contract;
+# sdk-contract/a-deployment-counts-its-licensed-data-use-contract; DESIGN28,
+# rulings 557 to 601). Breaking: the typed operations take meridian.SubjectRef
+# only (ruling 599), every role's suite holds new cases a plugin maps, and the
+# three latency cases are required again (518).
+from = "0.32.3"
+to = "0.33.0"
+summary = """
+SUMMARY
+"""
+breaking = true
+rewrite = "rewrite.py"
+
+[[rewrites]]
+rule = "subject-ref-from-the-sdk"
+what = """a SubjectRef built from the wire bindings (`ops.SubjectRef(...)`, \
+`operations_pb2.SubjectRef(...)`, or one imported from \
+meridian.plugin.v1.operations_pb2) and handed to the SDK became \
+`meridian.SubjectRef(...)`: from contract v28 a SubjectRef carries its role, and the \
+typed operations take the SDK's dataclass and refuse the wire's (ruling 599). One \
+built inside another wire message, or added to a wire message's field, stays the \
+wire's"""
+
+[[rewrites]]
+rule = "base-digest-dropped"
+what = """the Dockerfile's base, pinned by digest at an older release of \
+plugin-python, moved to 0.33.0 with its digest dropped: the migration runs with no \
+network, so it cannot read 0.33.0's digest, and an old digest under a new tag would \
+build the old release while saying the new one"""
+
+[[by_hand]]
+rule = "base-digest"
+what = """the Dockerfile's base was pinned by digest, and the digest was dropped \
+when its tag moved"""
+instead = """pin it again: `ghcr.io/open-meridian/plugin-python:0.33.0@sha256:<digest>`, \
+the digest `docker buildx imagetools inspect ghcr.io/open-meridian/plugin-python:0.33.0` \
+names"""
+
+[[by_hand]]
+rule = "subjects-from-the-wire"
+what = """a typed operation, or one of the SDK's rows, given the subjects of a heard \
+message (`subjects=want.subjects`): those are the wire's SubjectRef, which the typed \
+operations refuse from 0.33.0 (ruling 599)"""
+instead = """convert each: `[meridian.SubjectRef(entity_id=s.entity_id) for s in \
+want.subjects]`, keeping `role=s.role` where the row states one"""
+
+[[by_hand]]
+rule = "suite-cases-v28"
+what = """a test running a role's suite that contract v28 adds cases to"""
+instead = """CASES"""
+
+[[by_hand]]
+rule = "latency-cases-required"
+what = """one of the three cases about latency -- reports-its-feed-delay, \
+reports-a-sessions-round-trip, reports-its-pre-trade-checks-data-age -- named not \
+presented under contract v27 ("core receives ReportLatency from contract v28, ruling \
+515"): from v28 they are required, and the SDK sends ReportLatency (rulings 516 and \
+518)"""
+instead = """map it to a producer: the plugin's roles.Latency recorded as it runs and \
+reported (`await latency.report(plugin)`, which sends ReportLatency from 0.33.0); \
+meridian.roles.data.testing's feed_delay, and the connectivity and ems producers \
+the SDK's testing modules carry, do it for the SDK's kinds"""

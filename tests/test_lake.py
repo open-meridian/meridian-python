@@ -569,7 +569,7 @@ async def test_a_data_plugin_hears_a_want_records_against_it_and_declines_what_i
         await plugin.record_prices(prices=[close("62431.27", day=day)], want_id=want.want_id)
         await plugin.decline_want(
             want_id=want.want_id,
-            subjects=[ops.SubjectRef(entity_id="LCL-NOT-COVERED")],
+            subjects=[meridian.SubjectRef(entity_id="LCL-NOT-COVERED")],
             reason="not_covered",
         )
         answered.set()
@@ -833,7 +833,11 @@ class ToyDataPlugin:
                 prices=[self.price(s.entity_id, Decimal("62431.27")) for s in covered],
                 want_id=want.want_id,
             )
-        declined = [s for s, ok in zip(want.subjects, served, strict=True) if not ok]
+        declined = [
+            meridian.SubjectRef(entity_id=s.entity_id)
+            for s, ok in zip(want.subjects, served, strict=True)
+            if not ok
+        ]
         if declined:
             await self.plugin.decline_want(
                 want_id=want.want_id, subjects=declined, reason="not_covered"
@@ -982,7 +986,7 @@ def outcome_producer(determination: str, *stages: str):  # type: ignore[no-untyp
                     meridian.Outcome(
                         meta=meridian.ObservationMeta(
                             row_key="KXFEDDECISION-26OCT-H0:outcome",
-                            subjects=[ops.SubjectRef(entity_id="INS-KXFED-H0")],
+                            subjects=[meridian.SubjectRef(entity_id="INS-KXFED-H0")],
                             source=ops.Source(dataset=DAILY),
                             valid_from_ns=DAY,
                             raw=ops.RawRecordRef(instance_id=INSTANCE, key="market:1"),

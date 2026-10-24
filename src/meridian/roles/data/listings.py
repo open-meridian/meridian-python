@@ -106,6 +106,7 @@ from ...operations import (
     Price,
     Quote,
     SourceTime,
+    SubjectRef,
     Trade,
     TradeAttributes,
 )
@@ -576,7 +577,7 @@ class Feed:
         day = bar.business_date
         return ObservationMeta(
             row_key=row_key(bar.row_key, entity_id),
-            subjects=[ops.SubjectRef(entity_id=entity_id)],
+            subjects=[SubjectRef(entity_id=entity_id)],
             source=ops.Source(dataset=self.dataset(DAILY)),
             valid_from_ns=previous_close_of(day),
             valid_until_ns=close_of(day),
@@ -622,7 +623,7 @@ class Feed:
         return Price(
             meta=ObservationMeta(
                 row_key=row_key(quoted.row_key, entity_id),
-                subjects=[ops.SubjectRef(entity_id=entity_id)],
+                subjects=[SubjectRef(entity_id=entity_id)],
                 source=ops.Source(dataset=self.dataset(LIVE), venue_id=venue),
                 valid_from_ns=quoted.at_ns,
                 source_times=[SourceTime(kind="event", at_ns=quoted.at_ns)],
@@ -715,7 +716,7 @@ class Feed:
         for batch in _chunks(list(subjects)):
             await self.plugin.decline_want(
                 want_id=want_id,
-                subjects=[ops.SubjectRef(entity_id=s) for s in batch],
+                subjects=[SubjectRef(entity_id=s) for s in batch],
                 reason=reason,
             )
         counts.declined += len(subjects)
@@ -1245,7 +1246,7 @@ class Feed:
         return Trade(
             meta=ObservationMeta(
                 row_key=key,
-                subjects=[ops.SubjectRef(entity_id=subject)],
+                subjects=[SubjectRef(entity_id=subject)],
                 source=ops.Source(dataset=self.dataset(TRADES), venue_id=venue),
                 valid_from_ns=stated.at_ns,
                 source_times=[SourceTime(kind="event", at_ns=stated.at_ns)],
@@ -1277,7 +1278,7 @@ class Feed:
         return Quote(
             meta=ObservationMeta(
                 row_key=row_key(stated.row_key, subject),
-                subjects=[ops.SubjectRef(entity_id=subject)],
+                subjects=[SubjectRef(entity_id=subject)],
                 source=ops.Source(dataset=self.dataset(LIVE), venue_id=venue),
                 valid_from_ns=stated.at_ns,
                 source_times=[SourceTime(kind="event", at_ns=stated.at_ns)],

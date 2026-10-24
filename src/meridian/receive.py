@@ -90,6 +90,7 @@ from .operations import (
     ConflatedRow,
     DeliveredRow,
     SequencedRow,
+    SubjectRef,
 )
 
 if TYPE_CHECKING:
@@ -590,7 +591,7 @@ class _Latest:
             size: int = getattr(bounds, f"{prefix}_REQUEST_PAGE_SIZE_RANGE").most
             for start in range(0, len(self.subjects), most):
                 subjects = [
-                    ops.SubjectRef(entity_id=entity)
+                    SubjectRef(entity_id=entity)
                     for entity in self.subjects[start : start + most]
                 ]
                 cursor = ""
@@ -663,7 +664,7 @@ class _InFull(_Latest):
             records: list[Any] = []
             for start in range(0, len(self.subjects), most):
                 subjects = [
-                    ops.SubjectRef(entity_id=entity)
+                    SubjectRef(entity_id=entity)
                     for entity in self.subjects[start : start + most]
                 ]
                 cursor = ""

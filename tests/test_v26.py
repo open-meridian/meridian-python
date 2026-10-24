@@ -671,7 +671,7 @@ def test_custodys_thin_holding_is_about_securities() -> None:
 async def test_a_bounded_query_names_its_fields_and_limit() -> None:
     recorder = Recorder("reporting-1")
     await recorder.query_lake(
-        kind="bars", subjects=[ops.SubjectRef(entity_id=AAPL)],
+        kind="bars", subjects=[meridian.SubjectRef(entity_id=AAPL)],
         fields=["meridian.v1.Bar.close"], row_limit=10_000,
     )  # fmt: skip
     (sent,) = recorder.on("QueryLake")

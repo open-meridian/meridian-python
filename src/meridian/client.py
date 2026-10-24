@@ -121,9 +121,12 @@ if TYPE_CHECKING:
 #: -- and from v26 the analytics component, pricing, event groups and the
 #: agents' guard, and from v27 the placement type and RFQ quotes, execution
 #: costs, FX netting, realized P&L, the rates slice, latency, liveness and
-#: trading sessions -- and a newer sidecar still admits it. Raised with
+#: trading sessions, and from v28 listed options and futures (series, the
+#: chain read, statistics, lifecycle events, packages), derived series and
+#: saved scenarios, the filings slice, quality states and latency reported
+#: -- and a newer sidecar still admits it. Raised with
 #: every contract revision that adds something a plugin can depend on.
-SCHEMA_VERSION = "v27"
+SCHEMA_VERSION = "v28"
 
 #: Where a sidecar listens. Loopback, always: a sidecar reachable from another
 #: host is a way around the boundary it exists to enforce.

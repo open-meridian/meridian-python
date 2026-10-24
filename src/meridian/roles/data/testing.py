@@ -69,7 +69,7 @@ from pathlib import Path
 from typing import Any
 
 from ...errors import MeridianError, NotGranted
-from ...operations import Money, as_decimal, as_money
+from ...operations import Money, SubjectRef, as_decimal, as_money
 from ...plugin.v1 import operations_pb2 as ops
 from ...suites import ANSWERED_BY_SDK, Recorder, names, run, suite
 from ...testing import PageClient
@@ -364,7 +364,7 @@ def lake_query(subject: str, kind: str = "prices") -> Producer:
     async def produce(recorder: Recorder) -> None:
         await recorder.query_lake(
             kind=kind,
-            subjects=[ops.SubjectRef(entity_id=subject)],
+            subjects=[SubjectRef(entity_id=subject)],
             fields=["meridian.v1.Price.price"],
             row_limit=100,
         )
