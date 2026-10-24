@@ -43,7 +43,9 @@
 {% if record is defined and record %}
 <section class="panel">
 <h2>The record</h2>
-<details open><summary><code>{{ key }}</code></summary><pre class="wrap">{{ record }}</pre></details>
+{#- Wrapped within its box, never sideways (0.32.3: the kit styles no
+    pre), and scrolled within it past 24rem, so the page keeps to a screen. -#}
+<details open><summary style="overflow-wrap:anywhere"><code>{{ key }}</code></summary><pre style="margin:0;white-space:pre-wrap;overflow-wrap:anywhere;max-height:24rem;overflow-y:auto">{{ record }}</pre></details>
 </section>
 {% endif %}
 {% block vendor_sections %}{% endblock %}

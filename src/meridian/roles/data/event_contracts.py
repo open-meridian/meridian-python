@@ -246,6 +246,9 @@ class Resolution:
     #: When the venue paid out, as it states it; 0 until then.
     settled_at_ns: int = 0
     unread: tuple[Unread, ...] = ()
+    #: When the window to challenge a proposed determination ends, where the
+    #: venue reports one (0.32.3); 0, unset, where it does not.
+    challenge_ends_at_ns: int = 0
 
 
 @dataclass(frozen=True)
@@ -1210,6 +1213,7 @@ class Feed:
             determination_as_reported=ops.AsReported(
                 scheme=scheme[:64], code=word[:128], text=(text or word)[:256]
             ),
+            challenge_ends_at_ns=said.challenge_ends_at_ns,
         )
         return row, kept
 

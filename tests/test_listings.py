@@ -233,3 +233,45 @@ async def test_a_source_that_does_not_stream_streams_none() -> None:
     feed.streaming = False
     feed.restream()
     assert feed.streamed == []
+
+
+@dataclass(frozen=True)
+class Said:
+    symbol: str
+    bid: Decimal
+    ask: Decimal
+
+
+async def test_a_message_heard_is_noted_as_the_streams_sign_of_life() -> None:
+    """0.32.3: `heard` notes when the stream last spoke, a listing streamed or
+    not; nothing is recorded until the pass's `flush`."""
+    feed, recorder = lake(Broker())
+    assert feed.alive_ns == 0
+    await feed.heard([Said("QQQ", Decimal("1"), Decimal("2"))])
+    assert feed.alive_ns == EVENING
+    assert recorder.on("RecordLiveness") == []
+
+
+async def test_a_pass_records_the_live_datasets_liveness_once_when_heard() -> None:
+    """0.32.3: as `pairs.Feed` does, `flush` records the live dataset's
+    liveness for its consolidated view (no venue) once a pass, when a message
+    was heard since the last; a pass with nothing heard records none."""
+    now = [EVENING]
+    recorder = Recorder("brokerage-1")
+    feed = Lake(recorder, Broker(), listings.Listings(None), clock_ns=lambda: now[0])
+    await feed.flush()
+    assert recorder.on("RecordLiveness") == [], "nothing heard yet"
+    await feed.heard([])
+    await feed.flush()
+    await feed.flush()
+    (once,) = recorder.on("RecordLiveness")
+    (alive,) = once.liveness
+    assert (alive.dataset, alive.venue_id, alive.alive_at_ns) == (
+        "brokerage-1:live", "", EVENING,
+    )  # fmt: skip
+    now[0] += listings.NS
+    await feed.heard([])
+    await feed.flush()
+    assert [r.liveness[0].alive_at_ns for r in recorder.on("RecordLiveness")] == [
+        EVENING, EVENING + listings.NS,
+    ]  # fmt: skip

@@ -23,6 +23,18 @@ the source does not publish is no row, never a zero.
                       raw_key=raw)
     await feed.record("ust_par", rows)
 
+**Every rate carries its convention** (`Rate.convention`, never unset: the
+lake refuses a rate with none, of every kind): a fixing or an average its
+publisher's, a curve's points the curve's, and an index level the
+convention of the rate it compounds -- the SOFR Index act/360 simple,
+`rates.MONEY_MARKET`. `Feed.rate` refuses one with none, at the plugin,
+before the lake (0.32.3).
+
+    index = await feed.subject(("symbol", "SOFRINDEX", "nyfed"), instrument_type="index")
+    row = feed.rate(index, "nyfed_rates", "index_level",
+                    rates.index_level("1.18752336", base="2018-04-02=1.00000000"),
+                    business_date=day, convention=rates.MONEY_MARKET, series="SOFRINDEX")
+
 **Row keys**: a rate's row key names its series, kind, tenor or maturity,
 convention and business date, and the record it is about (`@INS-...`), never
 its published time, so a same-day revision -- a later published time, a new
@@ -33,6 +45,9 @@ row key, and an identical repeat is answered unchanged.
 states (a FIGI, an ISIN, the administrator's code as a `symbol` at its
 source), once per process; a record not held is reported as a miss
 (W3.2), once a day, and its rows not recorded -- a plugin never mints. A
+subject missed is asked again the same day after 5, then 15, then every
+60 minutes (0.32.3): at a deployment's start the
+instrument store may not hold it yet. A
 single-point series that is another source's curve point (FRED's DGS10,
 Treasury's 10-year) is recorded against the curve's record with its tenor
 (`Feed.rate(..., tenor="10Y")`), so both sit under the deployment's source
@@ -107,6 +122,11 @@ BOND_EQUIVALENT = RateConvention(
 )
 DISCOUNT = RateConvention(day_count="act_360", compounding="discount")
 CONTINUOUS = RateConvention(day_count="act_365_fixed", compounding="continuous")
+
+#: How long a subject missed waits before it is asked again the same day,
+#: in seconds: 5, then 15, then every 60 minutes (0.32.3). A miss is
+#: reported once a day all the same.
+_RETRY_AFTER_S = (5 * 60, 15 * 60, 60 * 60)
 
 _UNITS = {
     "d": "day", "day": "day", "days": "day",
@@ -251,7 +271,9 @@ class Feed:
         self.zone = ZoneInfo(day_zone)
         self.clock_ns = clock_ns
         self.subjects: dict[tuple[tuple[str, str, str], ...], str] = {}
-        self.missed: dict[tuple[tuple[str, str, str], ...], str] = {}
+        #: Each subject missed: the day it was first missed, how many times
+        #: it has missed that day, and when it may be asked again (ns).
+        self.missed: dict[tuple[tuple[str, str, str], ...], tuple[str, int, int]] = {}
 
     def dataset(self, key: str) -> str:
         return f"{self.plugin.identity.instance_id}:{key}"
@@ -266,17 +288,20 @@ class Feed:
         for a source-scoped code, its source) -- an `interest_rate`, a
         `rate_curve` or an `index`, as `instrument_type` states it -- once
         per process; empty, and reported as a miss once a day, where the
-        deployment holds none."""
+        deployment holds none -- asked again that day again after 5, 15,
+        then every 60 minutes, the next day at once."""
         named = tuple(
             (each[0], each[1], each[2] if len(each) > 2 else "") for each in identifiers
         )
         held = self.subjects.get(named)
         if held:
             return held
-        today = (
-            dt.datetime.fromtimestamp(self.clock_ns() / 1e9, tz=self.zone).date().isoformat()
-        )
-        if self.missed.get(named) == today:
+        now = self.clock_ns()
+        today = dt.datetime.fromtimestamp(now / 1e9, tz=self.zone).date().isoformat()
+        day, misses, again_ns = self.missed.get(named, ("", 0, 0))
+        if day != today:
+            misses = 0
+        elif now < again_ns:
             return ""
         asked = [ops.Identifier(scheme=s, value=v, source=o) for s, v, o in named]
         found = await self.plugin.resolve_identifier(
@@ -289,7 +314,11 @@ class Feed:
         if found.found and found.instrument_id:
             self.subjects[named] = found.instrument_id
             return str(found.instrument_id)
-        self.missed[named] = today
+        wait_s = _RETRY_AFTER_S[min(misses, len(_RETRY_AFTER_S) - 1)]
+        self.missed[named] = (today, misses + 1, now + wait_s * 10**9)
+        if misses:
+            log.info("a rate's record is still not held: %s", named)
+            return ""
         await self.plugin.report_missing_instrument(
             source=self.source_name,
             identifiers=asked,
@@ -323,7 +352,16 @@ class Feed:
         `coupon_equivalent`), its value (a bare number is a percent), its
         business date and, where the publisher states them, its published
         time, convention, tenor or maturity, whether it is preliminary, its
-        volume, transaction count and percentiles."""
+        volume, transaction count and percentiles. Its convention is never
+        unset: a rate with none is refused here, before the lake refuses it
+        (0.32.3) -- an index level takes the convention of the rate it
+        compounds."""
+        if convention is None:
+            raise ValueError(
+                f"a {kind} rate for {subject} under {key} has no convention: the lake "
+                "refuses a rate with none, of every kind; an index level takes the "
+                "convention of the rate it compounds (the SOFR Index: rates.MONEY_MARKET)"
+            )
         day = business_date if isinstance(business_date, str) else business_date.isoformat()
         held_tenor = None if tenor is None else _tenor_of(tenor)
         maturity = (

@@ -1,0 +1,23 @@
+# open-meridian 0.32.2 to 0.32.3: nothing a plugin calls changed shape, so
+# only the pins move.
+from = "0.32.2"
+to = "0.32.3"
+summary = """
+Three small additions. A listings feed (meridian.roles.data.listings, which
+the Alpaca and Tradier plugins subclass) records its live dataset's liveness
+as a pairs feed does: `heard` notes when the stream last spoke, and `flush`
+records RecordLiveness for the consolidated view once a pass when a message
+was heard since the last. An event-contract Resolution carries the venue's
+optional challenge_ends_at_ns through to the Outcome recorded, unset by
+default. DatasetLicence writes not_affiliated_notice. rates.Feed.rate refuses
+a rate with no convention, which the lake refuses too: an index level takes
+the convention of the rate it compounds (the SOFR Index rates.MONEY_MARKET).
+rates.Feed.subject asks a subject missed again the same day after 5, 15, then
+every 60 minutes, its miss reported once a day. The merged Connection
+(connectivity.connection_pages) draws one group at a time under a tab row,
+`?tab=`, so a plugin drops its own tab code. A plugin sets the
+licence fields 0.32.2 and 0.32.3 added only on core 0.1.311 or later: an
+earlier v27 core refuses its registration. Nothing a plugin calls changed
+shape, so `meridian plugin migrate` moves the pins and changes no code.
+"""
+breaking = false

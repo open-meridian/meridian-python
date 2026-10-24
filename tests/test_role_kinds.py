@@ -186,6 +186,36 @@ async def test_an_event_contract_feed_records_an_outcome_once_and_its_later_stag
     assert feed.counts.recorded == 3, "the live rows alone, apart from the outcomes"
 
 
+class ChallengedMarket(ContractsMarket):
+    """The made-up venue, its RESOLVED-1 proposed with a window to challenge
+    it that ends at a time the venue reports."""
+
+    CHALLENGE_ENDS_NS = NOW_NS + 2 * 3600 * 10**9
+
+    def _resolved(self) -> event_contracts.Resolution:
+        return replace(
+            super()._resolved(),
+            stage=event_contracts.PROPOSED,
+            challenge_ends_at_ns=self.CHALLENGE_ENDS_NS,
+        )
+
+
+async def test_an_outcome_carries_the_venues_challenge_deadline_where_it_reports_one() -> None:
+    """0.32.3: a resolution's `challenge_ends_at_ns`, where the venue reports
+    one, reaches the Outcome recorded; unset by default."""
+    assert event_contracts.Resolution(event_contracts.FINAL, None).challenge_ends_at_ns == 0
+    ends_ns = ChallengedMarket.CHALLENGE_ENDS_NS
+    for market, ends in ((ContractsMarket(NOW_NS), 0), (ChallengedMarket(NOW_NS), ends_ns)):
+        lake = Lake(contracts_venue.VENUE)
+        feed = event_contracts.Feed(
+            lake, market, event_contracts.ContractMap(), clock_ns=lambda: NOW_NS
+        )
+        subject = await lake.held(feed, "RESOLVED-1")
+        await feed.record_live([subject], data_type="meridian.v1.Price")
+        (row,) = lake.rows("RecordOutcomes")
+        assert row.challenge_ends_at_ns == ends
+
+
 # ── A range market's bounds, and a record already complete (0.31.1) ────
 
 FLOOR = event_contracts.Bound(Decimal("71.5"), inclusive=False)

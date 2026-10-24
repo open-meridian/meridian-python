@@ -26,6 +26,9 @@ declares in its catalogue:
   Pulled for a read; while a standing want stands, its prices kept current
   at the dataset's cadence and its quotes streamed, at most one a second
   per listing (the latest); nothing once it is withdrawn.
+  From 0.32.3 any stream message heard is the dataset's liveness
+  (`RecordLiveness`, its consolidated view), recorded once a pass by
+  `flush`.
 - **trades**: each trade with the platform's trade attributes, converted
   from what the broker states by the plugin (`attributes`), and no
   aggressor, which a broker's stock trades never state; a withdrawal or a
@@ -367,6 +370,12 @@ class Feed:
         self.streamer: Any = None
         self.pending_trades: list[Trade] = []
         self.pending_quotes: dict[str, Any] = {}
+        #: The stream's last message, and the liveness last recorded (0.32.3;
+        #: contract v27, ruling 418): a message with no price changed still
+        #: confirms the quotes in force, recorded for the live dataset once
+        #: a pass.
+        self.alive_ns = 0
+        self.liveness_ns = 0
         self._trades_at = 0
         self._quotes_at = 0
         #: The trades recorded, by row key, latest last: none sent twice.
@@ -1038,7 +1047,10 @@ class Feed:
 
     async def heard(self, stated: Sequence[Any]) -> None:
         """What the stream stated: each trade of a listing streamed made a
-        row, waiting to be recorded; each quote kept, the latest a listing's."""
+        row, waiting to be recorded; each quote kept, the latest a listing's.
+        Any message heard is the stream's sign of life (`alive_ns`), recorded
+        by the next `flush`."""
+        self.alive_ns = self.clock_ns()
         streamed = set(self.streamed)
         for each in stated:
             if each.symbol not in streamed:
@@ -1053,7 +1065,9 @@ class Feed:
 
     async def flush(self, force: bool = False) -> None:
         """Record what the stream stated, when it is due: trades every half
-        second or 500 at a time, quotes once a second."""
+        second or 500 at a time, quotes once a second; and, where a message
+        was heard since the last, the live dataset's liveness (`alive`)."""
+        await self.alive()
         now = self.clock_ns()
         due = (
             force
@@ -1075,6 +1089,27 @@ class Feed:
             ]
             if made:
                 await self._record(LIVE, QUOTE, made, "")
+
+    async def alive(self) -> bool:
+        """The stream's sign of life since the last (0.32.3; contract v27,
+        ruling 418): the live dataset's liveness, recorded once a pass for
+        its consolidated view (no venue), which confirms every quote in
+        force. Whether it was recorded; a refusal is said, never raised."""
+        if self.alive_ns <= self.liveness_ns:
+            return False
+        self.liveness_ns = self.alive_ns
+        try:
+            await self.plugin.record_liveness(
+                liveness=[
+                    ops.DatasetLiveness(
+                        dataset=self.dataset(LIVE), venue_id="", alive_at_ns=self.alive_ns
+                    )
+                ]
+            )
+        except (MeridianError, ValueError) as refused:
+            log.warning("the stream's liveness not recorded: %s", refused)
+            return False
+        return True
 
     async def caught_up(self, since: dict[str, int]) -> int:
         """After the stream reconnected: the trades since the last heard of

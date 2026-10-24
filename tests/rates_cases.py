@@ -82,7 +82,8 @@ async def _index(feed: rates.Feed, store: Instruments) -> None:
     subject = await feed.subject(SOFR_INDEX, instrument_type="index")
     row = feed.rate(subject, "nyfed_rates", "index_level",
                     rates.index_level("1.18752336", base="2018-04-02=1.00000000"),
-                    business_date=DAY, series="SOFRINDEX")  # fmt: skip
+                    business_date=DAY, convention=rates.MONEY_MARKET,
+                    series="SOFRINDEX")  # fmt: skip
     await feed.record("nyfed_rates", [row])
 
 
@@ -92,7 +93,7 @@ async def _another_sources_point(feed: rates.Feed, store: Instruments) -> None:
     _referential(store, "INS-PAR", PAR, ("symbol", "DGS10", "fred"))
     subject = await feed.subject(("symbol", "DGS10", "fred"))
     row = feed.rate(subject, "fred_public", "par_yield", "4.21", tenor="10Y", business_date=DAY,
-                    series="DGS10")  # fmt: skip
+                    convention=rates.BOND_EQUIVALENT, series="DGS10")  # fmt: skip
     await feed.record("fred_public", [row])
 
 

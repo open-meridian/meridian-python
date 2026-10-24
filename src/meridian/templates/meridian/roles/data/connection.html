@@ -3,7 +3,12 @@
     session's latency; from 0.32.2 only once a session is measured, so a
     polled plugin's page has none), then, for a plugin holding connectivity too (457),
     connectivity's sections of `data.trading` beside them where the screen is
-    wide enough, its key said once, then the vendor's sections.
+    wide enough, its key said once, then the vendor's sections. Where
+    `tabs` is given (0.32.3: `connectivity.connection_pages` gives it, the
+    sections' own titles, Sessions only once measured), a tab row and one
+    group at a time, `tab` the one drawn: Key, Limits and use, Stream,
+    Trading (connectivity's sections) or Sessions; a page given none draws
+    every section, as before.
     `data` is a meridian.roles.data.ConnectionRead, or the plugin's record
     extending it. -#}
 {% extends "meridian/base.html" %}
@@ -19,9 +24,16 @@
 {% if data.trading and data.trading.environment_to_save %}<div class="notice warn" role="status">Environment holds "{{ data.trading.environment_to_save }}", no longer offered: save it again in <a href="#settings" data-om-opens="settings">Settings</a>.</div>{% endif %}
 {% if data.trading and data.trading.badge %}{% import "meridian/kit.html" as kit %}<p class="hint">Connection {% if data.trading.badge == "Demo" %}{{ kit.badge("Demo", "good") }}{% elif data.trading.badge == "Live" %}{{ kit.badge("Live", "warn") }}{% else %}{{ kit.badge(data.trading.badge, "bad") }}{% endif %} The session reached {{ venue|default("the venue") }}'s {{ data.trading.reached_environment }} host; agents may place orders only on a Demo connection.</p>{% endif %}
 {% block vendor_notices %}{% endblock %}
-{% if data.trading %}<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,28rem),1fr));gap:0 1rem;align-items:start"><div>{% endif %}
+{% set tabbed = tabs is defined and tabs %}
+{% if tabbed %}
+<div><nav class="tabs" aria-label="Sections">
+{% for title in tabs %}<a class="tab{% if title == tab %} on{% endif %}" href="?tab={{ title|lower|replace(' ', '-') }}"{% if title == tab %} aria-current="page"{% endif %}>{{ title }}</a>
+{% endfor %}</nav></div>
+{% endif %}
+{% set side_by_side = data.trading and not tabbed %}
+{% if side_by_side %}<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,28rem),1fr));gap:0 1rem;align-items:start"><div>{% endif %}
 {% set measured = data.session_latency or (data.trading.session_latency if data.trading else []) %}
-{% for section in ["Key", "Limits and use", "Stream"] + (["Sessions"] if measured else []) %}
+{% for section in ["Key", "Limits and use", "Stream"] + (["Sessions"] if measured else []) if not tabbed or section == tab %}
 <section class="panel">
 <h2>{{ section }}</h2>
 <table class="one-line"><tbody>
@@ -48,12 +60,12 @@
 </tbody></table>
 </section>
 {% endfor %}
-{% if data.trading %}
-</div><div>
+{% if data.trading and (not tabbed or tab == "Trading") %}
+{% if side_by_side %}</div><div>{% endif %}
 {% set trading = data.trading %}
 {% set merged = true %}
 {% include "meridian/roles/connectivity/_sections.html" %}
-</div></div>
+{% if side_by_side %}</div></div>{% endif %}
 {% endif %}
 {% block vendor_sections %}{% endblock %}
 {% endblock %}

@@ -1237,7 +1237,8 @@ def test_the_recorder_answers_a_batch_of_rates_with_its_count() -> None:
         feed = rates.Feed(Recorder(INSTANCE), "ust", clock_ns=lambda: PUBLISHED)
         rows = [
             feed.rate("INS-PAR", "ust_par", "par_yield", value, tenor=tenor,
-                      business_date="2026-10-20", series="PAR")
+                      business_date="2026-10-20", convention=rates.BOND_EQUIVALENT,
+                      series="PAR")
             for tenor, value in (("1 Mo", "4.12"), ("10 Yr", "4.21"))
         ]  # fmt: skip
         return await feed.plugin.record_rates(rates=rows)
