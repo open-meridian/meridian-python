@@ -299,3 +299,14 @@ async def test_latency_is_reported_in_batches_and_a_refusal_kept() -> None:
     latency.rtt("pricing-stream", 41_000_000)
     latency.age("oanda-1:live", "AGE_HOP_EDGE", 120_000_000)
     assert await latency.report() == 2 and latency.sent == 2
+
+
+def test_the_admins_quality_settings_are_typed_tables() -> None:
+    columns = [c.name for c in meridian.dataset_thresholds().columns]
+    assert columns[-3:] == ["crossed_tolerance", "out_of_order_tolerance", "future_skew_max"]
+    outliers = meridian.quality_thresholds()
+    assert outliers.name == "quality_thresholds"
+    assert [c.name for c in outliers.columns] == [
+        "dataset", "outlier_sigma", "sigma_floor", "warm_up", "invalid_sigma",
+        "cross_source_tolerance",
+    ]  # fmt: skip

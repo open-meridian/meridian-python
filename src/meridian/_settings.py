@@ -421,7 +421,11 @@ def dataset_thresholds(*, roles: Sequence[str] = ()) -> Any:
     row a dataset, its asset class (the default's origin) and its
     `stale_after` in seconds, which the lake reads by its fixed name and
     answers on `DatasetRef.stale_after_ns`. Its declared delay is the
-    catalogue's (`DatasetDeclaration.declared_delay_ns`), never set here."""
+    catalogue's (`DatasetDeclaration.declared_delay_ns`), never set here.
+    From 0.33.0 (contract v28, ruling 424) the edge's tolerances beside it:
+    `crossed_tolerance`, how far a bid may sit above its ask before a quote
+    is invalid, in its price; `out_of_order_tolerance` and
+    `future_skew_max`, in seconds (`roles.data.quality.thresholds_from`)."""
     return Setting(
         "dataset_thresholds",
         list,
@@ -448,6 +452,53 @@ def dataset_thresholds(*, roles: Sequence[str] = ()) -> Any:
                 required=True,
                 description="In seconds",
             ),
+            Column(
+                "crossed_tolerance",
+                kind="decimal",
+                label="Crossed tolerance",
+                description="How far a bid may sit above its ask before the quote is invalid",
+            ),
+            Column(
+                "out_of_order_tolerance",
+                kind="decimal",
+                label="Out of order tolerance",
+                description="In seconds: how far back a source time may step",
+            ),
+            Column(
+                "future_skew_max",
+                kind="decimal",
+                label="Future skew max",
+                description="In seconds: how far ahead of our clock a source time may be",
+            ),
+        ),
+        roles=roles,
+    )
+
+
+def quality_thresholds(*, roles: Sequence[str] = ()) -> Any:
+    """A signal plugin admin's outlier thresholds per dataset (contract v28,
+    ruling 424; W10.12): `quality_thresholds`, a typed table labelled
+    "Quality thresholds", each row a dataset, how many robust deviations
+    make a value suspicious (`outlier_sigma`) and invalid
+    (`invalid_sigma`), the deviation's floor in the value's own units
+    (`sigma_floor`), how many values before judging (`warm_up`) and how far
+    two sources may disagree (`cross_source_tolerance`)
+    (`roles.data.quality.OutlierThresholds`)."""
+    return Setting(
+        "quality_thresholds",
+        list,
+        label="Quality thresholds",
+        description=(
+            "When a value is suspicious or invalid against its subject's recent ones, per "
+            "dataset. States only escalate."
+        ),
+        columns=(
+            Column("dataset", label="Dataset", required=True, description="A dataset, by name"),
+            Column("outlier_sigma", kind="decimal", label="Outlier sigma"),
+            Column("sigma_floor", kind="decimal", label="Sigma floor"),
+            Column("warm_up", kind="integer", label="Warm up", description="Values held first"),
+            Column("invalid_sigma", kind="decimal", label="Invalid sigma"),
+            Column("cross_source_tolerance", kind="decimal", label="Cross source tolerance"),
         ),
         roles=roles,
     )

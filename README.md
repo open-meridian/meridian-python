@@ -2025,8 +2025,11 @@ plugin migrate` rewrites what it can (`to_0_33_0`).
   order or stale suspicious, a source time ahead of the clock invalid --
   and carries its state and reasons; a state the plugin set is only ever
   escalated. `Wants.quality` holds the checks (`EdgeChecks`, its
-  thresholds from `dataset_thresholds` by `thresholds_from`); a pairs
-  venue's `Top.sequence` feeds the gap check.
+  thresholds from `meridian.dataset_thresholds()`'s new columns
+  `crossed_tolerance`, `out_of_order_tolerance` and `future_skew_max`, by
+  `thresholds_from`); a pairs venue's `Top.sequence` feeds the gap check.
+  A signal's admin sets its outlier thresholds
+  (`meridian.quality_thresholds()`).
 - **A licence's eligibility** (`DatasetLicence.eligibility`,
   `DataEligibility`; rulings 491 and 597): the uses its terms allow and the
   buyer's revenue bounds, shown and never enforced.
