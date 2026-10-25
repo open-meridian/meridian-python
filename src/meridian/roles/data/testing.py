@@ -394,7 +394,8 @@ def feed_delay(record: Callable[[Recorder, Any], Awaitable[None]]) -> Producer:
 #: The cases a kind of venue never presents unless its module maps them
 #: (contract v27): a pairs or event-contract venue publishes no rates; an
 #: event-contract venue polls rather than streams, and records no trades;
-#: and every plugin's feed delay, about `latency` until v28 (ruling 518).
+#: and from contract v28 neither lists option chains or publishes filings,
+#: and a polled venue numbers no message (ruling 602).
 _RATES = (
     "a-rate-fixing",
     "a-same-day-revision",

@@ -11,7 +11,42 @@
 from = "0.32.3"
 to = "0.33.0"
 summary = """
-SUMMARY
+The SDK declares contract v28 (meridian.SCHEMA_VERSION). A SubjectRef carries
+its role, and the typed operations take the SDK's meridian.SubjectRef only,
+refusing the wire's (ruling 599): this step rewrites an ops.SubjectRef(...)
+handed to the SDK, and a subject read from a heard message and passed on is
+left to convert by hand.
+
+Latency is reported: Latency.report sends ReportLatency (rulings 515 and
+516), and the three latency cases -- reports-its-feed-delay,
+reports-a-sessions-round-trip and reports-its-pre-trade-checks-data-age --
+are required of every plugin holding the role (518). An ems's
+ReferenceCheck reads the stale-reference actions the deployment permits
+(`permitted`, ruling 600) and honours warn only where permitted.
+
+Listed options and futures: meridian.roles.chains (the OSI symbol, a
+chain's series and statistics recorded under the underlying, never
+resolved; a chain and its open interest read; a series asked for before an
+order), meridian.roles.lifecycle (an expiry, assignment, exercise or day of
+variation reported as the broker states it; servicing's exercise by
+exception; operations' release of an unanswered proposal) and
+meridian.roles.packages (legs in lowest terms, a package proposed, a
+package fill reported once for the package and once per leg). A signal's
+derived series, saved scenarios and a row's quality escalated
+(meridian.roles.signal); the filings slice (meridian.roles.data.filings).
+Every row a data plugin records unasked or for a standing want is judged
+at the edge (meridian.roles.data.quality): a crossed quote invalid, a
+duplicate or the rows after a sequence gap suspicious, its state on the
+row's envelope. DatasetLicence states who may take a dataset
+(DataEligibility).
+
+The suites: every role's v28 cases, a case about what a plugin's source or
+work never presents marked by its `about` (ruling 602) -- option chains,
+filings, holdings, corporate actions, ratings and the quality of quotes for
+a data plugin, options for custody, connectivity and servicing, packages
+for connectivity, derived series, scenarios and quality states for a
+signal -- the readers' cases required. A plugin's suite test maps each
+new case, or names one it may not present with why: left by hand.
 """
 breaking = true
 rewrite = "rewrite.py"
@@ -51,8 +86,28 @@ want.subjects]`, keeping `role=s.role` where the row states one"""
 
 [[by_hand]]
 rule = "suite-cases-v28"
-what = """a test running a role's suite that contract v28 adds cases to"""
-instead = """CASES"""
+what = """a test running a role's suite that contract v28 adds cases to: the \
+data suite's chains, filings slice and quality cases; custody's reports-an-assignment; \
+connectivity's reports-an-expiry and reports-a-package-fill; servicing's \
+proposes-an-exercise-by-exception; the readers' chain, open interest, statistic, \
+lifecycle, derived-series, scenario and filings reads; portfolio's proposes-a-package; \
+the ems's reads-the-stale-reference-actions-permitted; operations' \
+releases-an-unreported-expiry; signal's records-a-derived-series, saves-a-scenario-set \
+and escalates-an-outlier"""
+instead = """map each new case to the plugin's own producer, through the SDK's v28 \
+helpers -- a chain read (chains.read_chain, read_open_interest) and a series asked for \
+(chains.want_series); an account's lifecycle events read (lifecycle.read_events) and \
+heard (receive(lifecycle_event_recorded=...)); a derived series and a saved scenario set \
+read (signal.read_derived, read_scenarios); the filings slice read (list_filings, \
+list_reported_facts, list_holdings, list_corporate_actions, list_rating_actions) and heard \
+(receive(statistics_recorded=..., filings_recorded=..., corporate_actions_recorded=...)); \
+a package proposed (packages.propose); the stale-reference actions read \
+(ems.ReferenceCheck.permitted) -- or, for a case about what its source or work never \
+presents (`about`: option chains, filings, holdings, corporate actions, ratings, quotes, \
+options, packages, derived series, scenarios, quality states; ruling 602), name it in \
+not_presented with why. meridian.roles.data.testing's PAIRS_NOT_PRESENTED, \
+EVENT_CONTRACTS_NOT_PRESENTED and RATES_NOT_PRESENTED name a kind of venue's; a pairs \
+venue maps the three quality cases in its STREAM_CASES, its Top numbered by `sequence`"""
 
 [[by_hand]]
 rule = "latency-cases-required"

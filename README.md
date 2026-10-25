@@ -1888,10 +1888,10 @@ await plugin.receive(observations_wanted=lambda heard: wants.hear(heard, answer)
   HdrHistogram's layout at 2 significant digits, taken every 10 seconds as
   `ReportLatency`'s snapshots with their counters, clock skew, liveness and
   the ceilings in force (`meridian.session_ceilings()`, `ceilings_from`).
-  **Recorded, not yet reported**: core receives `ReportLatency` from
-  contract v28 (rulings 515 and 516), so 0.32.0 records every session and
-  hop locally, shows it in "Sessions", and sends nothing; the liveness
-  below is sent. The suites' three latency reports are about `latency`, and
+  **Recorded, not yet reported in 0.32.x** (reported from 0.33.0, below):
+  core receives `ReportLatency` from contract v28 (rulings 515 and 516), so
+  0.32.0 records every session and hop locally, shows it in "Sessions", and
+  sends nothing; the liveness below is sent. The suites' three latency reports are about `latency`, and
   a v27 plugin names them not presented: "core receives ReportLatency from
   contract v28, ruling 515" (ruling 518). A data plugin's
   `Wants.latency` records each row's age at the edge, its feed delay, and
@@ -1959,6 +1959,86 @@ await plugin.receive(observations_wanted=lambda heard: wants.hear(heard, answer)
   identifier its venue states (`VenueOrder.identifiers`, `.currency`); a rejected replace's
   raw record names its venue account; a good-till-date order is asked with
   its expiry (`Asked.expire_date`, `.expire_time_ns`).
+
+### Listed options and futures, filings, quality states and latency reported (contract v28; 0.33.0)
+
+0.33.0 declares contract v28 (`meridian.SCHEMA_VERSION`). Breaking; `meridian
+plugin migrate` rewrites what it can (`to_0_33_0`).
+
+- **`meridian.SubjectRef` only** (ruling 599): a subject carries its role
+  (`role=`), and the typed operations take the SDK's `SubjectRef` and
+  refuse the wire's. The migration rewrites an `ops.SubjectRef(...)` handed
+  to the SDK; a heard message's subjects passed on are converted by hand
+  (`meridian.SubjectRef(entity_id=s.entity_id)`).
+- **Latency reported** (rulings 515, 516 and 518): `Latency.report` sends
+  `ReportLatency` every interval, and `reports-its-feed-delay`,
+  `reports-a-sessions-round-trip` and `reports-its-pre-trade-checks-data-age`
+  are required of every plugin holding the role. An `ems`'s
+  `ReferenceCheck.permitted(plugin)` reads the stale-reference actions the
+  deployment permits, at the plugin's own role (ruling 600), and `warn` is
+  honoured only where permitted.
+- **Chains** (`meridian.roles.chains`): a series keyed by its OSI symbol
+  (`osi_symbol`, `osi_key`, scheme `occ_osi`) under its underlying, never
+  resolved or minted; a data plugin records an underlying's series as the
+  `listed_option` template's fields (`option_series`, `RecordSeries`), each
+  series' open interest and volume per trading date (`statistic`,
+  `RecordStatistics`) and its chain's quotes (`series_meta`); a reader reads
+  a chain (`read_chain`) and its open interest (`read_open_interest`), and
+  asks for a series it wants to order (`want_series`).
+
+  ```python
+  from meridian.roles import chains
+
+  symbol = chains.osi_symbol("AAPL", "2026-11-20", "put", "230")   # "AAPL  261120P00230000"
+  row = chains.option_series(aapl, symbol, template_id=listed_option, template_version="1",
+                             dataset=wants.dataset("options"), currency="USD",
+                             exercise_style="EXERCISE_STYLE_AMERICAN",
+                             settlement_method="SETTLEMENT_METHOD_PHYSICAL",
+                             deliverable=[(aapl, 100)])
+  await wants.record("series", [row], "options")
+  ```
+- **Lifecycle** (`meridian.roles.lifecycle`): an expiry, assignment,
+  exercise or day of variation reported as the broker states it, once on
+  its own ID (`report`); `servicing`'s exercise by exception, a long option
+  a cent or more in the money against the underlying's close
+  (`exercise_by_exception`, `propose`); `operations`' release of a proposal
+  no report answered by the morning after (`due_for_release`, `release`);
+  an account's events read (`read_events`).
+- **Packages** (`meridian.roles.packages`): legs in lowest terms, 2 to 16
+  (`legs`), proposed at one net price (`propose`), and a venue's fill
+  reported once for the package and once per leg, linked (`report_fill`).
+- **A signal's** (`meridian.roles.signal`): a derived value with its rule
+  and every dataset it read (`derived`, `RecordDerivedSeries`;
+  `read_derived`); the common scenario format's grid axes (`spot_steps`,
+  `date_steps`) saved under a row key (`saved`, `RecordScenarios`;
+  `read_scenarios`); a row's quality escalated against a robust baseline
+  (`escalate`, `Baseline`).
+- **The filings slice** (`meridian.roles.data.filings`): filings, reported
+  facts, holdings reports and holdings, declared dividends and rating
+  actions, each under its company or security with its role, a filer
+  resolved once by its CIK (`Companies`, `ResolveCompany`). `Wants.record`
+  takes them, and a chain's series and statistics.
+- **Quality states at the edge** (`meridian.roles.data.quality`; ruling
+  424): every row recorded unasked or for a standing want is judged -- a
+  quote crossed past `crossed_tolerance` invalid, a duplicate under a new
+  row key, the rows after a sequence gap until resynced, a row out of
+  order or stale suspicious, a source time ahead of the clock invalid --
+  and carries its state and reasons; a state the plugin set is only ever
+  escalated. `Wants.quality` holds the checks (`EdgeChecks`, its
+  thresholds from `dataset_thresholds` by `thresholds_from`); a pairs
+  venue's `Top.sequence` feeds the gap check.
+- **A licence's eligibility** (`DatasetLicence.eligibility`,
+  `DataEligibility`; rulings 491 and 597): the uses its terms allow and the
+  buyer's revenue bounds, shown and never enforced.
+- **The suites**: every role's v28 cases, each case about what a plugin's
+  source or work may never present marked (`about`, ruling 602): option
+  chains, filings, holdings, corporate actions, ratings and quotes for a
+  data plugin, options for custody, connectivity and servicing, packages
+  for connectivity, derived series, scenarios and quality states for a
+  signal. The readers' cases are required. `data.testing`'s
+  `PAIRS_NOT_PRESENTED`, `EVENT_CONTRACTS_NOT_PRESENTED` and
+  `RATES_NOT_PRESENTED` name what each kind never presents, and its
+  `feed_delay` maps a plugin's feed delay.
 
 ## Moving a plugin to a new release
 
@@ -2034,6 +2114,7 @@ carries libcst.
 | 0.32.0 to 0.32.1: the data suite's `an-exact-price` and `a-want-recorded-against` are about `closes` (ruling 537), so a plugin recording rates and no prices names them not presented, "it records rates, never prices"; `meridian.roles.data.testing.RATES_NOT_PRESENTED` names every case a rates-only plugin never presents | only the pins move | |
 | 0.32.1 to 0.32.2: a data plugin's Connection draws "Sessions" only once a session is measured; the testing `Recorder` answers `RecordRates`; `DatasetLicence` writes `redistribution`, `attribution_required`, `attribution_text`, `copyright_class` and `no_more_restrictive_terms`; `RATES_NOT_PRESENTED` no longer names `records-a-datasets-liveness`, which a plugin recording no liveness adds itself | only the pins move | |
 | 0.32.2 to 0.32.3: a listings feed records its live dataset's liveness (`heard` notes it, `flush` records it once a pass); an event contract's `Resolution.challenge_ends_at_ns` reaches the `Outcome`; `DatasetLicence` writes `not_affiliated_notice`; `rates.Feed.rate` refuses a rate with no convention (an index level takes its compounded rate's) and a subject missed is asked again the same day; the merged Connection draws one group at a time under a tab row. Set the licence fields 0.32.2 and 0.32.3 added only on core 0.1.311 or later | only the pins move; a rate built with no convention now raises, so give it one | |
+| 0.32.3 to 0.33.0: the SDK declares contract v28: `meridian.SubjectRef` only (ruling 599); `Latency.report` sends ReportLatency and the three latency cases are required (518); the ems's actions permitted read (600); listed options' and futures' chains, lifecycle and packages (`roles.chains`, `roles.lifecycle`, `roles.packages`); a signal's derived series, saved scenarios and quality escalated (`roles.signal`); the filings slice (`roles.data.filings`); quality states at the edge (`roles.data.quality`); `DataEligibility`; the suites' v28 cases, marked by `about` (602). Breaking | an `ops.SubjectRef(...)` handed to the SDK into `meridian.SubjectRef(...)`; a base pinned by digest at an older release moved to 0.33.0, its digest dropped (offline) | a heard message's subjects passed to a typed operation: convert them; map each role suite's v28 cases, or name those about what the plugin never presents; map the three latency cases a v27 plugin named not presented; pin the base's digest again |
 
 `tests/migrations/` holds the plugins the migrations are recorded for, as
 written and as their migration leaves them, and `make check-migrations` holds
