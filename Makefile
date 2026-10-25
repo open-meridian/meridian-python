@@ -67,11 +67,11 @@ contract-diff:
 # PyPI depends on nothing by URL (PyPI refuses that) and a plugin installs one
 # thing. `make vendor-schema` moves the copy to SCHEMA_REV; `check-vendored`
 # fails when the two disagree, as core's check-codegen does for its bindings.
-# meridian-schema's v28 at 5e90f45 (contract v28, DESIGN28 with its
-# amendment: listed options and futures, the scenario format, filings,
-# quality states and the latency remainder), its gen/ and boundaries/
-# vendored here byte for byte.
-SCHEMA_REV := 5e90f459661c578827782eec08102c9a05b42ff9
+# meridian-schema's v28 at 7f9a91a (contract v28, DESIGN28 with its two
+# amendments: listed options and futures, the scenario format, filings,
+# quality states and the latency remainder; the v28 cases' `about`, ruling
+# 602), its gen/ and boundaries/ vendored here byte for byte.
+SCHEMA_REV := 7f9a91a3cee02edb303f9729159dcf2119b2aa29
 SCHEMA_REPO := https://github.com/open-meridian/meridian-schema.git
 SCRATCH     := .schema-scratch
 

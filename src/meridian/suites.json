@@ -651,7 +651,7 @@
     {
       "role": "connectivity",
       "since": "v22",
-      "says": "A connectivity plugin passing every case sends the placements naming its instance and no other, with what its ems set in the venue's account field; reports every acknowledgement, rejection, restatement, fill, bust and charge in the contract's meanings, each with the raw record it was converted from and the venue's text only where no contract reason maps; marks an unconverted status outcome unknown and resolves it by asking, never by sending again; derives an execution ID the same way twice; states every fill's settlement date, the venue's or the date read's; sends nothing new on a pause and cancels at its venue on a stop, reporting each cancel as a fact; and publishes its venue's catalogue. A case about calendars, settlement dates, locates or compliance waits (`about`, contract v22) a plugin whose work never uses them marks not presented, with why, and a case about a fill's place of execution (`about_field`) one whose venue never states it; and a case about venue-originated fills, charges without a fill, busts or value-date rolls (`about`, contract v23) one whose venue never originates a fill, never charges a fee with no fill, never busts or corrects a fill, or settles its trades rather than rolling them. From contract v24 it reports a prime broker's answer to a give-up. From contract v24 it hears an instrument replaced, catches up on replacements, and reads the template catalogue. From contract v26 it hears and reads event groups. From contract v27 it records a dealer's quote on the firm's RFQ placement -- a case about RFQs (`about`) a plugin whose venue takes none marks not presented -- and reports its session's round trip.\n",
+      "says": "A connectivity plugin passing every case sends the placements naming its instance and no other, with what its ems set in the venue's account field; reports every acknowledgement, rejection, restatement, fill, bust and charge in the contract's meanings, each with the raw record it was converted from and the venue's text only where no contract reason maps; marks an unconverted status outcome unknown and resolves it by asking, never by sending again; derives an execution ID the same way twice; states every fill's settlement date, the venue's or the date read's; sends nothing new on a pause and cancels at its venue on a stop, reporting each cancel as a fact; and publishes its venue's catalogue. A case about calendars, settlement dates, locates or compliance waits (`about`, contract v22) a plugin whose work never uses them marks not presented, with why, and a case about a fill's place of execution (`about_field`) one whose venue never states it; and a case about venue-originated fills, charges without a fill, busts or value-date rolls (`about`, contract v23) one whose venue never originates a fill, never charges a fee with no fill, never busts or corrects a fill, or settles its trades rather than rolling them. From contract v24 it reports a prime broker's answer to a give-up. From contract v24 it hears an instrument replaced, catches up on replacements, and reads the template catalogue. From contract v26 it hears and reads event groups. From contract v27 it records a dealer's quote on the firm's RFQ placement -- a case about RFQs (`about`) a plugin whose venue takes none marks not presented -- and reports its session's round trip. From contract v28 it reports an option's expiry as its broker session states it (`about: options`) and a package's fill once for the package and once per leg, linked (`about: packages`), each marked not presented, with why, by a plugin whose venue trades none.\n",
       "cases": [
         {
           "name": "acknowledges-a-placement-naming-it",
@@ -1250,6 +1250,7 @@
         {
           "name": "reports-an-expiry",
           "since": "v28",
+          "about": "options",
           "given": "the broker session reports an option expired worthless",
           "expect": [
             {
@@ -1267,6 +1268,7 @@
         {
           "name": "reports-a-package-fill",
           "since": "v28",
+          "about": "packages",
           "given": "the venue fills a two-leg package",
           "expect": [
             {
@@ -1289,7 +1291,7 @@
     {
       "role": "custody",
       "since": "v11",
-      "says": "A custody plugin passing every case reports its source's accounts with their kinds, its sync state in the contract's own values, and each account's holdings counted once, every row referencing the raw record it was converted from, the settled and pending quantities stated, the custodian named, and every value it closed rather than read carrying its provenance; it sends a value it cannot convert as not known beside the value as reported, and withholds a statement it cannot serve clean. A case about calendars or settlement dates (`about`, contract v22) a plugin whose work never uses them marks not presented, with why; and a case about plan fund codes, sweep funds or splits (`about`, contract v23) a plugin whose custodian never states them marks not presented, with why, and a case about a currency not stated (`about`, contract v23) one whose custodian states the currency of every holding. From contract v24 it hears an instrument replaced, catches up on replacements, and reads the template catalogue, and records a holding its source describes too thinly for a record unresolved, never dropped, a case about securities (`about`, contract v26) a plugin whose custodian holds only cash and currencies marking it not presented, with why. From contract v26 it hears and reads event groups.\n",
+      "says": "A custody plugin passing every case reports its source's accounts with their kinds, its sync state in the contract's own values, and each account's holdings counted once, every row referencing the raw record it was converted from, the settled and pending quantities stated, the custodian named, and every value it closed rather than read carrying its provenance; it sends a value it cannot convert as not known beside the value as reported, and withholds a statement it cannot serve clean. A case about calendars or settlement dates (`about`, contract v22) a plugin whose work never uses them marks not presented, with why; and a case about plan fund codes, sweep funds or splits (`about`, contract v23) a plugin whose custodian never states them marks not presented, with why, and a case about a currency not stated (`about`, contract v23) one whose custodian states the currency of every holding. From contract v24 it hears an instrument replaced, catches up on replacements, and reads the template catalogue, and records a holding its source describes too thinly for a record unresolved, never dropped, a case about securities (`about`, contract v26) a plugin whose custodian holds only cash and currencies marking it not presented, with why. From contract v26 it hears and reads event groups. From contract v28 it reports an option's assignment as its broker states it, a case about options (`about`) a plugin whose custodian holds none marking it not presented, with why.\n",
       "cases": [
         {
           "name": "sync-current",
@@ -2313,6 +2315,7 @@
         {
           "name": "reports-an-assignment",
           "since": "v28",
+          "about": "options",
           "given": "the broker reports a short call assigned in an account the plugin links",
           "expect": [
             {
@@ -2335,7 +2338,7 @@
     {
       "role": "data",
       "since": "v18",
-      "says": "A data plugin passing every case records each source's prices and bars exactly, under its dataset, its business date, its source's times and its raw record; restates a forming day under the same row key and sends an identical repeat unchanged; resolves every subject and venue before it records, reporting what does not resolve, and reads the record of a subject another source resolved to name it in its own; names a price in a token by the token's own cash instrument, never a fiat code; and records what a want asks, or declines it per subject. From v19 it records each trade it publishes with the platform's trade attributes, converted at the edge, and the side that took liquidity where its source says it, a withdrawal as a new version; and each quote it publishes with the sides its source states; and keeps a standing want of a streamed dataset current. A case about a kind of data the plugin declares it never publishes is not presented, with why. A case about calendars or settlement dates (`about`, contract v22) a plugin whose work never uses them marks not presented, with why; and a case about outcomes or disputed outcomes (`about`, contract v23) a plugin with no event contracts, or whose source has no disputes, marks not presented, with why. From contract v24 it hears an instrument replaced, catches up on replacements, and reads the template catalogue. From contract v26 it hears and reads event groups, reports its venue's event groups as stated -- a case about outcomes (`about`) a plugin serving no event contract marks not presented -- and queries the lake within bounds. From contract v27 it records rates -- a case about rates (`about`) a plugin serving none marks not presented -- records a stream's liveness (`about: streams`), and reports its feed delay; and it marks the lake query not presented, with why, where it records no trades.\n",
+      "says": "A data plugin passing every case records each source's prices and bars exactly, under its dataset, its business date, its source's times and its raw record; restates a forming day under the same row key and sends an identical repeat unchanged; resolves every subject and venue before it records, reporting what does not resolve, and reads the record of a subject another source resolved to name it in its own; names a price in a token by the token's own cash instrument, never a fiat code; and records what a want asks, or declines it per subject. From v19 it records each trade it publishes with the platform's trade attributes, converted at the edge, and the side that took liquidity where its source says it, a withdrawal as a new version; and each quote it publishes with the sides its source states; and keeps a standing want of a streamed dataset current. A case about a kind of data the plugin declares it never publishes is not presented, with why. A case about calendars or settlement dates (`about`, contract v22) a plugin whose work never uses them marks not presented, with why; and a case about outcomes or disputed outcomes (`about`, contract v23) a plugin with no event contracts, or whose source has no disputes, marks not presented, with why. From contract v24 it hears an instrument replaced, catches up on replacements, and reads the template catalogue. From contract v26 it hears and reads event groups, reports its venue's event groups as stated -- a case about outcomes (`about`) a plugin serving no event contract marks not presented -- and queries the lake within bounds. From contract v27 it records rates -- a case about rates (`about`) a plugin serving none marks not presented -- records a stream's liveness (`about: streams`), and reports its feed delay; and it marks the lake query not presented, with why, where it records no trades. From contract v28 it records an underlying's listed series, their open interest and its chain's quotes under the underlying, never resolving a series (`about: option chains`); the filings slice -- filings, reported facts and the filer resolved (`about: filings`), holdings reports and their holdings (`about: holdings`), declared dividends (`about: corporate actions`) and rating actions (`about: ratings`); and its quotes with the edge's quality state, a crossed quote invalid and a duplicate or the rows after a sequence gap suspicious (`about: quotes`). A plugin whose source presents none of a kind marks its cases not presented, with why.\n",
       "cases": [
         {
           "name": "a-daily-close",
@@ -3243,6 +3246,7 @@
         {
           "name": "records-a-chains-series",
           "since": "v28",
+          "about": "option chains",
           "given": "the plugin lists an underlying's option series from its source",
           "expect": [
             {
@@ -3265,6 +3269,7 @@
         {
           "name": "records-open-interest",
           "since": "v28",
+          "about": "option chains",
           "given": "the source publishes a series' open interest for the trading date",
           "expect": [
             {
@@ -3286,6 +3291,7 @@
         {
           "name": "a-chain-row-is-never-resolved",
           "since": "v28",
+          "about": "option chains",
           "given": "the plugin records quotes for a chain of series it does not hold",
           "expect": [
             {
@@ -3309,6 +3315,7 @@
         {
           "name": "a-filing-recorded",
           "since": "v28",
+          "about": "filings",
           "given": "the source accepts an 8-K for a filer the plugin keeps current",
           "expect": [
             {
@@ -3331,6 +3338,7 @@
         {
           "name": "a-fact-restated",
           "since": "v28",
+          "about": "filings",
           "given": "a later filing reports a different value for a fact already recorded",
           "expect": [
             {
@@ -3350,6 +3358,7 @@
         {
           "name": "a-fact-confirmed",
           "since": "v28",
+          "about": "filings",
           "given": "a later filing repeats a fact's value",
           "expect": [
             {
@@ -3368,6 +3377,7 @@
         {
           "name": "a-complete-holdings-report",
           "since": "v28",
+          "about": "holdings",
           "given": "a manager files a 13F",
           "expect": [
             {
@@ -3397,6 +3407,7 @@
         {
           "name": "a-cusip-used-as-key",
           "since": "v28",
+          "about": "holdings",
           "given": "a 13F row names a security by CUSIP only",
           "expect": [
             {
@@ -3422,6 +3433,7 @@
         {
           "name": "a-stake-crossed",
           "since": "v28",
+          "about": "holdings",
           "given": "a holder files a 13D and then its amendment",
           "expect": [
             {
@@ -3449,6 +3461,7 @@
         {
           "name": "a-dividend-declared",
           "since": "v28",
+          "about": "corporate actions",
           "given": "an 8-K exhibit declares a cash dividend with its dates",
           "expect": [
             {
@@ -3469,6 +3482,7 @@
         {
           "name": "a-rating-action",
           "since": "v28",
+          "about": "ratings",
           "given": "an agency's 17g-7 history lists an issuer rating affirmed",
           "expect": [
             {
@@ -3487,6 +3501,7 @@
         {
           "name": "resolves-a-filer",
           "since": "v28",
+          "about": "filings",
           "given": "a filing names a filer by its CIK",
           "expect": [
             {
@@ -3500,6 +3515,7 @@
         {
           "name": "a-crossed-quote-is-recorded-invalid",
           "since": "v28",
+          "about": "quotes",
           "given": "the source sends a quote whose bid is above its ask beyond the dataset's tolerance",
           "expect": [
             {
@@ -3522,6 +3538,7 @@
         {
           "name": "a-duplicate-is-recorded-suspicious",
           "since": "v28",
+          "about": "quotes",
           "given": "the source sends the same quote again under a new sequence number",
           "expect": [
             {
@@ -3544,6 +3561,7 @@
         {
           "name": "rows-after-a-gap-are-suspicious",
           "since": "v28",
+          "about": "quotes",
           "given": "the source's sequence skips, then resyncs",
           "expect": [
             {
@@ -6595,7 +6613,7 @@
     {
       "role": "servicing",
       "since": "v22",
-      "says": "A servicing plugin passing every case reads a settlement calendar's days over a range, and asks the instrument store for an instrument's settlement date by its market's rule, as every role may. A case about calendars or settlement dates (`about`, contract v22) a plugin whose work never uses them marks not presented, with why. From contract v24 it hears an instrument replaced, catches up on replacements, and reads the template catalogue. From contract v26 it hears and reads event groups.\n",
+      "says": "A servicing plugin passing every case reads a settlement calendar's days over a range, and asks the instrument store for an instrument's settlement date by its market's rule, as every role may. A case about calendars or settlement dates (`about`, contract v22) a plugin whose work never uses them marks not presented, with why. From contract v24 it hears an instrument replaced, catches up on replacements, and reads the template catalogue. From contract v26 it hears and reads event groups. From contract v28 it proposes an option's exercise by exception (`about: options`, not presented, with why, by a plugin servicing none), reads an account's lifecycle events and hears one recorded.\n",
       "cases": [
         {
           "name": "reads-a-calendar",
@@ -6676,6 +6694,7 @@
         {
           "name": "proposes-an-exercise-by-exception",
           "since": "v28",
+          "about": "options",
           "given": "an option held long expires in the money by more than $0.01",
           "expect": [
             {
@@ -6804,7 +6823,7 @@
     {
       "role": "signal",
       "since": "v18",
-      "says": "A signal plugin passing every case learns the datasets it may read, reads prices and bars by subject, a business date or a range, from the deployment's default sources unless it names others, and hears what the lake records after, narrowed to the subjects it asked for; from v19 it reads trades over a range and the latest quotes, hears every trade and the latest quotes recorded after, and catches up the trades it lost after the watermark it last saw; it records nothing in the lake. A case about calendars or settlement dates (`about`, contract v22) a plugin whose work never uses them marks not presented, with why. From contract v24 it hears an instrument replaced, catches up on replacements, and reads the template catalogue. From contract v26 it hears and reads event groups, runs analytics jobs and reads their answers, and queries the lake within bounds. From contract v27 it reads a curve for a date, hears a rate recorded and a dataset's liveness, and reads an account's execution costs.\n",
+      "says": "A signal plugin passing every case learns the datasets it may read, reads prices and bars by subject, a business date or a range, from the deployment's default sources unless it names others, and hears what the lake records after, narrowed to the subjects it asked for; from v19 it reads trades over a range and the latest quotes, hears every trade and the latest quotes recorded after, and catches up the trades it lost after the watermark it last saw; it records nothing in the lake. A case about calendars or settlement dates (`about`, contract v22) a plugin whose work never uses them marks not presented, with why. From contract v24 it hears an instrument replaced, catches up on replacements, and reads the template catalogue. From contract v26 it hears and reads event groups, runs analytics jobs and reads their answers, and queries the lake within bounds. From contract v27 it reads a curve for a date, hears a rate recorded and a dataset's liveness, and reads an account's execution costs. From contract v28 it asks for a series it wants to order and reads an underlying's chain, its open interest and a statistic recorded, a derived series, a saved scenario set, and the filings slice's rows; and, where its work does them, records a derived series (`about: derived series`), saves a scenario set (`about: scenarios`) and escalates an outlier's quality (`about: quality states`), each marked not presented, with why, by a plugin that does not.\n",
       "cases": [
         {
           "name": "reads-the-datasets-it-may-read",
@@ -7185,6 +7204,7 @@
         {
           "name": "records-a-derived-series",
           "since": "v28",
+          "about": "derived series",
           "given": "the plugin computes an underlying's 30-day constant-maturity IV at the close",
           "expect": [
             {
@@ -7205,6 +7225,7 @@
         {
           "name": "saves-a-scenario-set",
           "since": "v28",
+          "about": "scenarios",
           "given": "a person saves the grid's price-by-date axes on the plugin's page",
           "expect": [
             {
@@ -7338,6 +7359,7 @@
         {
           "name": "escalates-an-outlier",
           "since": "v28",
+          "about": "quality states",
           "given": "a close lies far outside the plugin's robust baseline for its subject",
           "expect": [
             {
