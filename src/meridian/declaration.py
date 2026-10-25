@@ -132,6 +132,7 @@ import re
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from decimal import Decimal
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, cast
 
@@ -159,6 +160,7 @@ from .bounds import (
     STORAGE_DECLARATION_RECORD_KINDS_COUNT,
     STORAGE_DECLARATION_RETENTION_DAYS_RANGE,
 )
+from .operations import _decimal
 from .v1 import sidecar_pb2
 
 if TYPE_CHECKING:
@@ -348,6 +350,63 @@ def _zone_refused(zone: str) -> bool:
 
 
 @dataclass(frozen=True, kw_only=True)
+class DataEligibility:
+    """Who may take a dataset under its vendor's terms (contract v28, ruling
+    491; the data terms' statement, shown and never enforced): the uses the
+    terms allow -- `personal`, `commercial` -- and the buyer's revenue
+    bounds where the terms set them, each a Decimal with its ISO 4217 code
+    (ruling 597)."""
+
+    uses: Sequence[str] = ()
+    buyer_revenue_below: Decimal | int | None = None
+    buyer_revenue_at_least: Decimal | int | None = None
+    buyer_revenue_currency_code: str = ""
+
+    def __post_init__(self) -> None:
+        uses = tuple(str(u).strip().lower().removeprefix("data_use_") for u in self.uses)
+        unknown = [u for u in uses if u not in ("personal", "commercial")]
+        if unknown:
+            raise ValueError(f"an eligibility's uses are personal or commercial, not {unknown}")
+        object.__setattr__(self, "uses", uses)
+        bounded = (
+            self.buyer_revenue_below is not None or self.buyer_revenue_at_least is not None
+        )
+        code = self.buyer_revenue_currency_code
+        if bounded and not (len(code) == 3 and code.isalpha() and code.isupper()):
+            raise ValueError("a revenue bound names its currency by its ISO 4217 code")
+
+    def _wire(self) -> sidecar_pb2.DataEligibility:
+        def amount(value: Decimal | int | None) -> sidecar_pb2.Decimal | None:
+            if value is None:
+                return None
+            held = _decimal(Decimal(value), "eligibility.buyer_revenue")
+            return sidecar_pb2.Decimal(high=held.high, low=held.low, scale=held.scale)
+
+        return sidecar_pb2.DataEligibility(
+            uses=[
+                cast(Any, sidecar_pb2.DataUse.Value("DATA_USE_" + u.upper())) for u in self.uses
+            ],
+            buyer_revenue_below=amount(self.buyer_revenue_below),
+            buyer_revenue_at_least=amount(self.buyer_revenue_at_least),
+            buyer_revenue_currency_code=self.buyer_revenue_currency_code,
+        )
+
+    def _to_json(self) -> dict[str, Any]:
+        return {
+            "uses": list(self.uses),
+            "buyer_revenue_below": (
+                None if self.buyer_revenue_below is None else str(self.buyer_revenue_below)
+            ),
+            "buyer_revenue_at_least": (
+                None
+                if self.buyer_revenue_at_least is None
+                else str(self.buyer_revenue_at_least)
+            ),
+            "buyer_revenue_currency_code": self.buyer_revenue_currency_code,
+        }
+
+
+@dataclass(frozen=True, kw_only=True)
 class DatasetLicence:
     """The terms a dataset's vendor's standard terms impose, as its catalogue
     declares them (contract v18; spec/the-lake, Q8): what the deployment's
@@ -380,7 +439,9 @@ class DatasetLicence:
     adding restrictions downstream. From 0.32.3 `not_affiliated_notice`, the
     notice as the vendor words it, shown with the terms. A deployment's core
     takes a declaration setting any of these from core 0.1.311; an earlier
-    v27 core refuses its registration."""
+    v27 core refuses its registration. From 0.33.0 (contract v28, rulings
+    491 and 597) `eligibility`, who may take the dataset (`DataEligibility`),
+    shown and never enforced."""
 
     kept: bool = False
     retention_days: int = 0
@@ -395,6 +456,7 @@ class DatasetLicence:
     copyright_class: str = ""
     no_more_restrictive_terms: bool = False
     not_affiliated_notice: str = ""
+    eligibility: DataEligibility | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "default_fields", tuple(self.default_fields))
@@ -466,6 +528,7 @@ class DatasetLicence:
             ),
             no_more_restrictive_terms=self.no_more_restrictive_terms,
             not_affiliated_notice=self.not_affiliated_notice,
+            eligibility=None if self.eligibility is None else self.eligibility._wire(),
         )
 
     def _to_json(self) -> dict[str, Any]:
@@ -483,6 +546,9 @@ class DatasetLicence:
             "copyright_class": self.copyright_class,
             "no_more_restrictive_terms": self.no_more_restrictive_terms,
             "not_affiliated_notice": self.not_affiliated_notice,
+            **(
+                {} if self.eligibility is None else {"eligibility": self.eligibility._to_json()}
+            ),
         }
 
 

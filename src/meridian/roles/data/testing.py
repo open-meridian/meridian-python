@@ -86,6 +86,7 @@ __all__ = [
     "PAIRS_NOT_PRESENTED",
     "PairsChecks",
     "event_contract_producers",
+    "feed_delay",
     "held",
     "lake_query",
     "hear",
@@ -372,6 +373,24 @@ def lake_query(subject: str, kind: str = "prices") -> Producer:
     return produce
 
 
+def feed_delay(record: Callable[[Recorder, Any], Awaitable[None]]) -> Producer:
+    """`reports-its-feed-delay` (W4.16; required from contract v28, ruling
+    518): the plugin's own conversion run with a `roles.Latency` on its
+    `Wants` -- `record(recorder, latency)` sets `wants.latency` and records
+    rows that carry a source time -- then the interval's snapshots sent by
+    `Latency.report`, the `edge` hop's age among them (0.33.0 sends
+    ReportLatency; rulings 515 and 516)."""
+
+    async def produce(recorder: Recorder) -> None:
+        from .._latency import Latency
+
+        latency = Latency(recorder)
+        await record(recorder, latency)
+        await latency.report()
+
+    return produce
+
+
 #: The cases a kind of venue never presents unless its module maps them
 #: (contract v27): a pairs or event-contract venue publishes no rates; an
 #: event-contract venue polls rather than streams, and records no trades;
@@ -385,25 +404,47 @@ _RATES = (
     "an-index-level",
     "a-curve-point-from-another-source",
 )
-#: Why a case about `latency` is not presented in contract v27 (ruling 518).
-_LATENCY_NOT_YET = "core receives ReportLatency from contract v28, ruling 515"
+#: The data suite's cases contract v28 adds about kinds a venue's listing
+#: or a publisher's feed may never present (ruling 602): option chains, and
+#: the filings slice's filings, holdings, corporate actions and ratings.
+_CHAINS = ("records-a-chains-series", "records-open-interest", "a-chain-row-is-never-resolved")
+_FILINGS = (
+    "a-filing-recorded", "a-fact-restated", "a-fact-confirmed", "resolves-a-filer",
+    "a-complete-holdings-report", "a-cusip-used-as-key", "a-stake-crossed",
+    "a-dividend-declared", "a-rating-action",
+)  # fmt: skip
+#: Its quality cases about `quotes` (ruling 602, amended): judged by the
+#: edge's checks (`quality.EdgeChecks`) on the quotes a plugin records.
+_QUALITY = (
+    "a-crossed-quote-is-recorded-invalid",
+    "a-duplicate-is-recorded-suspicious",
+    "rows-after-a-gap-are-suspicious",
+)
+#: What no venue listing pairs or event contracts publishes (contract v28).
+_NO_CHAINS_OR_FILINGS = {
+    **{case: "it lists no option chains" for case in _CHAINS},
+    **{case: "it publishes no filings" for case in _FILINGS},
+}
 PAIRS_NOT_PRESENTED = {
     **{case: "a pairs venue publishes no rates" for case in _RATES},
-    "reports-its-feed-delay": _LATENCY_NOT_YET,
+    **_NO_CHAINS_OR_FILINGS,
 }
 EVENT_CONTRACTS_NOT_PRESENTED = {
     **{case: "an event-contract venue publishes no rates" for case in _RATES},
     "records-a-datasets-liveness": "it polls its venue each second; it streams nothing",
     "queries-the-lake-within-bounds": "it records no trades",
-    "reports-its-feed-delay": _LATENCY_NOT_YET,
+    **_NO_CHAINS_OR_FILINGS,
+    "a-duplicate-is-recorded-suspicious": "its quotes are polled; no message is numbered",
+    "rows-after-a-gap-are-suspicious": "its quotes are polled; no message is numbered",
 }
 #: Why a rates-only plugin never presents a case about prices (ruling 537).
 _NO_PRICES = "it records rates, never prices"
 #: What a plugin recording only rates never presents (0.32.1; ruling 537):
 #: every data case about a price -- `an-exact-price` and
 #: `a-want-recorded-against` about `closes` from contract v27's ruling 537 --
-#: a trade, a quote or an outcome; and the feed delay, about `latency` until
-#: v28. A plugin maps what its publisher does present, rates and wants among
+#: a trade, a quote or an outcome; and from contract v28 the chains, the
+#: filings slice and the quality of quotes (ruling 602). A plugin maps what
+#: its publisher does present -- rates, wants and its feed delay among
 #: them. From 0.32.2 `records-a-datasets-liveness` is not listed: a polled
 #: plugin recording each poll as its dataset's liveness presents it; one
 #: recording none names it itself, with why.
@@ -449,7 +490,8 @@ RATES_NOT_PRESENTED = {
             "reports-a-flag-the-venue-does-not-state",
         )
     },
-    "reports-its-feed-delay": _LATENCY_NOT_YET,
+    **_NO_CHAINS_OR_FILINGS,
+    **{case: "it records rates, never quotes" for case in _QUALITY},
 }
 
 
@@ -582,28 +624,48 @@ def pairs_producers(venue: Any, **mutations: Any) -> dict[str, Producer]:
         await recorder.receive(want_withdrawn=feed.on_withdrawn)
         await feed.current(daily=True)  # one pass keeping current: nothing stands now
 
-    def streamed(message: str, key: str, data_type: str) -> Producer:
+    async def stream_on(
+        recorder: Recorder, key: str, data_type: str, messages: Any, latency: Any = None
+    ) -> None:
         # A standing want of a streamed dataset for BASE, then the venue's
         # stream stating the case's message, replayed through the plugin's
-        # stream, which drops once it is said.
-        async def produce(recorder: Recorder) -> None:
-            feed, store = made_on(recorder)
-            _mutated(feed, mutations)
-            subject = await held(store, feed, venue.BASE)
-            event = ops.ObservationsWantedEvent(
-                want_id="WNT-S", dataset=feed.dataset(key), data_type=data_type,
-                subjects=[ops.SubjectRef(entity_id=subject)], standing=True,
-            )  # fmt: skip
-            await hear(recorder, feed, event)
+        # stream, which drops once it is said. From contract v28 a case may
+        # state several (a duplicate, a gap): the first opens the stream,
+        # the rest are heard on the same connection, each on its own pass.
+        feed, store = made_on(recorder)
+        _mutated(feed, mutations)
+        if latency is not None:
+            feed.wants.latency = latency
+        subject = await held(store, feed, venue.BASE)
+        event = ops.ObservationsWantedEvent(
+            want_id="WNT-S", dataset=feed.dataset(key), data_type=data_type,
+            subjects=[ops.SubjectRef(entity_id=subject)], standing=True,
+        )  # fmt: skip
+        await hear(recorder, feed, event)
+        first, *rest = [messages] if isinstance(messages, str) else list(messages)
 
-            async def said(_: str) -> Any:
-                return venue.replayed([message])
+        async def said(_: str) -> Any:
+            return venue.replayed([first])
 
-            feed.stream.retarget(feed.market.stream_address, said, feed.market.subscriptions)
-            await feed.stream.run(once=True)
+        feed.stream.retarget(feed.market.stream_address, said, feed.market.subscriptions)
+        await feed.stream.run(once=True)
+        await feed.flush()
+        for message in rest:
+            await feed.on_message(message)
             await feed.flush()
 
+    def streamed(messages: Any, key: str, data_type: str) -> Producer:
+        async def produce(recorder: Recorder) -> None:
+            await stream_on(recorder, key, data_type, messages)
+
         return produce
+
+    def timed(messages: Any, key: str, data_type: str) -> Producer:
+        # Its feed delay: the streamed rows' age at the edge, then reported.
+        async def record(recorder: Recorder, latency: Any) -> None:
+            await stream_on(recorder, key, data_type, messages, latency)
+
+        return feed_delay(record)
 
     async def one_sided(recorder: Recorder) -> None:
         feed, store = made_on(recorder)
@@ -659,9 +721,21 @@ def pairs_producers(venue: Any, **mutations: Any) -> dict[str, Producer]:
         made["an-fx-rate"] = daily(venue.FX_BASE, PRICE)
     for case, message in venue.STREAM_CASES.items():
         key, data_type = (
-            (pairs.LIVE, QUOTE) if case == "a-quote-recorded" else (pairs.TRADES, TRADE)
+            (pairs.LIVE, QUOTE)
+            if case == "a-quote-recorded" or case in _QUALITY
+            else (pairs.TRADES, TRADE)
         )
         made[case] = streamed(message, key, data_type)
+    # Contract v28 (ruling 518): its feed delay, the streamed quote's age at
+    # the edge reported; else a streamed trade's.
+    timed_on = [c for c in ("a-quote-recorded", "a-trade-recorded") if c in venue.STREAM_CASES]
+    if timed_on:
+        quoted = timed_on[0] == "a-quote-recorded"
+        made["reports-its-feed-delay"] = timed(
+            venue.STREAM_CASES[timed_on[0]],
+            pairs.LIVE if quoted else pairs.TRADES,
+            QUOTE if quoted else TRADE,
+        )
     # Contract v27: a quote streamed is the stream's sign of life, recorded
     # as the live dataset's liveness; a trade streamed, its age at the edge.
     if "a-quote-recorded" in venue.STREAM_CASES:
@@ -769,6 +843,24 @@ def event_contract_producers(venue: Any, **mutations: Any) -> dict[str, Producer
         "a-one-sided-quote": live(venue.ONE_SIDED, QUOTE),
         "reads-its-datasets-licences": licences,
     }
+    # Contract v28 (ruling 424): a contract the venue quotes crossed, where
+    # its module names one (`CROSSED`), recorded invalid by the edge.
+    if getattr(venue, "CROSSED", None):
+        made["a-crossed-quote-is-recorded-invalid"] = live(venue.CROSSED, QUOTE)
+
+    async def timed(recorder: Recorder, latency: Any) -> None:
+        # Its feed delay (required from contract v28, ruling 518): a standing
+        # want's subject kept current, its rows' age at the edge recorded.
+        feed, store = made_on(recorder, mutate=True)
+        feed.wants.latency = latency
+        subject = await held(store, feed, venue.BASE)
+        feed.standing["WNT-T"] = Standing(
+            "WNT-T", feed.dataset(event_contracts.LIVE), PRICE, (subject,),
+            (ops.PRICE_KIND_LAST,), venue.NOW_NS,
+        )  # fmt: skip
+        await feed.current()
+
+    made["reports-its-feed-delay"] = feed_delay(timed)
 
     def grouped(event: Any) -> Producer | None:
         # Contract v26 (W3.29): the venue's event, as its conversion read

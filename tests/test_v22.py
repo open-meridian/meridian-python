@@ -530,8 +530,7 @@ def _v22_cases() -> list[tuple[str, str]]:
         (role, case.name)
         for role, held in sorted(suites().items())
         for case in held.cases
-        # Ruling 518: a case about `latency` is not presented until v28.
-        if (held.since == "v22" or case.name in _V22_NAMES) and case.about != "latency"
+        if held.since == "v22" or case.name in _V22_NAMES
     ]
 
 
@@ -574,8 +573,10 @@ def test_the_suites_carry_the_rows_v22_adds() -> None:
     # event group every role hears, and the oms's read of the agents' guard;
     # v27 connectivity's RFQ quote and round trip, and the oms's costs and a
     # block member's allocation instruction.
-    assert len(held["connectivity"].cases) == 37
-    assert len(held["oms"].cases) == 36
+    # v28 connectivity's expiry and package fill, the oms's series asked for
+    # and an underlying's chain read.
+    assert len(held["connectivity"].cases) == 39
+    assert len(held["oms"].cases) == 38
     every = {case.name for each in held.values() for case in each.cases}
     assert set(_V22_NAMES) <= every, "each producer answers a published case"
     for role, each in held.items():

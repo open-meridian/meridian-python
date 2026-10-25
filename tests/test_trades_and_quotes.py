@@ -263,6 +263,9 @@ def test_trades_are_heard_in_full_and_quotes_latest_value_first() -> None:
         ("TradesRecorded", "list_trades"),
         # An event contract's outcomes (contract v23), every version heard.
         ("OutcomesRecorded", "list_outcomes"),
+        # The filings slice's filings and declared dividends (contract v28).
+        ("FilingsRecorded", "list_filings"),
+        ("CorporateActionsRecorded", "list_corporate_actions"),
     ]
     assert {"TradesRecorded", "QuotesRecorded"} <= HEARD
 
@@ -460,9 +463,15 @@ def reading(role: str) -> dict[str, object]:
 
 @pytest.mark.parametrize("role", ["signal", "ems"])
 def test_a_reader_of_trades_and_quotes_passes_its_suite(role: str) -> None:
-    # Ruling 518: the ems's data age is about `latency`, not presented in v27.
-    why = "core receives ReportLatency from contract v28, ruling 515"
-    skipped = {c.name: why for c in suite(role).cases if c.about == "latency"}
+    # Contract v28: the ems's data age reported (ruling 518); a signal that
+    # records no derived series, saves no scenario and escalates nothing
+    # marks those cases not presented (ruling 602).
+    why = "this reader records nothing of its own"
+    skipped = {
+        c.name: why
+        for c in suite(role).cases
+        if c.about in ("derived series", "scenarios", "quality states")
+    }
     report = run(role, reading(role), not_presented=skipped)
     assert report.passed, report.failures
 
@@ -482,7 +491,8 @@ def test_the_ems_suite_is_carried_with_its_six_cases_and_v22s() -> None:
     # venue-originated fill's accept and DK, and from v24 the two every-role
     # cases and the escape hatch's read; v26 an event group heard and read, the
     # agents' guard read and its five cases, and the lake's bounded query.
-    assert len(held.cases) == 39  # v27: liveness, data age, costs, the RFQ's pick
+    assert len(held.cases) == 42  # v27: liveness, data age, costs, the RFQ's pick
+    # v28: a series asked for, an underlying's chain, the actions permitted.
     assert "places-at-a-linked-connectivity-plugin" in [case.name for case in held.cases]
 
 

@@ -25,7 +25,11 @@ order held with `HOLD_CAUSE_REFERENCE_PRICE_STALE` naming the dataset, age
 and ceiling -- or **warn** -- the placement sent carrying its
 `StaleReference`, which the book records as
 `PLACEMENT_CONDITION_SENT_ON_STALE_REFERENCE`. The book refuses nothing:
-this is the plugin's check.
+this is the plugin's check. From 0.33.0 (contract v28, rulings 517 and 600)
+the admin's choice is within what the deployment admin permits: the check
+reads `ReadStaleReferenceActionsPermitted` at the plugin's own role
+(`await check.permitted(plugin)`), and `warn` is honoured only where the
+deployment permits it; refuse is always permitted, and the default.
 
 **An RFQ placement's quotes** (`open_quotes`): the dealers' quotes standing
 on it, best first for its side, from which a person picks
@@ -74,10 +78,22 @@ class ReferenceCheck:
     latency: Latency | None = None
     liveness: Liveness | None = None
     clock_ns: Callable[[], int] = time.time_ns
+    #: Whether the deployment permits `warn` (contract v28), as last read by
+    #: `permitted`; None before the first read, when the admin's choice
+    #: stands as 0.32.x applied it.
+    warn_permitted: bool | None = None
 
     @property
     def refuses(self) -> bool:
-        return self.action != WARN
+        return self.action != WARN or self.warn_permitted is False
+
+    async def permitted(self, plugin: Any) -> bool:
+        """Read the stale-reference actions the deployment admin permits
+        (`ReadStaleReferenceActionsPermitted`, at the plugin's own role,
+        ruling 600): whether `warn` is among them, kept for `refuses`."""
+        answer = await plugin.read_stale_reference_actions_permitted()
+        self.warn_permitted = bool(answer.warn_permitted)
+        return self.warn_permitted
 
     def stale(
         self,

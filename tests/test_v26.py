@@ -42,7 +42,7 @@ AAPL = "INS-01J8XQ4M7K0000000000AAPL"
 
 
 def test_the_schema_is_contract_v26() -> None:
-    assert meridian.SCHEMA_VERSION == "v27"
+    assert meridian.SCHEMA_VERSION == "v28"
     fields = sidecar_pb2.CallerClaims.DESCRIPTOR.fields_by_name
     assert "demo_connectivity_instance_ids" in fields
     assert "model_tokens" in sidecar_pb2.HeartbeatRequest.DESCRIPTOR.fields_by_name

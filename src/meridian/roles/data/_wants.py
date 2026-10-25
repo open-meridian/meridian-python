@@ -49,8 +49,22 @@ BATCH = 500
 RECENT = 200
 
 #: The rows `Wants.record` sends, by the operation's plural; from 0.32.0
-#: (contract v27) rates too.
-KINDS = ("prices", "bars", "trades", "quotes", "outcomes", "rates")
+#: (contract v27) rates too; from 0.33.0 (contract v28) a chain's series and
+#: statistics, and the filings slice's rows.
+KINDS = (
+    "prices", "bars", "trades", "quotes", "outcomes", "rates", "series", "statistics",
+    "filings", "reported_facts", "holdings_reports", "holdings", "corporate_actions",
+    "rating_actions",
+)  # fmt: skip
+#: Where a record operation's rows are not named by its kind.
+_ROWS_NAMED = {
+    "reported_facts": "facts",
+    "holdings_reports": "reports",
+    "corporate_actions": "actions",
+    "rating_actions": "actions",
+}
+#: The rows the edge's quality checks judge (contract v28, ruling 424).
+JUDGED = ("prices", "bars", "trades", "quotes")
 
 
 @dataclass(frozen=True)
@@ -133,6 +147,19 @@ class Wants:
     #: session that carried them, for its Sessions row.
     latency: Any = None
     session: str = ""
+    #: From 0.33.0 (contract v28, ruling 424): the edge's quality checks
+    #: (`quality.EdgeChecks`), made on each row recorded unasked or for a
+    #: standing want, as the feed delay is; one on the plugin's clock unless
+    #: the plugin gives its own, with its admin's `dataset_thresholds`.
+    quality: Any = None
+
+    def edge(self) -> Any:
+        """The edge's quality checks (contract v28), made on first use."""
+        if self.quality is None:
+            from .quality import EdgeChecks
+
+            self.quality = EdgeChecks(clock_ns=self.clock_ns)
+        return self.quality
 
     # ── Names ────────────────────────────────────────────────────────────
 
@@ -170,24 +197,26 @@ class Wants:
         want_id: str = "",
         overall: bool = True,
     ) -> int:
-        """Send `rows` -- `kind` one of prices, bars, trades, quotes,
-        outcomes and rates -- in the lake's batches, against `want_id` where they
-        answer one (an outcome answers none), each answer counted to `key`;
-        how many rows were sent. A refusal raises, the batches before it
-        sent and counted."""
+        """Send `rows` -- `kind` one of `KINDS` -- in the lake's batches,
+        against `want_id` where they answer one (an outcome answers none),
+        each answer counted to `key`; how many rows were sent. A refusal
+        raises, the batches before it sent and counted."""
         if kind not in KINDS:
             raise ValueError(f"{kind!r} is not one of {', '.join(KINDS)}")
         call = getattr(self.plugin, f"record_{kind}")
-        if self.latency is not None and (not want_id or want_id in self.standing):
+        live = not want_id or want_id in self.standing
+        if self.latency is not None and live:
             for row in rows:
                 self.latency.aged(self.dataset(key), "AGE_HOP_EDGE", row, self.session)
+        if live and kind in JUDGED:
+            rows = self.edge().judged(key, rows)
         sent = 0
         for start in range(0, len(rows), BATCH):
             batch = list(rows[start : start + BATCH])
             if kind == "outcomes":
                 done = await call(outcomes=batch)
             else:
-                done = await call(**{kind: batch}, want_id=want_id)
+                done = await call(**{_ROWS_NAMED.get(kind, kind): batch}, want_id=want_id)
             self.count(done, key, overall)
             sent += len(batch)
         return sent
