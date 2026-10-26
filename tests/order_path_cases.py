@@ -35,6 +35,7 @@ from meridian.plugin.v1 import operations_pb2 as ops
 from meridian.suites import ANSWERED_BY_SDK, Recorder
 from meridian.testing import caller_header
 from meridian.v1 import sidecar_pb2
+from v28_cases import PRODUCERS as V28_PRODUCERS
 
 Producer = Callable[[Recorder], Awaitable[None]]
 
@@ -722,7 +723,7 @@ OUTCOME_HEARD = (
 
 async def hears_and_reads_an_outcome(recorder: Recorder) -> None:
     await hearing(OUTCOME_HEARD)(recorder)
-    await recorder.list_outcomes(subjects=[ops.SubjectRef(entity_id=EVENT_CONTRACT)])
+    await recorder.list_outcomes(subjects=[meridian.SubjectRef(entity_id=EVENT_CONTRACT)])
 
 
 # ── Contract v24: booking, the escape hatch, one ID ─────────────────────────
@@ -1200,7 +1201,7 @@ def queries_the_lake(kind: str, field: str) -> Producer:
     async def produce(recorder: Recorder) -> None:
         await recorder.query_lake(
             kind=kind,
-            subjects=[ops.SubjectRef(entity_id=AAPL)],
+            subjects=[meridian.SubjectRef(entity_id=AAPL)],
             fields=[field],
             row_limit=100,
         )
@@ -1360,7 +1361,9 @@ async def sets_a_block_members_allocation_instruction(recorder: Recorder) -> Non
 
 async def reads_a_trade_dates_fx_close(recorder: Recorder) -> None:
     await recorder.list_prices(
-        subjects=[ops.SubjectRef(entity_id=EUR)], kinds=["close"], business_date="2026-10-20"
+        subjects=[meridian.SubjectRef(entity_id=EUR)],
+        kinds=["close"],
+        business_date="2026-10-20",
     )
 
 
@@ -1548,8 +1551,7 @@ PRODUCERS: dict[str, Producer] = {
     ),
     "setting-and-session-disagree-counts-live": setting_and_session_disagree_counts_live,
     # Contract v27: rates, liveness, execution costs, the RFQ's quotes, oms's
-    # allocation instruction and a trade date's FX close. The three cases
-    # about `latency` have no producer: not presented until v28 (ruling 518).
+    # allocation instruction and a trade date's FX close.
     "reads-a-curve-for-a-date": reads_a_curve_for_a_date,
     "hears-a-rate-recorded": hears_a_rate_recorded,
     "hears-a-datasets-liveness": hears_a_datasets_liveness,
@@ -1558,4 +1560,8 @@ PRODUCERS: dict[str, Producer] = {
     "records-a-dealers-quote-on-an-rfq-placement": records_a_dealers_quote_on_an_rfq_placement,
     "sets-a-block-members-allocation-instruction": sets_a_block_members_allocation_instruction,
     "reads-a-trade-dates-fx-close": reads_a_trade_dates_fx_close,
+    # Contract v28: chains, lifecycle, packages, derived series, saved
+    # scenarios, the filings slice's reads, a quality escalated, and the
+    # three latency cases reported (ruling 518); tests/v28_cases.py.
+    **V28_PRODUCERS,
 }

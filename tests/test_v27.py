@@ -366,14 +366,14 @@ def test_the_histogram_is_hdrhistograms_layout_at_two_significant_digits() -> No
     assert held.percentile(50) <= 50_500_000 and held.total == 100
 
 
-async def test_latency_is_recorded_and_not_yet_reported() -> None:
+async def test_latency_is_recorded_and_reported() -> None:
     """Rulings 515 and 516: core receives ReportLatency from contract v28,
-    so 0.32.0's report takes the snapshots and sends nothing."""
+    so from 0.33.0 report takes the snapshots and sends them."""
     recorder = Recorder("oanda-1")
     latency = Latency(recorder)
     latency.rtt("pricing-stream", 41_000_000)
-    assert await latency.report() == 0
-    assert recorder.on("ReportLatency") == []
+    assert await latency.report() == 1
+    assert len(recorder.on("ReportLatency")[0].snapshots) == 1
     assert latency.session_latency()[0].rtt.p99_ns, "kept for the Sessions section"
     assert latency.sessions["pricing-stream"].histograms == {}, "the interval's counts reset"
 

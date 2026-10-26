@@ -100,7 +100,7 @@ def test_every_release_since_the_first_recorded_has_its_step() -> None:
         ("0.6.0", "0.6.1"),
         ("0.6.1", "0.7.0"),
     ]
-    assert (steps[-1].source, steps[-1].target) == ("0.32.2", "0.32.3")
+    assert (steps[-1].source, steps[-1].target) == ("0.32.3", "0.33.0")
     # A release that moves the version records its step, if only the pins.
     assert steps[-1].target == SDK
 
@@ -1474,3 +1474,138 @@ def test_an_e2e_log_upload_missing_hidden_files_is_left_to_add_them() -> None:
         "0.32.0",
     )
     assert left_by_hand(result) == [("e2e-hidden-files", ".github/workflows/e2e.yaml", 4)]
+
+
+# ── 0.32.3 to 0.33.0: contract v28 ───────────────────────────────────────
+
+# A v27 plugin's data feed, as plugin-kalshi and plugin-alpaca wrote theirs:
+# subjects built from the wire bindings, handed to the SDK's typed rows and
+# operations, and a test's fake want built of the wire's own messages.
+_V27_FEED = textwrap.dedent(
+    """\
+    import meridian
+    from meridian.plugin.v1 import operations_pb2 as ops
+
+
+    def meta(subject: str) -> meridian.ObservationMeta:
+        return meridian.ObservationMeta(
+            row_key="k",
+            subjects=[ops.SubjectRef(entity_id=subject)],
+            source=ops.Source(dataset="d"),
+        )
+
+
+    async def decline(plugin, want_id, subjects):
+        await plugin.decline_want(
+            want_id=want_id,
+            subjects=[ops.SubjectRef(entity_id=s) for s in subjects],
+            reason="not_covered",
+        )
+
+
+    def fake_want(subjects):
+        return ops.ObservationsWantedEvent(
+            want_id="WNT-1", subjects=[ops.SubjectRef(entity_id=s) for s in subjects]
+        )
+
+
+    def add(want, subject):
+        want.subjects.append(ops.SubjectRef(entity_id=subject))
+    """
+)
+
+
+def test_a_wire_subject_ref_handed_to_the_sdk_becomes_meridians() -> None:
+    result = migrate({"src/feed.py": _V27_FEED}, "0.32.3", "0.33.0")
+    text = result.files["src/feed.py"]
+    assert "subjects=[meridian.SubjectRef(entity_id=subject)]" in text
+    assert "subjects=[meridian.SubjectRef(entity_id=s) for s in subjects],\n" in text
+    # Inside a wire message, or added to one's field, the wire's stays.
+    assert 'want_id="WNT-1", subjects=[ops.SubjectRef(entity_id=s) for s in subjects]' in text
+    assert "want.subjects.append(ops.SubjectRef(entity_id=subject))" in text
+    assert result.steps[-1].rewrote == {"src/feed.py": {"subject-ref-from-the-sdk": 2}}
+    assert left_by_hand(result) == []
+
+
+def test_the_rewritten_subject_ref_is_what_the_typed_operations_take(tmp_path: Path) -> None:
+    import importlib.util
+
+    import meridian
+
+    text = migrate({"src/feed.py": _V27_FEED}, "0.32.3", "0.33.0").files["src/feed.py"]
+    (tmp_path / "feed.py").write_text(text)
+    spec = importlib.util.spec_from_file_location("v27_feed_migrated", tmp_path / "feed.py")
+    assert spec is not None and spec.loader is not None
+    feed = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(feed)
+    meta = feed.meta("INS-1")
+    assert isinstance(meta.subjects[0], meridian.SubjectRef)
+    assert feed.fake_want(["INS-1"]).subjects[0].entity_id == "INS-1"
+
+
+def test_a_file_naming_the_package_another_way_gets_it_imported() -> None:
+    aliased = (
+        "import meridian as om\n"
+        "from meridian.plugin.v1 import operations_pb2\n"
+        "ROW = om.ObservationMeta(subjects=[operations_pb2.SubjectRef(entity_id='X')])\n"
+    )
+    bare = (
+        "from meridian import ObservationMeta\n"
+        "from meridian.plugin.v1.operations_pb2 import Source, SubjectRef\n"
+        "ROW = ObservationMeta(subjects=[SubjectRef(entity_id='X')], source=Source())\n"
+    )
+    result = migrate({"src/a.py": aliased, "src/b.py": bare}, "0.32.3", "0.33.0")
+    assert "subjects=[om.SubjectRef(entity_id='X')]" in result.files["src/a.py"]
+    b = result.files["src/b.py"]
+    assert "\nimport meridian\n" in b
+    assert "from meridian.plugin.v1.operations_pb2 import Source\n" in b
+    assert "subjects=[meridian.SubjectRef(entity_id='X')]" in b
+
+
+def test_a_file_not_using_the_sdk_keeps_its_subject_refs() -> None:
+    other = "from vendor import ops\nROW = ops.SubjectRef(entity_id='X')\n"
+    assert migrate({"src/v.py": other}, "0.32.3", "0.33.0").files == {}
+
+
+def test_subjects_read_from_a_heard_message_are_left_by_hand() -> None:
+    echo = (
+        "import meridian\n"
+        "async def on_want(plugin, heard):\n"
+        "    await plugin.decline_want(\n"
+        "        want_id=heard.message.want_id,\n"
+        "        subjects=heard.message.subjects,\n"
+        "        reason='not_covered',\n"
+        "    )\n"
+        "    return meridian.roles.WantHeard(subjects=heard.subjects)\n"
+    )
+    result = migrate({"src/w.py": echo}, "0.32.3", "0.33.0")
+    assert left_by_hand(result) == [("subjects-from-the-wire", "src/w.py", 5)]
+
+
+def test_v28s_suite_cases_and_the_latency_cases_named_not_presented_are_left() -> None:
+    files = {
+        "tests/test_suite.py": (
+            'report = run("data", PRODUCERS, not_presented=NP)\n'
+            'NP = {"reports-its-feed-delay": "core receives ReportLatency from contract v28, '
+            'ruling 515"}\n'
+        ),
+        "tests/test_custody.py": 'report = run("custody", PRODUCERS)\n',
+    }
+    result = migrate(files, "0.32.3", "0.33.0")
+    assert result.files == {}
+    assert sorted(left_by_hand(result)) == [
+        ("latency-cases-required", "tests/test_suite.py", 2),
+        ("suite-cases-v28", "tests/test_custody.py", 1),
+        ("suite-cases-v28", "tests/test_suite.py", 1),
+    ]
+
+
+def test_v28s_base_pinned_by_digest_drops_its_digest() -> None:
+    dockerfile = (
+        f"ARG BASE=ghcr.io/open-meridian/plugin-python:0.32.3@{_DIGEST}\nFROM ${{BASE}}\n"
+    )
+    result = migrate({"Dockerfile": dockerfile}, "0.32.3", "0.33.0")
+    assert result.files["Dockerfile"].splitlines()[0] == (
+        "ARG BASE=ghcr.io/open-meridian/plugin-python:0.33.0"
+    )
+    assert ("base-digest", "Dockerfile", 1) in left_by_hand(result)

@@ -529,6 +529,141 @@ class PluginOperationsStub(object):
                 request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.PickPlacementQuoteParams.SerializeToString,
                 response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.PickPlacementQuoteResult.FromString,
                 _registered_method=True)
+        self.RequestSeriesRecords = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/RequestSeriesRecords',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RequestSeriesRecordsParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RequestSeriesRecordsResult.FromString,
+                _registered_method=True)
+        self.RecordSeries = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/RecordSeries',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordSeriesParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordSeriesResult.FromString,
+                _registered_method=True)
+        self.ListSeries = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ListSeries',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListSeriesParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListSeriesResult.FromString,
+                _registered_method=True)
+        self.RecordStatistics = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/RecordStatistics',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordStatisticsParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordStatisticsResult.FromString,
+                _registered_method=True)
+        self.ListStatistics = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ListStatistics',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListStatisticsParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListStatisticsResult.FromString,
+                _registered_method=True)
+        self.RecordLifecycleEvent = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/RecordLifecycleEvent',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordLifecycleEventParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordLifecycleEventResult.FromString,
+                _registered_method=True)
+        self.ProposeLifecycleEvents = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ProposeLifecycleEvents',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ProposeLifecycleEventsParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ProposeLifecycleEventsResult.FromString,
+                _registered_method=True)
+        self.ReleaseLifecycleEvent = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ReleaseLifecycleEvent',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReleaseLifecycleEventParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReleaseLifecycleEventResult.FromString,
+                _registered_method=True)
+        self.ListLifecycleEvents = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ListLifecycleEvents',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListLifecycleEventsParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListLifecycleEventsResult.FromString,
+                _registered_method=True)
+        self.RecordDerivedSeries = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/RecordDerivedSeries',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordDerivedSeriesParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordDerivedSeriesResult.FromString,
+                _registered_method=True)
+        self.ListDerivedSeries = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ListDerivedSeries',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListDerivedSeriesParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListDerivedSeriesResult.FromString,
+                _registered_method=True)
+        self.RecordScenarios = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/RecordScenarios',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordScenariosParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordScenariosResult.FromString,
+                _registered_method=True)
+        self.ListScenarios = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ListScenarios',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListScenariosParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListScenariosResult.FromString,
+                _registered_method=True)
+        self.ResolveCompany = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ResolveCompany',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ResolveCompanyParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ResolveCompanyResult.FromString,
+                _registered_method=True)
+        self.RecordFilings = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/RecordFilings',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordFilingsParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordFilingsResult.FromString,
+                _registered_method=True)
+        self.ListFilings = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ListFilings',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListFilingsParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListFilingsResult.FromString,
+                _registered_method=True)
+        self.RecordReportedFacts = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/RecordReportedFacts',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordReportedFactsParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordReportedFactsResult.FromString,
+                _registered_method=True)
+        self.ListReportedFacts = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ListReportedFacts',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListReportedFactsParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListReportedFactsResult.FromString,
+                _registered_method=True)
+        self.RecordHoldingsReports = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/RecordHoldingsReports',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordHoldingsReportsParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordHoldingsReportsResult.FromString,
+                _registered_method=True)
+        self.RecordHoldings = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/RecordHoldings',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordHoldingsParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordHoldingsResult.FromString,
+                _registered_method=True)
+        self.ListHoldings = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ListHoldings',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListHoldingsParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListHoldingsResult.FromString,
+                _registered_method=True)
+        self.RecordCorporateActions = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/RecordCorporateActions',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordCorporateActionsParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordCorporateActionsResult.FromString,
+                _registered_method=True)
+        self.ListCorporateActions = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ListCorporateActions',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListCorporateActionsParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListCorporateActionsResult.FromString,
+                _registered_method=True)
+        self.RecordRatingActions = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/RecordRatingActions',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordRatingActionsParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordRatingActionsResult.FromString,
+                _registered_method=True)
+        self.ListRatingActions = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ListRatingActions',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListRatingActionsParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListRatingActionsResult.FromString,
+                _registered_method=True)
+        self.RecordQualityAssessments = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/RecordQualityAssessments',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordQualityAssessmentsParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordQualityAssessmentsResult.FromString,
+                _registered_method=True)
+        self.ReadStaleReferenceActionsPermitted = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ReadStaleReferenceActionsPermitted',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadStaleReferenceActionsPermittedParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadStaleReferenceActionsPermittedResult.FromString,
+                _registered_method=True)
         self.Receive = channel.unary_stream(
                 '/meridian.plugin.v1.PluginOperations/Receive',
                 request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReceiveRequest.SerializeToString,
@@ -1232,6 +1367,195 @@ class PluginOperationsServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def RequestSeriesRecords(self, request, context):
+        """W3.31: platform.reference.command.request-series-records (command; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RecordSeries(self, request, context):
+        """W10.4: platform.lake.command.record-series (command; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListSeries(self, request, context):
+        """W10.6: platform.lake.query.list-series (query; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RecordStatistics(self, request, context):
+        """W10.4: platform.lake.command.record-statistics (command; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListStatistics(self, request, context):
+        """W10.6: platform.lake.query.list-statistics (query; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RecordLifecycleEvent(self, request, context):
+        """W9.16: platform.book.command.record-lifecycle-event (command; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ProposeLifecycleEvents(self, request, context):
+        """W9.17: platform.book.command.propose-lifecycle-events (command; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ReleaseLifecycleEvent(self, request, context):
+        """W9.18: platform.book.command.release-lifecycle-event (command; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListLifecycleEvents(self, request, context):
+        """W9.19: platform.book.query.list-lifecycle-events (query; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RecordDerivedSeries(self, request, context):
+        """W10.4: platform.lake.command.record-derived-series (command; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListDerivedSeries(self, request, context):
+        """W10.6: platform.lake.query.list-derived-series (query; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RecordScenarios(self, request, context):
+        """W12.8: platform.lake.command.record-scenarios (command; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListScenarios(self, request, context):
+        """W12.8: platform.lake.query.list-scenarios (query; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ResolveCompany(self, request, context):
+        """W3.32: platform.reference.query.resolve-company (query; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RecordFilings(self, request, context):
+        """W10.4: platform.lake.command.record-filings (command; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListFilings(self, request, context):
+        """W10.6: platform.lake.query.list-filings (query; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RecordReportedFacts(self, request, context):
+        """W10.4: platform.lake.command.record-reported-facts (command; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListReportedFacts(self, request, context):
+        """W10.6: platform.lake.query.list-reported-facts (query; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RecordHoldingsReports(self, request, context):
+        """W10.4: platform.lake.command.record-holdings-reports (command; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RecordHoldings(self, request, context):
+        """W10.4: platform.lake.command.record-holdings (command; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListHoldings(self, request, context):
+        """W10.6: platform.lake.query.list-holdings (query; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RecordCorporateActions(self, request, context):
+        """W10.4: platform.lake.command.record-corporate-actions (command; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListCorporateActions(self, request, context):
+        """W10.6: platform.lake.query.list-corporate-actions (query; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RecordRatingActions(self, request, context):
+        """W10.4: platform.lake.command.record-rating-actions (command; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListRatingActions(self, request, context):
+        """W10.6: platform.lake.query.list-rating-actions (query; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RecordQualityAssessments(self, request, context):
+        """W10.12: platform.lake.command.record-quality-assessments (command; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ReadStaleReferenceActionsPermitted(self, request, context):
+        """W6.38: platform.config.query.read-stale-reference-actions-permitted (query; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def Receive(self, request, context):
         """W4.3: every row this plugin's roles hear, within its read scope.
         """
@@ -1736,6 +2060,141 @@ def add_PluginOperationsServicer_to_server(servicer, server):
                     servicer.PickPlacementQuote,
                     request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.PickPlacementQuoteParams.FromString,
                     response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.PickPlacementQuoteResult.SerializeToString,
+            ),
+            'RequestSeriesRecords': grpc.unary_unary_rpc_method_handler(
+                    servicer.RequestSeriesRecords,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RequestSeriesRecordsParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RequestSeriesRecordsResult.SerializeToString,
+            ),
+            'RecordSeries': grpc.unary_unary_rpc_method_handler(
+                    servicer.RecordSeries,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordSeriesParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordSeriesResult.SerializeToString,
+            ),
+            'ListSeries': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListSeries,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListSeriesParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListSeriesResult.SerializeToString,
+            ),
+            'RecordStatistics': grpc.unary_unary_rpc_method_handler(
+                    servicer.RecordStatistics,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordStatisticsParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordStatisticsResult.SerializeToString,
+            ),
+            'ListStatistics': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListStatistics,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListStatisticsParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListStatisticsResult.SerializeToString,
+            ),
+            'RecordLifecycleEvent': grpc.unary_unary_rpc_method_handler(
+                    servicer.RecordLifecycleEvent,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordLifecycleEventParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordLifecycleEventResult.SerializeToString,
+            ),
+            'ProposeLifecycleEvents': grpc.unary_unary_rpc_method_handler(
+                    servicer.ProposeLifecycleEvents,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ProposeLifecycleEventsParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ProposeLifecycleEventsResult.SerializeToString,
+            ),
+            'ReleaseLifecycleEvent': grpc.unary_unary_rpc_method_handler(
+                    servicer.ReleaseLifecycleEvent,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReleaseLifecycleEventParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReleaseLifecycleEventResult.SerializeToString,
+            ),
+            'ListLifecycleEvents': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListLifecycleEvents,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListLifecycleEventsParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListLifecycleEventsResult.SerializeToString,
+            ),
+            'RecordDerivedSeries': grpc.unary_unary_rpc_method_handler(
+                    servicer.RecordDerivedSeries,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordDerivedSeriesParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordDerivedSeriesResult.SerializeToString,
+            ),
+            'ListDerivedSeries': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListDerivedSeries,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListDerivedSeriesParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListDerivedSeriesResult.SerializeToString,
+            ),
+            'RecordScenarios': grpc.unary_unary_rpc_method_handler(
+                    servicer.RecordScenarios,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordScenariosParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordScenariosResult.SerializeToString,
+            ),
+            'ListScenarios': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListScenarios,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListScenariosParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListScenariosResult.SerializeToString,
+            ),
+            'ResolveCompany': grpc.unary_unary_rpc_method_handler(
+                    servicer.ResolveCompany,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ResolveCompanyParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ResolveCompanyResult.SerializeToString,
+            ),
+            'RecordFilings': grpc.unary_unary_rpc_method_handler(
+                    servicer.RecordFilings,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordFilingsParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordFilingsResult.SerializeToString,
+            ),
+            'ListFilings': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListFilings,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListFilingsParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListFilingsResult.SerializeToString,
+            ),
+            'RecordReportedFacts': grpc.unary_unary_rpc_method_handler(
+                    servicer.RecordReportedFacts,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordReportedFactsParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordReportedFactsResult.SerializeToString,
+            ),
+            'ListReportedFacts': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListReportedFacts,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListReportedFactsParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListReportedFactsResult.SerializeToString,
+            ),
+            'RecordHoldingsReports': grpc.unary_unary_rpc_method_handler(
+                    servicer.RecordHoldingsReports,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordHoldingsReportsParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordHoldingsReportsResult.SerializeToString,
+            ),
+            'RecordHoldings': grpc.unary_unary_rpc_method_handler(
+                    servicer.RecordHoldings,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordHoldingsParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordHoldingsResult.SerializeToString,
+            ),
+            'ListHoldings': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListHoldings,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListHoldingsParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListHoldingsResult.SerializeToString,
+            ),
+            'RecordCorporateActions': grpc.unary_unary_rpc_method_handler(
+                    servicer.RecordCorporateActions,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordCorporateActionsParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordCorporateActionsResult.SerializeToString,
+            ),
+            'ListCorporateActions': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListCorporateActions,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListCorporateActionsParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListCorporateActionsResult.SerializeToString,
+            ),
+            'RecordRatingActions': grpc.unary_unary_rpc_method_handler(
+                    servicer.RecordRatingActions,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordRatingActionsParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordRatingActionsResult.SerializeToString,
+            ),
+            'ListRatingActions': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListRatingActions,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListRatingActionsParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListRatingActionsResult.SerializeToString,
+            ),
+            'RecordQualityAssessments': grpc.unary_unary_rpc_method_handler(
+                    servicer.RecordQualityAssessments,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordQualityAssessmentsParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordQualityAssessmentsResult.SerializeToString,
+            ),
+            'ReadStaleReferenceActionsPermitted': grpc.unary_unary_rpc_method_handler(
+                    servicer.ReadStaleReferenceActionsPermitted,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadStaleReferenceActionsPermittedParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadStaleReferenceActionsPermittedResult.SerializeToString,
             ),
             'Receive': grpc.unary_stream_rpc_method_handler(
                     servicer.Receive,
@@ -4416,6 +4875,735 @@ class PluginOperations(object):
             '/meridian.plugin.v1.PluginOperations/PickPlacementQuote',
             meridian_dot_plugin_dot_v1_dot_operations__pb2.PickPlacementQuoteParams.SerializeToString,
             meridian_dot_plugin_dot_v1_dot_operations__pb2.PickPlacementQuoteResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RequestSeriesRecords(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/RequestSeriesRecords',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RequestSeriesRecordsParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RequestSeriesRecordsResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RecordSeries(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/RecordSeries',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordSeriesParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordSeriesResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListSeries(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ListSeries',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListSeriesParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListSeriesResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RecordStatistics(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/RecordStatistics',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordStatisticsParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordStatisticsResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListStatistics(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ListStatistics',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListStatisticsParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListStatisticsResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RecordLifecycleEvent(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/RecordLifecycleEvent',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordLifecycleEventParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordLifecycleEventResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ProposeLifecycleEvents(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ProposeLifecycleEvents',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ProposeLifecycleEventsParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ProposeLifecycleEventsResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ReleaseLifecycleEvent(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ReleaseLifecycleEvent',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ReleaseLifecycleEventParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ReleaseLifecycleEventResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListLifecycleEvents(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ListLifecycleEvents',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListLifecycleEventsParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListLifecycleEventsResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RecordDerivedSeries(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/RecordDerivedSeries',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordDerivedSeriesParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordDerivedSeriesResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListDerivedSeries(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ListDerivedSeries',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListDerivedSeriesParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListDerivedSeriesResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RecordScenarios(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/RecordScenarios',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordScenariosParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordScenariosResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListScenarios(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ListScenarios',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListScenariosParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListScenariosResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ResolveCompany(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ResolveCompany',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ResolveCompanyParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ResolveCompanyResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RecordFilings(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/RecordFilings',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordFilingsParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordFilingsResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListFilings(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ListFilings',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListFilingsParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListFilingsResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RecordReportedFacts(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/RecordReportedFacts',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordReportedFactsParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordReportedFactsResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListReportedFacts(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ListReportedFacts',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListReportedFactsParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListReportedFactsResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RecordHoldingsReports(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/RecordHoldingsReports',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordHoldingsReportsParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordHoldingsReportsResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RecordHoldings(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/RecordHoldings',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordHoldingsParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordHoldingsResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListHoldings(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ListHoldings',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListHoldingsParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListHoldingsResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RecordCorporateActions(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/RecordCorporateActions',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordCorporateActionsParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordCorporateActionsResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListCorporateActions(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ListCorporateActions',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListCorporateActionsParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListCorporateActionsResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RecordRatingActions(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/RecordRatingActions',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordRatingActionsParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordRatingActionsResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListRatingActions(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ListRatingActions',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListRatingActionsParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListRatingActionsResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RecordQualityAssessments(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/RecordQualityAssessments',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordQualityAssessmentsParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordQualityAssessmentsResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ReadStaleReferenceActionsPermitted(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ReadStaleReferenceActionsPermitted',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadStaleReferenceActionsPermittedParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadStaleReferenceActionsPermittedResult.FromString,
             options,
             channel_credentials,
             insecure,

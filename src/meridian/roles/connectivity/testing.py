@@ -180,10 +180,10 @@ class Rig:
     recorder gives them. `after_poll` is where a venue streaming its trade
     updates delivers what a poll's steps made. From 0.32.0 (contract v27)
     the Trader records its session's latency into `latency`, which a test
-    reads (`rig.latency.session_latency()`, `rig.latency.snapshots()`);
-    0.32.0's `Latency.report` sends nothing until contract v28 (ruling 515),
-    and the suite's `reports-a-sessions-round-trip`, about `latency`, is not
-    presented until then (ruling 518)."""
+    reads (`rig.latency.session_latency()`, `rig.latency.snapshots()`), and
+    from 0.33.0 sends (`await rig.latency.report()`), which the suite's
+    `reports-a-sessions-round-trip` asks of every connectivity plugin
+    (contract v28, ruling 518)."""
 
     #: The plugin's instance, the venue account code its fake broker holds,
     #: and the source its symbols are named by.

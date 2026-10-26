@@ -102,6 +102,7 @@ from ...operations import (
     Price,
     Quote,
     SourceTime,
+    SubjectRef,
     Trade,
     TradeAttributes,
 )
@@ -287,6 +288,11 @@ class Top:
     unread: tuple[Unread, ...] = ()
     bid_size: Decimal | None = None
     ask_size: Decimal | None = None
+    #: The stream message's sequence number, where the venue numbers its
+    #: messages (0.33.0; contract v28, ruling 424): a skip makes the live
+    #: dataset's quotes suspicious until the stream opens again, and the
+    #: same quote under a new number is a duplicate. 0 where it numbers none.
+    sequence: int = 0
 
 
 #: Whose side a venue names on a trade.
@@ -939,7 +945,7 @@ class Feed:
     ) -> ObservationMeta:
         return ObservationMeta(
             row_key=row_key,
-            subjects=[ops.SubjectRef(entity_id=mapped.base_id)],
+            subjects=[SubjectRef(entity_id=mapped.base_id)],
             source=ops.Source(dataset=self.dataset(key), venue_id=self.venue.venue_id),
             valid_from_ns=valid_from_ns,
             valid_until_ns=valid_until_ns,
@@ -1060,9 +1066,10 @@ class Feed:
         if best.bid is None and best.ask is None:
             return None
         times = [SourceTime(kind="event", at_ns=best.at_ns)] if best.stated else []
+        numbered = f":{best.sequence}" if best.sequence else ""
         return Quote(
             meta=self._meta(
-                f"{mapped.product}:q:{best.at_ns}",
+                f"{mapped.product}:q:{best.at_ns}{numbered}",
                 mapped,
                 LIVE,
                 best.at_ns,
@@ -1314,7 +1321,10 @@ class Feed:
                 continue
             if isinstance(seen, Print):
                 self._hear_trade(mapped, seen)
-            elif row := self.quote(mapped, seen):
+                continue
+            if seen.sequence:
+                self.wants.edge().sequenced(LIVE, seen.sequence)
+            if row := self.quote(mapped, seen):
                 self.pending_quotes[mapped.product] = row
         if len(self.pending_trades) >= BATCH:
             await self.flush()
@@ -1322,7 +1332,9 @@ class Feed:
     async def on_opened(self, names: Sequence[str]) -> None:
         """The stream opened: each product's trades since the last one recorded
         read from the venue's history, so a drop leaves the lake no gap. A
-        product with none recorded yet has no gap to fill."""
+        product with none recorded yet has no gap to fill. The live dataset's
+        quotes are judged as before a sequence gap (0.33.0)."""
+        self.wants.edge().resynced(LIVE)
         for name in names:
             mapped = self.streams.get(name)
             last = self.last_trade.get(mapped.product) if mapped else None

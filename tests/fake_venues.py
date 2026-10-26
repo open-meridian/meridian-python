@@ -155,6 +155,17 @@ TOP = json.dumps(
 )
 
 
+def top(seq: int, bid: str = "62510.00", ask: str = "62510.02", back: int = 1) -> str:
+    """The stream's best bid and offer, numbered (contract v28's quality
+    cases): its sequence, its sides, and how many seconds ago it stood."""
+    return json.dumps(
+        {
+            "type": "top", "product": "BTC-USD", "bid": bid, "bid_size": "0.84",
+            "ask": ask, "ask_size": "0.50", "at": NOW_NS - back * SECOND, "seq": seq,
+        }
+    )  # fmt: skip
+
+
 class PairsMarket:
     """The made-up pairs venue, read into the module's values."""
 
@@ -278,6 +289,7 @@ class PairsMarket:
                 raw_key="responses/stream/top#0",
                 bid_size=number(said["bid_size"]),
                 ask_size=number(said["ask_size"]),
+                sequence=int(said.get("seq", 0)),
             )
         ]
 
@@ -300,6 +312,11 @@ pairs_venue = SimpleNamespace(
         "the-makers-side-inverted": MAKER_SELL,
         "a-standing-want-streamed": MAKER_SELL,
         "a-quote-recorded": TOP,
+        # Contract v28 (ruling 424): crossed beyond the dataset's tolerance;
+        # the same quote again under a new number; a number skipped.
+        "a-crossed-quote-is-recorded-invalid": top(1, bid="62511.00", ask="62510.02"),
+        "a-duplicate-is-recorded-suspicious": [top(1), top(2)],
+        "rows-after-a-gap-are-suspicious": [top(1), top(3, bid="62509.00", back=0)],
     },
     RESTARTED=("BTC-USD", "8804", NOW_NS - 196 * SECOND),
     BACKFILLED=["8805", "8806"],
@@ -438,6 +455,7 @@ contracts_venue = SimpleNamespace(
         "a-restarts-gap-backfilled": "it publishes no trades, so no gap to read back",
         "reads-a-calendar": "it reads no settlement calendar",
         "asks-for-a-settlement-date": "an event contract settles on its outcome",
+        "a-crossed-quote-is-recorded-invalid": "its book is never crossed",
     },
     market=lambda now_ns=NOW_NS, directory=None: ContractsMarket(now_ns, directory),
     # Contract v26: the venue's events, as its conversion reads them.

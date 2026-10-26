@@ -403,6 +403,13 @@ def _ordinary(row: str, params: Any, n: int, *, provisional: bool = False) -> Me
         return ops.RecordQuotesResult(recorded=len(params.quotes))
     if row == "RecordRates":
         return ops.RecordRatesResult(recorded=len(params.rates))
+    if row == "ResolveCompany":
+        # Contract v28: the company record the identifiers name.
+        return ops.ResolveCompanyResult(company_id=f"ENT-suite-{n}", version=1)
+    if row == "RecordSeries":
+        return ops.RecordSeriesResult(recorded=len(params.series))
+    if row == "RecordStatistics":
+        return ops.RecordStatisticsResult(recorded=len(params.statistics))
     if row == "ResolveVenue":
         return ops.ResolveVenueResult(
             found=True, venue=ops.VenueRecord(venue_id=f"VEN-suite-{n}")

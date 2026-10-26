@@ -67,10 +67,11 @@ contract-diff:
 # PyPI depends on nothing by URL (PyPI refuses that) and a plugin installs one
 # thing. `make vendor-schema` moves the copy to SCHEMA_REV; `check-vendored`
 # fails when the two disagree, as core's check-codegen does for its bindings.
-# meridian-schema's main at bc31b00 (contract v27, DESIGN27, with ruling 518's
-# latency markers and ruling 537's two data cases about closes), its gen/ and
-# boundaries/ vendored here byte for byte.
-SCHEMA_REV := bc31b003aac1e294198262cabd0b0ecdc58ab03d
+# meridian-schema's v28 at 7f9a91a (contract v28, DESIGN28 with its two
+# amendments: listed options and futures, the scenario format, filings,
+# quality states and the latency remainder; the v28 cases' `about`, ruling
+# 602), its gen/ and boundaries/ vendored here byte for byte.
+SCHEMA_REV := dcca81b6a36cf1f9c02bb7d1afd7994242f1f1ce
 SCHEMA_REPO := https://github.com/open-meridian/meridian-schema.git
 SCRATCH     := .schema-scratch
 
@@ -117,7 +118,7 @@ DESIGN ?= ../meridian-design
 # without either waiting on the other's push.
 # Core's main after open-meridian/meridian-core#51 (ruling 545): v27's proto/
 # with LicenceList.administrators, conductor-to-store only, which no plugin meets.
-CORE_REV   := 6d346b370f908be3aa299adc3e43af09d2d3b6c0
+CORE_REV   := 8def82a5c1997db8e5cfdda5c7b7a2bdbee568b5
 CORE_PROTO ?= https://github.com/open-meridian/meridian-core.git\#$(CORE_REV):proto
 # And meridian-schema's, which core's import, at the revision vendored here.
 SCHEMA_PROTO ?= https://github.com/open-meridian/meridian-schema.git\#$(SCHEMA_REV):proto

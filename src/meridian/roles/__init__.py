@@ -58,9 +58,36 @@ rates slice (`data.rates`) and records its edge age and liveness;
 delay, the placement types its venue takes and the dealers' quotes on an
 RFQ placement; and `ems`, the `ems`'s check of its reference price's age
 and its RFQ placement's quotes.
+
+From 0.33.0 (contract v28) `Latency.report` sends its snapshots (rulings
+515 and 516), and the roles share listed options' and futures' work
+(sdk-contract/listed-options-and-futures-contract): `chains`, a chain's
+series keyed by their OSI symbols, recorded and read under the underlying
+with their statistics, and a series asked for before an order;
+`lifecycle`, an exercise, assignment, expiry or day of variation reported
+as the broker states it, `servicing`'s exercise by exception proposed and
+`operations`' release of a proposal no report answered; and `packages`, a
+package order's legs in lowest terms and its fill reported once for the
+package and once per leg. `signal` holds a signal's derived series, saved
+scenarios (the common scenario format) and a row's quality escalated;
+`data` the filings slice (`data.filings`) and the edge's quality checks
+(`data.quality`) on every row it records; and `ems`'s check reads the
+stale-reference actions the deployment permits.
 """
 
-from . import connectivity, custody, data, ems, operations, pricing, reporting
+from . import (
+    chains,
+    connectivity,
+    custody,
+    data,
+    ems,
+    lifecycle,
+    operations,
+    packages,
+    pricing,
+    reporting,
+    signal,
+)
 from ._latency import (
     FeedDelay,
     Histogram,
@@ -82,14 +109,18 @@ __all__ = [
     "Percentiles",
     "SessionCeilings",
     "SessionLatency",
+    "chains",
     "confirmed_ns",
     "connectivity",
     "custody",
     "data",
     "ems",
     "in_session",
+    "lifecycle",
     "operations",
+    "packages",
     "pricing",
     "reporting",
+    "signal",
     "source_ns",
 ]

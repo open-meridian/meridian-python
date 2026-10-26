@@ -50,6 +50,7 @@ from meridian.suites import Recorder, check, names, suite
 from meridian.suites import run as run_suite
 from order_path_cases import PRODUCERS
 from rates_cases import PUBLISHED, RATES
+from v28_cases import DATA as V28_DATA
 
 INSTANCE = "data-coinbase-1"
 DAILY = f"{INSTANCE}:daily"
@@ -569,7 +570,7 @@ async def test_a_data_plugin_hears_a_want_records_against_it_and_declines_what_i
         await plugin.record_prices(prices=[close("62431.27", day=day)], want_id=want.want_id)
         await plugin.decline_want(
             want_id=want.want_id,
-            subjects=[ops.SubjectRef(entity_id="LCL-NOT-COVERED")],
+            subjects=[meridian.SubjectRef(entity_id="LCL-NOT-COVERED")],
             reason="not_covered",
         )
         answered.set()
@@ -833,7 +834,11 @@ class ToyDataPlugin:
                 prices=[self.price(s.entity_id, Decimal("62431.27")) for s in covered],
                 want_id=want.want_id,
             )
-        declined = [s for s, ok in zip(want.subjects, served, strict=True) if not ok]
+        declined = [
+            meridian.SubjectRef(entity_id=s.entity_id)
+            for s, ok in zip(want.subjects, served, strict=True)
+            if not ok
+        ]
         if declined:
             await self.plugin.decline_want(
                 want_id=want.want_id, subjects=declined, reason="not_covered"
@@ -982,7 +987,7 @@ def outcome_producer(determination: str, *stages: str):  # type: ignore[no-untyp
                     meridian.Outcome(
                         meta=meridian.ObservationMeta(
                             row_key="KXFEDDECISION-26OCT-H0:outcome",
-                            subjects=[ops.SubjectRef(entity_id="INS-KXFED-H0")],
+                            subjects=[meridian.SubjectRef(entity_id="INS-KXFED-H0")],
                             source=ops.Source(dataset=DAILY),
                             valid_from_ns=DAY,
                             raw=ops.RawRecordRef(instance_id=INSTANCE, key="market:1"),
@@ -1097,21 +1102,15 @@ def producers(**mutations: bool) -> dict[str, object]:
         # Contract v27: the rates slice, a stream's liveness and the feed delay.
         **rates_producers(RATES, source="ust", now_ns=PUBLISHED),
         "records-a-datasets-liveness": liveness,
+        # Contract v28: chains, the filings slice, quotes' quality states and
+        # the feed delay reported (tests/v28_cases.py).
+        **V28_DATA,
     }
 
 
-#: Ruling 518: the feed delay is about `latency` until v28, not presented by
-#: a v27 data plugin with why.
-LATENCY = {
-    "reports-its-feed-delay": "core receives ReportLatency from contract v28, ruling 515"
-}
-
-
 def run(role: str, producers: Any, **given: Any) -> Any:
-    """A suite as a v27 plugin runs it: the data suite's feed delay not
-    presented."""
-    skipped = dict(LATENCY) if role == "data" else {}
-    skipped.update(given.pop("not_presented", None) or {})
+    """A suite as a plugin runs it."""
+    skipped = dict(given.pop("not_presented", None) or {})
     return run_suite(role, producers, not_presented=skipped, **given)
 
 
@@ -1150,19 +1149,24 @@ def event_group(*, exhaustive: bool | None):  # type: ignore[no-untyped-def]
     return produce
 
 
-def test_the_data_suite_is_carried_with_its_forty_four_cases() -> None:
+def test_the_data_suite_is_carried_with_its_fifty_nine_cases() -> None:
     held = suite("data")
     assert held.since == "v18"
     # Contract v24 adds the two every role's suite holds, which the SDK answers;
     # v26 a third, the venue's event groups reported (two, about outcomes) and
     # the lake's bounded query; v27 the rates slice's seven (about rates), a
     # stream's liveness (about streams) and the feed delay, and the bounded
-    # query about trades.
-    assert len(held.cases) == 44
+    # query about trades; v28 fifteen, each about what a source may never
+    # present (ruling 602), the feed delay required again (518).
+    assert len(held.cases) == 59
     assert held.case("queries-the-lake-within-bounds").about == "trades"
     assert {held.case(name).about for name in RATES_CASES} == {"rates"}
     assert held.case("records-a-datasets-liveness").about == "streams"
-    assert held.case("reports-its-feed-delay").about == "latency"  # until v28 (518)
+    assert held.case("reports-its-feed-delay").about == ""  # required from v28 (518)
+    v28 = {case.name: case.about for case in held.cases[44:]}
+    assert len(v28) == 15 and set(v28.values()) == {
+        "option chains", "filings", "holdings", "corporate actions", "ratings", "quotes"
+    }  # fmt: skip
     assert held.case("reports-an-event-group").about == "outcomes"
     assert held.case("reports-a-flag-the-venue-does-not-state").about == "outcomes"
     assert "a-want-recorded-against" in names("data")
@@ -1220,6 +1224,8 @@ def test_a_rates_only_data_plugin_passes_the_suite_with_prices_not_presented() -
         **answered,
         **rates_producers(RATES, source="ust", now_ns=PUBLISHED),
         "records-a-datasets-liveness": polled,
+        # Required from contract v28 (ruling 518): its rows' age, reported.
+        "reports-its-feed-delay": every["reports-its-feed-delay"],
     }
     assert "records-a-datasets-liveness" not in RATES_NOT_PRESENTED
     report = run_suite("data", mapped, not_presented=RATES_NOT_PRESENTED)
@@ -1300,8 +1306,8 @@ V19_DATA_CASES = {
 def test_a_data_plugin_converting_exactly_passes_every_case_of_its_suite() -> None:
     report = run("data", producers(), instance_id="toy-1")
     assert report.passed, report.failures
-    assert len(report.passed_cases) == 44 - 1
-    assert report.not_presented == LATENCY
+    assert len(report.passed_cases) == 59
+    assert report.not_presented == {}
     assert report.answered_by_sdk == [
         "hears-and-reads-a-replacement",
         "reads-the-template-catalogue",
@@ -1327,11 +1333,18 @@ def test_a_case_about_a_kind_the_plugin_never_publishes_may_be_not_presented() -
     # Contract v27: the lake's bounded query is about trades, so a source
     # recording none marks it not presented rather than faking it.
     never["queries-the-lake-within-bounds"] = "it records no trades"
+    # Contract v28 (ruling 602): the quality of quotes is about quotes.
+    for name in (
+        "a-crossed-quote-is-recorded-invalid",
+        "a-duplicate-is-recorded-suspicious",
+        "rows-after-a-gap-are-suspicious",
+    ):
+        never[name] = "daily closes and bars only: this source states no quotes"
     mapped = {name: made for name, made in every.items() if name not in never}
     report = run("data", mapped, not_presented=never)
     assert report.passed, report.failures
-    assert report.not_presented == {**LATENCY, **never}
-    assert len(report.passed_cases) == 44 - 11
+    assert report.not_presented == never
+    assert len(report.passed_cases) == 59 - 13
 
 
 def test_a_case_about_a_field_the_source_never_states_may_be_not_presented() -> None:
@@ -1341,7 +1354,7 @@ def test_a_case_about_a_field_the_source_never_states_may_be_not_presented() -> 
     mapped = {name: made for name, made in every.items() if name != "the-takers-side-stated"}
     report = run("data", mapped, not_presented={"the-takers-side-stated": why})
     assert report.passed, report.failures
-    assert report.not_presented == {**LATENCY, "the-takers-side-stated": why}
+    assert report.not_presented == {"the-takers-side-stated": why}
 
 
 def test_a_restart_that_does_not_read_its_last_trades_fails_the_suite() -> None:
@@ -1376,7 +1389,7 @@ def test_a_case_every_data_plugin_answers_is_never_not_presented_and_one_that_is
     assert "required" in report.failures["a-subject-declined"]
     assert "required" in report.failures["reads-its-datasets-licences"]
     assert "says why" in report.failures["a-trade-recorded"]
-    assert report.not_presented == LATENCY
+    assert report.not_presented == {}
 
 
 def test_a_data_plugin_declining_a_subject_another_source_resolved_fails_the_suite() -> None:
@@ -1479,6 +1492,21 @@ def test_a_reading_role_hears_and_reads_as_its_suite_asks() -> None:
                     "hears-a-rate-recorded",
                     "hears-a-datasets-liveness",
                     "reads-an-accounts-execution-costs",
+                    # Chains, lifecycle, derived series, saved scenarios and
+                    # the filings slice (contract v28).
+                    "reads-open-interest-for-a-chain",
+                    "hears-a-statistic-recorded",
+                    "reads-an-accounts-lifecycle-events",
+                    "hears-a-lifecycle-event-recorded",
+                    "reads-a-derived-series",
+                    "reads-a-saved-scenario-set",
+                    "reads-a-companys-filings",
+                    "reads-reported-facts",
+                    "reads-who-holds-a-security",
+                    "reads-declared-dividends",
+                    "reads-a-rating-history",
+                    "hears-a-filing-recorded",
+                    "hears-a-dividend-declared",
                 )
             },
         },

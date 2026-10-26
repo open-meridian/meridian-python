@@ -42,7 +42,7 @@ AAPL = "INS-01J8XQ4M7K0000000000AAPL"
 
 
 def test_the_schema_is_contract_v26() -> None:
-    assert meridian.SCHEMA_VERSION == "v27"
+    assert meridian.SCHEMA_VERSION == "v28"
     fields = sidecar_pb2.CallerClaims.DESCRIPTOR.fields_by_name
     assert "demo_connectivity_instance_ids" in fields
     assert "model_tokens" in sidecar_pb2.HeartbeatRequest.DESCRIPTOR.fields_by_name
@@ -671,7 +671,7 @@ def test_custodys_thin_holding_is_about_securities() -> None:
 async def test_a_bounded_query_names_its_fields_and_limit() -> None:
     recorder = Recorder("reporting-1")
     await recorder.query_lake(
-        kind="bars", subjects=[ops.SubjectRef(entity_id=AAPL)],
+        kind="bars", subjects=[meridian.SubjectRef(entity_id=AAPL)],
         fields=["meridian.v1.Bar.close"], row_limit=10_000,
     )  # fmt: skip
     (sent,) = recorder.on("QueryLake")
