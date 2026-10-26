@@ -1,0 +1,23 @@
+# open-meridian 0.33.0 to 0.33.1: additive, on contract v28 (rulings 624 to
+# 626 and 629): nothing a plugin calls changed shape, so only the pins move.
+from = "0.33.0"
+to = "0.33.1"
+summary = """
+Additive, on contract v28. An event-contract venue's Market may answer
+bars(contract, interval, first_ns, until_ns), each Candle of an hour (HOUR) or
+the venue's session day (DAY) it states or builds from its own trades: the
+plugin then declares a third dataset keyed bars, of meridian.v1.Bar, on its
+session day (day_time_zone, day_end_minute), and runs Feed.keep_bars(that
+declaration) beside keep_current, which keeps each contract served's closed
+hours and days and answers a want of bars from the venue's history. A Market
+without the hook is unchanged, and the data checks
+(EventContractsChecks) refuse a third dataset other than bars, or bars
+without the hook. The data suite's feed-delay producer stands its want on the
+quote where the venue's last trade states no time or the live dataset
+declares no prices (ruling 626), so a plugin's own feed-delay producer for
+that can be removed. The edge's duplicate check reads a row stating an
+interval -- a bar, a day's close -- as saying it of that interval, so the same
+values over another hour or day are no duplicate. Nothing a plugin calls
+changed shape: `meridian plugin migrate` moves the pins and changes no code.
+"""
+breaking = false

@@ -126,13 +126,22 @@ def _amount(money: Any) -> Decimal | None:
 
 def _content(row: Any) -> tuple[Any, ...]:
     """What a row says, without the row key and the record of where it came
-    from: two rows saying the same thing under two keys are a duplicate."""
+    from: two rows saying the same thing under two keys are a duplicate. A
+    row stating an interval -- a bar, a day's close: its valid time to an
+    end, or its business date -- says it of that interval (0.33.1), so the
+    same values over another hour or day are no duplicate."""
     meta = row.meta
     said = {f.name: getattr(row, f.name) for f in dataclasses.fields(row) if f.name != "meta"}
+    over = (
+        (meta.valid_from_ns, meta.valid_until_ns, str(meta.business_date))
+        if meta.valid_until_ns or meta.business_date
+        else ()
+    )
     return (
         tuple(s.entity_id for s in meta.subjects),
         tuple((t.kind, t.at_ns) for t in meta.source_times),
         repr(sorted(said.items())),
+        over,
     )
 
 

@@ -7,9 +7,11 @@ their own conversions."""
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 from dataclasses import replace
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
@@ -18,7 +20,21 @@ from typing import Any
 import pytest
 
 import meridian
-from fake_venues import NOW_NS, ContractsMarket, contracts_venue, pairs_venue
+from fake_venues import (
+    HOUR,
+    NOW_NS,
+    BarsMarket,
+    ContractsMarket,
+    candle,
+    contracts_catalogue,
+    contracts_venue,
+    contracts_venue_with,
+    ny_day_starts,
+    pairs_venue,
+)
+from fake_venues import (
+    contracts_page as fake_page,
+)
 from meridian.plugin.v1 import operations_pb2 as ops
 from meridian.roles.data import event_contracts, pairs
 from meridian.roles.data.testing import (
@@ -473,3 +489,278 @@ def test_a_plugin_not_started_shows_its_next_step() -> None:
         "Answering",
         "Does not stream",
     ]
+
+
+# ── Bars, where a venue keeps them (0.33.1; rulings 624, 625, 629) ──────
+
+DAY_BEFORE = date(2026, 10, 9)
+
+
+def _checks(venue: SimpleNamespace) -> EventContractsChecks:
+    checks = EventContractsChecks()
+    checks.venue = venue
+    return checks
+
+
+def _bars_feed(lake: Lake, market: ContractsMarket | None = None) -> event_contracts.Feed:
+    return event_contracts.Feed(
+        lake, market or BarsMarket(), event_contracts.ContractMap(), clock_ns=lambda: NOW_NS,
+        bars_declared=contracts_catalogue("bars")[0],
+    )  # fmt: skip
+
+
+@pytest.mark.parametrize(
+    ("market", "keys"),
+    [(ContractsMarket, ("live", "outcomes")), (BarsMarket, ("live", "outcomes", "bars"))],
+)
+def test_a_venue_with_and_without_bars_passes_every_case_it_presents(
+    market: type[ContractsMarket], keys: tuple[str, ...]
+) -> None:
+    v = contracts_venue_with(market, *keys)
+    checks = _checks(v)
+    checks.test_every_case_is_mapped_or_said_not_presented_with_why()
+    report = run("data", event_contract_producers(v), not_presented=checks.not_presented(),
+                 instance_id=v.VENUE)  # fmt: skip
+    assert report.passed, report.failures
+    assert ("a-daily-bar" in report.passed_cases) == (market is BarsMarket)
+    checks.test_it_serves_live_and_outcomes_and_bars_only_where_it_keeps_them()
+    checks.test_the_roles_figures_in_its_order()
+    checks.test_datasets_says_whether_a_deployment_admin_licensed_it()
+    checks.test_an_outcome_recorded_counts_on_its_own_dataset()
+
+
+async def test_the_bars_checks_pass_a_venue_keeping_bars_and_skip_one_keeping_none() -> None:
+    for venue in (
+        contracts_venue_with(BarsMarket, "live", "outcomes", "bars"),
+        contracts_venue_with(ContractsMarket),
+    ):
+        await _checks(venue).test_bars_are_kept_hourly_and_daily_on_the_declared_day()
+        await _checks(venue).test_a_bars_want_is_answered_from_the_venues_history()
+
+
+@pytest.mark.parametrize(
+    ("market", "keys"),
+    [
+        (ContractsMarket, ("live", "outcomes", "bars")),  # bars declared, none kept
+        (BarsMarket, ("live", "outcomes")),  # bars kept, none declared
+        (BarsMarket, ("live", "outcomes", "trades")),  # another dataset for the third
+        (BarsMarket, ("live", "outcomes", "bars", "trades")),  # a fourth
+        (ContractsMarket, ("live", "outcomes", "trades")),
+    ],
+)
+def test_the_checks_refuse_any_dataset_but_bars_where_bars_are_kept(
+    market: type[ContractsMarket], keys: tuple[str, ...]
+) -> None:
+    checks = _checks(contracts_venue_with(market, *keys))
+    with pytest.raises(AssertionError, match="an event-contract venue serves"):
+        checks.test_it_serves_live_and_outcomes_and_bars_only_where_it_keeps_them()
+
+
+async def test_keep_bars_keeps_each_closed_hour_and_day_once() -> None:
+    lake = Lake(contracts_venue.VENUE)
+    feed = _bars_feed(lake)
+    subject = await lake.held(feed, "BASE-1")
+    await feed.record_live([subject], data_type="meridian.v1.Price")
+    sent = await feed.keep_bars(once=True)
+    bars = lake.rows("RecordBars")
+    assert sent == len(bars) and bars
+    days = [b for b in bars if b.meta.business_date]
+    hours = [b for b in bars if not b.meta.business_date]
+    # New York's days, the last closed the 9th (12:00 UTC is 08:00 there).
+    assert days[-1].meta.business_date == "2026-10-09"
+    assert (days[-1].meta.valid_from_ns, days[-1].meta.valid_until_ns) == (
+        ny_day_starts(DAY_BEFORE), ny_day_starts(date(2026, 10, 10))
+    )  # fmt: skip
+    assert len(days) == 30, "BARS_FIRST_DAYS of days, first read"
+    assert hours[-1].meta.valid_until_ns <= NOW_NS - 60 * 10**9
+    assert days[-1].meta.row_key == f"BASE-1:1d:{ny_day_starts(DAY_BEFORE) // 10**9}"
+    assert all(b.meta.source.dataset == "fakev:bars" for b in bars)
+    assert all(not b.meta.source_times and not b.HasField("vwap") for b in bars)
+    assert not any(b.meta.quality for b in bars), "a bar over another interval no duplicate"
+    assert [b.meta.valid_until_ns for b in bars] == sorted(b.meta.valid_until_ns for b in bars)
+    assert feed.bar_counts.recorded == len(bars) and feed.counts.recorded == 3
+    # Nothing closed since: nothing asked or sent again.
+    asked = len(feed.market.asked)  # type: ignore[attr-defined]
+    assert await feed.keep_bars(once=True) == 0 and len(feed.market.asked) == asked  # type: ignore[attr-defined]
+
+
+async def test_kept_bars_are_read_on_from_where_the_map_left_them(tmp_path: Path) -> None:
+    lake = Lake(contracts_venue.VENUE)
+    feed = _bars_feed(lake)
+    kept = tmp_path / "contracts-synthetic.json"
+    feed.contracts = event_contracts.ContractMap(kept)
+    subject = await lake.held(feed, "BASE-1")
+    await feed.record_live([subject], data_type="meridian.v1.Price")
+    await feed.keep_bars(once=True)
+    later = NOW_NS + 2 * HOUR
+    again = event_contracts.Feed(
+        lake, BarsMarket(later), event_contracts.ContractMap(kept), clock_ns=lambda: later,
+        bars_declared=contracts_catalogue("bars")[0],
+    )  # fmt: skip
+    assert again.contracts.load()
+    await again.keep_bars(once=True)
+    [(code, interval, first_ns, until_ns)] = again.market.asked  # type: ignore[attr-defined]
+    assert (code, interval) == ("BASE-1", event_contracts.HOUR), "no day closed since"
+    assert until_ns - first_ns == 2 * HOUR
+
+
+async def test_a_bar_off_its_interval_or_past_the_payout_is_left_unrecorded() -> None:
+    class Odd(BarsMarket):
+        def days(self, code: str, first_ns: int, until_ns: int) -> list[event_contracts.Candle]:
+            # A UTC day, where the plugin declares New York's.
+            start = ny_day_starts(DAY_BEFORE) - 4 * HOUR
+            return [candle(code, start, start + 24 * HOUR)]
+
+        def hours(
+            self, code: str, first_ns: int, until_ns: int
+        ) -> list[event_contracts.Candle]:
+            at = NOW_NS - 3 * HOUR
+            return [
+                candle(code, at, at + HOUR, high=Decimal("1.5")),
+                candle(code, at - HOUR, at, low=Decimal("0.44")),  # above its open
+                candle(code, at - 2 * HOUR, at - HOUR, volume=None),
+                candle(code, at - 4 * HOUR, at - 2 * HOUR),  # two hours
+            ]
+
+    lake = Lake(contracts_venue.VENUE)
+    feed = _bars_feed(lake, Odd())
+    subject = await lake.held(feed, "BASE-1")
+    await feed.record_live([subject], data_type="meridian.v1.Price")
+    assert await feed.keep_bars(once=True) == 0
+    assert not lake.rows("RecordBars") and feed.bar_counts.unread == 5
+
+
+async def test_no_bar_is_read_past_a_contracts_close_once_kept_to_it() -> None:
+    class Closed(BarsMarket):
+        def contract(
+            self, code: str, watching: bool = False
+        ) -> event_contracts.Contract | None:
+            read = super().contract(code, watching)
+            return (
+                None
+                if read is None
+                else replace(read, closes_at_ns=NOW_NS - 3 * 86_400 * 10**9)
+            )
+
+    lake = Lake(contracts_venue.VENUE)
+    feed = _bars_feed(lake, Closed())
+    subject = await lake.held(feed, "BASE-1")
+    await feed.name([subject])
+    await feed.cash_id()
+    assert await feed.keep_bars(once=True) > 0
+    later = NOW_NS + 86_400 * 10**9
+    feed.clock_ns = lambda: later
+    feed.wants.clock_ns = feed.clock_ns
+    asked = len(feed.market.asked)  # type: ignore[attr-defined]
+    assert await feed.keep_bars(once=True) == 0
+    assert len(feed.market.asked) == asked, "kept to its close: not read again"  # type: ignore[attr-defined]
+
+
+async def test_keep_bars_is_refused_without_the_hook_or_the_bars_dataset() -> None:
+    lake = Lake(contracts_venue.VENUE)
+    plain = event_contracts.Feed(lake, ContractsMarket(), event_contracts.ContractMap())
+    assert not plain.keeps_bars and plain.wants.keys == ("live", "outcomes")
+    with pytest.raises(TypeError, match="answers no bars"):
+        await plain.keep_bars(contracts_catalogue("bars")[0], once=True)
+    kept = event_contracts.Feed(lake, BarsMarket(), event_contracts.ContractMap())
+    assert kept.wants.keys == ("live", "outcomes", "bars")
+    with pytest.raises(ValueError, match="'bars'"):
+        await kept.keep_bars(contracts_catalogue("trades")[0], once=True)
+    with pytest.raises(ValueError, match="the day the plugin declares"):
+        await kept.keep_bars(once=True)
+
+
+async def test_a_standing_want_of_bars_is_kept_by_keep_bars_never_polled_live() -> None:
+    lake = Lake(contracts_venue.VENUE)
+    feed = _bars_feed(lake)
+    subject = await lake.held(feed, "BASE-1")
+    await hear(lake, feed, wanted(feed, "WNT-S", event_contracts.BARS, [subject],
+                                  data_type="meridian.v1.Bar", standing=True))  # fmt: skip
+    assert set(feed.standing) == {"WNT-S"} and lake.on("RecordBars")[0].want_id == "WNT-S"
+    await feed.current()
+    assert not lake.on("RecordPrices") and not lake.on("RecordQuotes")
+    assert await feed.keep_bars(once=True) > 0, "its subject's contract is served"
+
+
+def test_a_session_day_ending_after_midnight_is_the_date_it_ends_on() -> None:
+    declared = replace(contracts_catalogue("bars")[0], day_end_minute=17 * 60)
+    feed = event_contracts.Feed(
+        Lake(contracts_venue.VENUE), BarsMarket(), event_contracts.ContractMap(),
+        bars_declared=declared,
+    )  # fmt: skip
+    five_pm = ny_day_starts(DAY_BEFORE) + 17 * HOUR
+    assert feed.business_date(five_pm - 1) == DAY_BEFORE
+    assert feed.business_date(five_pm) == date(2026, 10, 10)
+    assert feed.day_starts_ns(date(2026, 10, 10)) == five_pm
+    midnight = replace(declared, day_end_minute=0)
+    feed.bars_declared = midnight
+    assert feed.business_date(ny_day_starts(DAY_BEFORE)) == DAY_BEFORE
+    assert feed.day_starts_ns(DAY_BEFORE) == ny_day_starts(DAY_BEFORE)
+
+
+# ── The feed delay on the quote (0.33.1; ruling 626) ────────────────────
+
+
+class UntimedMarket(ContractsMarket):
+    """A venue whose last trade states no time, its book its own."""
+
+    def last(self, contract: event_contracts.Contract) -> event_contracts.Tick:
+        return replace(super().last(contract), stated=False)
+
+
+def _feed_delay(venue: SimpleNamespace) -> tuple[bool, list[Any], list[Any]]:
+    recorder = Recorder(venue.VENUE)
+    asyncio.run(event_contract_producers(venue)["reports-its-feed-delay"](recorder))
+    snapshots = [s for r in recorder.on("ReportLatency") for s in r.snapshots]
+    return bool(snapshots), list(recorder.on("RecordPrices")), list(recorder.on("RecordQuotes"))
+
+
+def test_the_feed_delay_stands_on_the_last_price_where_its_trade_is_timed() -> None:
+    reported, prices, quotes = _feed_delay(contracts_venue_with(ContractsMarket))
+    assert reported and prices and not quotes
+
+
+def test_the_feed_delay_stands_on_the_quote_where_the_last_trade_states_no_time() -> None:
+    v = contracts_venue_with(UntimedMarket)
+    reported, prices, quotes = _feed_delay(v)
+    assert reported and quotes and not prices
+    report = run("data", event_contract_producers(v), not_presented=_checks(v).not_presented(),
+                 instance_id=v.VENUE)  # fmt: skip
+    assert "reports-its-feed-delay" in report.passed_cases
+
+
+def test_the_feed_delay_stands_on_the_quote_where_no_price_is_declared() -> None:
+    v = contracts_venue_with(ContractsMarket)
+    catalogue = contracts_catalogue("live", "outcomes")
+    catalogue[0] = replace(catalogue[0], data_types=("meridian.v1.Quote",))
+    v.page = fake_page(catalogue)
+    reported, prices, quotes = _feed_delay(v)
+    assert reported and quotes and not prices
+
+
+async def test_an_interval_the_venue_did_not_answer_is_asked_again() -> None:
+    class Down(BarsMarket):
+        down = True
+
+        def bars(
+            self,
+            contract: event_contracts.Contract,
+            interval: str,
+            first_ns: int,
+            until_ns: int,
+        ) -> list[event_contracts.Candle]:
+            if self.down:
+                raise OSError("down")
+            return super().bars(contract, interval, first_ns, until_ns)
+
+    lake = Lake(contracts_venue.VENUE)
+    market = Down()
+    feed = _bars_feed(lake, market)
+    subject = await lake.held(feed, "BASE-1")
+    await feed.record_live([subject], data_type="meridian.v1.Price")
+    assert await feed.keep_bars(once=True) == 0 and not feed.contracts.bars
+    market.down = False
+    assert await feed.keep_bars(once=True) > 0 and set(feed.contracts.bars) == {
+        "BASE-1:1h",
+        "BASE-1:1d",
+    }

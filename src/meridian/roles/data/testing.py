@@ -46,7 +46,13 @@ venue states mutually exclusive and exhaustive, and one adding outcomes
 named later, which states no exhaustiveness. A venue whose module names
 neither leaves `reports-an-event-group` and
 `reports-a-flag-the-venue-does-not-state` to its own producers or to
-`NOT_PRESENTED`, with why.
+`NOT_PRESENTED`, with why. From 0.33.1 a venue whose `Market` keeps bars
+(`bars(...)`, ruling 625) names `BARS_DECLARED`, its `bars`
+`DatasetDeclaration`, and its synthetic exchange states at least one closed
+hourly and one closed daily bar of `BASE` in the `BARS_FIRST_DAYS` before
+`NOW_NS`, among them the day before `TODAY`'s; `a-daily-bar` is then
+presented on that day, unless named in `NOT_PRESENTED` (a venue stating a
+day's volume-weighted price, which the case leaves unset).
 
 Every data plugin's suite holds `queries-the-lake-within-bounds` from
 contract v26: one bounded query of a kind its role reads
@@ -74,7 +80,7 @@ from ...plugin.v1 import operations_pb2 as ops
 from ...suites import ANSWERED_BY_SDK, Recorder, names, run, suite
 from ...testing import PageClient
 from . import event_contracts, pairs
-from ._wants import Standing
+from ._wants import Standing, asked
 
 __all__ = [
     "BITCOIN",
@@ -747,6 +753,35 @@ def pairs_producers(venue: Any, **mutations: Any) -> dict[str, Producer]:
     return {case: produce for case, produce in made.items() if case not in skipped}
 
 
+def _keeps_bars(venue: Any) -> bool:
+    """Whether a venue's `Market` answers `bars(...)` (0.33.1; ruling 625)."""
+    return callable(getattr(venue.market(venue.NOW_NS), "bars", None))
+
+
+def _declares_prices(venue: Any) -> bool:
+    """Whether the venue's live dataset declares prices (`meridian.v1.Price`),
+    as its page's Datasets lists it; a module with no page is taken to."""
+    page = getattr(venue, "page", None)
+    if page is None or not callable(getattr(page, "datasets_now", None)):
+        return True
+    live = [s for s in page.datasets_now().served
+            if s.dataset.endswith(f":{event_contracts.LIVE}")]  # fmt: skip
+    return not live or "Price" in live[0].data.split(", ")
+
+
+async def _timed_on(feed: Any, venue: Any) -> tuple[str, tuple[int, ...]]:
+    """What the feed-delay case's standing want asks (0.33.1; ruling 626):
+    last prices where the plugin declares prices and the venue's last trade
+    of BASE, read through its own conversion, states when it traded; else
+    the quote, which states its book's time."""
+    contract = await feed.contract(venue.BASE)
+    if contract is not None and _declares_prices(venue):
+        tick = await asked(feed.market.last, contract, of=feed.market.name)
+        if tick is not None and tick.stated and tick.price is not None:
+            return PRICE, (ops.PRICE_KIND_LAST,)
+    return QUOTE, ()
+
+
 def event_contract_producers(venue: Any, **mutations: Any) -> dict[str, Producer]:
     """Each data-suite case's producer for an event-contract venue: the
     plugin's own steps on its own exchange; `mutations` replace a `Feed`
@@ -852,16 +887,33 @@ def event_contract_producers(venue: Any, **mutations: Any) -> dict[str, Producer
     async def timed(recorder: Recorder, latency: Any) -> None:
         # Its feed delay (required from contract v28, ruling 518): a standing
         # want's subject kept current, its rows' age at the edge recorded.
+        # From 0.33.1 (ruling 626) the want stands on the last price where
+        # the venue's last trade states its time, else on the quote.
         feed, store = made_on(recorder, mutate=True)
         feed.wants.latency = latency
         subject = await held(store, feed, venue.BASE)
+        data_type, kinds = await _timed_on(feed, venue)
         feed.standing["WNT-T"] = Standing(
-            "WNT-T", feed.dataset(event_contracts.LIVE), PRICE, (subject,),
-            (ops.PRICE_KIND_LAST,), venue.NOW_NS,
+            "WNT-T", feed.dataset(event_contracts.LIVE), data_type, (subject,), kinds,
+            venue.NOW_NS,
         )  # fmt: skip
         await feed.current()
 
     made["reports-its-feed-delay"] = feed_delay(timed)
+
+    async def daily_bar(recorder: Recorder) -> None:
+        # From 0.33.1 (ruling 625): a venue keeping bars, its day before
+        # TODAY's bars wanted from its history, the daily one dated on the
+        # session day the plugin declares.
+        feed, store = made_on(recorder, mutate=True)
+        feed.bars_declared = venue.BARS_DECLARED
+        subject = await held(store, feed, venue.BASE)
+        day = venue.TODAY - timedelta(days=1)
+        await hear(recorder, feed, wanted(feed, "WNT-B", event_contracts.BARS, [subject],
+                                          data_type=BAR, day=day))  # fmt: skip
+
+    if _keeps_bars(venue):
+        made["a-daily-bar"] = daily_bar
 
     def grouped(event: Any) -> Producer | None:
         # Contract v26 (W3.29): the venue's event, as its conversion read
@@ -1816,6 +1868,17 @@ class EventContractsChecks(_PageChecks):
         over those its kind never does (contract v27)."""
         return {**EVENT_CONTRACTS_NOT_PRESENTED, **self.venue.NOT_PRESENTED}
 
+    def keeps_bars(self) -> bool:
+        """Whether its `Market` answers `bars(...)` (0.33.1; ruling 625)."""
+        return _keeps_bars(self.venue)
+
+    def datasets(self) -> list[str]:
+        """The datasets an event-contract venue serves, as rows name them:
+        `live` and `outcomes`, and `bars` where its `Market` keeps bars."""
+        keys = [event_contracts.LIVE, event_contracts.OUTCOMES]
+        keys += [event_contracts.BARS] if self.keeps_bars() else []
+        return [f"{self.venue.VENUE}:{key}" for key in keys]
+
     # ── The suite ───────────────────────────────────────────────────────
 
     def test_every_case_is_mapped_or_said_not_presented_with_why(self) -> None:
@@ -2375,13 +2438,11 @@ class EventContractsChecks(_PageChecks):
         assert "No key needed" in page and "Does not stream" in page
         assert feed.venue.venue_id in page and data["allowed"] in page
         datasets = client.call_tool("read_datasets", level="admin").data
-        assert [d["dataset"] for d in datasets["served"]] == [
-            f"{v.VENUE}:live", f"{v.VENUE}:outcomes",
-        ]  # fmt: skip
-        assert [d["data"] for d in datasets["served"]] == ["Price, Quote", "Outcome"]
-        assert [d["arrives"] for d in datasets["served"]] == ["pull, stream", "push"]
+        assert [d["dataset"] for d in datasets["served"]] == self.datasets()
+        assert [d["data"] for d in datasets["served"]][:2] == ["Price, Quote", "Outcome"]
+        assert [d["arrives"] for d in datasets["served"]][:2] == ["pull, stream", "push"]
         assert datasets["served"][1]["default_terms"].startswith("kept"), "outcomes are kept"
-        assert all(d["day"] == "Etc/UTC, ends 00:00" for d in datasets["served"])
+        assert all(d["day"] == "Etc/UTC, ends 00:00" for d in datasets["served"][:2])
         assert datasets["served"][0]["recorded"] > 0 and datasets["served"][0]["last_recorded"]
         assert datasets["served"][1]["recorded"] == 0, "no contract it serves is determined"
         assert datasets["standing_wants"] == 1
@@ -2406,11 +2467,9 @@ class EventContractsChecks(_PageChecks):
         served = client.call_tool("read_datasets", level="admin").data["served"]
         assert served[0]["licensed"] is False
         assert "Not licensed yet" in client.get("/datasets", "admin").text
-        feed.licensed = frozenset(
-            {feed.dataset(event_contracts.LIVE), feed.dataset(event_contracts.OUTCOMES)}
-        )
+        feed.licensed = frozenset(self.datasets())
         served = client.call_tool("read_datasets", level="admin").data["served"]
-        assert [d["licensed"] for d in served] == [True, True]
+        assert [d["licensed"] for d in served] == [True] * len(self.datasets())
         shown = client.get("/datasets", "admin").text
         assert "Not licensed yet" not in shown and "Licensed" in shown
 
@@ -2426,7 +2485,7 @@ class EventContractsChecks(_PageChecks):
         asyncio.run(resolved())
         tool = PageClient(self.venue.page.pages).call_tool("read_datasets", level="admin")
         served = tool.data["served"]
-        assert [d["recorded"] for d in served] == [live, 1] and served[1]["last_recorded"]
+        assert [d["recorded"] for d in served][:2] == [live, 1] and served[1]["last_recorded"]
 
     def test_the_roles_figures_in_its_order(self) -> None:
         self.ran()
@@ -2434,5 +2493,78 @@ class EventContractsChecks(_PageChecks):
         assert [f.label for f in figures] == [
             "Connection", "Entitled at the vendor", "Stream", "Last recorded",
         ]  # fmt: skip
-        assert [f.value for f in figures[:3]] == ["Sample data", "2 of 2 datasets",
-                                                 "Does not stream"]  # fmt: skip
+        served = len(self.datasets())
+        assert [f.value for f in figures[:3]] == [
+            "Sample data", f"{served} of {served} datasets", "Does not stream",
+        ]  # fmt: skip
+
+    # ── Its datasets, and bars where it keeps them (0.33.1) ─────────────
+
+    def test_it_serves_live_and_outcomes_and_bars_only_where_it_keeps_them(self) -> None:
+        """Two datasets, `live` and `outcomes`; a third, `bars` of the lake's
+        bar kind, only where its `Market` answers `bars(...)` (ruling 625);
+        never another."""
+        v = self.venue
+        client = PageClient(v.page.pages)
+        served = client.call_tool("read_datasets", level="admin").data["served"]
+        named = [d["dataset"] for d in served]
+        assert named == self.datasets(), (
+            f"an event-contract venue serves {self.datasets()}: live and outcomes, and bars "
+            f"where its Market answers bars(...); it serves {named}"
+        )
+        if self.keeps_bars():
+            declared = v.BARS_DECLARED
+            assert declared.key == event_contracts.BARS
+            assert all(t.startswith(BAR) for t in declared.data_types), declared.data_types
+            assert served[2]["day"].startswith(declared.day_time_zone or "Etc/UTC")
+
+    async def test_bars_are_kept_hourly_and_daily_on_the_declared_day(self) -> None:
+        if not self.keeps_bars():
+            return  # its Market keeps no bars: it serves two datasets
+        v, lake = self.venue, self.lake()
+        feed = self.feed(lake)
+        subject = await lake.held(feed, v.BASE)
+        await feed.record_live([subject], data_type=PRICE)
+        assert await feed.keep_bars(v.BARS_DECLARED, once=True) > 0
+        bars = lake.rows("RecordBars")
+        hours = [b for b in bars if not b.meta.business_date]
+        days = [b for b in bars if b.meta.business_date]
+        assert hours and days, "an hourly and a daily bar of BASE kept"
+        assert all(b.meta.source.dataset == f"{v.VENUE}:bars" for b in bars)
+        assert all(b.meta.row_key.startswith(f"{v.BASE}:") for b in bars)
+        assert all(b.meta.subjects[0].entity_id == subject for b in bars)
+        assert all(b.meta.valid_until_ns <= v.NOW_NS for b in bars), "closed intervals only"
+        assert all(b.meta.valid_until_ns - b.meta.valid_from_ns == 3_600 * 10**9 for b in hours)
+        for row in days:
+            day = date.fromisoformat(row.meta.business_date)
+            assert (row.meta.valid_from_ns, row.meta.valid_until_ns) == (
+                feed.day_starts_ns(day),
+                feed.day_starts_ns(day + timedelta(days=1)),
+            ), "a day's bar spans the session day the plugin declares"
+        payout = feed.contracts.contracts[v.BASE].payout
+        for row in bars:
+            low, high = as_decimal(row.low.amount), as_decimal(row.high.amount)
+            assert 0 <= low <= high and (payout is None or high <= payout)
+        assert await feed.keep_bars(once=True) == 0, "nothing closed since: nothing read again"
+
+    async def test_a_bars_want_is_answered_from_the_venues_history(self) -> None:
+        if not self.keeps_bars():
+            return  # its Market keeps no bars: a want of `bars` is no dataset of its own
+        v, lake = self.venue, self.lake()
+        feed = self.feed(lake)
+        feed.bars_declared = v.BARS_DECLARED
+        subject = await lake.held(feed, v.BASE)
+        day = v.TODAY - timedelta(days=1)
+        key = event_contracts.BARS
+        await hear(lake, feed, wanted(feed, "WNT-B", key, [subject], data_type=BAR, day=day))
+        await hear(lake, feed, wanted(feed, "WNT-P", key, [subject], day=day))
+        await hear(lake, feed, wanted(feed, "WNT-C", key, [subject], data_type=BAR,
+                                      day=v.TODAY + timedelta(days=2)))  # fmt: skip
+        [sent] = lake.on("RecordBars")
+        assert sent.want_id == "WNT-B" and sent.bars
+        assert any(b.meta.business_date == day.isoformat() for b in sent.bars)
+        declined = {(d.want_id, d.reason) for d in lake.on("DeclineWant")}
+        assert declined == {
+            ("WNT-P", ops.UNANSWERED_REASON_NOT_COVERED),
+            ("WNT-C", ops.UNANSWERED_REASON_SOURCE_SILENT),
+        }
