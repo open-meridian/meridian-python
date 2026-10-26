@@ -2,7 +2,7 @@
 
 The Python SDK for building [Open Meridian](https://open-meridian.com) plugins:
 the tools a trader has an AI agent build, and the bots and analytics a
-developer writes. Python 3.11 or newer. This is release 0.33.0; its reference
+developer writes. Python 3.11 or newer. This is release 0.33.1; its reference
 is at [open-meridian.dev](https://open-meridian.dev/api/python-sdk/).
 
 ## Start here
@@ -1960,7 +1960,7 @@ await plugin.receive(observations_wanted=lambda heard: wants.hear(heard, answer)
   raw record names its venue account; a good-till-date order is asked with
   its expiry (`Asked.expire_date`, `.expire_time_ns`).
 
-### Listed options and futures, filings, quality states and latency reported (contract v28; 0.33.0)
+### Listed options and futures, filings, quality states and latency reported (contract v28; 0.33.0 and 0.33.1)
 
 0.33.0 declares contract v28 (`meridian.SCHEMA_VERSION`). Breaking; `meridian
 plugin migrate` rewrites what it can (`to_0_33_0`).
@@ -2042,6 +2042,29 @@ plugin migrate` rewrites what it can (`to_0_33_0`).
   `PAIRS_NOT_PRESENTED`, `EVENT_CONTRACTS_NOT_PRESENTED` and
   `RATES_NOT_PRESENTED` name what each kind never presents, and its
   `feed_delay` maps a plugin's feed delay.
+- **0.33.1, additive** (rulings 624 to 626 and 629): an event-contract
+  venue's bars. A `Market` answering `bars(contract, interval, first_ns,
+  until_ns)` -- each `Candle` of an hour (`HOUR`) or the venue's session
+  day (`DAY`) it states, or builds from its own trades -- publishes a third
+  dataset keyed `bars`, of the lake's bar kind, declared on the venue's
+  session day; `Feed.keep_bars(declared)` keeps each contract served's
+  closed hours and days (first `BARS_FIRST_DAYS` back, none past its close
+  once kept to it) and a want of `bars` is answered from the venue's
+  history. A `Market` without the hook is unchanged, and
+  `EventContractsChecks` refuse any third dataset but `bars`, or `bars`
+  without the hook; a venue keeping bars names `BARS_DECLARED` in its
+  `venue_cases` and presents `a-daily-bar`. The data suite's feed-delay
+  producer stands its want on the quote where the venue's last trade states
+  no time or its live dataset declares no prices, so a plugin's own
+  producer for that comes out. The edge reads a row stating an interval (a
+  bar, a day's close) as saying it of that interval, so the same values
+  over another hour or day are no duplicate.
+
+  ```python
+  feed = event_contracts.Feed(plugin, KalshiMarket(client, "live"), contracts)
+  bars = next(d for d in CATALOGUE if d.key == event_contracts.BARS)  # its day: America/New_York
+  await asyncio.gather(feed.keep_current(), feed.keep_events(), feed.keep_bars(bars))
+  ```
 
 ## Moving a plugin to a new release
 
@@ -2118,6 +2141,7 @@ carries libcst.
 | 0.32.1 to 0.32.2: a data plugin's Connection draws "Sessions" only once a session is measured; the testing `Recorder` answers `RecordRates`; `DatasetLicence` writes `redistribution`, `attribution_required`, `attribution_text`, `copyright_class` and `no_more_restrictive_terms`; `RATES_NOT_PRESENTED` no longer names `records-a-datasets-liveness`, which a plugin recording no liveness adds itself | only the pins move | |
 | 0.32.2 to 0.32.3: a listings feed records its live dataset's liveness (`heard` notes it, `flush` records it once a pass); an event contract's `Resolution.challenge_ends_at_ns` reaches the `Outcome`; `DatasetLicence` writes `not_affiliated_notice`; `rates.Feed.rate` refuses a rate with no convention (an index level takes its compounded rate's) and a subject missed is asked again the same day; the merged Connection draws one group at a time under a tab row. Set the licence fields 0.32.2 and 0.32.3 added only on core 0.1.311 or later | only the pins move; a rate built with no convention now raises, so give it one | |
 | 0.32.3 to 0.33.0: the SDK declares contract v28: `meridian.SubjectRef` only (ruling 599); `Latency.report` sends ReportLatency and the three latency cases are required (518); the ems's actions permitted read (600); listed options' and futures' chains, lifecycle and packages (`roles.chains`, `roles.lifecycle`, `roles.packages`); a signal's derived series, saved scenarios and quality escalated (`roles.signal`); the filings slice (`roles.data.filings`); quality states at the edge (`roles.data.quality`); `DataEligibility`; the suites' v28 cases, marked by `about` (602). Breaking | an `ops.SubjectRef(...)` handed to the SDK into `meridian.SubjectRef(...)`; a base pinned by digest at an older release moved to 0.33.0, its digest dropped (offline) | a heard message's subjects passed to a typed operation: convert them; map each role suite's v28 cases, or name those about what the plugin never presents; map the three latency cases a v27 plugin named not presented; pin the base's digest again |
+| 0.33.0 to 0.33.1: additive, on contract v28: an event-contract `Market` may answer `bars(contract, interval, first_ns, until_ns)` (`Candle`, `HOUR`, `DAY`), its plugin declaring a third dataset keyed `bars` (`meridian.v1.Bar`, on its session day) and running `Feed.keep_bars(declared)`; `EventContractsChecks` accept `bars` where the hook is supplied and refuse any other third dataset; the feed-delay producer stands on the quote where the last trade states no time or no prices are declared (ruling 626); a row stating an interval is no duplicate of the same values over another | only the pins move: no migrate step is needed beyond them | a venue keeping bars declares `bars`, names `BARS_DECLARED` in its `venue_cases` and drops `a-daily-bar` from `NOT_PRESENTED`; a plugin's own feed-delay producer standing on the quote can be removed |
 
 `tests/migrations/` holds the plugins the migrations are recorded for, as
 written and as their migration leaves them, and `make check-migrations` holds
