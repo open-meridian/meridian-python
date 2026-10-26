@@ -274,7 +274,7 @@ REQUEST_SERIES_RECORDS_REQUEST_SERIES_COUNT = Count(least=1, most=500)
 REQUEST_SERIES_RECORDS_REQUEST_NOTE_LENGTH = Length(least=0, most=2000)
 """meridian.v1.RequestSeriesRecordsRequest.note: says why"""
 
-SERIES_WANT_SERIES_KEY_COUNT = Count(least=1, most=2)
+SERIES_WANT_SERIES_KEY_COUNT = Count(least=1, most=1)
 """meridian.v1.SeriesWant.series_key: names the series by its key"""
 
 RESOLVE_COMPANY_REQUEST_IDENTIFIERS_COUNT = Count(least=0, most=4)
@@ -406,7 +406,7 @@ executions"""
 LIST_EXECUTION_COSTS_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=True)
 """meridian.v1.ListExecutionCostsRequest.page_size: bounds a page"""
 
-OBSERVATION_META_SERIES_KEY_COUNT = Count(least=0, most=2)
+OBSERVATION_META_SERIES_KEY_COUNT = Count(least=0, most=1)
 """meridian.v1.ObservationMeta.series_key: keys a chain row by its series
 without minting it (ruling 561)"""
 
@@ -780,6 +780,9 @@ slowly"""
 RECEIVE_REQUEST_SUBJECTS_COUNT = Count(least=0, most=500)
 """meridian.plugin.v1.ReceiveRequest.subjects: names the subjects a plugin
 wants of the conflated rows"""
+
+PLUGIN_CATALOGUE_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=True)
+"""meridian.v1.PluginCatalogueRequest.page_size: bounds a page"""
 
 TOOL_DECLARATION_CHECKED_BY_LENGTH = Length(least=0, most=61)
 """meridian.v1.ToolDeclaration.checked_by: names the read tool that checks an

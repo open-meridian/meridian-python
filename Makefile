@@ -71,7 +71,7 @@ contract-diff:
 # amendments: listed options and futures, the scenario format, filings,
 # quality states and the latency remainder; the v28 cases' `about`, ruling
 # 602), its gen/ and boundaries/ vendored here byte for byte.
-SCHEMA_REV := dcca81b6a36cf1f9c02bb7d1afd7994242f1f1ce
+SCHEMA_REV := b0054ba6cc9ac011338a064beb1d55dafbaca7c9
 SCHEMA_REPO := https://github.com/open-meridian/meridian-schema.git
 SCRATCH     := .schema-scratch
 
