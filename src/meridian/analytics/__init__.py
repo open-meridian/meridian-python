@@ -128,7 +128,8 @@ def measure(
     served = SERVED_VERSIONS.get(definition)
     if served is not None and version > served:
         raise ValueError(
-            f"{definition} v{version} is not served in contract {SCHEMA_VERSION}; up to v{served} is"
+            f"{definition} v{version} is not served in contract {SCHEMA_VERSION};"
+            f" up to v{served} is"
         )
     if definition in EVENT_MEASURES and not event_group:
         raise ValueError(f"{definition} is over an event group, and names none")
