@@ -143,6 +143,32 @@ def test_a_repeat_under_the_same_row_key_is_no_duplicate() -> None:
     assert judged(edge, quote("2", "10", "11"))[0] == ("suspicious", ("duplicate",))
 
 
+def test_the_same_bar_over_another_interval_is_no_duplicate() -> None:
+    """0.33.1: a bar says its values of its interval, so a day's bar equal to
+    its one traded hour's, or the next hour's alike, is no duplicate; the
+    same interval under a new row key still is."""
+    hour = 3_600 * 10**9
+
+    def bar(key: str, start: int, end: int, day: str = "") -> meridian.Bar:
+        return meridian.Bar(
+            meta=meridian.ObservationMeta(
+                row_key=key, subjects=[meridian.SubjectRef(entity_id="INS-1")],
+                valid_from_ns=start, valid_until_ns=end, business_date=day,
+            ),
+            open=usd("0.40"), high=usd("0.45"), low=usd("0.38"), close=usd("0.43"), volume=12,
+        )  # fmt: skip
+
+    edge = EdgeChecks(clock_ns=lambda: NOW)
+    rows = [
+        bar("h1", NOW - 3 * hour, NOW - 2 * hour),
+        bar("h2", NOW - 2 * hour, NOW - hour),
+        bar("d1", NOW - 24 * hour, NOW, "2026-10-09"),
+        bar("d1-again", NOW - 24 * hour, NOW, "2026-10-09"),
+    ]
+    kept = edge.judged("bars", rows)
+    assert [r.meta.quality for r in kept] == [None, None, None, "suspicious"]
+
+
 def test_rows_after_a_gap_stay_suspicious_until_resynced() -> None:
     edge = EdgeChecks(clock_ns=lambda: NOW)
     assert not edge.sequenced("live", 1)

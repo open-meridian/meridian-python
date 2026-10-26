@@ -11,10 +11,12 @@ from __future__ import annotations
 import json
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import UTC, date, datetime, time, timedelta
 from types import SimpleNamespace
 from typing import Any
+from zoneinfo import ZoneInfo
 
+import meridian
 from meridian.roles.data import Endpoint, Limits, Session, day_start, number, pairs
 from meridian.roles.data import event_contracts as ec
 from meridian.roles.data.testing import BITCOIN
@@ -476,3 +478,160 @@ contracts_venue = SimpleNamespace(
         raw_key="responses/2026-10-10/event/FAKEV-EVENT-2.jsonl#0",
     ),
 )
+
+
+# ── An event-contract venue keeping bars (0.33.1) ───────────────────────
+
+#: The made-up venue's session day, as its plugin declares it for `bars`:
+#: New York's, as Kalshi's.
+BARS_ZONE = "America/New_York"
+HOUR = 3_600 * SECOND
+
+
+def ny_day_starts(day: date) -> int:
+    """When New York's `day` starts, in UTC nanoseconds."""
+    return int(datetime.combine(day, time(0), tzinfo=ZoneInfo(BARS_ZONE)).timestamp()) * SECOND
+
+
+def candle(code: str, start_ns: int, end_ns: int, **kw: Any) -> ec.Candle:
+    held: dict[str, Any] = {
+        "open": number("0.40"),
+        "high": number("0.45"),
+        "low": number("0.38"),
+        "close": number("0.43"),
+        "volume": number("120"),
+        "raw_key": f"responses/2026-10-10/candles/{code}.jsonl#{start_ns // SECOND}",
+    }
+    held.update(kw)
+    return ec.Candle(code, start_ns, end_ns, **held)
+
+
+class BarsMarket(ContractsMarket):
+    """The made-up venue answering `bars`: BASE-1 traded every sixth UTC hour
+    and every New York day; `asked` keeps each question."""
+
+    def __init__(self, now_ns: int = NOW_NS, directory: Any = None) -> None:
+        super().__init__(now_ns, directory)
+        self.asked: list[tuple[str, str, int, int]] = []
+
+    def hours(self, code: str, first_ns: int, until_ns: int) -> list[ec.Candle]:
+        start = first_ns + (-first_ns) % HOUR
+        return [
+            candle(code, at, at + HOUR)
+            for at in range(start, until_ns - HOUR + 1, HOUR)
+            if (at // HOUR) % 6 == 0
+        ]
+
+    def days(self, code: str, first_ns: int, until_ns: int) -> list[ec.Candle]:
+        day = datetime.fromtimestamp(first_ns / 1e9, tz=UTC).date() - timedelta(days=1)
+        found = []
+        while ny_day_starts(day) < until_ns:
+            start, end = ny_day_starts(day), ny_day_starts(day + timedelta(days=1))
+            if start >= first_ns and end <= until_ns:
+                found.append(candle(code, start, end, volume=number("480")))
+            day += timedelta(days=1)
+        return found
+
+    def bars(
+        self, contract: ec.Contract, interval: str, first_ns: int, until_ns: int
+    ) -> list[ec.Candle]:
+        self.session.health.calls += 1
+        self.asked.append((contract.code, interval, first_ns, until_ns))
+        if contract.code != "BASE-1":
+            return []
+        if interval == ec.HOUR:
+            return self.hours(contract.code, first_ns, until_ns)
+        return self.days(contract.code, first_ns, until_ns)
+
+
+def contracts_catalogue(*keys: str) -> list[meridian.DatasetDeclaration]:
+    """An event-contract venue's catalogue: `live`, `outcomes` and, as
+    named, `bars` on New York's day, or another key (of trades)."""
+    said: dict[str, tuple[list[str], list[str], bool, str]] = {
+        "live": (["meridian.v1.Price", "meridian.v1.Quote"], ["pull", "stream"], False,
+                 "Etc/UTC"),
+        "outcomes": (["meridian.v1.Outcome"], ["push"], True, "Etc/UTC"),
+        "bars": (["meridian.v1.Bar"], ["pull", "push"], True, BARS_ZONE),
+    }  # fmt: skip
+    other = (["meridian.v1.Trade"], ["pull"], True, "Etc/UTC")
+    return [
+        meridian.DatasetDeclaration(
+            key=key,
+            vendor="Fake",
+            data_types=types,
+            modes=modes,
+            cadence=1,
+            history=0,
+            licence_default=meridian.DatasetLicence(kept=kept),
+            day_time_zone=zone,
+            day_end_minute=0,
+        )  # fmt: skip
+        for key in keys
+        for types, modes, kept, zone in [said.get(key, other)]
+    ]
+
+
+def contracts_page(catalogue: list[meridian.DatasetDeclaration]) -> SimpleNamespace:
+    """A page module for the made-up event-contract venue, as a plugin's
+    page.py is: its two pages drawn from the SDK's templates over
+    `catalogue`."""
+    held: dict[str, Any] = {"feed": None}
+    pages = meridian.Pages("Fake Events", kit="0.12.0")
+
+    def datasets_now() -> ec.DatasetsRead:
+        return ec.datasets_read(held["feed"], catalogue, "fakev", "Public", "Yes and no")
+
+    @pages.page(
+        "/", "Connection", levels="admin", answers=ec.ConnectionRead, name="read_connection"
+    )
+    def connection(request: meridian.Request) -> meridian.Response:
+        return pages.answer(
+            "meridian/roles/data/event_contracts/connection.html",
+            ec.connection_read(held["feed"], "Fake Events", "Public"),
+        )
+
+    @pages.page(
+        "/datasets", "Datasets", levels="admin", answers=ec.DatasetsRead, name="read_datasets"
+    )
+    def datasets(request: meridian.Request) -> meridian.Response:
+        return pages.answer(
+            "meridian/roles/data/event_contracts/datasets.html", datasets_now(),
+            venue="Fake Events",
+        )  # fmt: skip
+
+    def hold(feed: ec.Feed) -> None:
+        held["feed"] = feed
+
+    return SimpleNamespace(
+        pages=pages,
+        TITLE="Fake Events",
+        ENTITLED="Public",
+        hold=hold,
+        datasets_now=datasets_now,
+        figures_now=lambda: ec.figures_read(held["feed"], catalogue),
+    )
+
+
+def contracts_venue_with(
+    market: type[ContractsMarket], *keys: str, **names: Any
+) -> SimpleNamespace:
+    """The made-up event-contract venue over `market`, its page serving the
+    datasets `keys` (`live` and `outcomes` by default); a market keeping
+    bars presents `a-daily-bar`."""
+    catalogue = contracts_catalogue(*(keys or ("live", "outcomes")))
+    bars = [d for d in catalogue if d.key == "bars"]
+    not_presented = dict(contracts_venue.NOT_PRESENTED)
+    if callable(getattr(market, "bars", None)):
+        not_presented.pop("a-daily-bar")
+    held = {
+        **vars(contracts_venue),
+        "market": lambda now_ns=NOW_NS, directory=None: market(now_ns, directory),
+        "page": contracts_page(catalogue),
+        "NOT_PRESENTED": not_presented,
+        "BARS_DECLARED": bars[0] if bars else None,
+        "PAYOUT": "1.0000",
+        "CASH": "USD",
+        "RESOLVED": "RESOLVED-1",
+    }
+    held.update(names)
+    return SimpleNamespace(**held)

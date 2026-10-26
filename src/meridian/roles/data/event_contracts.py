@@ -42,6 +42,22 @@ answer first stating it arrived. It answers no want: it is recorded, unasked,
 for each contract a subject the lake asked for is, and each minute for a
 contract past its close until its final stage is recorded.
 
+**Bars, where the plugin keeps them** (0.33.1; rulings 624, 625, 629). A
+`Market` answering `bars(contract, interval, first_ns, until_ns)` -- each
+`Candle` of `interval` (`HOUR`, or `DAY`: the venue's session day) the venue
+states, or the plugin builds from the venue's own trades, starting at or
+after `first_ns` and ending by `until_ns` -- publishes a third dataset,
+`bars`, of the lake's bar kind, declared beside the other two. `keep_bars`
+keeps each contract served: every closed hour and day, first read
+`BARS_FIRST_DAYS` back, then each interval once it has closed, and none past
+the contract's close once its last is kept. A daily bar's business date is
+the session day the plugin declares for `bars` (`day_time_zone`,
+`day_end_minute`: Kalshi's days in New York); a day or an hour the venue
+states otherwise, or a price no price per contract, is left unrecorded and
+counted. A want of `bars` is answered for a day, a range or the latest from
+the venue's history. A plugin whose `Market` keeps none is unchanged: two
+datasets, and the checks refuse a third.
+
 **A contract's identifiers** (0.31.0, ruling 312): its symbol at the venue
 and its ticker -- the venue's own market ticker under the `ticker` scheme,
 the venue's ISO 10383 MIC in source, or its VEN- ID where it has no MIC --
@@ -102,14 +118,17 @@ import time
 from collections import deque
 from collections.abc import Awaitable, Callable, Iterable, Sequence
 from dataclasses import asdict, dataclass, field
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
+from datetime import time as wall_time
 from decimal import Decimal
 from pathlib import Path
 from typing import Any, Protocol
+from zoneinfo import ZoneInfo
 
 from ...errors import NotGranted
 from ...figures import Figure
 from ...operations import (
+    Bar,
     EventContractBound,
     EventGroupMemberBound,
     Money,
@@ -132,13 +151,17 @@ from ._wants import Counts, Heard, Standing, Venue, Wants, asked, same, unconver
 
 __all__ = [
     "Bound",
+    "Candle",
     "Event",
     "EventGroups",
     "flag",
     "stated",
+    "BARS",
+    "DAY",
     "DETERMINED",
     "DISPUTED",
     "FINAL",
+    "HOUR",
     "LIVE",
     "NOT_A_CONTRACT",
     "NOT_READ",
@@ -168,7 +191,20 @@ log = logging.getLogger("meridian.roles.data.event_contracts")
 LIVE = "live"
 #: The dataset of each contract's outcome (contract v23).
 OUTCOMES = "outcomes"
-PRICE, QUOTE = "meridian.v1.Price", "meridian.v1.Quote"
+#: The dataset of each contract's bars, where the plugin keeps them (0.33.1;
+#: rulings 625 and 629).
+BARS = "bars"
+PRICE, QUOTE, BAR = "meridian.v1.Price", "meridian.v1.Quote", "meridian.v1.Bar"
+#: A bar's interval: an hour, or the venue's session day as the plugin
+#: declares it for `bars`.
+HOUR, DAY = "1h", "1d"
+#: How often `keep_bars` reads the intervals closed since its last pass, and
+#: how far back a contract's bars are first read, in seconds and days.
+BARS_EVERY_SECONDS, BARS_FIRST_DAYS = 300.0, 30
+#: How long after an interval closes it is read: the venue's statement of it
+#: settled.
+_BARS_SETTLE_NS = 60 * 1_000_000_000
+_HOUR_NS = 3_600 * 1_000_000_000
 #: The live dataset's pace: each subject at most once a second.
 LIVE_EVERY_SECONDS = 1.0
 #: How soon an event first served is read, and how often each is read again
@@ -366,9 +402,41 @@ class Top:
     unread: tuple[Unread, ...] = ()
 
 
+@dataclass(frozen=True)
+class Candle:
+    """One interval of a contract's trading (0.33.1): an hour, or the venue's
+    session day, as the venue states it or as the plugin built it from the
+    venue's own trades. A price is per contract, in the venue's cash; a value
+    that did not read is None, and kept as sent (`unread`)."""
+
+    code: str
+    #: When it starts and ends, in UTC nanoseconds; the end is exclusive.
+    start_ns: int
+    end_ns: int
+    open: Decimal | None
+    high: Decimal | None
+    low: Decimal | None
+    close: Decimal | None
+    #: The contracts traded in it.
+    volume: Decimal | None
+    #: Its volume-weighted price and trade count, where the venue states
+    #: them, or the plugin counted them, for an interval that traded.
+    vwap: Decimal | None = None
+    trade_count: int | None = None
+    raw_key: str = ""
+    unread: tuple[Unread, ...] = ()
+
+
 class Market(Protocol):
     """A venue's public market data for event contracts, read into the values
-    above by the plugin's own client and conversion."""
+    above by the plugin's own client and conversion.
+
+    Two answers are optional, each found by its name: `event(ref)`, the
+    venue's event (`Event`, or None), which `Feed.keep_events` reports; and
+    (0.33.1) `bars(contract, interval, first_ns, until_ns)`, the contract's
+    `Candle`s of `interval` (`HOUR` or `DAY`) starting at or after
+    `first_ns` and ending by `until_ns`, empty where it traded in none: a
+    `Market` answering it publishes the `bars` dataset (`Feed.keep_bars`)."""
 
     #: The venue's code as a `symbol`'s source (`kalshi`, `polymarket`).
     venue: str
@@ -508,6 +576,9 @@ class ContractMap:
         self.read_at_ns = 0
         #: Each contract's outcome as last recorded, by the venue's code.
         self.outcomes: dict[str, Recorded] = {}
+        #: How far each contract's bars are kept (0.33.1): the end of the
+        #: last interval read, in UTC nanoseconds, by `<code>:<interval>`.
+        self.bars: dict[str, int] = {}
 
     def load(self) -> bool:
         """Read the map kept in storage; whether there was one."""
@@ -520,6 +591,7 @@ class ContractMap:
         self.missing = dict(held.get("missing", {}))
         self.read_at_ns = int(held.get("read_at_ns", 0))
         self.outcomes = {code: Recorded(**o) for code, o in held.get("outcomes", {}).items()}
+        self.bars = {mark: int(end) for mark, end in held.get("bars", {}).items()}
         return True
 
     def save(self) -> None:
@@ -533,6 +605,7 @@ class ContractMap:
             "missing": self.missing,
             "read_at_ns": self.read_at_ns,
             "outcomes": {code: asdict(o) for code, o in sorted(self.outcomes.items())},
+            "bars": dict(sorted(self.bars.items())),
         }
         written = self.path.with_suffix(".tmp")
         written.write_text(json.dumps(body, indent=1, sort_keys=True), encoding="utf-8")
@@ -585,6 +658,10 @@ class Feed:
     unnamed: dict[str, str] = field(default_factory=dict)
     #: Contracts whose stated determination did not read, counted once each.
     unreadable: set[str] = field(default_factory=set)
+    #: The plugin's declaration of its `bars` dataset (a `DatasetDeclaration`,
+    #: 0.33.1), whose day a daily bar's business date is in: given to
+    #: `keep_bars`, or here.
+    bars_declared: Any = None
     wants: Wants = field(init=False)
     #: When each event was last read, and what was last reported of each
     #: (`keep_events`, 0.32.0).
@@ -592,7 +669,13 @@ class Feed:
     _events_reported: dict[str, tuple[object, ...]] = field(default_factory=dict, init=False)
 
     def __post_init__(self) -> None:
-        self.wants = Wants(self.plugin, (LIVE, OUTCOMES), clock_ns=self.clock_ns)
+        keys = (LIVE, OUTCOMES, BARS) if self.keeps_bars else (LIVE, OUTCOMES)
+        self.wants = Wants(self.plugin, keys, clock_ns=self.clock_ns)
+
+    @property
+    def keeps_bars(self) -> bool:
+        """Whether its `Market` answers `bars` (0.33.1): it publishes `bars`."""
+        return callable(getattr(self.market, "bars", None))
 
     # ── What the Datasets page and the suites read ───────────────────────
 
@@ -609,6 +692,12 @@ class Feed:
     def outcome_counts(self) -> Counts:
         """What it sent the outcomes dataset, apart from the live one's."""
         return self.wants.sent_to(OUTCOMES)
+
+    @property
+    def bar_counts(self) -> Counts:
+        """What it sent the bars dataset (0.33.1); a bar it kept unasked is
+        counted here alone, one answering a want overall too."""
+        return self.wants.sent_to(BARS)
 
     @property
     def heard(self) -> deque[Heard]:
@@ -1298,6 +1387,8 @@ class Feed:
         subjects: list[str],
         kinds: tuple[int, ...],
     ) -> dict[str, str]:
+        if key == BARS and self.keeps_bars:
+            return await self._answer_bars(want, subjects)
         if (
             key != LIVE
             or want.data_type not in ("", PRICE, QUOTE)
@@ -1320,8 +1411,9 @@ class Feed:
     # ── Keeping current ──────────────────────────────────────────────────
 
     async def current(self) -> None:
-        """One pass keeping each standing want's subjects current."""
-        for data_type, kinds, subjects in _grouped(self.standing.values()):
+        """One pass keeping each standing want of the live dataset's subjects
+        current (a standing want of `bars` is kept by `keep_bars`)."""
+        for data_type, kinds, subjects in _grouped(self.wants.standing_of(LIVE)):
             await self.record_live(subjects, kinds, data_type=data_type)
 
     async def keep_current(
@@ -1344,6 +1436,252 @@ class Feed:
             except Exception as failed:  # noqa: BLE001 - said, and tried again next time
                 log.warning("keeping current stopped this time: %s", failed)
             await sleep(LIVE_EVERY_SECONDS)
+
+    # ── Bars (0.33.1) ────────────────────────────────────────────────────
+
+    def _day(self) -> tuple[ZoneInfo, int]:
+        """The session day the plugin declares for `bars`: its zone and the
+        minute after local midnight it ends."""
+        declared = self.bars_declared
+        if declared is None:
+            raise ValueError("bars are kept on the day the plugin declares: give keep_bars "
+                             "its bars DatasetDeclaration")  # fmt: skip
+        return ZoneInfo(declared.day_time_zone or "Etc/UTC"), int(declared.day_end_minute)
+
+    def business_date(self, at_ns: int) -> date:
+        """The session day `at_ns` falls in, as the plugin declares it for
+        `bars`: a day ending at local midnight is its own date; one ending
+        later (`day_end_minute`) is the date it ends on."""
+        zone, end = self._day()
+        local = datetime.fromtimestamp(at_ns // NANOS_PER_SECOND, tz=zone) - timedelta(
+            minutes=end
+        )
+        return local.date() + timedelta(days=1 if end else 0)
+
+    def day_starts_ns(self, day: date) -> int:
+        """When the session day `day` starts, in UTC nanoseconds."""
+        zone, end = self._day()
+        first = day - timedelta(days=1 if end else 0)
+        local = datetime.combine(first, wall_time(0), tzinfo=zone) + timedelta(minutes=end)
+        return int(local.timestamp()) * NANOS_PER_SECOND
+
+    def _closed_by(self, interval: str, now_ns: int) -> int:
+        """The end of the last `interval` closed, and settled, by `now_ns`."""
+        settled = now_ns - _BARS_SETTLE_NS
+        if interval == HOUR:
+            return settled - settled % _HOUR_NS
+        return self.day_starts_ns(self.business_date(settled))
+
+    def _first(self, interval: str, closed_ns: int) -> int:
+        """Where a contract's bars of `interval` are first read from:
+        `BARS_FIRST_DAYS` before the last closed, on a day's boundary."""
+        if interval == HOUR:
+            return closed_ns - BARS_FIRST_DAYS * 24 * _HOUR_NS
+        day = self.business_date(closed_ns) - timedelta(days=BARS_FIRST_DAYS)
+        return self.day_starts_ns(day)
+
+    def _spans(self, interval: str, candle: Candle) -> date | bool:
+        """Whether a candle spans one `interval`: for a day, the session day
+        it is (its business date); True for an hour; False for neither."""
+        if interval == HOUR:
+            return candle.end_ns - candle.start_ns == _HOUR_NS
+        day = self.business_date(candle.start_ns)
+        if (candle.start_ns, candle.end_ns) != (
+            self.day_starts_ns(day), self.day_starts_ns(day + timedelta(days=1))
+        ):  # fmt: skip
+            return False
+        return day
+
+    def bar(self, mapped: Mapped, interval: str, candle: Candle) -> Bar | None:
+        """One interval's bar, in the venue's cash; None where it is not one
+        `interval` on the declared day, a value did not read, or a price is
+        no price per contract (`_within`) or out of its range."""
+        spans = self._spans(interval, candle)
+        prices = (candle.open, candle.high, candle.low, candle.close)
+        if spans is False or candle.volume is None or candle.volume < 0:
+            return None
+        if any(p is None or not self._within(p, mapped.contract) for p in prices):
+            return None
+        open_, high, low, close = (p for p in prices if p is not None)
+        if not low <= min(open_, close) <= max(open_, close) <= high:
+            return None
+        vwap = candle.vwap if self._within(candle.vwap, mapped.contract) else None
+        optional = [u for u in candle.unread if u.field.endswith(("vwap", "count"))]
+        return Bar(
+            meta=ObservationMeta(
+                row_key=_bar_key(mapped.contract.code, interval, candle.start_ns),
+                subjects=[SubjectRef(entity_id=mapped.subject)],
+                source=ops.Source(dataset=self.dataset(BARS), venue_id=self.venue.venue_id),
+                valid_from_ns=candle.start_ns,
+                valid_until_ns=candle.end_ns,
+                business_date=spans if isinstance(spans, date) else "",
+                raw=self.plugin.raw_record(candle.raw_key) if candle.raw_key else None,
+                unconverted=self._unconverted(optional),
+            ),
+            open=self._money(open_, mapped),
+            high=self._money(high, mapped),
+            low=self._money(low, mapped),
+            close=self._money(close, mapped),
+            volume=candle.volume,
+            vwap=None if vwap is None else self._money(vwap, mapped),
+            trade_count=candle.trade_count,
+        )
+
+    async def _bars_of(
+        self, mapped: Mapped, interval: str, first_ns: int, until_ns: int
+    ) -> list[Bar] | None:
+        """A contract's closed bars of `interval` from `first_ns` to
+        `until_ns`, as the venue states them; a candle not read as a bar
+        counted on the bars dataset as not read. None where the venue did
+        not answer, so the interval is asked again."""
+        market: Any = self.market
+        read = await self._asked(market.bars, mapped.contract, interval, first_ns, until_ns)
+        if read is None:
+            return None
+        rows: list[Bar] = []
+        for candle in read:
+            if candle.start_ns < first_ns or candle.end_ns > until_ns:
+                continue
+            row = self.bar(mapped, interval, candle)
+            if row is None:
+                if candle.open is not None or candle.unread:
+                    self.bar_counts.unread += 1
+                    log.warning("%s's %s bar from %d did not read as one", candle.code,
+                                interval, candle.start_ns)  # fmt: skip
+                continue
+            rows.append(row)
+        return rows
+
+    async def record_bars(
+        self,
+        subjects: Iterable[str],
+        first_ns: int,
+        until_ns: int,
+        want_id: str = "",
+    ) -> dict[str, str]:
+        """Each subject's hourly and daily bars closed from `first_ns` to
+        `until_ns`, answering `want_id`; what was declined, by subject and
+        reason."""
+        await self.venue_id()
+        subjects = list(subjects)
+        await self.name(subjects)
+        until_ns = min(until_ns, self._closed_by(HOUR, self.clock_ns()))
+        declined: dict[str, str] = {}
+        rows: list[Bar] = []
+        for subject in subjects:
+            mapped = self.contracts.serving(subject)
+            if mapped is None:
+                declined[subject] = "not_covered"
+                continue
+            found: list[Bar] = []
+            for interval in (HOUR, DAY):
+                found += await self._bars_of(mapped, interval, first_ns, until_ns) or []
+            if not found:
+                declined[subject] = "source_silent"
+            rows += found
+        rows.sort(key=_ends)
+        await self.wants.record("bars", rows, BARS, want_id)
+        return declined
+
+    async def _answer_bars(
+        self, want: ops.ObservationsWantedEvent, subjects: list[str]
+    ) -> dict[str, str]:
+        """A want of `bars`: a day's or a range's closed bars from the venue's
+        history, or the latest -- the last session day closed and the hours
+        since it started; a day or range to come declined `source_silent`."""
+        if want.data_type not in ("", BAR) or want.kinds:
+            return {s: "not_covered" for s in subjects}
+        if self.bars_declared is None:
+            # keep_bars not started: the day a bar is dated on not yet known.
+            return {s: "source_silent" for s in subjects}
+        now = self.clock_ns()
+        if want.business_date:
+            day = date.fromisoformat(want.business_date)
+            first, until = self.day_starts_ns(day), self.day_starts_ns(day + timedelta(days=1))
+        elif want.valid_from_ns:
+            first, until = want.valid_from_ns, want.valid_until_ns or now
+        else:
+            today = self.business_date(now)
+            first, until = self.day_starts_ns(today - timedelta(days=1)), now
+        if first >= self._closed_by(HOUR, now):
+            return {s: "source_silent" for s in subjects}
+        if want.standing:
+            self.wants.stand(want, subjects, ())
+        return await self.record_bars(subjects, first, until, want.want_id)
+
+    async def keep_bars(
+        self,
+        declared: Any = None,
+        sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+        *,
+        once: bool = False,
+    ) -> int:
+        """Keep each contract served's bars, until cancelled (0.33.1; ruling
+        625): `declared`, the plugin's `bars` DatasetDeclaration, says the
+        session day a daily bar is dated on. Each pass, every
+        `BARS_EVERY_SECONDS`, reads each contract's hours and days closed
+        since it last kept them -- first `BARS_FIRST_DAYS` back -- and
+        records them unasked, none past the contract's close once kept to
+        it; a failure said, never raised. `once` makes one pass and answers
+        how many bars it sent."""
+        if not self.keeps_bars:
+            raise TypeError(f"{self.market.name}'s Market answers no bars(...)")
+        if declared is not None:
+            if declared.key != BARS or BAR not in declared.data_types:
+                raise ValueError(
+                    f"bars are kept in the dataset {BARS!r} of {BAR}, not {declared.key!r}"
+                )
+            self.bars_declared = declared
+        self._day()
+        sent = 0
+        while True:
+            try:
+                sent += await self._bars_pass()
+            except Exception as failed:  # noqa: BLE001 - said, and read again on the next pass
+                log.warning("bars not kept this time: %s", failed)
+            if once:
+                return sent
+            await sleep(BARS_EVERY_SECONDS)
+
+    async def _bars_pass(self) -> int:
+        now = self.clock_ns()
+        await self.venue_id()
+        sent = 0
+        for mapped in self.contracts.mapped():
+            contract = mapped.contract
+            rows: list[Bar] = []
+            kept: dict[str, int] = {}
+            for interval in (HOUR, DAY):
+                mark = f"{contract.code}:{interval}"
+                closed = self._closed_by(interval, now)
+                since = self.contracts.bars.get(mark) or self._first(interval, closed)
+                if since >= closed or (
+                    contract.closes_at_ns and since >= contract.closes_at_ns
+                ):
+                    continue
+                read = await self._bars_of(mapped, interval, since, closed)
+                if read is not None:  # unanswered: asked again on the next pass
+                    rows += read
+                    kept[mark] = closed
+            if not kept:
+                continue
+            rows.sort(key=_ends)
+            sent += await self.wants.record("bars", rows, BARS, overall=False)
+            self.contracts.bars.update(kept)
+            self.contracts.save()
+        return sent
+
+
+def _ends(row: Bar) -> tuple[int, int]:
+    """When a bar ends, then starts: an hour sent before the day it closes."""
+    meta = row.meta
+    return (0, 0) if meta is None else (meta.valid_until_ns, meta.valid_from_ns)
+
+
+def _bar_key(code: str, interval: str, start_ns: int) -> str:
+    """A bar's row key: the contract, its interval and when it starts, in
+    seconds (`<code>:1h:1791626400`), as a pairs venue keys its day's."""
+    return f"{code}:{interval}:{start_ns // NANOS_PER_SECOND}"[:128]
 
 
 def _offered(bound: Bound | None) -> EventContractBound | None:
@@ -1493,7 +1831,7 @@ def figures_read(feed: Feed | None, catalogue: Sequence[Any]) -> list[Figure]:
     if feed is None:
         return role_figures(connection="Answering", stream="Does not stream")
     said = connection_read(feed, feed.market.name, "")
-    last = max(feed.sent_to(LIVE).last_ns, feed.outcome_counts.last_ns)
+    last = max(feed.sent_to(LIVE).last_ns, feed.outcome_counts.last_ns, feed.bar_counts.last_ns)
     return role_figures(
         connection=connection_figure(said.mode, said.healthy, said.last_error),
         entitled_at_vendor=f"{len(catalogue)} of {len(catalogue)} datasets",
