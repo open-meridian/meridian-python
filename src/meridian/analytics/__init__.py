@@ -59,6 +59,7 @@ from decimal import Decimal
 from fractions import Fraction
 from typing import Any
 
+from ..client import SCHEMA_VERSION
 from ..operations import Job, Money, WhatIf, WhatIfTrade, _decimal, as_decimal
 from ..plugin.v1 import operations_pb2 as ops
 from ..receive import Heard
@@ -127,7 +128,7 @@ def measure(
     served = SERVED_VERSIONS.get(definition)
     if served is not None and version > served:
         raise ValueError(
-            f"{definition} v{version} is not served in contract v27; up to v{served} is"
+            f"{definition} v{version} is not served in contract {SCHEMA_VERSION}; up to v{served} is"
         )
     if definition in EVENT_MEASURES and not event_group:
         raise ValueError(f"{definition} is over an event group, and names none")

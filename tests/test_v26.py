@@ -265,10 +265,10 @@ def test_pnl_v1_is_unrealized_alone_and_v2_adds_realized() -> None:
         ("unrealized", "market_value_less_open_lots_cost"),
     )
     assert analytics.measure("pnl", 2).version == 2
-    with pytest.raises(ValueError, match="pnl v3 is not served in contract v27; up to v2 is$"):
+    with pytest.raises(ValueError, match="pnl v3 is not served in contract v28; up to v2 is$"):
         analytics.measure("pnl", 3)
     with pytest.raises(
-        ValueError, match="exposure v2 is not served in contract v27; up to v1 is$"
+        ValueError, match="exposure v2 is not served in contract v28; up to v1 is$"
     ):
         analytics.measure("exposure", 2)
 
