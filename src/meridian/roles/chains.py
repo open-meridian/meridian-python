@@ -5,7 +5,8 @@ A chain is read under its underlying, never minted: each series is a row
 whose subject is the underlying's `INS-` record and whose `series_key` is
 the series' public key -- the OCC's 21-character Options Symbology
 Initiative symbol (`occ_osi`, W1.26) for an option, or a future's or future
-option's exchange symbol and its MIC, as two identifiers. A series gets an
+option's exchange ticker as one `ticker` identifier carrying its venue's ISO
+10383 MIC in `source` (W1.26, DESIGN28's sixth amendment). A series gets an
 `INS-` record only when the deployment wants it (W6.37), minted by the
 platform, so a data plugin recording a chain's series, quotes and
 statistics never resolves a series (`a-chain-row-is-never-resolved`).
