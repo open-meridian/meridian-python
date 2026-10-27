@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import Callable
 from decimal import Decimal
 from fractions import Fraction
 from pathlib import Path
@@ -357,6 +358,72 @@ async def test_a_job_answered_later_is_waited_for_by_its_finishing() -> None:
     # Caught up once more: nothing new, read after the sequence seen.
     assert await jobs.catch_up(recorder) == 0
     assert recorder.on("ListFinishedJobs")[-1].after_sequence == 4
+
+
+def _paged(job_id: str, pages: int, *, other_job: str = "") -> Callable[[Any], Any]:
+    """ReadJobAnswer as the component pages it (ruling 794): two figures a
+    page, then one not evaluated, the provenance on every page."""
+    provenance = ops.AnswerProvenance(answer_hash="sha256:3c5e", engine_version="0.1.0")
+
+    def answer(params: Any) -> ops.ReadJobAnswerResult:
+        at = int(params.cursor.rsplit("/", 1)[1]) if params.cursor else 0
+        last = at == pages - 1
+        return ops.ReadJobAnswerResult(
+            job_id=other_job if other_job and at == 1 else params.job_id,
+            figures=[
+                ops.Figure(account_id=f"ACC-{at}-{i}", measure=ops.MeasureRef(definition="pnl"))
+                for i in range(2)
+            ],
+            not_evaluated=[ops.NotEvaluated(account_id="ACC-9")] if last else [],
+            provenance=provenance,
+            next_cursor="" if last else f"{params.job_id}/3c5e/{at + 1}",
+        )
+
+    return answer
+
+
+async def test_a_job_answer_is_read_in_pages_and_handed_back_whole() -> None:
+    """Contract v28's amendment (ruling 794): every page read in turn, the
+    whole answer handed back."""
+    recorder = Recorder("reporting-1")
+    recorder.answer("RunJob", lambda _: ops.RunJobResult(answered_inline=False, job_id="JOB-9"))
+    finished = ops.JobFinishedEvent(job_id="JOB-9", sequence=1)
+    recorder.answer(
+        "ListFinishedJobs",
+        lambda params: ops.ListFinishedJobsResult(
+            finished=[finished] if params.after_sequence < 1 else [], sequence=1
+        ),
+    )
+    recorder.answer("ReadJobAnswer", _paged("JOB-9", 3))
+    answer = await analytics.Jobs(poll_seconds=0.01, timeout_seconds=1).run(
+        recorder, analytics.job(analytics.measure("pnl"), accounts=["ACC-1"])
+    )
+    reads = recorder.on("ReadJobAnswer")
+    assert [r.cursor for r in reads] == ["", "JOB-9/3c5e/1", "JOB-9/3c5e/2"]
+    assert all(r.job_id == "JOB-9" for r in reads)
+    assert [f.account_id for f in answer.figures()] == [
+        "ACC-0-0", "ACC-0-1", "ACC-1-0", "ACC-1-1", "ACC-2-0", "ACC-2-1",
+    ]  # fmt: skip
+    assert [u.account_id for u in answer.message.not_evaluated] == ["ACC-9"]
+    assert answer.message.provenance.answer_hash == "sha256:3c5e"
+    assert not answer.message.next_cursor
+
+
+async def test_a_page_naming_another_job_is_refused_never_joined() -> None:
+    recorder = Recorder("reporting-1")
+    recorder.answer("RunJob", lambda _: ops.RunJobResult(answered_inline=False, job_id="JOB-9"))
+    finished = ops.JobFinishedEvent(job_id="JOB-9", sequence=1)
+    recorder.answer(
+        "ListFinishedJobs",
+        lambda params: ops.ListFinishedJobsResult(
+            finished=[finished] if params.after_sequence < 1 else [], sequence=1
+        ),
+    )
+    recorder.answer("ReadJobAnswer", _paged("JOB-9", 3, other_job="JOB-8"))
+    with pytest.raises(ValueError, match="another job or provenance"):
+        await analytics.Jobs(poll_seconds=0.01, timeout_seconds=1).run(
+            recorder, analytics.job(analytics.measure("pnl"), accounts=["ACC-1"])
+        )
 
 
 async def test_a_job_answered_inline_is_not_waited_for() -> None:

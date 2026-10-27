@@ -43,8 +43,10 @@ evaluated is listed with why, never as a zero.
 **Waiting for one answered later** (`Jobs`): a job the component answers
 later finishes on `job_finished`, heard by the instance that ran it alone,
 and caught up by sequence (`list_finished_jobs`) after a loss; its answer is
-read by its ID (`read_job_answer`) while the component still caches it, and
-run again when it is not (Q12).
+read by its ID while the component still caches it, and run again when it
+is not (Q12). The component answers it in pages of about 512 KiB (contract
+v28's amendment, ruling 794); `Jobs` reads every page in turn and
+hands back the whole answer, so a plugin never sees a page.
 
 **The reference computations** v26's engine must equal exactly, hashes
 included, are `meridian.analytics.reference` (requirement 36).
@@ -656,7 +658,35 @@ class Jobs:
                     continue
         finally:
             self._waiting.pop(job_id, None)
-        return Answer(await operations.read_job_answer(job_id=job_id))
+        return Answer(await _read_answer(operations, job_id))
+
+
+async def _read_answer(operations: Any, job_id: str) -> ops.ReadJobAnswerResult:
+    """A finished job's whole answer (W12.4), read one page at a time
+    (contract v28's amendment, ruling 794). The component ends a page at about
+    512 KiB, figures first and then what was not evaluated, and gives its
+    provenance on every page. This reads from the first page until a page's
+    `next_cursor` is empty and joins the pages in order. A page naming
+    another job or a different provenance is refused, never joined."""
+    whole = ops.ReadJobAnswerResult()
+    cursor = ""
+    while True:
+        page = await operations.read_job_answer(job_id=job_id, cursor=cursor)
+        if not cursor:
+            whole.job_id = page.job_id
+            whole.provenance.CopyFrom(page.provenance)
+        elif page.job_id != whole.job_id or page.provenance != whole.provenance:
+            raise ValueError(
+                f"a page of {job_id}'s answer names another job or provenance: "
+                "the job is run again"
+            )
+        whole.figures.extend(page.figures)
+        whole.not_evaluated.extend(page.not_evaluated)
+        if not page.next_cursor:
+            return whole
+        if page.next_cursor == cursor:
+            raise ValueError(f"the component answered {job_id}'s page again: a cursor repeats")
+        cursor = page.next_cursor
 
 
 def measures_of(definitions: Iterable[Any]) -> dict[str, Any]:

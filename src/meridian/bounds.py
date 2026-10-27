@@ -55,6 +55,9 @@ magnitude below 10 to this power (decisions/023)."""
 MEASURE_DEFINITION_SCALE_RANGE = Range(least=0, most=18, capped=False)
 """meridian.v1.MeasureDefinition.scale: states the scale values are rounded to"""
 
+READ_JOB_ANSWER_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=True)
+"""meridian.v1.ReadJobAnswerRequest.page_size: bounds a page"""
+
 JOB_CHAINS_COUNT = Count(least=0, most=64)
 """meridian.v1.Job.chains: names chains a job prices (contract v28)"""
 

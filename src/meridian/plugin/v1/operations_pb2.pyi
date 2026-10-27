@@ -4411,22 +4411,28 @@ class ListFinishedJobsResult(_message.Message):
     def __init__(self, finished: _Optional[_Iterable[_Union[JobFinishedEvent, _Mapping]]] = ..., sequence: _Optional[int] = ...) -> None: ...
 
 class ReadJobAnswerParams(_message.Message):
-    __slots__ = ("job_id",)
+    __slots__ = ("job_id", "page_size", "cursor")
     JOB_ID_FIELD_NUMBER: _ClassVar[int]
+    PAGE_SIZE_FIELD_NUMBER: _ClassVar[int]
+    CURSOR_FIELD_NUMBER: _ClassVar[int]
     job_id: str
-    def __init__(self, job_id: _Optional[str] = ...) -> None: ...
+    page_size: int
+    cursor: str
+    def __init__(self, job_id: _Optional[str] = ..., page_size: _Optional[int] = ..., cursor: _Optional[str] = ...) -> None: ...
 
 class ReadJobAnswerResult(_message.Message):
-    __slots__ = ("job_id", "figures", "not_evaluated", "provenance")
+    __slots__ = ("job_id", "figures", "not_evaluated", "provenance", "next_cursor")
     JOB_ID_FIELD_NUMBER: _ClassVar[int]
     FIGURES_FIELD_NUMBER: _ClassVar[int]
     NOT_EVALUATED_FIELD_NUMBER: _ClassVar[int]
     PROVENANCE_FIELD_NUMBER: _ClassVar[int]
+    NEXT_CURSOR_FIELD_NUMBER: _ClassVar[int]
     job_id: str
     figures: _containers.RepeatedCompositeFieldContainer[Figure]
     not_evaluated: _containers.RepeatedCompositeFieldContainer[NotEvaluated]
     provenance: AnswerProvenance
-    def __init__(self, job_id: _Optional[str] = ..., figures: _Optional[_Iterable[_Union[Figure, _Mapping]]] = ..., not_evaluated: _Optional[_Iterable[_Union[NotEvaluated, _Mapping]]] = ..., provenance: _Optional[_Union[AnswerProvenance, _Mapping]] = ...) -> None: ...
+    next_cursor: str
+    def __init__(self, job_id: _Optional[str] = ..., figures: _Optional[_Iterable[_Union[Figure, _Mapping]]] = ..., not_evaluated: _Optional[_Iterable[_Union[NotEvaluated, _Mapping]]] = ..., provenance: _Optional[_Union[AnswerProvenance, _Mapping]] = ..., next_cursor: _Optional[str] = ...) -> None: ...
 
 class ReportEventGroupParams(_message.Message):
     __slots__ = ("venue_id", "venue_event_ref", "title", "member_instrument_ids", "mutually_exclusive", "exhaustive", "series_id", "valid_from_ns", "raw_record", "member_bounds", "acting_for")
@@ -8669,16 +8675,18 @@ class ScenarioRef(_message.Message):
     def __init__(self, row_key: _Optional[str] = ..., dataset: _Optional[str] = ..., version: _Optional[int] = ...) -> None: ...
 
 class JobAnswer(_message.Message):
-    __slots__ = ("job_id", "figures", "not_evaluated", "provenance")
+    __slots__ = ("job_id", "figures", "not_evaluated", "provenance", "next_cursor")
     JOB_ID_FIELD_NUMBER: _ClassVar[int]
     FIGURES_FIELD_NUMBER: _ClassVar[int]
     NOT_EVALUATED_FIELD_NUMBER: _ClassVar[int]
     PROVENANCE_FIELD_NUMBER: _ClassVar[int]
+    NEXT_CURSOR_FIELD_NUMBER: _ClassVar[int]
     job_id: str
     figures: _containers.RepeatedCompositeFieldContainer[Figure]
     not_evaluated: _containers.RepeatedCompositeFieldContainer[NotEvaluated]
     provenance: AnswerProvenance
-    def __init__(self, job_id: _Optional[str] = ..., figures: _Optional[_Iterable[_Union[Figure, _Mapping]]] = ..., not_evaluated: _Optional[_Iterable[_Union[NotEvaluated, _Mapping]]] = ..., provenance: _Optional[_Union[AnswerProvenance, _Mapping]] = ...) -> None: ...
+    next_cursor: str
+    def __init__(self, job_id: _Optional[str] = ..., figures: _Optional[_Iterable[_Union[Figure, _Mapping]]] = ..., not_evaluated: _Optional[_Iterable[_Union[NotEvaluated, _Mapping]]] = ..., provenance: _Optional[_Union[AnswerProvenance, _Mapping]] = ..., next_cursor: _Optional[str] = ...) -> None: ...
 
 class Figure(_message.Message):
     __slots__ = ("measure", "account_id", "breakdown", "scenario_key", "value", "numerator", "denominator", "currency_instrument_id", "computed_as", "oldest_input_source_ns", "series_key")

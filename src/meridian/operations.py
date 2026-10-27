@@ -4922,10 +4922,14 @@ class Operations:
         self,
         *,
         job_id: str = "",
+        page_size: int = 0,
+        cursor: str = "",
     ) -> ops.ReadJobAnswerResult:
-        """W12.4: ReadJobAnswer (preview)."""
+        """W12.4: A finished job's answer, read one page at a time (W12.4) (preview)."""
         params = ops.ReadJobAnswerParams(
             job_id=job_id,
+            page_size=page_size,
+            cursor=cursor,
         )
         return await self._operate(self._operations().ReadJobAnswer, params)
 
