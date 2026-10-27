@@ -118,7 +118,7 @@ DESIGN ?= ../meridian-design
 # without either waiting on the other's push.
 # Core's main after open-meridian/meridian-core#51 (ruling 545): v27's proto/
 # with LicenceList.administrators, conductor-to-store only, which no plugin meets.
-CORE_REV   := fcd3f8df102d28eed62ee69359a6b6e81a5454cf
+CORE_REV   := 0fc1ff0517e033cdb8cacfbfe13f55f61bd2537d
 CORE_PROTO ?= https://github.com/open-meridian/meridian-core.git\#$(CORE_REV):proto
 # And meridian-schema's, which core's import, at the revision vendored here.
 SCHEMA_PROTO ?= https://github.com/open-meridian/meridian-schema.git\#$(SCHEMA_REV):proto
