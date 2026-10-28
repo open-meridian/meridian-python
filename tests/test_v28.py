@@ -106,6 +106,36 @@ async def test_a_chain_read_asks_only_for_what_its_page_shows() -> None:
     )
 
 
+async def test_an_underlyings_expirations_are_one_read() -> None:
+    """Contract v28, amended 2026-10-28 (rulings 856, 858, 859): one
+    ListExpirations, the type and the range sent as asked, each date once
+    with its series count."""
+    recorder = Recorder("signal-1")
+    recorder.answer(
+        "ListExpirations",
+        lambda _: ops.ListExpirationsResult(
+            expirations=[
+                ops.Expiration(expiration_date="2026-11-20", series_count=212),
+                ops.Expiration(expiration_date="2026-12-18", series_count=188),
+            ]
+        ),
+    )
+    found = await chains.read_expirations(recorder, "INS-AAPL", "2026-11-01", date(2026, 12, 31))
+    assert [(e.expiration_date, e.series_count) for e in found] == [
+        ("2026-11-20", 212),
+        ("2026-12-18", 188),
+    ]
+    asked = recorder.on("ListExpirations")
+    assert len(asked) == 1
+    assert asked[0].underlying_id == "INS-AAPL"
+    assert asked[0].instrument_type == ops.INSTRUMENT_TYPE_LISTED_OPTION
+    assert (asked[0].expiration_from, asked[0].expiration_to) == ("2026-11-01", "2026-12-31")
+    await chains.read_expirations(recorder, "INS-ES", instrument_type="future")
+    every = recorder.on("ListExpirations")[1]
+    assert every.instrument_type == ops.INSTRUMENT_TYPE_FUTURE
+    assert (every.expiration_from, every.expiration_to) == ("", "")
+
+
 # ── Packages ─────────────────────────────────────────────────────────────
 
 

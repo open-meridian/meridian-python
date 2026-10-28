@@ -5700,6 +5700,23 @@ class Operations:
         )
         return await self._operate(self._operations().ReadStaleReferenceActionsPermitted, params)
 
+    async def list_expirations(
+        self,
+        *,
+        underlying_id: str = "",
+        instrument_type: ops.InstrumentType | str | None = None,
+        expiration_from: date | str = "",
+        expiration_to: date | str = "",
+    ) -> ops.ListExpirationsResult:
+        """W10.6: Contract v28, amended 2026-10-28 (W10.6): ListExpirations's request (preview)."""
+        params = ops.ListExpirationsParams(
+            underlying_id=underlying_id,
+            instrument_type=_enum(ops.InstrumentType, instrument_type, "instrument_type"),
+            expiration_from=_date(expiration_from, "expiration_from"),
+            expiration_to=_date(expiration_to, "expiration_to"),
+        )
+        return await self._operate(self._operations().ListExpirations, params)
+
     async def receive(
         self,
         *,

@@ -23,7 +23,9 @@ statistics never resolves a series (`a-chain-row-is-never-resolved`).
   key on the envelope (`series_meta`).
 
 **A reader** (`portfolio`, `signal`, `reporting`, and the `oms` and `ems`
-for an order's leg) reads an underlying's series for an expiration range
+for an order's leg) reads an underlying's expirations (`read_expirations`,
+`ListExpirations`: each date once with its series count, from the lake's
+listing alone), its series for an expiration range
 (`read_chain`, `ListSeries`) and its chain's open interest for a trading
 date (`read_open_interest`, `ListStatistics` with `all_series`), asking only
 for what its page shows (contract v28, amended 2026-10-28; ruling 821): the
@@ -212,6 +214,33 @@ def statistic(
 
 
 # ── Reading a chain ──────────────────────────────────────────────────────
+
+
+async def read_expirations(
+    plugin: Any,
+    underlying_id: str,
+    expiration_from: date | str = "",
+    expiration_to: date | str = "",
+    *,
+    instrument_type: str = "listed_option",
+) -> list[ops.Expiration]:
+    """An underlying's expirations of a listed type, in date order, each with
+    how many series the lake's listing holds expiring then (`series_count`):
+    within the range where either end is named, every expiration where none
+    is (contract v28, amended 2026-10-28; rulings 856, 858 and 859).
+
+    One call, answered from the listing without reading a series: a page
+    chooses its expiration with this, then reads only that expiration's
+    series (`read_chain`), never every series to keep each date once. A
+    reader not entitled to the chain's dataset is named in the answer's
+    `unanswered`; `plugin.list_expirations` returns the whole answer."""
+    answer = await plugin.list_expirations(
+        underlying_id=underlying_id,
+        instrument_type=instrument_type,
+        expiration_from=expiration_from,
+        expiration_to=expiration_to,
+    )
+    return list(answer.expirations)
 
 
 async def read_chain(
