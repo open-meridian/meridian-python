@@ -326,14 +326,22 @@ from meridian.roles import chains
 day = "2026-11-20"
 underlying = meridian.SubjectRef(entity_id=underlying_id)
 series = await chains.read_chain(
-    plugin, underlying_id, day,
+    plugin,
+    underlying_id,
+    day,
     paths=["put_or_call", "strike_price", "expiration_date"],
 )
 quotes = await plugin.list_quotes(
-    subjects=[underlying], all_series=True,
-    expiration_from=day, expiration_to=day,
-    fields=["meridian.v1.Quote.bid", "meridian.v1.Quote.ask",
-            "meridian.v1.Quote.bid_quantity", "meridian.v1.Quote.ask_quantity"],
+    subjects=[underlying],
+    all_series=True,
+    expiration_from=day,
+    expiration_to=day,
+    fields=[
+        "meridian.v1.Quote.bid",
+        "meridian.v1.Quote.ask",
+        "meridian.v1.Quote.bid_quantity",
+        "meridian.v1.Quote.ask_quantity",
+    ],
     page_size=500,
 )
 ```
