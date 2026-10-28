@@ -2,7 +2,7 @@
 
 The Python SDK for building [Open Meridian](https://open-meridian.com) plugins:
 the tools a trader has an AI agent build, and the bots and analytics a
-developer writes. Python 3.11 or newer. This is release 0.33.1; its reference
+developer writes. Python 3.11 or newer. This is release 0.33.2; its reference
 is at [open-meridian.dev](https://open-meridian.dev/api/python-sdk/).
 
 ## Start here
@@ -1960,7 +1960,7 @@ await plugin.receive(observations_wanted=lambda heard: wants.hear(heard, answer)
   raw record names its venue account; a good-till-date order is asked with
   its expiry (`Asked.expire_date`, `.expire_time_ns`).
 
-### Listed options and futures, filings, quality states and latency reported (contract v28; 0.33.0 and 0.33.1)
+### Listed options and futures, filings, quality states and latency reported (contract v28; 0.33.0 to 0.33.2)
 
 0.33.0 declares contract v28 (`meridian.SCHEMA_VERSION`). Breaking; `meridian
 plugin migrate` rewrites what it can (`to_0_33_0`).
@@ -2064,6 +2064,20 @@ plugin migrate` rewrites what it can (`to_0_33_0`).
   feed = event_contracts.Feed(plugin, KalshiMarket(client, "live"), contracts)
   bars = next(d for d in CATALOGUE if d.key == event_contracts.BARS)  # its day: America/New_York
   await asyncio.gather(feed.keep_current(), feed.keep_events(), feed.keep_bars(bars))
+  ```
+- **0.33.2, additive** (rulings 794, 821 and 833 to 838): reads ask for what
+  a page shows. `chains.read_chain` takes `paths`, the template paths a page
+  draws, and asks no page size, so the lake fills each page;
+  `chains.read_open_interest` takes `expiration_from`, `expiration_to` and
+  `fields`; the typed `list_quotes`, `list_trades` and `list_statistics`
+  take an expiration window (with `all_series`) and `fields`, and
+  `list_series` takes `paths`. A field not asked comes back unset. A job's
+  answer larger than one page is read page by page inside `Jobs.wait`, which
+  still hands back the whole answer. Every template's AGENTS.md gains
+  "Reading data: ask for what a page shows".
+
+  ```python
+  series = await chains.read_chain(plugin, underlying, expiration, paths=["put_or_call", "strike_price"])
   ```
 
 ## Moving a plugin to a new release

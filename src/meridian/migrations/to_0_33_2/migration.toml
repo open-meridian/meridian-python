@@ -1,0 +1,17 @@
+# open-meridian 0.33.1 to 0.33.2: additive, on contract v28 (rulings 794, 821
+# and 833 to 838): nothing a plugin calls changed shape, so only the pins move.
+from = "0.33.1"
+to = "0.33.2"
+summary = """
+Additive, on contract v28. Reads ask for what a page shows: chains.read_chain
+takes paths, the template paths a page draws, and asks no page size, so the
+lake fills each page; chains.read_open_interest takes expiration_from,
+expiration_to and fields; the typed list_quotes, list_trades and
+list_statistics take an expiration window (with all_series) and fields, and
+list_series takes paths. A field not asked comes back unset. A job's answer
+larger than one page is read page by page inside Jobs.wait, which still hands
+back the whole answer. Every template's AGENTS.md gains "Reading data: ask for
+what a page shows". Nothing a plugin calls changed shape: `meridian plugin
+migrate` moves the pins and changes no code.
+"""
+breaking = false
