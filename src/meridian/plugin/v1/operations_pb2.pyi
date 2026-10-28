@@ -4213,7 +4213,7 @@ class ListBarsResult(_message.Message):
     def __init__(self, bars: _Optional[_Iterable[_Union[Bar, _Mapping]]] = ..., unanswered: _Optional[_Iterable[_Union[Unanswered, _Mapping]]] = ..., datasets: _Optional[_Iterable[_Union[DatasetRef, _Mapping]]] = ..., watermark: _Optional[_Union[Watermark, _Mapping]] = ..., next_cursor: _Optional[str] = ...) -> None: ...
 
 class ListTradesParams(_message.Message):
-    __slots__ = ("subjects", "sources", "valid_from_ns", "valid_until_ns", "after_watermark", "as_of_ns", "page_size", "cursor", "latest_recorded", "series_keys", "all_series")
+    __slots__ = ("subjects", "sources", "valid_from_ns", "valid_until_ns", "after_watermark", "as_of_ns", "page_size", "cursor", "latest_recorded", "series_keys", "all_series", "expiration_from", "expiration_to", "fields")
     SUBJECTS_FIELD_NUMBER: _ClassVar[int]
     SOURCES_FIELD_NUMBER: _ClassVar[int]
     VALID_FROM_NS_FIELD_NUMBER: _ClassVar[int]
@@ -4225,6 +4225,9 @@ class ListTradesParams(_message.Message):
     LATEST_RECORDED_FIELD_NUMBER: _ClassVar[int]
     SERIES_KEYS_FIELD_NUMBER: _ClassVar[int]
     ALL_SERIES_FIELD_NUMBER: _ClassVar[int]
+    EXPIRATION_FROM_FIELD_NUMBER: _ClassVar[int]
+    EXPIRATION_TO_FIELD_NUMBER: _ClassVar[int]
+    FIELDS_FIELD_NUMBER: _ClassVar[int]
     subjects: _containers.RepeatedCompositeFieldContainer[SubjectRef]
     sources: SourceChoice
     valid_from_ns: int
@@ -4236,7 +4239,10 @@ class ListTradesParams(_message.Message):
     latest_recorded: bool
     series_keys: _containers.RepeatedCompositeFieldContainer[Identifier]
     all_series: bool
-    def __init__(self, subjects: _Optional[_Iterable[_Union[SubjectRef, _Mapping]]] = ..., sources: _Optional[_Union[SourceChoice, _Mapping]] = ..., valid_from_ns: _Optional[int] = ..., valid_until_ns: _Optional[int] = ..., after_watermark: _Optional[_Union[Watermark, _Mapping]] = ..., as_of_ns: _Optional[int] = ..., page_size: _Optional[int] = ..., cursor: _Optional[str] = ..., latest_recorded: bool = ..., series_keys: _Optional[_Iterable[_Union[Identifier, _Mapping]]] = ..., all_series: bool = ...) -> None: ...
+    expiration_from: str
+    expiration_to: str
+    fields: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, subjects: _Optional[_Iterable[_Union[SubjectRef, _Mapping]]] = ..., sources: _Optional[_Union[SourceChoice, _Mapping]] = ..., valid_from_ns: _Optional[int] = ..., valid_until_ns: _Optional[int] = ..., after_watermark: _Optional[_Union[Watermark, _Mapping]] = ..., as_of_ns: _Optional[int] = ..., page_size: _Optional[int] = ..., cursor: _Optional[str] = ..., latest_recorded: bool = ..., series_keys: _Optional[_Iterable[_Union[Identifier, _Mapping]]] = ..., all_series: bool = ..., expiration_from: _Optional[str] = ..., expiration_to: _Optional[str] = ..., fields: _Optional[_Iterable[str]] = ...) -> None: ...
 
 class ListTradesResult(_message.Message):
     __slots__ = ("trades", "unanswered", "datasets", "watermark", "next_cursor")
@@ -4253,7 +4259,7 @@ class ListTradesResult(_message.Message):
     def __init__(self, trades: _Optional[_Iterable[_Union[Trade, _Mapping]]] = ..., unanswered: _Optional[_Iterable[_Union[Unanswered, _Mapping]]] = ..., datasets: _Optional[_Iterable[_Union[DatasetRef, _Mapping]]] = ..., watermark: _Optional[_Union[Watermark, _Mapping]] = ..., next_cursor: _Optional[str] = ...) -> None: ...
 
 class ListQuotesParams(_message.Message):
-    __slots__ = ("subjects", "sources", "at_ns", "valid_from_ns", "valid_until_ns", "as_of_ns", "page_size", "cursor", "series_keys", "all_series")
+    __slots__ = ("subjects", "sources", "at_ns", "valid_from_ns", "valid_until_ns", "as_of_ns", "page_size", "cursor", "series_keys", "all_series", "expiration_from", "expiration_to", "fields")
     SUBJECTS_FIELD_NUMBER: _ClassVar[int]
     SOURCES_FIELD_NUMBER: _ClassVar[int]
     AT_NS_FIELD_NUMBER: _ClassVar[int]
@@ -4264,6 +4270,9 @@ class ListQuotesParams(_message.Message):
     CURSOR_FIELD_NUMBER: _ClassVar[int]
     SERIES_KEYS_FIELD_NUMBER: _ClassVar[int]
     ALL_SERIES_FIELD_NUMBER: _ClassVar[int]
+    EXPIRATION_FROM_FIELD_NUMBER: _ClassVar[int]
+    EXPIRATION_TO_FIELD_NUMBER: _ClassVar[int]
+    FIELDS_FIELD_NUMBER: _ClassVar[int]
     subjects: _containers.RepeatedCompositeFieldContainer[SubjectRef]
     sources: SourceChoice
     at_ns: int
@@ -4274,7 +4283,10 @@ class ListQuotesParams(_message.Message):
     cursor: str
     series_keys: _containers.RepeatedCompositeFieldContainer[Identifier]
     all_series: bool
-    def __init__(self, subjects: _Optional[_Iterable[_Union[SubjectRef, _Mapping]]] = ..., sources: _Optional[_Union[SourceChoice, _Mapping]] = ..., at_ns: _Optional[int] = ..., valid_from_ns: _Optional[int] = ..., valid_until_ns: _Optional[int] = ..., as_of_ns: _Optional[int] = ..., page_size: _Optional[int] = ..., cursor: _Optional[str] = ..., series_keys: _Optional[_Iterable[_Union[Identifier, _Mapping]]] = ..., all_series: bool = ...) -> None: ...
+    expiration_from: str
+    expiration_to: str
+    fields: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, subjects: _Optional[_Iterable[_Union[SubjectRef, _Mapping]]] = ..., sources: _Optional[_Union[SourceChoice, _Mapping]] = ..., at_ns: _Optional[int] = ..., valid_from_ns: _Optional[int] = ..., valid_until_ns: _Optional[int] = ..., as_of_ns: _Optional[int] = ..., page_size: _Optional[int] = ..., cursor: _Optional[str] = ..., series_keys: _Optional[_Iterable[_Union[Identifier, _Mapping]]] = ..., all_series: bool = ..., expiration_from: _Optional[str] = ..., expiration_to: _Optional[str] = ..., fields: _Optional[_Iterable[str]] = ...) -> None: ...
 
 class ListQuotesResult(_message.Message):
     __slots__ = ("quotes", "unanswered", "datasets", "watermark", "next_cursor")
@@ -4779,7 +4791,7 @@ class RecordSeriesResult(_message.Message):
     def __init__(self, recorded: _Optional[int] = ..., restated: _Optional[int] = ..., unchanged: _Optional[int] = ..., watermark: _Optional[_Union[Watermark, _Mapping]] = ...) -> None: ...
 
 class ListSeriesParams(_message.Message):
-    __slots__ = ("subjects", "instrument_type", "expiration_from", "expiration_to", "series_keys", "sources", "as_of_ns", "page_size", "cursor")
+    __slots__ = ("subjects", "instrument_type", "expiration_from", "expiration_to", "series_keys", "sources", "as_of_ns", "page_size", "cursor", "paths")
     SUBJECTS_FIELD_NUMBER: _ClassVar[int]
     INSTRUMENT_TYPE_FIELD_NUMBER: _ClassVar[int]
     EXPIRATION_FROM_FIELD_NUMBER: _ClassVar[int]
@@ -4789,6 +4801,7 @@ class ListSeriesParams(_message.Message):
     AS_OF_NS_FIELD_NUMBER: _ClassVar[int]
     PAGE_SIZE_FIELD_NUMBER: _ClassVar[int]
     CURSOR_FIELD_NUMBER: _ClassVar[int]
+    PATHS_FIELD_NUMBER: _ClassVar[int]
     subjects: _containers.RepeatedCompositeFieldContainer[SubjectRef]
     instrument_type: InstrumentType
     expiration_from: str
@@ -4798,7 +4811,8 @@ class ListSeriesParams(_message.Message):
     as_of_ns: int
     page_size: int
     cursor: str
-    def __init__(self, subjects: _Optional[_Iterable[_Union[SubjectRef, _Mapping]]] = ..., instrument_type: _Optional[_Union[InstrumentType, str]] = ..., expiration_from: _Optional[str] = ..., expiration_to: _Optional[str] = ..., series_keys: _Optional[_Iterable[_Union[Identifier, _Mapping]]] = ..., sources: _Optional[_Union[SourceChoice, _Mapping]] = ..., as_of_ns: _Optional[int] = ..., page_size: _Optional[int] = ..., cursor: _Optional[str] = ...) -> None: ...
+    paths: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, subjects: _Optional[_Iterable[_Union[SubjectRef, _Mapping]]] = ..., instrument_type: _Optional[_Union[InstrumentType, str]] = ..., expiration_from: _Optional[str] = ..., expiration_to: _Optional[str] = ..., series_keys: _Optional[_Iterable[_Union[Identifier, _Mapping]]] = ..., sources: _Optional[_Union[SourceChoice, _Mapping]] = ..., as_of_ns: _Optional[int] = ..., page_size: _Optional[int] = ..., cursor: _Optional[str] = ..., paths: _Optional[_Iterable[str]] = ...) -> None: ...
 
 class ListSeriesResult(_message.Message):
     __slots__ = ("series", "unanswered", "datasets", "watermark", "next_cursor")
@@ -4837,7 +4851,7 @@ class RecordStatisticsResult(_message.Message):
     def __init__(self, recorded: _Optional[int] = ..., restated: _Optional[int] = ..., unchanged: _Optional[int] = ..., watermark: _Optional[_Union[Watermark, _Mapping]] = ...) -> None: ...
 
 class ListStatisticsParams(_message.Message):
-    __slots__ = ("subjects", "kinds", "business_date", "from_date", "to_date", "series_keys", "all_series", "sources", "as_of_ns", "page_size", "cursor")
+    __slots__ = ("subjects", "kinds", "business_date", "from_date", "to_date", "series_keys", "all_series", "sources", "as_of_ns", "page_size", "cursor", "expiration_from", "expiration_to", "fields")
     SUBJECTS_FIELD_NUMBER: _ClassVar[int]
     KINDS_FIELD_NUMBER: _ClassVar[int]
     BUSINESS_DATE_FIELD_NUMBER: _ClassVar[int]
@@ -4849,6 +4863,9 @@ class ListStatisticsParams(_message.Message):
     AS_OF_NS_FIELD_NUMBER: _ClassVar[int]
     PAGE_SIZE_FIELD_NUMBER: _ClassVar[int]
     CURSOR_FIELD_NUMBER: _ClassVar[int]
+    EXPIRATION_FROM_FIELD_NUMBER: _ClassVar[int]
+    EXPIRATION_TO_FIELD_NUMBER: _ClassVar[int]
+    FIELDS_FIELD_NUMBER: _ClassVar[int]
     subjects: _containers.RepeatedCompositeFieldContainer[SubjectRef]
     kinds: _containers.RepeatedScalarFieldContainer[StatisticKind]
     business_date: str
@@ -4860,7 +4877,10 @@ class ListStatisticsParams(_message.Message):
     as_of_ns: int
     page_size: int
     cursor: str
-    def __init__(self, subjects: _Optional[_Iterable[_Union[SubjectRef, _Mapping]]] = ..., kinds: _Optional[_Iterable[_Union[StatisticKind, str]]] = ..., business_date: _Optional[str] = ..., from_date: _Optional[str] = ..., to_date: _Optional[str] = ..., series_keys: _Optional[_Iterable[_Union[Identifier, _Mapping]]] = ..., all_series: bool = ..., sources: _Optional[_Union[SourceChoice, _Mapping]] = ..., as_of_ns: _Optional[int] = ..., page_size: _Optional[int] = ..., cursor: _Optional[str] = ...) -> None: ...
+    expiration_from: str
+    expiration_to: str
+    fields: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, subjects: _Optional[_Iterable[_Union[SubjectRef, _Mapping]]] = ..., kinds: _Optional[_Iterable[_Union[StatisticKind, str]]] = ..., business_date: _Optional[str] = ..., from_date: _Optional[str] = ..., to_date: _Optional[str] = ..., series_keys: _Optional[_Iterable[_Union[Identifier, _Mapping]]] = ..., all_series: bool = ..., sources: _Optional[_Union[SourceChoice, _Mapping]] = ..., as_of_ns: _Optional[int] = ..., page_size: _Optional[int] = ..., cursor: _Optional[str] = ..., expiration_from: _Optional[str] = ..., expiration_to: _Optional[str] = ..., fields: _Optional[_Iterable[str]] = ...) -> None: ...
 
 class ListStatisticsResult(_message.Message):
     __slots__ = ("statistics", "unanswered", "datasets", "watermark", "next_cursor")
@@ -9545,7 +9565,7 @@ class BarsRecordedEvent(_message.Message):
     def __init__(self, bar: _Optional[_Union[Bar, _Mapping]] = ...) -> None: ...
 
 class ObservationsWantedEvent(_message.Message):
-    __slots__ = ("want_id", "dataset", "data_type", "subjects", "kinds", "interval_ns", "business_date", "valid_from_ns", "valid_until_ns", "standing")
+    __slots__ = ("want_id", "dataset", "data_type", "subjects", "kinds", "interval_ns", "business_date", "valid_from_ns", "valid_until_ns", "standing", "expiration_from", "expiration_to", "series_keys", "all_series")
     WANT_ID_FIELD_NUMBER: _ClassVar[int]
     DATASET_FIELD_NUMBER: _ClassVar[int]
     DATA_TYPE_FIELD_NUMBER: _ClassVar[int]
@@ -9556,6 +9576,10 @@ class ObservationsWantedEvent(_message.Message):
     VALID_FROM_NS_FIELD_NUMBER: _ClassVar[int]
     VALID_UNTIL_NS_FIELD_NUMBER: _ClassVar[int]
     STANDING_FIELD_NUMBER: _ClassVar[int]
+    EXPIRATION_FROM_FIELD_NUMBER: _ClassVar[int]
+    EXPIRATION_TO_FIELD_NUMBER: _ClassVar[int]
+    SERIES_KEYS_FIELD_NUMBER: _ClassVar[int]
+    ALL_SERIES_FIELD_NUMBER: _ClassVar[int]
     want_id: str
     dataset: str
     data_type: str
@@ -9566,7 +9590,11 @@ class ObservationsWantedEvent(_message.Message):
     valid_from_ns: int
     valid_until_ns: int
     standing: bool
-    def __init__(self, want_id: _Optional[str] = ..., dataset: _Optional[str] = ..., data_type: _Optional[str] = ..., subjects: _Optional[_Iterable[_Union[SubjectRef, _Mapping]]] = ..., kinds: _Optional[_Iterable[_Union[PriceKind, str]]] = ..., interval_ns: _Optional[int] = ..., business_date: _Optional[str] = ..., valid_from_ns: _Optional[int] = ..., valid_until_ns: _Optional[int] = ..., standing: bool = ...) -> None: ...
+    expiration_from: str
+    expiration_to: str
+    series_keys: _containers.RepeatedCompositeFieldContainer[Identifier]
+    all_series: bool
+    def __init__(self, want_id: _Optional[str] = ..., dataset: _Optional[str] = ..., data_type: _Optional[str] = ..., subjects: _Optional[_Iterable[_Union[SubjectRef, _Mapping]]] = ..., kinds: _Optional[_Iterable[_Union[PriceKind, str]]] = ..., interval_ns: _Optional[int] = ..., business_date: _Optional[str] = ..., valid_from_ns: _Optional[int] = ..., valid_until_ns: _Optional[int] = ..., standing: bool = ..., expiration_from: _Optional[str] = ..., expiration_to: _Optional[str] = ..., series_keys: _Optional[_Iterable[_Union[Identifier, _Mapping]]] = ..., all_series: bool = ...) -> None: ...
 
 class WantWithdrawnEvent(_message.Message):
     __slots__ = ("want_id", "dataset")

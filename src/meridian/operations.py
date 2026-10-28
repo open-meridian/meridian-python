@@ -4774,6 +4774,9 @@ class Operations:
         latest_recorded: bool = False,
         series_keys: Sequence[ops.Identifier] = (),
         all_series: bool = False,
+        expiration_from: date | str = "",
+        expiration_to: date | str = "",
+        fields: Sequence[str] = (),
     ) -> ops.ListTradesResult:
         """W10.6: Trades for subjects (contract v19): a valid-time range, from inclusive to (preview)."""
         params = ops.ListTradesParams(
@@ -4788,6 +4791,9 @@ class Operations:
             latest_recorded=latest_recorded,
             series_keys=list(series_keys),
             all_series=all_series,
+            expiration_from=_date(expiration_from, "expiration_from"),
+            expiration_to=_date(expiration_to, "expiration_to"),
+            fields=list(fields),
         )
         return await self._operate(self._operations().ListTrades, params)
 
@@ -4804,6 +4810,9 @@ class Operations:
         cursor: str = "",
         series_keys: Sequence[ops.Identifier] = (),
         all_series: bool = False,
+        expiration_from: date | str = "",
+        expiration_to: date | str = "",
+        fields: Sequence[str] = (),
     ) -> ops.ListQuotesResult:
         """W10.6: Quotes for subjects (contract v19), at one of: the latest in force at a (preview)."""
         params = ops.ListQuotesParams(
@@ -4817,6 +4826,9 @@ class Operations:
             cursor=cursor,
             series_keys=list(series_keys),
             all_series=all_series,
+            expiration_from=_date(expiration_from, "expiration_from"),
+            expiration_to=_date(expiration_to, "expiration_to"),
+            fields=list(fields),
         )
         return await self._operate(self._operations().ListQuotes, params)
 
@@ -5221,6 +5233,7 @@ class Operations:
         as_of_ns: int = 0,
         page_size: int = 0,
         cursor: str = "",
+        paths: Sequence[str] = (),
     ) -> ops.ListSeriesResult:
         """W10.6: Contract v28 (W10.6): ListSeries's request (preview)."""
         params = ops.ListSeriesParams(
@@ -5233,6 +5246,7 @@ class Operations:
             as_of_ns=as_of_ns,
             page_size=page_size,
             cursor=cursor,
+            paths=list(paths),
         )
         return await self._operate(self._operations().ListSeries, params)
 
@@ -5266,6 +5280,9 @@ class Operations:
         as_of_ns: int = 0,
         page_size: int = 0,
         cursor: str = "",
+        expiration_from: date | str = "",
+        expiration_to: date | str = "",
+        fields: Sequence[str] = (),
     ) -> ops.ListStatisticsResult:
         """W10.6: Contract v28 (W10.6): ListStatistics's request (preview)."""
         params = ops.ListStatisticsParams(
@@ -5280,6 +5297,9 @@ class Operations:
             as_of_ns=as_of_ns,
             page_size=page_size,
             cursor=cursor,
+            expiration_from=_date(expiration_from, "expiration_from"),
+            expiration_to=_date(expiration_to, "expiration_to"),
+            fields=list(fields),
         )
         return await self._operate(self._operations().ListStatistics, params)
 

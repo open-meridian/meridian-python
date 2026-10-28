@@ -71,7 +71,7 @@ contract-diff:
 # amendments: listed options and futures, the scenario format, filings,
 # quality states and the latency remainder; the v28 cases' `about`, ruling
 # 602), its gen/ and boundaries/ vendored here byte for byte.
-SCHEMA_REV := f098564ac4fdc8e53b0eb886a67376d09b4a772a
+SCHEMA_REV := 31c18b549fd3f6da024ecb45cb45247db3943e0b
 SCHEMA_REPO := https://github.com/open-meridian/meridian-schema.git
 SCRATCH     := .schema-scratch
 
@@ -118,7 +118,7 @@ DESIGN ?= ../meridian-design
 # without either waiting on the other's push.
 # Core's main after open-meridian/meridian-core#51 (ruling 545): v27's proto/
 # with LicenceList.administrators, conductor-to-store only, which no plugin meets.
-CORE_REV   := 0fc1ff0517e033cdb8cacfbfe13f55f61bd2537d
+CORE_REV   := c8a698e2d035de642ac53d52dcb96a0fb325c7c6
 CORE_PROTO ?= https://github.com/open-meridian/meridian-core.git\#$(CORE_REV):proto
 # And meridian-schema's, which core's import, at the revision vendored here.
 SCHEMA_PROTO ?= https://github.com/open-meridian/meridian-schema.git\#$(SCHEMA_REV):proto

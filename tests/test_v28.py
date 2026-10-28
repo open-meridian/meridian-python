@@ -73,6 +73,37 @@ async def test_a_chain_is_read_page_by_page() -> None:
     assert len(await chains.read_chain(recorder, "INS-AAPL", "2026-11-20")) == 2
     first = recorder.on("ListSeries")[0]
     assert (first.expiration_from, first.expiration_to) == ("2026-11-20", "2026-11-20")
+    assert list(first.paths) == [] and first.page_size == 0, "every term, the lake's max page"
+
+
+async def test_a_chain_read_asks_only_for_what_its_page_shows() -> None:
+    """Contract v28, amended 2026-10-28 (rulings 821, 833): the window, the
+    terms drawn and the fields shown, each sent as asked."""
+    recorder = Recorder("signal-1")
+    recorder.answer("ListSeries", lambda _: ops.ListSeriesResult(series=[ops.ListedSeries()]))
+    drawn = ["put_or_call", "strike_price", "expiration_date"]
+    await chains.read_chain(recorder, "INS-AAPL", "2026-11-20", paths=drawn)
+    assert list(recorder.on("ListSeries")[0].paths) == drawn
+    recorder.answer("ListStatistics", lambda _: ops.ListStatisticsResult())
+    await chains.read_open_interest(
+        recorder, "INS-AAPL", "2026-10-23", expiration_from="2026-11-20",
+        expiration_to="2026-11-20", fields=["meridian.v1.Statistic.value"],
+    )  # fmt: skip
+    asked = recorder.on("ListStatistics")[0]
+    assert asked.all_series
+    assert (asked.expiration_from, asked.expiration_to) == ("2026-11-20", "2026-11-20")
+    assert list(asked.fields) == ["meridian.v1.Statistic.value"]
+    recorder.answer("ListQuotes", lambda _: ops.ListQuotesResult())
+    await recorder.list_quotes(
+        subjects=[meridian.SubjectRef(entity_id="INS-AAPL")], all_series=True,
+        expiration_from="2026-11-20", expiration_to="2026-11-20",
+        fields=["meridian.v1.Quote.bid", "meridian.v1.Quote.ask"], page_size=500,
+    )  # fmt: skip
+    quotes = recorder.on("ListQuotes")[0]
+    assert (quotes.expiration_from, list(quotes.fields)) == (
+        "2026-11-20",
+        ["meridian.v1.Quote.bid", "meridian.v1.Quote.ask"],
+    )
 
 
 # ── Packages ─────────────────────────────────────────────────────────────
