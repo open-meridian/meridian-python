@@ -358,6 +358,10 @@ LIST_QUOTES_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=True)
 OBSERVATIONS_WANTED_EVENT_SUBJECTS_COUNT = Count(least=1, most=500)
 """meridian.v1.ObservationsWantedEvent.subjects: names the entities wanted"""
 
+OBSERVATIONS_WANTED_EVENT_SERIES_KEYS_COUNT = Count(least=0, most=500)
+"""meridian.v1.ObservationsWantedEvent.series_keys: names the series a chain
+want is of (amended 2026-10-28, 821)"""
+
 DECLINE_WANT_REQUEST_SUBJECTS_COUNT = Count(least=1, most=500)
 """meridian.v1.DeclineWantRequest.subjects: names the subjects declined"""
 
@@ -432,6 +436,10 @@ LIST_SERIES_REQUEST_SERIES_KEYS_COUNT = Count(least=0, most=500)
 LIST_SERIES_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=True)
 """meridian.v1.ListSeriesRequest.page_size: bounds a page"""
 
+LIST_SERIES_REQUEST_PATHS_COUNT = Count(least=0, most=64)
+"""meridian.v1.ListSeriesRequest.paths: asks for only the terms a reader shows
+(amended 2026-10-28, 821)"""
+
 RECORD_STATISTICS_REQUEST_STATISTICS_COUNT = Count(least=1, most=500)
 """meridian.v1.RecordStatisticsRequest.statistics: carries a batch of
 statistics (W10.4)"""
@@ -444,6 +452,10 @@ LIST_STATISTICS_REQUEST_SERIES_KEYS_COUNT = Count(least=0, most=500)
 """meridian.v1.ListStatisticsRequest.series_keys: asks for chain rows by series
 (contract v28)"""
 
+LIST_STATISTICS_REQUEST_FIELDS_COUNT = Count(least=0, most=32)
+"""meridian.v1.ListStatisticsRequest.fields: asks for only the fields a reader
+shows (amended 2026-10-28, 821)"""
+
 LIST_STATISTICS_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=True)
 """meridian.v1.ListStatisticsRequest.page_size: bounds a page"""
 
@@ -451,9 +463,17 @@ LIST_QUOTES_REQUEST_SERIES_KEYS_COUNT = Count(least=0, most=500)
 """meridian.v1.ListQuotesRequest.series_keys: asks for chain rows by series
 (contract v28)"""
 
+LIST_QUOTES_REQUEST_FIELDS_COUNT = Count(least=0, most=32)
+"""meridian.v1.ListQuotesRequest.fields: asks for only the fields a reader
+shows (amended 2026-10-28, 821)"""
+
 LIST_TRADES_REQUEST_SERIES_KEYS_COUNT = Count(least=0, most=500)
 """meridian.v1.ListTradesRequest.series_keys: asks for chain rows by series
 (contract v28)"""
+
+LIST_TRADES_REQUEST_FIELDS_COUNT = Count(least=0, most=32)
+"""meridian.v1.ListTradesRequest.fields: asks for only the fields a reader
+shows (amended 2026-10-28, 821)"""
 
 DERIVED_SERIES_SERIES_LENGTH = Length(least=1, most=64)
 """meridian.v1.DerivedSeries.series: names the plugin's series"""

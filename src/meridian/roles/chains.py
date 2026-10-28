@@ -25,7 +25,13 @@ statistics never resolves a series (`a-chain-row-is-never-resolved`).
 **A reader** (`portfolio`, `signal`, `reporting`, and the `oms` and `ems`
 for an order's leg) reads an underlying's series for an expiration range
 (`read_chain`, `ListSeries`) and its chain's open interest for a trading
-date (`read_open_interest`, `ListStatistics` with `all_series`); and a
+date (`read_open_interest`, `ListStatistics` with `all_series`), asking only
+for what its page shows (contract v28, amended 2026-10-28; ruling 821): the
+expiration window shown, the terms drawn (`paths`) and the fields shown
+(`fields`, dictionary entries such as `meridian.v1.Quote.bid`). A chain's
+quotes are read the same way, `list_quotes(all_series=True,
+expiration_from=..., expiration_to=..., fields=[...])`, never every
+expiration paged and filtered in the plugin; and a
 plugin about to order a series the deployment does not hold asks for it
 (`want_series`, `RequestSeriesRecords` with the cause `order`), which the
 deployment admin's series request rule allows.
@@ -215,9 +221,16 @@ async def read_chain(
     expiration_to: date | str = "",
     *,
     instrument_type: str = "listed_option",
+    paths: Sequence[str] = (),
 ) -> list[ops.ListedSeries]:
     """An underlying's listed series expiring in the range (one expiration
-    when `expiration_to` is left out), every page read."""
+    when `expiration_to` is left out), every page read.
+
+    `paths` names the template paths a page draws (`put_or_call`,
+    `strike_price`, `expiration_date`); none answers every term. No page size
+    is asked, so the lake fills each page to about 512 KiB, the most it
+    answers (rulings 816 and 823): one expiration of a large chain is one
+    page."""
     rows: list[ops.ListedSeries] = []
     cursor = ""
     while True:
@@ -226,6 +239,7 @@ async def read_chain(
             instrument_type=instrument_type,
             expiration_from=expiration_from,
             expiration_to=expiration_to or expiration_from,
+            paths=list(paths),
             cursor=cursor,
         )
         rows.extend(page.series)
@@ -235,10 +249,19 @@ async def read_chain(
 
 
 async def read_open_interest(
-    plugin: Any, underlying_id: str, business_date: date | str = ""
+    plugin: Any,
+    underlying_id: str,
+    business_date: date | str = "",
+    *,
+    expiration_from: date | str = "",
+    expiration_to: date | str = "",
+    fields: Sequence[str] = (),
 ) -> list[ops.Statistic]:
     """The open interest of every series of an underlying's chain for a
-    trading date (the latest where none is named), every page read."""
+    trading date (the latest where none is named), every page read: of the
+    series expiring from `expiration_from` to `expiration_to` where either is
+    named (the lake's listing says which), and only the `fields` named
+    (`meridian.v1.Statistic.value`), every field where none is."""
     rows: list[ops.Statistic] = []
     cursor = ""
     while True:
@@ -247,6 +270,9 @@ async def read_open_interest(
             kinds=["open_interest"],
             business_date=business_date,
             all_series=True,
+            expiration_from=expiration_from,
+            expiration_to=expiration_to,
+            fields=list(fields),
             cursor=cursor,
         )
         rows.extend(page.statistics)
