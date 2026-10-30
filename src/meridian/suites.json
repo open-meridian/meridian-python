@@ -4196,6 +4196,19 @@
           ]
         },
         {
+          "name": "reads-an-underlyings-expirations",
+          "since": "v28",
+          "given": "the plugin needs the expirations an underlying lists, to choose one before reading its series",
+          "expect": [
+            {
+              "row": "ListExpirations",
+              "fields": {
+                "underlying_id": "<set>"
+              }
+            }
+          ]
+        },
+        {
           "name": "reads-the-stale-reference-actions-permitted",
           "since": "v28",
           "given": "the plugin is about to place on a reference price past its ceiling",
@@ -4782,6 +4795,19 @@
                 "subjects": "<set>",
                 "expiration_from": "<set>",
                 "expiration_to": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "reads-an-underlyings-expirations",
+          "since": "v28",
+          "given": "the plugin needs the expirations an underlying lists, to choose one before reading its series",
+          "expect": [
+            {
+              "row": "ListExpirations",
+              "fields": {
+                "underlying_id": "<set>"
               }
             }
           ]
@@ -5684,6 +5710,19 @@
                 "subjects": "<set>",
                 "expiration_from": "<set>",
                 "expiration_to": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "reads-an-underlyings-expirations",
+          "since": "v28",
+          "given": "the plugin needs the expirations an underlying lists, to choose one before reading its series",
+          "expect": [
+            {
+              "row": "ListExpirations",
+              "fields": {
+                "underlying_id": "<set>"
               }
             }
           ]
@@ -7170,6 +7209,19 @@
                 "subjects": "<set>",
                 "expiration_from": "<set>",
                 "expiration_to": "<set>"
+              }
+            }
+          ]
+        },
+        {
+          "name": "reads-an-underlyings-expirations",
+          "since": "v28",
+          "given": "the plugin needs the expirations an underlying lists, to choose one before reading its series",
+          "expect": [
+            {
+              "row": "ListExpirations",
+              "fields": {
+                "underlying_id": "<set>"
               }
             }
           ]
