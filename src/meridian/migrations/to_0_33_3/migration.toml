@@ -1,0 +1,15 @@
+# open-meridian 0.33.2 to 0.33.3: additive, on contract v28 (rulings 856, 859
+# and 860): nothing a plugin calls changed shape, so only the pins move.
+from = "0.33.2"
+to = "0.33.3"
+summary = """
+Additive, on contract v28. chains.read_expirations(plugin, underlying_id,
+expiration_from, expiration_to, instrument_type=...) answers an underlying's
+expirations alone, in date order, each with how many series the lake's listing
+holds expiring then (series_count), from the typed list_expirations; a page
+chooses its expiration with one small read instead of listing every series.
+Every template's AGENTS.md "Reading data" section now does so. Nothing a
+plugin calls changed shape: `meridian plugin migrate` moves the pins and
+changes no code.
+"""
+breaking = false
