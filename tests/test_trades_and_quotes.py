@@ -491,8 +491,9 @@ def test_the_ems_suite_is_carried_with_its_six_cases_and_v22s() -> None:
     # venue-originated fill's accept and DK, and from v24 the two every-role
     # cases and the escape hatch's read; v26 an event group heard and read, the
     # agents' guard read and its five cases, and the lake's bounded query.
-    assert len(held.cases) == 42  # v27: liveness, data age, costs, the RFQ's pick
-    # v28: a series asked for, an underlying's chain, the actions permitted.
+    assert len(held.cases) == 43  # v27: liveness, data age, costs, the RFQ's pick
+    # v28: a series asked for, an underlying's chain, the actions permitted;
+    # amended 2026-10-28, an underlying's expirations (856, 858).
     assert "places-at-a-linked-connectivity-plugin" in [case.name for case in held.cases]
 
 

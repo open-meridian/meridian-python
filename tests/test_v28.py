@@ -120,7 +120,9 @@ async def test_an_underlyings_expirations_are_one_read() -> None:
             ]
         ),
     )
-    found = await chains.read_expirations(recorder, "INS-AAPL", "2026-11-01", date(2026, 12, 31))
+    found = await chains.read_expirations(
+        recorder, "INS-AAPL", "2026-11-01", date(2026, 12, 31)
+    )
     assert [(e.expiration_date, e.series_count) for e in found] == [
         ("2026-11-20", 212),
         ("2026-12-18", 188),
