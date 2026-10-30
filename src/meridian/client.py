@@ -1529,6 +1529,47 @@ class Plugin(Operations):
             _translated("CallAsServiceAccount", failed)
         return reply
 
+    async def subscribe(
+        self,
+        row: str,
+        *,
+        subjects: Sequence[str] = (),
+        series_keys: Sequence[Any] = (),
+        all_series: bool = False,
+        expiration_from: Any = "",
+        expiration_to: Any = "",
+        fields: Sequence[str] = (),
+        linger: float = 30.0,
+    ) -> Any:
+        """A targeted read kept open (W4.3; contract v28, amended 2026-10-30):
+        a `LiveView` of what `row` delivers for the selector -- `subjects`
+        (a lake row's entity IDs, or a book row's accounts, every one in the
+        read scope when none), `series_keys` or `all_series` with an
+        expiration window, and `fields` (dictionary entries) -- kept current
+        by the SDK from deliveries. A page reads it with no bus call, and the
+        plugin keeps no copy of its own (ruling 822).
+
+        The snapshot is read by the row's own read at a watermark, and only
+        deliveries above it are applied; a loss or a broken stream reads it
+        again. Identical selectors are one subscription, shared; `close()`
+        the view when a reader is done, and the subscription is dropped
+        `linger` seconds after its last reader leaves."""
+        from .views import selector, views_of
+
+        self._check_open()
+        return await views_of(self).subscribe(
+            selector(
+                row,
+                subjects=subjects,
+                series_keys=series_keys,
+                all_series=all_series,
+                expiration_from=expiration_from,
+                expiration_to=expiration_to,
+                fields=fields,
+            ),
+            linger,
+        )
+
     async def account_scope(self) -> AsyncIterator[AccountScope]:
         """Its account scope and its links, now and again on every change
         (W4.11): the first at once, so a plugin just started has its links."""
@@ -1835,6 +1876,9 @@ class Plugin(Operations):
             self._heartbeat.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await self._heartbeat
+        views = getattr(self, "_views_kept", None)
+        if views is not None:
+            await views.stop()
         # Best effort. A sidecar already gone is the ordinary case during a
         # shutdown, and failing here would turn a clean stop into a traceback.
         with contextlib.suppress(grpc.aio.AioRpcError):

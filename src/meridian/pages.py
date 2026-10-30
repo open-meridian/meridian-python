@@ -118,6 +118,7 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
+import contextlib
 import contextvars
 import dataclasses
 import datetime as _dt
@@ -129,9 +130,11 @@ import inspect
 import json
 import logging
 import os
+import queue
 import re
 import secrets
 import threading
+import time
 import typing
 import urllib.parse
 from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
@@ -313,6 +316,9 @@ class Response:
     status: int = 200
     content_type: str = "text/html; charset=utf-8"
     headers: tuple[tuple[str, str], ...] = ()
+    #: An answer sent as it is made, in place of `body`: a page's event
+    #: stream (contract v28, amended 2026-10-30; `Pages.live`).
+    stream: Any = None
 
     @property
     def text(self) -> str:
@@ -683,6 +689,67 @@ class Pages:
             ),
             _roles(roles, f"route {path!r}"),
         )
+
+    def live(
+        self,
+        path: str,
+        *,
+        levels: Sequence[str | int] | str | int,
+        roles: Sequence[str] | str = (),
+        why: str = (
+            "a page's live channel, its snapshot and event stream for om-live; "
+            "an agent reads the same view through the page's read tool"
+        ),
+    ) -> Callable[[Callable[[Request], Awaitable[Any]]], Callable[[Request], Awaitable[Any]]]:
+        """A page's live channel (contract v28, amended 2026-10-30;
+        spec/one-data-access-model, step 2), drawn by the kit's `om-live`:
+        the decorated function opens the `LiveView` a request shows
+        (`await plugin.subscribe(...)`), and `GET path` answers its snapshot,
+        `{"sequence", "rows"}`, `GET path/events` its event stream, each
+        event the view's changes over 250 ms, the latest per row key. A
+        view is shared by every page showing the same selector and lingers
+        after the last, so a reload does not churn it.
+
+            @pages.live("/rates/live", levels="read")
+            async def rates(request):
+                return await plugin.subscribe("QuotesRecorded", subjects=pairs)
+        """
+
+        def decorate(
+            open_view: Callable[[Request], Awaitable[Any]],
+        ) -> Callable[[Request], Awaitable[Any]]:
+            async def snapshot(request: Request) -> Response:
+                view = await open_view(request)
+                try:
+                    return Response(
+                        body=json.dumps(view.snapshot(), separators=(",", ":")),
+                        content_type="application/json",
+                    )
+                finally:
+                    await view.close()
+
+            async def events(request: Request) -> Response:
+                view = await open_view(request)
+
+                async def sent() -> Any:
+                    try:
+                        async for part in view.events():
+                            yield part
+                    finally:
+                        await view.close()
+
+                return Response(stream=sent(), content_type="text/event-stream")
+
+            name = getattr(open_view, "__name__", "live")
+            snapshot.__name__ = f"{name}_snapshot"
+            events.__name__ = f"{name}_events"
+            self.route(path, levels=levels, roles=roles, tool=False, why=why)(snapshot)
+            self.route(
+                path.rstrip("/") + "/events", levels=levels, roles=roles, tool=False, why=why
+            )(events)
+            return open_view
+
+        return decorate
 
     def tool(
         self,
@@ -1371,6 +1438,9 @@ def _request(scope: Scope, body: bytes, plugin: Any) -> Request:
 
 
 async def _answer(send: Send, response: Response) -> None:
+    if response.stream is not None:
+        await _answer_streamed(send, response)
+        return
     body = response._bytes()
     others = [(n, v) for n, v in response.headers if n.lower() != "content-length"]
     given = [v for n, v in response.headers if n.lower() == "content-length"]
@@ -1389,6 +1459,29 @@ async def _answer(send: Send, response: Response) -> None:
         }
     )
     await send({"type": "http.response.body", "body": body})
+
+
+async def _answer_streamed(send: Send, response: Response) -> None:
+    """An answer sent as it is made: no length, each part as it comes, until
+    the stream ends or the reader goes."""
+    others = [(n, v) for n, v in response.headers if n.lower() != "content-length"]
+    await send(
+        {
+            "type": "http.response.start",
+            "status": response.status,
+            "headers": [
+                (b"content-type", response.content_type.encode("latin-1")),
+                (b"cache-control", b"no-cache"),
+                *((name.encode("latin-1"), value.encode("latin-1")) for name, value in others),
+            ],
+        }
+    )
+    try:
+        async for part in response.stream:
+            await send({"type": "http.response.body", "body": part, "more_body": True})
+    finally:
+        with contextlib.suppress(Exception):
+            await send({"type": "http.response.body", "body": b"", "more_body": False})
 
 
 def _serve(
@@ -1449,40 +1542,81 @@ def _serve(
                 "client": self.client_address[:2],
                 "server": cast(Any, self.server.server_address)[:2],
             }
-            sent: list[Mapping[str, Any]] = []
+            sent: queue.Queue[Mapping[str, Any]] = queue.Queue()
 
             async def receive() -> dict[str, Any]:
                 return {"type": "http.request", "body": body, "more_body": False}
 
             async def send(message: Any) -> None:
-                sent.append(message)
+                sent.put(message)
 
             async def answer() -> None:
                 await app(scope, receive, send)
 
             running = asyncio.run_coroutine_threadsafe(answer(), loop)
-            try:
-                running.result(timeout=REQUEST_SECONDS)
-            except concurrent.futures.TimeoutError:
-                running.cancel()
-                log.error("%s %s took longer than %ss", self.command, path, REQUEST_SECONDS)
-                sent = []
-            except Exception:
-                log.exception("%s %s failed", self.command, path)
-                sent = []
-            start = next((m for m in sent if m["type"] == "http.response.start"), None)
+            # The answer's start within the request's time; a streamed
+            # answer's parts after it as they come (contract v28, amended
+            # 2026-10-30: a page's event stream).
+            until = time.monotonic() + REQUEST_SECONDS
+            start: Mapping[str, Any] | None = None
+            early: list[Mapping[str, Any]] = []
+            while start is None:
+                try:
+                    message = sent.get(timeout=0.05)
+                except queue.Empty:
+                    if running.done():
+                        failed = running.exception()
+                        if failed is not None:
+                            log.error("%s %s failed: %r", self.command, path, failed)
+                        break
+                    if time.monotonic() > until:
+                        running.cancel()
+                        log.error(
+                            "%s %s took longer than %ss", self.command, path, REQUEST_SECONDS
+                        )
+                        break
+                    continue
+                if message["type"] == "http.response.start":
+                    start = message
+                else:
+                    early.append(message)
             if start is None:
                 self.send_error(500, "The page failed; the plugin's log says why.")
                 return
+            headers = start.get("headers", [])
+            streamed = not any(name.lower() == b"content-length" for name, _ in headers)
             self.send_response(start["status"])
-            for name, value in start.get("headers", []):
+            for name, value in headers:
                 self.send_header(name.decode("latin-1"), value.decode("latin-1"))
+            if streamed:
+                self.close_connection = True
+                self.send_header("Connection", "close")
             self.end_headers()
             if self.command == "HEAD":  # whatever answered it, the headers alone
+                running.cancel()
                 return
-            for message in sent:
-                if message["type"] == "http.response.body":
+            if not streamed:
+                with contextlib.suppress(concurrent.futures.TimeoutError, Exception):
+                    running.result(timeout=max(0.0, until - time.monotonic()))
+            while True:
+                try:
+                    message = early.pop(0) if early else sent.get(timeout=0.5)
+                except queue.Empty:
+                    if running.done() and sent.empty():
+                        return
+                    continue
+                if message["type"] != "http.response.body":
+                    continue
+                try:
                     self.wfile.write(message.get("body", b""))
+                    if streamed:
+                        self.wfile.flush()
+                except OSError:
+                    # The reader went: the stream stops with it.
+                    running.cancel()
+                    return
+                if not message.get("more_body", False):
+                    return
 
         do_GET = _handle  # noqa: N815 - the server's names
         do_HEAD = _handle  # noqa: N815

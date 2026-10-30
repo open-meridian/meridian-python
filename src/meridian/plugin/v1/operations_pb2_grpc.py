@@ -674,6 +674,16 @@ class PluginOperationsStub(object):
                 request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReceiveRequest.SerializeToString,
                 response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.Delivery.FromString,
                 _registered_method=True)
+        self.Subscribe = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/Subscribe',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.SubscribeRequest.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.SubscribeReply.FromString,
+                _registered_method=True)
+        self.Unsubscribe = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/Unsubscribe',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.UnsubscribeRequest.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.UnsubscribeReply.FromString,
+                _registered_method=True)
 
 
 class PluginOperationsServicer(object):
@@ -1575,6 +1585,21 @@ class PluginOperationsServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def Subscribe(self, request, context):
+        """W4.3: a targeted read kept open on the one stream (contract v28,
+        amended 2026-10-30; spec/one-data-access-model, step 2).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def Unsubscribe(self, request, context):
+        """W4.3: a subscription dropped by its subscription_id.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_PluginOperationsServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -2217,6 +2242,16 @@ def add_PluginOperationsServicer_to_server(servicer, server):
                     servicer.Receive,
                     request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReceiveRequest.FromString,
                     response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.Delivery.SerializeToString,
+            ),
+            'Subscribe': grpc.unary_unary_rpc_method_handler(
+                    servicer.Subscribe,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.SubscribeRequest.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.SubscribeReply.SerializeToString,
+            ),
+            'Unsubscribe': grpc.unary_unary_rpc_method_handler(
+                    servicer.Unsubscribe,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.UnsubscribeRequest.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.UnsubscribeReply.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -5675,6 +5710,60 @@ class PluginOperations(object):
             '/meridian.plugin.v1.PluginOperations/Receive',
             meridian_dot_plugin_dot_v1_dot_operations__pb2.ReceiveRequest.SerializeToString,
             meridian_dot_plugin_dot_v1_dot_operations__pb2.Delivery.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def Subscribe(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/Subscribe',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.SubscribeRequest.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.SubscribeReply.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def Unsubscribe(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/Unsubscribe',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.UnsubscribeRequest.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.UnsubscribeReply.FromString,
             options,
             channel_credentials,
             insecure,

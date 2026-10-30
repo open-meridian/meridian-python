@@ -532,6 +532,7 @@ from .roles.data._groups import EventGroups
 # What a plugin at the edge says its storage holds of each kind (contract v16),
 # and how a dataset's rows can arrive (contract v18).
 from .v1.sidecar_pb2 import MoveOutcome, ObservationMode, StoredSpan
+from .views import LiveView
 
 __all__ = [
     "AccessLevel",
@@ -607,6 +608,7 @@ __all__ = [
     "GiveUpRecord",
     "Grants",
     "Heard",
+    "LiveView",
     "Holding",
     "HoldingSide",
     "HoldingsReport",

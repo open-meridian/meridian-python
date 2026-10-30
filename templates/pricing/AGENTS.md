@@ -310,9 +310,8 @@ and slow when the plugin reads everything and filters it.
 - **Never page through a whole chain or list to filter it in the plugin.**
   A wider window, more series or another field is another read.
 - **Keep no copy of platform data in the plugin.** No cache of quotes,
-  chains, listings, book records or engine answers. Read again at the
-  source's cadence. The SDK will keep that copy for you once subscriptions
-  arrive.
+  chains, listings, book records or engine answers. Subscribe instead, and
+  let the SDK keep the copy (below).
 - **Show an "as of" on every figure** (`<om-asof>`): the time the data it
   came from was true.
 - **Draw the page first, then fill in what takes longer.** The first answer
@@ -350,9 +349,47 @@ quotes = await plugin.list_quotes(
 )
 ```
 
-That is three reads, not one per page of every expiration. The model behind
-this, and what comes next (subscriptions, a hot layer, standing analytics),
-is the design's `spec/one-data-access-model.md`.
+That is three reads, not one per page of every expiration.
+
+### Subscribe to what a page shows
+
+A page that ticks, or that is opened again and again, subscribes to what it
+shows rather than reading it on every request. `plugin.subscribe` takes the
+row and the same narrowing as the read -- `subjects`, `series_keys` or
+`all_series` with a window, and `fields` -- and answers a `LiveView`. The
+SDK reads its snapshot once, keeps it current from the deliveries the
+sidecar matches, and reads again on a loss. A page's second request makes
+no bus call.
+
+- **One view per thing shown.** Identical selectors within the plugin are
+  one subscription, shared by every page showing it.
+- **Close what you open.** `await view.close()` when a request is done with
+  it, or `async with`. The subscription lingers 30 seconds after the last
+  reader, so a reload does not churn it.
+- **Tick with `pages.live`.** It serves the view's snapshot and its event
+  stream to the kit's `<om-live>`, the changes conflated to one per row
+  every 250 ms. The page never polls.
+- **Book records too.** `OrderUpdated`, `PositionChanged` and the other
+  records your roles hear keep a view by entity. A page reads the view, not
+  `list_orders` on every request.
+
+```python
+@pages.live("/rates/live", levels="read")
+async def rates(request):
+    return await plugin.subscribe(
+        "QuotesRecorded",
+        subjects=pairs_shown,
+        fields=["meridian.v1.Quote.bid", "meridian.v1.Quote.ask"],
+    )
+```
+
+```html
+<om-live src="rates/live/events" snapshot="rates/live" for="rates"></om-live>
+<om-grid id="rates"></om-grid>
+```
+
+The model behind this, and what comes next (a hot layer, standing
+analytics), is the design's `spec/one-data-access-model.md`.
 
 ## Checking it: `meridian plugin check`
 
