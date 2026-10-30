@@ -304,6 +304,9 @@ and slow when the plugin reads everything and filters it.
     left unset. The envelope always comes back.
   - A listing read names the terms it draws in `paths` (`put_or_call`,
     `strike_price`, `expiration_date`).
+  - A page choosing an expiration reads the underlying's expirations
+    alone (`chains.read_expirations`): each date once with its series
+    count, one call, never every series read to keep each date.
 - **Never page through a whole chain or list to filter it in the plugin.**
   A wider window, more series or another field is another read.
 - **Keep no copy of platform data in the plugin.** No cache of quotes,
@@ -323,7 +326,8 @@ One expiration of a chain, as a Chain page draws it:
 ```python
 from meridian.roles import chains
 
-day = "2026-11-20"
+expirations = await chains.read_expirations(plugin, underlying_id)
+day = expirations[0].expiration_date  # or the one the person picked
 underlying = meridian.SubjectRef(entity_id=underlying_id)
 series = await chains.read_chain(
     plugin,
@@ -346,7 +350,7 @@ quotes = await plugin.list_quotes(
 )
 ```
 
-That is two reads, not one per page of every expiration. The model behind
+That is three reads, not one per page of every expiration. The model behind
 this, and what comes next (subscriptions, a hot layer, standing analytics),
 is the design's `spec/one-data-access-model.md`.
 

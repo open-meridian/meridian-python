@@ -5414,6 +5414,30 @@ class ReadStaleReferenceActionsPermittedResult(_message.Message):
     changed_by: str
     def __init__(self, warn_permitted: bool = ..., changed_at_ns: _Optional[int] = ..., changed_by: _Optional[str] = ...) -> None: ...
 
+class ListExpirationsParams(_message.Message):
+    __slots__ = ("underlying_id", "instrument_type", "expiration_from", "expiration_to")
+    UNDERLYING_ID_FIELD_NUMBER: _ClassVar[int]
+    INSTRUMENT_TYPE_FIELD_NUMBER: _ClassVar[int]
+    EXPIRATION_FROM_FIELD_NUMBER: _ClassVar[int]
+    EXPIRATION_TO_FIELD_NUMBER: _ClassVar[int]
+    underlying_id: str
+    instrument_type: InstrumentType
+    expiration_from: str
+    expiration_to: str
+    def __init__(self, underlying_id: _Optional[str] = ..., instrument_type: _Optional[_Union[InstrumentType, str]] = ..., expiration_from: _Optional[str] = ..., expiration_to: _Optional[str] = ...) -> None: ...
+
+class ListExpirationsResult(_message.Message):
+    __slots__ = ("expirations", "unanswered", "datasets", "watermark")
+    EXPIRATIONS_FIELD_NUMBER: _ClassVar[int]
+    UNANSWERED_FIELD_NUMBER: _ClassVar[int]
+    DATASETS_FIELD_NUMBER: _ClassVar[int]
+    WATERMARK_FIELD_NUMBER: _ClassVar[int]
+    expirations: _containers.RepeatedCompositeFieldContainer[Expiration]
+    unanswered: _containers.RepeatedCompositeFieldContainer[Unanswered]
+    datasets: _containers.RepeatedCompositeFieldContainer[DatasetRef]
+    watermark: Watermark
+    def __init__(self, expirations: _Optional[_Iterable[_Union[Expiration, _Mapping]]] = ..., unanswered: _Optional[_Iterable[_Union[Unanswered, _Mapping]]] = ..., datasets: _Optional[_Iterable[_Union[DatasetRef, _Mapping]]] = ..., watermark: _Optional[_Union[Watermark, _Mapping]] = ...) -> None: ...
+
 class ReceiveRequest(_message.Message):
     __slots__ = ("rows", "subjects")
     ROWS_FIELD_NUMBER: _ClassVar[int]
@@ -9475,6 +9499,14 @@ class QualityAssessment(_message.Message):
     reasons: _containers.RepeatedScalarFieldContainer[QualityReason]
     assessed_by_instance: str
     def __init__(self, dataset: _Optional[str] = ..., row_key: _Optional[str] = ..., version: _Optional[int] = ..., state: _Optional[_Union[QualityState, str]] = ..., reasons: _Optional[_Iterable[_Union[QualityReason, str]]] = ..., assessed_by_instance: _Optional[str] = ...) -> None: ...
+
+class Expiration(_message.Message):
+    __slots__ = ("expiration_date", "series_count")
+    EXPIRATION_DATE_FIELD_NUMBER: _ClassVar[int]
+    SERIES_COUNT_FIELD_NUMBER: _ClassVar[int]
+    expiration_date: str
+    series_count: int
+    def __init__(self, expiration_date: _Optional[str] = ..., series_count: _Optional[int] = ...) -> None: ...
 
 class CustodialPositionUpdatedEvent(_message.Message):
     __slots__ = ("position", "statement_id", "previous_quantity", "journal", "cause")

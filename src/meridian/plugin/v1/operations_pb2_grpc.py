@@ -664,6 +664,11 @@ class PluginOperationsStub(object):
                 request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadStaleReferenceActionsPermittedParams.SerializeToString,
                 response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadStaleReferenceActionsPermittedResult.FromString,
                 _registered_method=True)
+        self.ListExpirations = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ListExpirations',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListExpirationsParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListExpirationsResult.FromString,
+                _registered_method=True)
         self.Receive = channel.unary_stream(
                 '/meridian.plugin.v1.PluginOperations/Receive',
                 request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReceiveRequest.SerializeToString,
@@ -1556,6 +1561,13 @@ class PluginOperationsServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def ListExpirations(self, request, context):
+        """W10.6: platform.lake.query.list-expirations (query; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def Receive(self, request, context):
         """W4.3: every row this plugin's roles hear, within its read scope.
         """
@@ -2195,6 +2207,11 @@ def add_PluginOperationsServicer_to_server(servicer, server):
                     servicer.ReadStaleReferenceActionsPermitted,
                     request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadStaleReferenceActionsPermittedParams.FromString,
                     response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadStaleReferenceActionsPermittedResult.SerializeToString,
+            ),
+            'ListExpirations': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListExpirations,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListExpirationsParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListExpirationsResult.SerializeToString,
             ),
             'Receive': grpc.unary_stream_rpc_method_handler(
                     servicer.Receive,
@@ -5604,6 +5621,33 @@ class PluginOperations(object):
             '/meridian.plugin.v1.PluginOperations/ReadStaleReferenceActionsPermitted',
             meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadStaleReferenceActionsPermittedParams.SerializeToString,
             meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadStaleReferenceActionsPermittedResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListExpirations(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ListExpirations',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListExpirationsParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListExpirationsResult.FromString,
             options,
             channel_credentials,
             insecure,

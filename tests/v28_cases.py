@@ -297,6 +297,10 @@ async def reads_an_underlyings_chain(recorder: Recorder) -> None:
     await chains.read_chain(recorder, AAPL, EXPIRY)
 
 
+async def reads_an_underlyings_expirations(recorder: Recorder) -> None:
+    await chains.read_expirations(recorder, AAPL)
+
+
 async def reads_open_interest_for_a_chain(recorder: Recorder) -> None:
     await chains.read_open_interest(recorder, AAPL, "2026-10-23")
 
@@ -488,6 +492,7 @@ PRODUCERS: dict[str, Producer] = {
     "reads-a-saved-scenario-set": reads_a_saved_scenario_set,
     "asks-for-a-series-it-wants-to-order": asks_for_a_series_it_wants_to_order,
     "reads-an-underlyings-chain": reads_an_underlyings_chain,
+    "reads-an-underlyings-expirations": reads_an_underlyings_expirations,
     "reads-the-stale-reference-actions-permitted": reads_the_stale_reference_actions_permitted,
     "reads-open-interest-for-a-chain": reads_open_interest_for_a_chain,
     "hears-a-statistic-recorded": heard(
