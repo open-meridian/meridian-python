@@ -2,7 +2,7 @@
 
 The Python SDK for building [Open Meridian](https://open-meridian.com) plugins:
 the tools a trader has an AI agent build, and the bots and analytics a
-developer writes. Python 3.11 or newer. This is release 0.33.2; its reference
+developer writes. Python 3.11 or newer. This is release 0.33.3; its reference
 is at [open-meridian.dev](https://open-meridian.dev/api/python-sdk/).
 
 ## Start here
@@ -1960,7 +1960,7 @@ await plugin.receive(observations_wanted=lambda heard: wants.hear(heard, answer)
   raw record names its venue account; a good-till-date order is asked with
   its expiry (`Asked.expire_date`, `.expire_time_ns`).
 
-### Listed options and futures, filings, quality states and latency reported (contract v28; 0.33.0 to 0.33.2)
+### Listed options and futures, filings, quality states and latency reported (contract v28; 0.33.0 to 0.33.3)
 
 0.33.0 declares contract v28 (`meridian.SCHEMA_VERSION`). Breaking; `meridian
 plugin migrate` rewrites what it can (`to_0_33_0`).
@@ -2078,6 +2078,17 @@ plugin migrate` rewrites what it can (`to_0_33_0`).
 
   ```python
   series = await chains.read_chain(plugin, underlying, expiration, paths=["put_or_call", "strike_price"])
+  ```
+- **0.33.3, additive** (rulings 856, 859 and 860): an underlying's
+  expirations alone. `chains.read_expirations(plugin, underlying_id,
+  expiration_from, expiration_to)` answers them in date order, each with
+  `series_count`, from the typed `list_expirations`, so a page chooses its
+  expiration with one small read instead of listing every series. Every
+  template's AGENTS.md "Reading data" section does so.
+
+  ```python
+  expirations = await chains.read_expirations(plugin, underlying)
+  series = await chains.read_chain(plugin, underlying, expirations[0].expiration_date, paths=["strike_price"])
   ```
 
 ## Moving a plugin to a new release
