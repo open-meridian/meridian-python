@@ -574,9 +574,10 @@ def test_the_suites_carry_the_rows_v22_adds() -> None:
     # v27 connectivity's RFQ quote and round trip, and the oms's costs and a
     # block member's allocation instruction.
     # v28 connectivity's expiry and package fill, the oms's series asked for,
-    # an underlying's chain read and its expirations (amended 2026-10-28).
+    # an underlying's chain read and its expirations (amended 2026-10-28),
+    # and a listed series heard (amended 2026-10-30).
     assert len(held["connectivity"].cases) == 39
-    assert len(held["oms"].cases) == 39
+    assert len(held["oms"].cases) == 40
     every = {case.name for each in held.values() for case in each.cases}
     assert set(_V22_NAMES) <= every, "each producer answers a published case"
     for role, each in held.items():
