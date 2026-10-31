@@ -1771,6 +1771,7 @@ class Price:
     kind: ops.PriceKind | str | None = None
     price: Money
     basis: ops.PriceBasis | str | None = None
+    confidence: Decimal | int | None = None
 
 
 def _price(value: Price, name: str) -> ops.Price:
@@ -1782,6 +1783,7 @@ def _price(value: Price, name: str) -> ops.Price:
         kind=_enum(ops.PriceKind, value.kind, f"{name}.kind"),
         price=_money(value.price, f"{name}.price"),
         basis=_enum(ops.PriceBasis, value.basis, f"{name}.basis"),
+        confidence=None if value.confidence is None else _decimal(value.confidence, f"{name}.confidence"),
     )
 
 

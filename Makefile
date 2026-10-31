@@ -71,7 +71,7 @@ contract-diff:
 # amendments: listed options and futures, the scenario format, filings,
 # quality states and the latency remainder; the v28 cases' `about`, ruling
 # 602), its gen/ and boundaries/ vendored here byte for byte.
-SCHEMA_REV := ef69a142984f9867e29a25222e1d91e021f2622b
+SCHEMA_REV := 94c57315b17a8e1819ae6f366d2f6778a40e10f1
 SCHEMA_REPO := https://github.com/open-meridian/meridian-schema.git
 SCRATCH     := .schema-scratch
 
@@ -118,7 +118,7 @@ DESIGN ?= ../meridian-design
 # without either waiting on the other's push.
 # Core's main after open-meridian/meridian-core#75 (data-access step 2,
 # contract 28 amended 2026-10-30): lake.proto's RenewWants and SeriesRecordedEvent.
-CORE_REV   := d3ba6263b7ef0a04f7f814e97a75d459b6c35b04
+CORE_REV   := 93fd4784f8ec1bba15786805cf5d489210e44a23
 CORE_PROTO ?= https://github.com/open-meridian/meridian-core.git\#$(CORE_REV):proto
 # And meridian-schema's, which core's import, at the revision vendored here.
 SCHEMA_PROTO ?= https://github.com/open-meridian/meridian-schema.git\#$(SCHEMA_REV):proto

@@ -190,6 +190,23 @@ and subscribe to comes from the roles `pyproject.toml` declares under
   datasets, never a price: prices are the reading roles'. Hold it to the
   suite: `meridian.suites.run("data", producers)` on synthetic exchanges, each
   case mapped to the plugin's own conversion.
+- **A data plugin says what stands behind its prices.** Declare each
+  dataset's class of source, `DatasetDeclaration(price_source_class=...)`:
+  `traded` for prices of trades done (a venue's last, close or settlement),
+  `firm_quote` for prices someone stands ready to deal at (an executable bid
+  and ask, and the mid between them), `composite` for an aggregate of several
+  contributors' prices, `evaluated` for a pricing service's or a model's
+  evaluation; leave it empty only where the source does not say. A price
+  keeps its real kind -- a composite's is `mid`, an evaluated bond's `bid`,
+  `mid` and `ask` -- never a kind made up for the class. Where the vendor
+  passes on another source's data or serves an aggregate, name it in the
+  terms, `DatasetLicence(underlying_source=...)`, in words: "Pyth's aggregate
+  of its publishers". Where the source states an interval around its price,
+  record it as the source states it, `Price(confidence=...)`, in the price's
+  own unit, never computed, and name `meridian.v1.Price.confidence` among
+  the dataset's `data_types`. A deployment admin sees the class and the
+  underlying source on Data sources; a core earlier than contract 28's
+  amendment of 2026-10-31 refuses a registration setting either.
 - **A data plugin streaming trades and quotes records them as its source states
   them, converted at the edge.** Declare them in a live dataset apart
   (`data_types=["meridian.v1.Trade", "meridian.v1.Quote"]`, `modes=["stream"]`)

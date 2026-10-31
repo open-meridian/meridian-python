@@ -325,6 +325,10 @@ _DATASET_KEY = re.compile(r"[a-z][a-z0-9_]*")
 #: The largest whole number a uint32 field carries.
 _UINT32 = 2**32 - 1
 
+#: What class of source a dataset's prices come from, by its word (contract
+#: 28, amended 2026-10-31, ruling 906).
+_PRICE_SOURCE_CLASSES = ("traded", "firm_quote", "composite", "evaluated")
+
 
 def _entry_named(name: str) -> bool:
     """Whether `name` is a dictionary entry, or a message the dictionary has
@@ -441,7 +445,12 @@ class DatasetLicence:
     takes a declaration setting any of these from core 0.1.311; an earlier
     v27 core refuses its registration. From 0.33.0 (contract v28, rulings
     491 and 597) `eligibility`, who may take the dataset (`DataEligibility`),
-    shown and never enforced."""
+    shown and never enforced. From contract 28 as amended 2026-10-31 (ruling
+    896) `underlying_source`, the source behind the vendor (ruling 387) or,
+    where the vendor serves an aggregate, whose aggregate it is, in words --
+    "Pyth's aggregate of its publishers" -- shown on the Data sources page;
+    empty for none. A core earlier than the amendment's refuses a
+    registration setting it."""
 
     kept: bool = False
     retention_days: int = 0
@@ -457,9 +466,13 @@ class DatasetLicence:
     no_more_restrictive_terms: bool = False
     not_affiliated_notice: str = ""
     eligibility: DataEligibility | None = None
+    underlying_source: str = ""
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "default_fields", tuple(self.default_fields))
+        if not isinstance(self.underlying_source, str):
+            raise ValueError("a licence's underlying_source is text: whose source, in words")
+        object.__setattr__(self, "underlying_source", self.underlying_source.strip())
         for name, prefix, words in (
             ("redistribution", "redistribution_",
              ("not_allowed", "licence_required", "allowed_with_attribution")),
@@ -529,6 +542,7 @@ class DatasetLicence:
             no_more_restrictive_terms=self.no_more_restrictive_terms,
             not_affiliated_notice=self.not_affiliated_notice,
             eligibility=None if self.eligibility is None else self.eligibility._wire(),
+            underlying_source=self.underlying_source,
         )
 
     def _to_json(self) -> dict[str, Any]:
@@ -549,6 +563,9 @@ class DatasetLicence:
             **(
                 {} if self.eligibility is None else {"eligibility": self.eligibility._to_json()}
             ),
+            # Written only where declared, so an upload declaring none reads
+            # as before the amendment.
+            **({"underlying_source": self.underlying_source} if self.underlying_source else {}),
         }
 
 
@@ -574,7 +591,13 @@ class DatasetDeclaration:
     it. `declared_delay_ns` (contract v27, rulings 368, 369 and 382) is how
     far behind real time the vendor serves it, 0 for real time: its
     staleness and edge age are judged against the delay plus the ceiling,
-    one dataset per timeliness."""
+    one dataset per timeliness. `price_source_class` (contract 28, amended
+    2026-10-31, ruling 906) is what class of source its prices come from --
+    `traded`, `firm_quote`, `composite` or `evaluated`, empty for not stated:
+    a price keeps its real kind (a composite's is `mid`), and the class says
+    what stands behind it; whose aggregate a composite is goes in its
+    licence's `underlying_source`. A core earlier than the amendment's
+    refuses a registration setting it."""
 
     key: str
     vendor: str
@@ -589,6 +612,7 @@ class DatasetDeclaration:
     venue_id: str = ""
     calendar_id: str = ""
     declared_delay_ns: int = 0
+    price_source_class: str = ""
 
     def __post_init__(self) -> None:
         from .operations import _enum
@@ -670,6 +694,14 @@ class DatasetDeclaration:
                 f"{at}'s calendar_id {self.calendar_id!r} is no calendar's ID (CAL-): the "
                 "deployment's Calendars name each (list_calendars, read_calendar)"
             )
+        said = str(self.price_source_class or "").strip().lower()
+        said = said.removeprefix("price_source_class_")
+        if said and said not in _PRICE_SOURCE_CLASSES:
+            raise ValueError(
+                f"{at}'s price_source_class {self.price_source_class!r} is one of "
+                f"{', '.join(_PRICE_SOURCE_CLASSES)}, or empty for not stated"
+            )
+        object.__setattr__(self, "price_source_class", said)
 
     def _wire(self) -> sidecar_pb2.DatasetDeclaration:
         return sidecar_pb2.DatasetDeclaration(
@@ -688,6 +720,12 @@ class DatasetDeclaration:
             venue_id=self.venue_id,
             calendar_id=self.calendar_id,
             declared_delay_ns=self.declared_delay_ns,
+            price_source_class=cast(
+                Any,
+                sidecar_pb2.PriceSourceClass.Value(
+                    "PRICE_SOURCE_CLASS_" + (self.price_source_class or "unspecified").upper()
+                ),
+            ),
         )
 
     def _to_json(self) -> dict[str, Any]:
@@ -713,6 +751,13 @@ class DatasetDeclaration:
             "venue_id": self.venue_id,
             "calendar_id": self.calendar_id,
             "declared_delay_ns": self.declared_delay_ns,
+            # Written only where declared, so an upload declaring none reads
+            # as before the amendment.
+            **(
+                {"price_source_class": self.price_source_class}
+                if self.price_source_class
+                else {}
+            ),
         }
 
 
