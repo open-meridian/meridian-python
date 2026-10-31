@@ -19,7 +19,11 @@ of a UTC day: `<kind>/2026-10-09/`, holding that day's answers as one file
 each, and its live answers -- asked as often as once a second -- as a line
 each of one file per call and name, a line added only when the answer
 changed, so a row read from an answer that did not change names the line it
-was first read from and the time it first arrived (`received`).
+was first read from and the time it first arrived (`received`). A line is in
+its file when `keep_line` returns -- written and flushed, as a closed file's
+would be -- so a process that dies loses none it was told was kept; the
+files a stream writes are held open meanwhile, and what is remembered of the
+lines is the current day's and bounded, so a stream's memory stays flat.
 
 Past the kind's window a day's unit is archived, kept or deleted as its
 `<kind>_past_window` setting says, through the SDK's `archive_unit` and
@@ -36,11 +40,12 @@ import json
 import logging
 import re
 import tempfile
+from collections import OrderedDict
 from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, TextIO
 
 from .errors import MeridianError
 from .v1 import sidecar_pb2
@@ -50,6 +55,12 @@ log = logging.getLogger(__name__)
 _UNSAFE = re.compile(r"[^A-Za-z0-9._-]")
 _NANOS_PER_SECOND = 1_000_000_000
 _SECONDS_PER_DAY = 86_400
+#: The day's line files held open for appending at once; one more opened
+#: closes the one written least lately, which is reopened when next written.
+_HELD_OPEN = 128
+#: The live lines whose first arrival is remembered, the latest; any other's
+#: is read from its line.
+_REMEMBERED = 10_000
 
 
 def storage_root(prefix: str = "meridian-raw-") -> Path:
@@ -94,11 +105,18 @@ class RawStore:
         self.root = root
         self.kind = kind
         self._kept = 0
-        self._last: dict[str, str] = {}
+        #: The day the latest live line was kept on; what is remembered below
+        #: is that day's, forgotten when a later day's first line arrives.
+        self._day = ""
+        #: Each file's last line kept: its body and its key.
+        self._last: dict[str, tuple[str, str]] = {}
         #: The lines each day's file holds, counted once: a stream adds many.
         self._lines: dict[str, int] = {}
-        #: When the answer each live line names first arrived.
-        self._first: dict[str, int] = {}
+        #: When the answer each live line names first arrived, the latest
+        #: `_REMEMBERED` of the day.
+        self._first: OrderedDict[str, int] = OrderedDict()
+        #: The files held open for appending, the one written least lately first.
+        self._open: OrderedDict[str, TextIO] = OrderedDict()
 
     def keep(self, call: str, name: str, record: dict[str, Any]) -> str:
         """Keep one answer; its key. A key is never written twice."""
@@ -117,30 +135,91 @@ class RawStore:
     def keep_line(self, call: str, name: str, record: dict[str, Any]) -> str:
         """Keep one live answer as the next line of its day's file for `call`
         and `name`, unless its body is the one kept last for them, which the
-        returned key then names again: `<file>#<line>`."""
+        returned key then names again: `<file>#<line>`. The line is written
+        and flushed before this returns."""
         received = int(record["received_at_ns"])
-        key = f"{self.kind}/{_day_of(received)}/{_safe(call)}/{_safe(name)}.jsonl"
+        day = _day_of(received)
+        if day > self._day:
+            self._forget(before=day)
+            self._day = day
+        key = f"{self.kind}/{day}/{_safe(call)}/{_safe(name)}.jsonl"
         body = str(record.get("body", ""))
         held = self._last.get(key)
-        if held is not None and held.startswith(body + "\0"):
-            return held.split("\0", 1)[1]
-        path = self.root / key
-        path.parent.mkdir(parents=True, exist_ok=True)
+        if held is not None and held[0] == body:
+            return held[1]
         lines = self._lines.get(key)
         if lines is None:
+            path = self.root / key
             lines = sum(1 for _ in path.open(encoding="utf-8")) if path.exists() else 0
-        with path.open("a", encoding="utf-8") as out:
+        out = self._appender(key)
+        try:
             out.write(json.dumps(record, sort_keys=True) + "\n")
+            out.flush()
+        except OSError:
+            self._close(key)
+            raise
         self._lines[key] = lines + 1
         named = f"{key}#{lines}"
-        self._last[key] = body + "\0" + named
+        self._last[key] = (body, named)
         self._first[named] = received
+        if len(self._first) > _REMEMBERED:
+            self._first.popitem(last=False)
         return named
 
     def received(self, ref_key: str, otherwise: int) -> int:
         """When the answer a key names first arrived, for a live line kept by
-        this store; `otherwise` for anything else."""
-        return self._first.get(ref_key, otherwise)
+        this store: remembered, or read from its line; `otherwise` for
+        anything else."""
+        remembered = self._first.get(ref_key)
+        if remembered is not None:
+            return remembered
+        if ref_key.partition("#")[0].endswith(".jsonl"):
+            line = self.get(ref_key)
+            if line is not None and "received_at_ns" in line:
+                return int(line["received_at_ns"])
+        return otherwise
+
+    def _appender(self, key: str) -> TextIO:
+        """The file `key` names, held open for appending: its directory made
+        when it is first opened, the file written least lately closed past
+        `_HELD_OPEN`."""
+        out = self._open.get(key)
+        if out is not None:
+            self._open.move_to_end(key)
+            return out
+        path = self.root / key
+        path.parent.mkdir(parents=True, exist_ok=True)
+        out = path.open("a", encoding="utf-8")
+        self._open[key] = out
+        if len(self._open) > _HELD_OPEN:
+            self._open.popitem(last=False)[1].close()
+        return out
+
+    def _close(self, key: str) -> None:
+        out = self._open.pop(key, None)
+        if out is not None:
+            out.close()
+
+    def _forget(self, before: str) -> None:
+        """Close the files of days before `before` and forget their lines: a
+        day's rollover, and a past day's unit about to move. Anything
+        forgotten is still in its file, and read from it if asked again."""
+        prefix = f"{self.kind}/"
+
+        def earlier(key: str) -> bool:
+            return key[len(prefix) : len(prefix) + 10] < before
+
+        for key in [k for k in self._open if earlier(k)]:
+            self._close(key)
+        for held in (self._last, self._lines):
+            for key in [k for k in held if earlier(k)]:
+                del held[key]
+        for named in [k for k in self._first if earlier(k)]:
+            del self._first[named]
+
+    def __del__(self) -> None:
+        for out in getattr(self, "_open", {}).values():
+            out.close()
 
     def get(self, ref_key: str) -> dict[str, Any] | None:
         """The record a row's reference names: a whole answer, or one line of a
@@ -213,6 +292,7 @@ class RawStore:
         refused (no archive, a deletion inside the deployment's hold) keeps
         the unit, and the next pass tries again."""
         cutoff = today - timedelta(days=max(window_days, 0))
+        self._forget(before=today.isoformat())
         for unit in self.units():
             if unit.day >= cutoff or unit.day >= today or past == "kept":
                 continue
