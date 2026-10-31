@@ -17,8 +17,8 @@ that is the deployment shape the design calls for.
 from __future__ import annotations
 
 import asyncio
-import inspect
 import base64
+import inspect
 import os
 import uuid
 from decimal import Decimal
