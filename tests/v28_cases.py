@@ -495,6 +495,13 @@ PRODUCERS: dict[str, Producer] = {
     "reads-an-underlyings-expirations": reads_an_underlyings_expirations,
     "reads-the-stale-reference-actions-permitted": reads_the_stale_reference_actions_permitted,
     "reads-open-interest-for-a-chain": reads_open_interest_for_a_chain,
+    # Contract v28, amended 2026-10-30 (ruling 922): a copy of a chain
+    # follows its listing.
+    "hears-a-listed-series": heard(
+        "SeriesRecorded",
+        "series_recorded",
+        ops.SeriesRecordedEvent(series=ops.ListedSeries()),
+    ),
     "hears-a-statistic-recorded": heard(
         "StatisticsRecorded",
         "statistics_recorded",

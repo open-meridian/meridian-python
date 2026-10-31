@@ -821,6 +821,7 @@ async def follow(
                             pass
                         break
                     await asyncio.sleep(REFUSAL_WAIT_SECONDS / REFUSAL_WAIT_TICKS)
+                again = started
                 async with follower.lock:
                     if not started:
                         await follower.seed(handing=seed)
@@ -834,7 +835,22 @@ async def follow(
                         await full.read()
                         await sequenced.read()
                 wait = RETRY_SECONDS
+                views = getattr(plugin, "_views_kept", None)
+                if again and views is not None:
+                    # Subscriptions opened on this stream before it broke
+                    # were dropped with it (contract v28, amended 2026-10-30).
+                    await views.reopened()
                 async for delivery in call:
+                    views = getattr(plugin, "_views_kept", None)
+                    if views is not None and (
+                        delivery.meta.subscription_ids or delivery.WhichOneof("item") == "lost"
+                    ):
+                        # A view's delivery, on whichever stream its
+                        # subscription opened (contract v28, amended
+                        # 2026-10-30): the views keep their copies.
+                        await views.delivered(delivery)
+                        if delivery.meta.row and delivery.meta.row not in given:
+                            continue
                     async with follower.lock:
                         which = delivery.WhichOneof("item")
                         if which in latest.by_arm:

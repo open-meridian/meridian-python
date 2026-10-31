@@ -5768,6 +5768,7 @@ class Operations:
         statistics_recorded: Callable[[Heard[ops.StatisticsRecordedEvent]], Awaitable[None]] | None = None,
         filings_recorded: Callable[[Heard[ops.FilingsRecordedEvent]], Awaitable[None]] | None = None,
         corporate_actions_recorded: Callable[[Heard[ops.CorporateActionsRecordedEvent]], Awaitable[None]] | None = None,
+        series_recorded: Callable[[Heard[ops.SeriesRecordedEvent]], Awaitable[None]] | None = None,
         seed: bool = True,
         subjects: Sequence[str] = (),
     ) -> None:
@@ -5820,6 +5821,7 @@ class Operations:
             "StatisticsRecorded": statistics_recorded,
             "FilingsRecorded": filings_recorded,
             "CorporateActionsRecorded": corporate_actions_recorded,
+            "SeriesRecorded": series_recorded,
         }
         await self._receive(
             {row: handler for row, handler in handlers.items() if handler is not None},
@@ -6243,6 +6245,15 @@ CONFLATED: tuple[ConflatedRow, ...] = (
         caught_up_by="list_statistics",
         records="statistics",
         within="statistic",
+    ),
+    ConflatedRow(
+        name="SeriesRecorded",
+        step="W10.5",
+        arm="series_recorded",
+        message=ops.SeriesRecordedEvent,
+        caught_up_by="list_series",
+        records="series",
+        within="series",
     ),
 )
 

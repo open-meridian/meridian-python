@@ -71,7 +71,7 @@ contract-diff:
 # amendments: listed options and futures, the scenario format, filings,
 # quality states and the latency remainder; the v28 cases' `about`, ruling
 # 602), its gen/ and boundaries/ vendored here byte for byte.
-SCHEMA_REV := f47a4a53ab43bda62eec2dfe6c20266575bc58ad
+SCHEMA_REV := ef69a142984f9867e29a25222e1d91e021f2622b
 SCHEMA_REPO := https://github.com/open-meridian/meridian-schema.git
 SCRATCH     := .schema-scratch
 
@@ -116,9 +116,9 @@ DESIGN ?= ../meridian-design
 # pinned here by commit as the schema is pinned in pyproject.toml. Core's own
 # interop gate overrides this with its working tree, so a change to both lands
 # without either waiting on the other's push.
-# Core's main after open-meridian/meridian-core#51 (ruling 545): v27's proto/
-# with LicenceList.administrators, conductor-to-store only, which no plugin meets.
-CORE_REV   := 24f3be4c2be0982c4e2a9a54856668b558c3876d
+# Core's main after open-meridian/meridian-core#75 (data-access step 2,
+# contract 28 amended 2026-10-30): lake.proto's RenewWants and SeriesRecordedEvent.
+CORE_REV   := d3ba6263b7ef0a04f7f814e97a75d459b6c35b04
 CORE_PROTO ?= https://github.com/open-meridian/meridian-core.git\#$(CORE_REV):proto
 # And meridian-schema's, which core's import, at the revision vendored here.
 SCHEMA_PROTO ?= https://github.com/open-meridian/meridian-schema.git\#$(SCHEMA_REV):proto

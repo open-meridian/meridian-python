@@ -4209,6 +4209,17 @@
           ]
         },
         {
+          "name": "hears-a-listed-series",
+          "about": "listed series",
+          "since": "v28",
+          "given": "the plugin keeps a copy of a chain and must follow new and changed series",
+          "expect": [
+            {
+              "row": "SeriesRecorded"
+            }
+          ]
+        },
+        {
           "name": "reads-the-stale-reference-actions-permitted",
           "since": "v28",
           "given": "the plugin is about to place on a reference price past its ceiling",
@@ -4809,6 +4820,17 @@
               "fields": {
                 "underlying_id": "<set>"
               }
+            }
+          ]
+        },
+        {
+          "name": "hears-a-listed-series",
+          "about": "listed series",
+          "since": "v28",
+          "given": "the plugin keeps a copy of a chain and must follow new and changed series",
+          "expect": [
+            {
+              "row": "SeriesRecorded"
             }
           ]
         }
@@ -5724,6 +5746,17 @@
               "fields": {
                 "underlying_id": "<set>"
               }
+            }
+          ]
+        },
+        {
+          "name": "hears-a-listed-series",
+          "about": "listed series",
+          "since": "v28",
+          "given": "the plugin keeps a copy of a chain and must follow new and changed series",
+          "expect": [
+            {
+              "row": "SeriesRecorded"
             }
           ]
         },
@@ -7223,6 +7256,17 @@
               "fields": {
                 "underlying_id": "<set>"
               }
+            }
+          ]
+        },
+        {
+          "name": "hears-a-listed-series",
+          "about": "listed series",
+          "since": "v28",
+          "given": "the plugin keeps a copy of a chain and must follow new and changed series",
+          "expect": [
+            {
+              "row": "SeriesRecorded"
             }
           ]
         },
