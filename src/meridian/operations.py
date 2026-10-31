@@ -1771,6 +1771,7 @@ class Price:
     kind: ops.PriceKind | str | None = None
     price: Money
     basis: ops.PriceBasis | str | None = None
+    confidence: Decimal | int | None = None
 
 
 def _price(value: Price, name: str) -> ops.Price:
@@ -1782,6 +1783,7 @@ def _price(value: Price, name: str) -> ops.Price:
         kind=_enum(ops.PriceKind, value.kind, f"{name}.kind"),
         price=_money(value.price, f"{name}.price"),
         basis=_enum(ops.PriceBasis, value.basis, f"{name}.basis"),
+        confidence=None if value.confidence is None else _decimal(value.confidence, f"{name}.confidence"),
     )
 
 
@@ -2752,7 +2754,9 @@ def _lifecycle_delivery(value: LifecycleDelivery, name: str) -> ops.LifecycleDel
 @dataclass(frozen=True, kw_only=True)
 class DerivedSeries:
     """Contract v28: one value of a signal plugin's own series, naming its
-    rule and inputs, never presented as a publisher's figure (contract v28).
+    rule and inputs, never presented as a publisher's figure; from the
+    amendment of 2026-10-31 (ruling 955), or a publisher's figure a data
+    plugin records, marked published_by.
 
     The SDK's form of the wire's DerivedSeries: a number as a Decimal, an amount
     as a Money, an enum as its value or name, each converted and refused
@@ -2763,6 +2767,7 @@ class DerivedSeries:
     value: UnitValue | None = None
     rule: ops.MeasureRef | None = None
     inputs: Sequence[ops.DerivedInput] = ()
+    published_by: str = ""
 
 
 def _derived_series(value: DerivedSeries, name: str) -> ops.DerivedSeries:
@@ -2775,6 +2780,7 @@ def _derived_series(value: DerivedSeries, name: str) -> ops.DerivedSeries:
         value=None if value.value is None else _unit_value(value.value, f"{name}.value"),
         rule=value.rule,
         inputs=list(value.inputs),
+        published_by=value.published_by,
     )
 
 

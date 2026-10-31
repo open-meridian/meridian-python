@@ -1032,6 +1032,14 @@ class DataUse(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     DATA_USE_PERSONAL: _ClassVar[DataUse]
     DATA_USE_COMMERCIAL: _ClassVar[DataUse]
 
+class PriceSourceClass(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    PRICE_SOURCE_CLASS_UNSPECIFIED: _ClassVar[PriceSourceClass]
+    PRICE_SOURCE_CLASS_TRADED: _ClassVar[PriceSourceClass]
+    PRICE_SOURCE_CLASS_FIRM_QUOTE: _ClassVar[PriceSourceClass]
+    PRICE_SOURCE_CLASS_COMPOSITE: _ClassVar[PriceSourceClass]
+    PRICE_SOURCE_CLASS_EVALUATED: _ClassVar[PriceSourceClass]
+
 class ShockObject(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
     SHOCK_OBJECT_UNSPECIFIED: _ClassVar[ShockObject]
@@ -1891,6 +1899,11 @@ REPORT_CADENCE_ON_CHANGE: ReportCadence
 DATA_USE_UNSPECIFIED: DataUse
 DATA_USE_PERSONAL: DataUse
 DATA_USE_COMMERCIAL: DataUse
+PRICE_SOURCE_CLASS_UNSPECIFIED: PriceSourceClass
+PRICE_SOURCE_CLASS_TRADED: PriceSourceClass
+PRICE_SOURCE_CLASS_FIRM_QUOTE: PriceSourceClass
+PRICE_SOURCE_CLASS_COMPOSITE: PriceSourceClass
+PRICE_SOURCE_CLASS_EVALUATED: PriceSourceClass
 SHOCK_OBJECT_UNSPECIFIED: ShockObject
 SHOCK_OBJECT_SPOT: ShockObject
 SHOCK_OBJECT_VOL_SURFACE: ShockObject
@@ -6159,18 +6172,20 @@ class MoneyMarketFund(_message.Message):
     def __init__(self, category: _Optional[_Union[MoneyMarketFundCategory, str]] = ..., investors: _Optional[_Union[MoneyMarketFundInvestors, str]] = ..., nav: _Optional[_Union[MoneyMarketFundNav, str]] = ..., liquidity_fee: _Optional[_Union[LiquidityFeeRegime, str]] = ...) -> None: ...
 
 class BinaryEventContract(_message.Message):
-    __slots__ = ("payout", "closes_at_ns", "floor", "cap", "bound_unit")
+    __slots__ = ("payout", "closes_at_ns", "floor", "cap", "bound_unit", "category")
     PAYOUT_FIELD_NUMBER: _ClassVar[int]
     CLOSES_AT_NS_FIELD_NUMBER: _ClassVar[int]
     FLOOR_FIELD_NUMBER: _ClassVar[int]
     CAP_FIELD_NUMBER: _ClassVar[int]
     BOUND_UNIT_FIELD_NUMBER: _ClassVar[int]
+    CATEGORY_FIELD_NUMBER: _ClassVar[int]
     payout: Money
     closes_at_ns: int
     floor: EventContractBound
     cap: EventContractBound
     bound_unit: str
-    def __init__(self, payout: _Optional[_Union[Money, _Mapping]] = ..., closes_at_ns: _Optional[int] = ..., floor: _Optional[_Union[EventContractBound, _Mapping]] = ..., cap: _Optional[_Union[EventContractBound, _Mapping]] = ..., bound_unit: _Optional[str] = ...) -> None: ...
+    category: str
+    def __init__(self, payout: _Optional[_Union[Money, _Mapping]] = ..., closes_at_ns: _Optional[int] = ..., floor: _Optional[_Union[EventContractBound, _Mapping]] = ..., cap: _Optional[_Union[EventContractBound, _Mapping]] = ..., bound_unit: _Optional[str] = ..., category: _Optional[str] = ...) -> None: ...
 
 class EventContractBound(_message.Message):
     __slots__ = ("value", "inclusive")
@@ -8181,16 +8196,18 @@ class ModelBinding(_message.Message):
     def __init__(self, exercise_style: _Optional[_Union[ExerciseStyle, str]] = ..., underlying_asset_class: _Optional[_Union[AssetClass, str]] = ..., model_id: _Optional[str] = ..., model_version: _Optional[int] = ...) -> None: ...
 
 class Price(_message.Message):
-    __slots__ = ("meta", "kind", "price", "basis")
+    __slots__ = ("meta", "kind", "price", "basis", "confidence")
     META_FIELD_NUMBER: _ClassVar[int]
     KIND_FIELD_NUMBER: _ClassVar[int]
     PRICE_FIELD_NUMBER: _ClassVar[int]
     BASIS_FIELD_NUMBER: _ClassVar[int]
+    CONFIDENCE_FIELD_NUMBER: _ClassVar[int]
     meta: ObservationMeta
     kind: PriceKind
     price: Money
     basis: PriceBasis
-    def __init__(self, meta: _Optional[_Union[ObservationMeta, _Mapping]] = ..., kind: _Optional[_Union[PriceKind, str]] = ..., price: _Optional[_Union[Money, _Mapping]] = ..., basis: _Optional[_Union[PriceBasis, str]] = ...) -> None: ...
+    confidence: Decimal
+    def __init__(self, meta: _Optional[_Union[ObservationMeta, _Mapping]] = ..., kind: _Optional[_Union[PriceKind, str]] = ..., price: _Optional[_Union[Money, _Mapping]] = ..., basis: _Optional[_Union[PriceBasis, str]] = ..., confidence: _Optional[_Union[Decimal, _Mapping]] = ...) -> None: ...
 
 class ObservationMeta(_message.Message):
     __slots__ = ("row_key", "subjects", "source", "valid_from_ns", "valid_until_ns", "business_date", "source_times", "sent_at_ns", "recorded_at_ns", "version", "sequence", "previous_sequence", "raw", "unconverted", "closed_day", "series_key", "quality", "quality_reasons")
@@ -8425,7 +8442,7 @@ class DatasetRef(_message.Message):
     def __init__(self, dataset: _Optional[str] = ..., instance: _Optional[str] = ..., vendor: _Optional[str] = ..., aggregator: _Optional[str] = ..., declaration: _Optional[_Union[DatasetDeclaration, _Mapping]] = ..., unconverted_count: _Optional[int] = ..., miss_count: _Optional[int] = ..., closed_day_count: _Optional[int] = ..., outside_coverage_count: _Optional[int] = ..., declared_delay_ns: _Optional[int] = ..., stale_after_ns: _Optional[int] = ..., liveness: _Optional[_Iterable[_Union[DatasetLiveness, _Mapping]]] = ...) -> None: ...
 
 class DatasetDeclaration(_message.Message):
-    __slots__ = ("key", "vendor", "aggregator", "data_types", "modes", "cadence", "history", "licence_default", "day_time_zone", "day_end_minute", "venue_id", "calendar_id", "declared_delay_ns")
+    __slots__ = ("key", "vendor", "aggregator", "data_types", "modes", "cadence", "history", "licence_default", "day_time_zone", "day_end_minute", "venue_id", "calendar_id", "declared_delay_ns", "price_source_class")
     KEY_FIELD_NUMBER: _ClassVar[int]
     VENDOR_FIELD_NUMBER: _ClassVar[int]
     AGGREGATOR_FIELD_NUMBER: _ClassVar[int]
@@ -8439,6 +8456,7 @@ class DatasetDeclaration(_message.Message):
     VENUE_ID_FIELD_NUMBER: _ClassVar[int]
     CALENDAR_ID_FIELD_NUMBER: _ClassVar[int]
     DECLARED_DELAY_NS_FIELD_NUMBER: _ClassVar[int]
+    PRICE_SOURCE_CLASS_FIELD_NUMBER: _ClassVar[int]
     key: str
     vendor: str
     aggregator: str
@@ -8452,7 +8470,8 @@ class DatasetDeclaration(_message.Message):
     venue_id: str
     calendar_id: str
     declared_delay_ns: int
-    def __init__(self, key: _Optional[str] = ..., vendor: _Optional[str] = ..., aggregator: _Optional[str] = ..., data_types: _Optional[_Iterable[str]] = ..., modes: _Optional[_Iterable[_Union[ObservationMode, str]]] = ..., cadence: _Optional[int] = ..., history: _Optional[int] = ..., licence_default: _Optional[_Union[DatasetLicence, _Mapping]] = ..., day_time_zone: _Optional[str] = ..., day_end_minute: _Optional[int] = ..., venue_id: _Optional[str] = ..., calendar_id: _Optional[str] = ..., declared_delay_ns: _Optional[int] = ...) -> None: ...
+    price_source_class: PriceSourceClass
+    def __init__(self, key: _Optional[str] = ..., vendor: _Optional[str] = ..., aggregator: _Optional[str] = ..., data_types: _Optional[_Iterable[str]] = ..., modes: _Optional[_Iterable[_Union[ObservationMode, str]]] = ..., cadence: _Optional[int] = ..., history: _Optional[int] = ..., licence_default: _Optional[_Union[DatasetLicence, _Mapping]] = ..., day_time_zone: _Optional[str] = ..., day_end_minute: _Optional[int] = ..., venue_id: _Optional[str] = ..., calendar_id: _Optional[str] = ..., declared_delay_ns: _Optional[int] = ..., price_source_class: _Optional[_Union[PriceSourceClass, str]] = ...) -> None: ...
 
 class DatasetLicence(_message.Message):
     __slots__ = ("dataset", "kept", "retention_days", "derived_use", "display", "default_fields", "personal_use", "updated_by", "updated_at_ns", "acting_through_delegation", "client_name", "note", "prepared_call_id", "terms_version", "access_basis", "timeliness", "delay_minutes", "delay_label", "underlying_source", "meters", "display_terms", "non_display", "enterprise", "derived_use_terms", "derived_multi_instrument_free", "derived_creation_is_non_display", "redistribution", "outside_computation", "prohibited_uses", "attribution_required", "attribution_text", "copyright_class", "no_more_restrictive_terms", "not_affiliated_notice", "report_cadence", "report_due_day", "eligibility")
@@ -9365,18 +9384,20 @@ class LifecycleDelivery(_message.Message):
     def __init__(self, instrument_id: _Optional[str] = ..., quantity: _Optional[_Union[Decimal, _Mapping]] = ..., price: _Optional[_Union[Money, _Mapping]] = ...) -> None: ...
 
 class DerivedSeries(_message.Message):
-    __slots__ = ("meta", "series", "value", "rule", "inputs")
+    __slots__ = ("meta", "series", "value", "rule", "inputs", "published_by")
     META_FIELD_NUMBER: _ClassVar[int]
     SERIES_FIELD_NUMBER: _ClassVar[int]
     VALUE_FIELD_NUMBER: _ClassVar[int]
     RULE_FIELD_NUMBER: _ClassVar[int]
     INPUTS_FIELD_NUMBER: _ClassVar[int]
+    PUBLISHED_BY_FIELD_NUMBER: _ClassVar[int]
     meta: ObservationMeta
     series: str
     value: UnitValue
     rule: MeasureRef
     inputs: _containers.RepeatedCompositeFieldContainer[DerivedInput]
-    def __init__(self, meta: _Optional[_Union[ObservationMeta, _Mapping]] = ..., series: _Optional[str] = ..., value: _Optional[_Union[UnitValue, _Mapping]] = ..., rule: _Optional[_Union[MeasureRef, _Mapping]] = ..., inputs: _Optional[_Iterable[_Union[DerivedInput, _Mapping]]] = ...) -> None: ...
+    published_by: str
+    def __init__(self, meta: _Optional[_Union[ObservationMeta, _Mapping]] = ..., series: _Optional[str] = ..., value: _Optional[_Union[UnitValue, _Mapping]] = ..., rule: _Optional[_Union[MeasureRef, _Mapping]] = ..., inputs: _Optional[_Iterable[_Union[DerivedInput, _Mapping]]] = ..., published_by: _Optional[str] = ...) -> None: ...
 
 class DerivedInput(_message.Message):
     __slots__ = ("dataset", "as_of_ns")

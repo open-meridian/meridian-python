@@ -1105,6 +1105,8 @@ def producers(**mutations: bool) -> dict[str, object]:
         # Contract v28: chains, the filings slice, quotes' quality states and
         # the feed delay reported (tests/v28_cases.py).
         **V28_DATA,
+        # Contract 28, amended 2026-10-31 (ruling 955): a publisher's figure.
+        "records-a-derived-series": publishers_figure,
     }
 
 
@@ -1112,6 +1114,27 @@ def run(role: str, producers: Any, **given: Any) -> Any:
     """A suite as a plugin runs it."""
     skipped = dict(given.pop("not_presented", None) or {})
     return run_suite(role, producers, not_presented=skipped, **given)
+
+
+async def publishers_figure(recorder: Recorder) -> None:
+    """An index's level as its publisher computes it, recorded as the
+    publisher's figure, naming whose (contract 28, amended 2026-10-31)."""
+    await recorder.record_derived_series(
+        values=[
+            meridian.DerivedSeries(
+                meta=meridian.ObservationMeta(
+                    row_key="VIX:level:2026-10-23",
+                    subjects=[meridian.SubjectRef(entity_id=BTC)],
+                    source=ops.Source(dataset="toy-1:indices"),
+                    valid_from_ns=DAY,
+                ),
+                series="level",
+                value=meridian.UnitValue(value=Decimal("16.42"), unit="percent"),
+                rule=ops.MeasureRef(definition="cboe_vix", version=1),
+                published_by="Cboe",
+            )
+        ]
+    )
 
 
 async def liveness(recorder: Recorder) -> None:
@@ -1149,7 +1172,7 @@ def event_group(*, exhaustive: bool | None):  # type: ignore[no-untyped-def]
     return produce
 
 
-def test_the_data_suite_is_carried_with_its_fifty_nine_cases() -> None:
+def test_the_data_suite_is_carried_with_its_sixty_cases() -> None:
     held = suite("data")
     assert held.since == "v18"
     # Contract v24 adds the two every role's suite holds, which the SDK answers;
@@ -1157,16 +1180,19 @@ def test_the_data_suite_is_carried_with_its_fifty_nine_cases() -> None:
     # the lake's bounded query; v27 the rates slice's seven (about rates), a
     # stream's liveness (about streams) and the feed delay, and the bounded
     # query about trades; v28 fifteen, each about what a source may never
-    # present (ruling 602), the feed delay required again (518).
-    assert len(held.cases) == 59
+    # present (ruling 602), the feed delay required again (518); and the
+    # amendment of 2026-10-31 a publisher's figure (955, about derived series).
+    assert len(held.cases) == 60
+    assert held.case("records-a-derived-series").about == "derived series"
     assert held.case("queries-the-lake-within-bounds").about == "trades"
     assert {held.case(name).about for name in RATES_CASES} == {"rates"}
     assert held.case("records-a-datasets-liveness").about == "streams"
     assert held.case("reports-its-feed-delay").about == ""  # required from v28 (518)
-    v28 = {case.name: case.about for case in held.cases[44:]}
+    v28 = {case.name: case.about for case in held.cases[44:59]}
     assert len(v28) == 15 and set(v28.values()) == {
         "option chains", "filings", "holdings", "corporate actions", "ratings", "quotes"
     }  # fmt: skip
+    assert held.cases[59].name == "records-a-derived-series"
     assert held.case("reports-an-event-group").about == "outcomes"
     assert held.case("reports-a-flag-the-venue-does-not-state").about == "outcomes"
     assert "a-want-recorded-against" in names("data")
@@ -1306,7 +1332,7 @@ V19_DATA_CASES = {
 def test_a_data_plugin_converting_exactly_passes_every_case_of_its_suite() -> None:
     report = run("data", producers(), instance_id="toy-1")
     assert report.passed, report.failures
-    assert len(report.passed_cases) == 59
+    assert len(report.passed_cases) == 60
     assert report.not_presented == {}
     assert report.answered_by_sdk == [
         "hears-and-reads-a-replacement",
@@ -1344,7 +1370,7 @@ def test_a_case_about_a_kind_the_plugin_never_publishes_may_be_not_presented() -
     report = run("data", mapped, not_presented=never)
     assert report.passed, report.failures
     assert report.not_presented == never
-    assert len(report.passed_cases) == 59 - 13
+    assert len(report.passed_cases) == 60 - 13
 
 
 def test_a_case_about_a_field_the_source_never_states_may_be_not_presented() -> None:

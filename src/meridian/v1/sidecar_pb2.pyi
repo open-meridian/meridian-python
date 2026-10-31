@@ -7,6 +7,14 @@ from typing import ClassVar as _ClassVar, Iterable as _Iterable, Mapping as _Map
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
+class PriceSourceClass(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    PRICE_SOURCE_CLASS_UNSPECIFIED: _ClassVar[PriceSourceClass]
+    PRICE_SOURCE_CLASS_TRADED: _ClassVar[PriceSourceClass]
+    PRICE_SOURCE_CLASS_FIRM_QUOTE: _ClassVar[PriceSourceClass]
+    PRICE_SOURCE_CLASS_COMPOSITE: _ClassVar[PriceSourceClass]
+    PRICE_SOURCE_CLASS_EVALUATED: _ClassVar[PriceSourceClass]
+
 class ObservationMode(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
     OBSERVATION_MODE_UNSPECIFIED: _ClassVar[ObservationMode]
@@ -276,6 +284,11 @@ class DataUse(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     DATA_USE_UNSPECIFIED: _ClassVar[DataUse]
     DATA_USE_PERSONAL: _ClassVar[DataUse]
     DATA_USE_COMMERCIAL: _ClassVar[DataUse]
+PRICE_SOURCE_CLASS_UNSPECIFIED: PriceSourceClass
+PRICE_SOURCE_CLASS_TRADED: PriceSourceClass
+PRICE_SOURCE_CLASS_FIRM_QUOTE: PriceSourceClass
+PRICE_SOURCE_CLASS_COMPOSITE: PriceSourceClass
+PRICE_SOURCE_CLASS_EVALUATED: PriceSourceClass
 OBSERVATION_MODE_UNSPECIFIED: ObservationMode
 OBSERVATION_MODE_PULL: ObservationMode
 OBSERVATION_MODE_PUSH: ObservationMode
@@ -555,7 +568,7 @@ class Catalogue(_message.Message):
     def __init__(self, datasets: _Optional[_Iterable[_Union[DatasetDeclaration, _Mapping]]] = ...) -> None: ...
 
 class DatasetDeclaration(_message.Message):
-    __slots__ = ("key", "vendor", "aggregator", "data_types", "modes", "cadence", "history", "licence_default", "day_time_zone", "day_end_minute", "venue_id", "calendar_id", "declared_delay_ns")
+    __slots__ = ("key", "vendor", "aggregator", "data_types", "modes", "cadence", "history", "licence_default", "day_time_zone", "day_end_minute", "venue_id", "calendar_id", "declared_delay_ns", "price_source_class")
     KEY_FIELD_NUMBER: _ClassVar[int]
     VENDOR_FIELD_NUMBER: _ClassVar[int]
     AGGREGATOR_FIELD_NUMBER: _ClassVar[int]
@@ -569,6 +582,7 @@ class DatasetDeclaration(_message.Message):
     VENUE_ID_FIELD_NUMBER: _ClassVar[int]
     CALENDAR_ID_FIELD_NUMBER: _ClassVar[int]
     DECLARED_DELAY_NS_FIELD_NUMBER: _ClassVar[int]
+    PRICE_SOURCE_CLASS_FIELD_NUMBER: _ClassVar[int]
     key: str
     vendor: str
     aggregator: str
@@ -582,7 +596,8 @@ class DatasetDeclaration(_message.Message):
     venue_id: str
     calendar_id: str
     declared_delay_ns: int
-    def __init__(self, key: _Optional[str] = ..., vendor: _Optional[str] = ..., aggregator: _Optional[str] = ..., data_types: _Optional[_Iterable[str]] = ..., modes: _Optional[_Iterable[_Union[ObservationMode, str]]] = ..., cadence: _Optional[int] = ..., history: _Optional[int] = ..., licence_default: _Optional[_Union[DatasetLicence, _Mapping]] = ..., day_time_zone: _Optional[str] = ..., day_end_minute: _Optional[int] = ..., venue_id: _Optional[str] = ..., calendar_id: _Optional[str] = ..., declared_delay_ns: _Optional[int] = ...) -> None: ...
+    price_source_class: PriceSourceClass
+    def __init__(self, key: _Optional[str] = ..., vendor: _Optional[str] = ..., aggregator: _Optional[str] = ..., data_types: _Optional[_Iterable[str]] = ..., modes: _Optional[_Iterable[_Union[ObservationMode, str]]] = ..., cadence: _Optional[int] = ..., history: _Optional[int] = ..., licence_default: _Optional[_Union[DatasetLicence, _Mapping]] = ..., day_time_zone: _Optional[str] = ..., day_end_minute: _Optional[int] = ..., venue_id: _Optional[str] = ..., calendar_id: _Optional[str] = ..., declared_delay_ns: _Optional[int] = ..., price_source_class: _Optional[_Union[PriceSourceClass, str]] = ...) -> None: ...
 
 class DatasetLicence(_message.Message):
     __slots__ = ("dataset", "kept", "retention_days", "derived_use", "display", "default_fields", "personal_use", "updated_by", "updated_at_ns", "acting_through_delegation", "client_name", "note", "prepared_call_id", "terms_version", "access_basis", "timeliness", "delay_minutes", "delay_label", "underlying_source", "meters", "display_terms", "non_display", "enterprise", "derived_use_terms", "derived_multi_instrument_free", "derived_creation_is_non_display", "redistribution", "outside_computation", "prohibited_uses", "attribution_required", "attribution_text", "copyright_class", "no_more_restrictive_terms", "not_affiliated_notice", "report_cadence", "report_due_day", "eligibility")

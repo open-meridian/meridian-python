@@ -428,9 +428,13 @@ _QUALITY = (
     "rows-after-a-gap-are-suspicious",
 )
 #: What no venue listing pairs or event contracts publishes (contract v28).
+#: Nor, from the amendment of 2026-10-31 (ruling 955), a figure its publisher
+#: computes itself, which a data plugin records as a derived series.
+_NO_PUBLISHERS_FIGURES = {"records-a-derived-series": "it publishes no figure of its own"}
 _NO_CHAINS_OR_FILINGS = {
     **{case: "it lists no option chains" for case in _CHAINS},
     **{case: "it publishes no filings" for case in _FILINGS},
+    **_NO_PUBLISHERS_FIGURES,
 }
 PAIRS_NOT_PRESENTED = {
     **{case: "a pairs venue publishes no rates" for case in _RATES},

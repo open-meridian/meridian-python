@@ -399,3 +399,98 @@ def test_the_admins_quality_settings_are_typed_tables() -> None:
         "dataset", "outlier_sigma", "sigma_floor", "warm_up", "invalid_sigma",
         "cross_source_tolerance",
     ]  # fmt: skip
+
+
+# Contract 28, amended 2026-10-31 (ruling 898): a dataset's class of source,
+# whose aggregate it serves, and a price's confidence (rulings 895, 896, 906).
+
+
+def test_a_dataset_declares_its_class_of_source_and_whose_aggregate() -> None:
+    from meridian.v1 import sidecar_pb2
+
+    pyth = meridian.DatasetDeclaration(
+        key="crypto",
+        vendor="Pyth",
+        data_types=["meridian.v1.Price", "meridian.v1.Price.confidence"],
+        modes=["stream"],
+        price_source_class="composite",
+        licence_default=meridian.DatasetLicence(
+            kept=True, underlying_source="Pyth's aggregate of its publishers"
+        ),
+    )
+    wire = pyth._wire()
+    assert wire.price_source_class == sidecar_pb2.PRICE_SOURCE_CLASS_COMPOSITE
+    assert wire.licence_default.underlying_source == "Pyth's aggregate of its publishers"
+    said = pyth._to_json()
+    assert said["price_source_class"] == "composite"
+    assert said["licence_default"]["underlying_source"] == "Pyth's aggregate of its publishers"
+    # The enum's name reads as its word; not stated writes nothing new, so an
+    # upload declaring neither reads as before the amendment.
+    named = meridian.DatasetDeclaration(
+        key="bonds", vendor="v", data_types=["meridian.v1.Price"], modes=["pull"],
+        price_source_class="PRICE_SOURCE_CLASS_EVALUATED",
+    )  # fmt: skip
+    assert named.price_source_class == "evaluated"
+    plain = meridian.DatasetDeclaration(
+        key="daily", vendor="v", data_types=["meridian.v1.Price"], modes=["pull"],
+        licence_default=meridian.DatasetLicence(kept=True),
+    )  # fmt: skip
+    assert plain._wire().price_source_class == sidecar_pb2.PRICE_SOURCE_CLASS_UNSPECIFIED
+    assert "price_source_class" not in plain._to_json()
+    assert "underlying_source" not in plain._to_json()["licence_default"]
+    with pytest.raises(ValueError, match="price_source_class"):
+        meridian.DatasetDeclaration(
+            key="x", vendor="v", data_types=["meridian.v1.Price"], modes=["pull"],
+            price_source_class="indicative",
+        )  # fmt: skip
+
+
+def test_a_price_carries_its_sources_confidence_in_its_own_unit() -> None:
+    from meridian.operations import _price
+
+    composite = meridian.Price(
+        meta=meridian.ObservationMeta(
+            row_key="pyth:BTC/USD:1791331200",
+            subjects=[meridian.SubjectRef(entity_id="INS-01JA00000000000000BTC1")],
+            source=ops.Source(dataset="pyth-1:crypto"),
+            valid_from_ns=1_791_331_200 * 10**9,
+        ),
+        kind="mid",
+        price=meridian.Money(Decimal("62431.27"), currency_code="USD"),
+        basis="per_unit",
+        confidence=Decimal("18.42"),
+    )
+    wire = _price(composite, "prices[0]")
+    assert wire.HasField("confidence")
+    assert (wire.confidence.high, wire.confidence.low, wire.confidence.scale) == (0, 1842, 2)
+    unstated = _price(
+        meridian.Price(
+            meta=composite.meta, kind="mid", price=composite.price, basis="per_unit"
+        ),
+        "prices[0]",
+    )
+    assert not unstated.HasField("confidence")
+
+
+def test_a_derived_series_says_whose_figure_it_is() -> None:
+    """Contract 28, amended 2026-10-31 (ruling 955): a data plugin records a
+    publisher's figure, naming whose, its inputs empty."""
+    from meridian.operations import _derived_series
+
+    figure = meridian.DerivedSeries(
+        series="level",
+        value=meridian.UnitValue(value=Decimal("16.42"), unit="percent"),
+        rule=ops.MeasureRef(definition="cboe_vix", version=1),
+        published_by="Cboe",
+    )
+    wire = _derived_series(figure, "values[0]")
+    assert wire.published_by == "Cboe" and not wire.inputs
+    own = _derived_series(meridian.DerivedSeries(series="iv30"), "values[0]")
+    assert own.published_by == ""
+    # The data suite asks a data plugin for it, which one publishing no
+    # figure of its own marks not presented (about: derived series).
+    from meridian.suites import suite
+
+    cases = {c.name: c for c in suite("data").cases}
+    case = cases["records-a-derived-series"]
+    assert case.about == "derived series"

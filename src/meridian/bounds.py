@@ -249,6 +249,10 @@ SPOT_DATE_RULE_PAIR_COUNT = Count(least=2, most=2)
 """meridian.v1.SpotDateRule.pair: names the currency pair a spot-date rule is
 for (W1.22)"""
 
+BINARY_EVENT_CONTRACT_CATEGORY_LENGTH = Length(least=0, most=64)
+"""meridian.v1.BinaryEventContract.category: says what a market is about, in
+the venue's own word for it (W1.1; amended 2026-10-31, ruling 954)"""
+
 LIST_EVENT_GROUPS_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=False)
 """meridian.v1.ListEventGroupsRequest.page_size: bounds a page"""
 
@@ -490,8 +494,12 @@ shows (amended 2026-10-28, 821)"""
 DERIVED_SERIES_SERIES_LENGTH = Length(least=1, most=64)
 """meridian.v1.DerivedSeries.series: names the plugin's series"""
 
-DERIVED_SERIES_INPUTS_COUNT = Count(least=1, most=32)
+DERIVED_SERIES_INPUTS_COUNT = Count(least=0, most=32)
 """meridian.v1.DerivedSeries.inputs: names what the value was derived from"""
+
+DERIVED_SERIES_PUBLISHED_BY_LENGTH = Length(least=0, most=64)
+"""meridian.v1.DerivedSeries.published_by: marks a value as the publisher's
+figure and says whose (W10.4; amended 2026-10-31, ruling 955)"""
 
 RECORD_DERIVED_SERIES_REQUEST_VALUES_COUNT = Count(least=1, most=500)
 """meridian.v1.RecordDerivedSeriesRequest.values: carries a batch of derived
