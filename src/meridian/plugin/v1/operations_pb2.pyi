@@ -6172,18 +6172,20 @@ class MoneyMarketFund(_message.Message):
     def __init__(self, category: _Optional[_Union[MoneyMarketFundCategory, str]] = ..., investors: _Optional[_Union[MoneyMarketFundInvestors, str]] = ..., nav: _Optional[_Union[MoneyMarketFundNav, str]] = ..., liquidity_fee: _Optional[_Union[LiquidityFeeRegime, str]] = ...) -> None: ...
 
 class BinaryEventContract(_message.Message):
-    __slots__ = ("payout", "closes_at_ns", "floor", "cap", "bound_unit")
+    __slots__ = ("payout", "closes_at_ns", "floor", "cap", "bound_unit", "category")
     PAYOUT_FIELD_NUMBER: _ClassVar[int]
     CLOSES_AT_NS_FIELD_NUMBER: _ClassVar[int]
     FLOOR_FIELD_NUMBER: _ClassVar[int]
     CAP_FIELD_NUMBER: _ClassVar[int]
     BOUND_UNIT_FIELD_NUMBER: _ClassVar[int]
+    CATEGORY_FIELD_NUMBER: _ClassVar[int]
     payout: Money
     closes_at_ns: int
     floor: EventContractBound
     cap: EventContractBound
     bound_unit: str
-    def __init__(self, payout: _Optional[_Union[Money, _Mapping]] = ..., closes_at_ns: _Optional[int] = ..., floor: _Optional[_Union[EventContractBound, _Mapping]] = ..., cap: _Optional[_Union[EventContractBound, _Mapping]] = ..., bound_unit: _Optional[str] = ...) -> None: ...
+    category: str
+    def __init__(self, payout: _Optional[_Union[Money, _Mapping]] = ..., closes_at_ns: _Optional[int] = ..., floor: _Optional[_Union[EventContractBound, _Mapping]] = ..., cap: _Optional[_Union[EventContractBound, _Mapping]] = ..., bound_unit: _Optional[str] = ..., category: _Optional[str] = ...) -> None: ...
 
 class EventContractBound(_message.Message):
     __slots__ = ("value", "inclusive")
@@ -9382,18 +9384,20 @@ class LifecycleDelivery(_message.Message):
     def __init__(self, instrument_id: _Optional[str] = ..., quantity: _Optional[_Union[Decimal, _Mapping]] = ..., price: _Optional[_Union[Money, _Mapping]] = ...) -> None: ...
 
 class DerivedSeries(_message.Message):
-    __slots__ = ("meta", "series", "value", "rule", "inputs")
+    __slots__ = ("meta", "series", "value", "rule", "inputs", "published_by")
     META_FIELD_NUMBER: _ClassVar[int]
     SERIES_FIELD_NUMBER: _ClassVar[int]
     VALUE_FIELD_NUMBER: _ClassVar[int]
     RULE_FIELD_NUMBER: _ClassVar[int]
     INPUTS_FIELD_NUMBER: _ClassVar[int]
+    PUBLISHED_BY_FIELD_NUMBER: _ClassVar[int]
     meta: ObservationMeta
     series: str
     value: UnitValue
     rule: MeasureRef
     inputs: _containers.RepeatedCompositeFieldContainer[DerivedInput]
-    def __init__(self, meta: _Optional[_Union[ObservationMeta, _Mapping]] = ..., series: _Optional[str] = ..., value: _Optional[_Union[UnitValue, _Mapping]] = ..., rule: _Optional[_Union[MeasureRef, _Mapping]] = ..., inputs: _Optional[_Iterable[_Union[DerivedInput, _Mapping]]] = ...) -> None: ...
+    published_by: str
+    def __init__(self, meta: _Optional[_Union[ObservationMeta, _Mapping]] = ..., series: _Optional[str] = ..., value: _Optional[_Union[UnitValue, _Mapping]] = ..., rule: _Optional[_Union[MeasureRef, _Mapping]] = ..., inputs: _Optional[_Iterable[_Union[DerivedInput, _Mapping]]] = ..., published_by: _Optional[str] = ...) -> None: ...
 
 class DerivedInput(_message.Message):
     __slots__ = ("dataset", "as_of_ns")

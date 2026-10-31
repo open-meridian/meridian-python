@@ -380,6 +380,23 @@ async def proposes_an_exercise_by_exception(recorder: Recorder) -> None:
 
 
 async def records_a_derived_series(recorder: Recorder) -> None:
+    # The data suite's case of the same name (contract 28, amended
+    # 2026-10-31, ruling 955): a publisher's figure, naming whose.
+    if recorder.identity.instance_id.startswith("data-"):
+        figure = meridian.DerivedSeries(
+            meta=meridian.ObservationMeta(
+                row_key="VIX:level:2026-10-23",
+                subjects=[meridian.SubjectRef(entity_id=AAPL)],
+                source=ops.Source(dataset=f"{recorder.identity.instance_id}:indices"),
+                valid_from_ns=NOW_NS,
+            ),
+            series="level",
+            value=meridian.UnitValue(value=Decimal("16.42"), unit="percent"),
+            rule=ops.MeasureRef(definition="cboe_vix", version=1),
+            published_by="Cboe",
+        )
+        await recorder.record_derived_series(values=[figure])
+        return
     value = signal.derived(
         AAPL, "iv30", Decimal("27.84"), "2026-10-23",
         dataset=f"{recorder.identity.instance_id}:derived", unit="percent",

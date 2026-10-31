@@ -470,3 +470,27 @@ def test_a_price_carries_its_sources_confidence_in_its_own_unit() -> None:
         "prices[0]",
     )
     assert not unstated.HasField("confidence")
+
+
+def test_a_derived_series_says_whose_figure_it_is() -> None:
+    """Contract 28, amended 2026-10-31 (ruling 955): a data plugin records a
+    publisher's figure, naming whose, its inputs empty."""
+    from meridian.operations import _derived_series
+
+    figure = meridian.DerivedSeries(
+        series="level",
+        value=meridian.UnitValue(value=Decimal("16.42"), unit="percent"),
+        rule=ops.MeasureRef(definition="cboe_vix", version=1),
+        published_by="Cboe",
+    )
+    wire = _derived_series(figure, "values[0]")
+    assert wire.published_by == "Cboe" and not wire.inputs
+    own = _derived_series(meridian.DerivedSeries(series="iv30"), "values[0]")
+    assert own.published_by == ""
+    # The data suite asks a data plugin for it, which one publishing no
+    # figure of its own marks not presented (about: derived series).
+    from meridian.suites import suite
+
+    cases = {c.name: c for c in suite("data").cases}
+    case = cases["records-a-derived-series"]
+    assert case.about == "derived series"

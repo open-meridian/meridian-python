@@ -210,6 +210,8 @@ KINDS = {
     "holdings": "meridian.v1.HoldingsReport",
     "corporate actions": "meridian.v1.CorporateActionAnnounced",
     "ratings": "meridian.v1.RatingAction",
+    # Contract 28, amended 2026-10-31 (ruling 955): a publisher's figure.
+    "derived series": "meridian.v1.DerivedSeries",
 }
 DECLARED = {kind for dataset in DECLARATION.catalogue for kind in dataset.data_types}
 STREAMED = any(

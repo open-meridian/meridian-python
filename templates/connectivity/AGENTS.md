@@ -207,6 +207,21 @@ and subscribe to comes from the roles `pyproject.toml` declares under
   the dataset's `data_types`. A deployment admin sees the class and the
   underlying source on Data sources; a core earlier than contract 28's
   amendment of 2026-10-31 refuses a registration setting either.
+- **A data plugin records a publisher's figure as the publisher's.** A
+  figure the source computes itself -- an index's level, a vendor's own
+  implied volatility -- is recorded as a derived series in a dataset of its
+  own (`plugin.record_derived_series`), each value marked
+  `DerivedSeries(published_by=...)` with whose it is ("Cboe"), its `rule`
+  naming the publisher's definition and its `inputs` empty; never as the
+  plugin's or the platform's own measure. A data plugin's derived series
+  without `published_by` is refused. Map the data suite's
+  `records-a-derived-series` to it, or mark it not presented where the
+  source publishes no figure of its own.
+- **A venue plugin records a market's category in the venue's words.** A
+  binary event contract's terms carry `category`, the venue's primary
+  category for the market as the venue words it (a series' category, an
+  event's primary tag label), 0 to 64 characters, empty where it states
+  none; never mapped to a list of our own.
 - **A data plugin streaming trades and quotes records them as its source states
   them, converted at the edge.** Declare them in a live dataset apart
   (`data_types=["meridian.v1.Trade", "meridian.v1.Quote"]`, `modes=["stream"]`)

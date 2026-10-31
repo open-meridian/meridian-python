@@ -3580,6 +3580,27 @@
               }
             }
           ]
+        },
+        {
+          "name": "records-a-derived-series",
+          "since": "v28",
+          "about": "derived series",
+          "given": "the source publishes an index's level, a figure its publisher computes",
+          "expect": [
+            {
+              "row": "RecordDerivedSeries",
+              "fields": {
+                "values": [
+                  {
+                    "series": "<set>",
+                    "value": "<set>",
+                    "rule": "<set>",
+                    "published_by": "<set>"
+                  }
+                ]
+              }
+            }
+          ]
         }
       ]
     },
