@@ -118,7 +118,7 @@ DESIGN ?= ../meridian-design
 # without either waiting on the other's push.
 # Core's main after open-meridian/meridian-core#75 (data-access step 2,
 # contract 28 amended 2026-10-30): lake.proto's RenewWants and SeriesRecordedEvent.
-CORE_REV   := 93fd4784f8ec1bba15786805cf5d489210e44a23
+CORE_REV   := c4e9ca53a68bb43616aa642845337e858b826c8f
 CORE_PROTO ?= https://github.com/open-meridian/meridian-core.git\#$(CORE_REV):proto
 # And meridian-schema's, which core's import, at the revision vendored here.
 SCHEMA_PROTO ?= https://github.com/open-meridian/meridian-schema.git\#$(SCHEMA_REV):proto
