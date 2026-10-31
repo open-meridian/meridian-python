@@ -2,7 +2,7 @@
 
 The Python SDK for building [Open Meridian](https://open-meridian.com) plugins:
 the tools a trader has an AI agent build, and the bots and analytics a
-developer writes. Python 3.11 or newer. This is release 0.33.4; its reference
+developer writes. Python 3.11 or newer. This is release 0.33.5; its reference
 is at [open-meridian.dev](https://open-meridian.dev/api/python-sdk/).
 
 ## Start here
@@ -1960,7 +1960,7 @@ await plugin.receive(observations_wanted=lambda heard: wants.hear(heard, answer)
   raw record names its venue account; a good-till-date order is asked with
   its expiry (`Asked.expire_date`, `.expire_time_ns`).
 
-### Listed options and futures, filings, quality states and latency reported (contract v28; 0.33.0 to 0.33.4)
+### Listed options and futures, filings, quality states and latency reported (contract v28; 0.33.0 to 0.33.5)
 
 0.33.0 declares contract v28 (`meridian.SCHEMA_VERSION`). Breaking; `meridian
 plugin migrate` rewrites what it can (`to_0_33_0`).
@@ -2100,6 +2100,54 @@ plugin migrate` rewrites what it can (`to_0_33_0`).
   forgotten line's arrival from the line. The typed operations read each
   enum type's names once rather than on every call. Nothing a plugin calls
   changed; `meridian plugin migrate` moves the pins.
+- **0.33.5, additive** (ruling 969; contract v28 as amended 2026-10-30 and
+  2026-10-31): pages that tick, and what stands behind a price.
+  - **Subscriptions.** `plugin.subscribe(row, subjects=..., fields=...)`,
+    or with `series_keys`, or `all_series` and an expiration window,
+    answers a `LiveView`. The SDK reads its snapshot once, keeps it current
+    from the deliveries the sidecar matches, and reads it again after a
+    loss, so a page reads the view with no bus call and the plugin keeps no
+    copy of its own. Identical selectors are one subscription, shared;
+    `close()` a view when done with it (or `async with`), and its
+    subscription lingers 30 seconds after the last reader, so a reload does
+    not churn it. `pages.live(path, ...)` serves a view's snapshot and its
+    event stream, changes conflated to one per row every 250 ms, to the
+    kit's `<om-live>`. A core older than chart 0.1.334 has no
+    subscriptions.
+  - **What stands behind a price.** A data plugin declares each dataset's
+    class of source, `DatasetDeclaration(price_source_class=...)`:
+    `traded`, `firm_quote`, `composite` or `evaluated`, empty where the
+    source does not say. Where the vendor passes on another source's data or
+    serves an aggregate, its terms name it in words,
+    `DatasetLicence(underlying_source="Pyth's aggregate of its
+    publishers")`. A deployment admin sees both on Data sources. A price may
+    carry the interval its source states around it,
+    `Price(confidence=...)`, in the price's own unit.
+  - **A publisher's figure and a market's category.** A figure the source
+    computes itself, such as an index's level, is recorded as a derived
+    series marked with whose it is, `DerivedSeries(published_by="Cboe")`,
+    never as the plugin's own measure. A binary event contract's terms carry
+    `category`, the venue's own word for what the market is about.
+  - **Suites.** The data suite gains `records-a-derived-series`, and the
+    ems, oms, portfolio and signal suites `hears-a-listed-series`. A plugin
+    that maps its suite's cases itself maps each new case or names it not
+    presented, with why; the pairs, event-contract and rates helpers'
+    not-presented sets already name `records-a-derived-series`.
+
+  **Set `price_source_class` or `underlying_source` only on core chart
+  0.1.336 or later**: an older core refuses the registration of a
+  declaration setting either. Every template's AGENTS.md gains "Subscribe
+  to what a page shows", "A data plugin says what stands behind its
+  prices", "A data plugin records a publisher's figure as the publisher's"
+  and "A venue plugin records a market's category in the venue's words".
+  Nothing a plugin calls changed shape; `meridian plugin migrate` moves the
+  pins.
+
+  ```python
+  @pages.live("/rates/live", levels="read")
+  async def rates(request):
+      return await plugin.subscribe("QuotesRecorded", subjects=pairs_shown)
+  ```
 
 ## Moving a plugin to a new release
 
