@@ -17,6 +17,7 @@ that is the deployment shape the design calls for.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import base64
 import os
 import uuid
@@ -151,9 +152,16 @@ async def test_a_source_thinner_than_the_minimum_is_answered_not_found(plugin) -
 
 
 async def test_there_is_no_path_onto_the_bus_but_a_typed_operation(plugin) -> None:
-    """decisions/013: the generic operations are gone from contract v2."""
-    for generic in ("publish", "subscribe", "call"):
+    """decisions/013: the generic operations are gone from contract v2.
+
+    From contract v28's amendment of 2026-10-30 `subscribe` is a typed
+    operation again, not the generic one: a row by its matrix name and a
+    read's narrowing, delivered on the one stream, never a topic (rulings
+    834 and 888)."""
+    for generic in ("publish", "call"):
         assert not hasattr(plugin, generic), generic
+    typed = inspect.signature(plugin.subscribe).parameters
+    assert "row" in typed and "topic" not in typed and "subject" not in typed
 
 
 async def test_a_required_setting_the_deployment_holds_nothing_for_is_named() -> None:
