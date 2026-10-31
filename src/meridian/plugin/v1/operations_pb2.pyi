@@ -5447,7 +5447,7 @@ class ReceiveRequest(_message.Message):
     def __init__(self, rows: _Optional[_Iterable[str]] = ..., subjects: _Optional[_Iterable[str]] = ...) -> None: ...
 
 class Delivery(_message.Message):
-    __slots__ = ("meta", "lost", "statement_recorded", "custodial_position_updated", "position_changed", "break_changed", "account_figures_recorded", "account_attribute_changed", "activity_recorded", "sync_status_recorded", "activity_re_resolved", "prices_recorded", "bars_recorded", "observations_wanted", "want_withdrawn", "trades_recorded", "quotes_recorded", "order_updated", "placement_updated", "execution_recorded", "unplaced_fact_recorded", "trading_instruction_changed", "locate_updated", "report_venue_catalogue", "outcomes_recorded", "replace_merged_instrument", "booking_updated", "alert_changed", "price_batch", "job_finished", "event_group_changed", "rates_recorded", "liveness_recorded", "statistics_recorded", "lifecycle_event_recorded", "filings_recorded", "corporate_actions_recorded")
+    __slots__ = ("meta", "lost", "statement_recorded", "custodial_position_updated", "position_changed", "break_changed", "account_figures_recorded", "account_attribute_changed", "activity_recorded", "sync_status_recorded", "activity_re_resolved", "prices_recorded", "bars_recorded", "observations_wanted", "want_withdrawn", "trades_recorded", "quotes_recorded", "order_updated", "placement_updated", "execution_recorded", "unplaced_fact_recorded", "trading_instruction_changed", "locate_updated", "report_venue_catalogue", "outcomes_recorded", "replace_merged_instrument", "booking_updated", "alert_changed", "price_batch", "job_finished", "event_group_changed", "rates_recorded", "liveness_recorded", "statistics_recorded", "lifecycle_event_recorded", "filings_recorded", "corporate_actions_recorded", "series_recorded")
     META_FIELD_NUMBER: _ClassVar[int]
     LOST_FIELD_NUMBER: _ClassVar[int]
     STATEMENT_RECORDED_FIELD_NUMBER: _ClassVar[int]
@@ -5485,6 +5485,7 @@ class Delivery(_message.Message):
     LIFECYCLE_EVENT_RECORDED_FIELD_NUMBER: _ClassVar[int]
     FILINGS_RECORDED_FIELD_NUMBER: _ClassVar[int]
     CORPORATE_ACTIONS_RECORDED_FIELD_NUMBER: _ClassVar[int]
+    SERIES_RECORDED_FIELD_NUMBER: _ClassVar[int]
     meta: DeliveryMeta
     lost: Lost
     statement_recorded: StatementRecordedEvent
@@ -5522,10 +5523,11 @@ class Delivery(_message.Message):
     lifecycle_event_recorded: LifecycleEventRecordedEvent
     filings_recorded: FilingsRecordedEvent
     corporate_actions_recorded: CorporateActionsRecordedEvent
-    def __init__(self, meta: _Optional[_Union[DeliveryMeta, _Mapping]] = ..., lost: _Optional[_Union[Lost, _Mapping]] = ..., statement_recorded: _Optional[_Union[StatementRecordedEvent, _Mapping]] = ..., custodial_position_updated: _Optional[_Union[CustodialPositionUpdatedEvent, _Mapping]] = ..., position_changed: _Optional[_Union[PositionChangedEvent, _Mapping]] = ..., break_changed: _Optional[_Union[BreakChangedEvent, _Mapping]] = ..., account_figures_recorded: _Optional[_Union[AccountFiguresRecordedEvent, _Mapping]] = ..., account_attribute_changed: _Optional[_Union[AccountAttributeChangedEvent, _Mapping]] = ..., activity_recorded: _Optional[_Union[ActivityRecordedEvent, _Mapping]] = ..., sync_status_recorded: _Optional[_Union[SyncStatusRecordedEvent, _Mapping]] = ..., activity_re_resolved: _Optional[_Union[ActivityReResolvedEvent, _Mapping]] = ..., prices_recorded: _Optional[_Union[PricesRecordedEvent, _Mapping]] = ..., bars_recorded: _Optional[_Union[BarsRecordedEvent, _Mapping]] = ..., observations_wanted: _Optional[_Union[ObservationsWantedEvent, _Mapping]] = ..., want_withdrawn: _Optional[_Union[WantWithdrawnEvent, _Mapping]] = ..., trades_recorded: _Optional[_Union[TradesRecordedEvent, _Mapping]] = ..., quotes_recorded: _Optional[_Union[QuotesRecordedEvent, _Mapping]] = ..., order_updated: _Optional[_Union[OrderUpdatedEvent, _Mapping]] = ..., placement_updated: _Optional[_Union[PlacementUpdatedEvent, _Mapping]] = ..., execution_recorded: _Optional[_Union[ExecutionRecordedEvent, _Mapping]] = ..., unplaced_fact_recorded: _Optional[_Union[UnplacedFactRecordedEvent, _Mapping]] = ..., trading_instruction_changed: _Optional[_Union[TradingInstructionChangedEvent, _Mapping]] = ..., locate_updated: _Optional[_Union[LocateUpdatedEvent, _Mapping]] = ..., report_venue_catalogue: _Optional[_Union[VenueCatalogueEvent, _Mapping]] = ..., outcomes_recorded: _Optional[_Union[OutcomesRecordedEvent, _Mapping]] = ..., replace_merged_instrument: _Optional[_Union[InstrumentReplacedEvent, _Mapping]] = ..., booking_updated: _Optional[_Union[BookingUpdatedEvent, _Mapping]] = ..., alert_changed: _Optional[_Union[AlertChangedEvent, _Mapping]] = ..., price_batch: _Optional[_Union[PriceBatchRequest, _Mapping]] = ..., job_finished: _Optional[_Union[JobFinishedEvent, _Mapping]] = ..., event_group_changed: _Optional[_Union[EventGroup, _Mapping]] = ..., rates_recorded: _Optional[_Union[RatesRecordedEvent, _Mapping]] = ..., liveness_recorded: _Optional[_Union[LivenessRecordedEvent, _Mapping]] = ..., statistics_recorded: _Optional[_Union[StatisticsRecordedEvent, _Mapping]] = ..., lifecycle_event_recorded: _Optional[_Union[LifecycleEventRecordedEvent, _Mapping]] = ..., filings_recorded: _Optional[_Union[FilingsRecordedEvent, _Mapping]] = ..., corporate_actions_recorded: _Optional[_Union[CorporateActionsRecordedEvent, _Mapping]] = ...) -> None: ...
+    series_recorded: SeriesRecordedEvent
+    def __init__(self, meta: _Optional[_Union[DeliveryMeta, _Mapping]] = ..., lost: _Optional[_Union[Lost, _Mapping]] = ..., statement_recorded: _Optional[_Union[StatementRecordedEvent, _Mapping]] = ..., custodial_position_updated: _Optional[_Union[CustodialPositionUpdatedEvent, _Mapping]] = ..., position_changed: _Optional[_Union[PositionChangedEvent, _Mapping]] = ..., break_changed: _Optional[_Union[BreakChangedEvent, _Mapping]] = ..., account_figures_recorded: _Optional[_Union[AccountFiguresRecordedEvent, _Mapping]] = ..., account_attribute_changed: _Optional[_Union[AccountAttributeChangedEvent, _Mapping]] = ..., activity_recorded: _Optional[_Union[ActivityRecordedEvent, _Mapping]] = ..., sync_status_recorded: _Optional[_Union[SyncStatusRecordedEvent, _Mapping]] = ..., activity_re_resolved: _Optional[_Union[ActivityReResolvedEvent, _Mapping]] = ..., prices_recorded: _Optional[_Union[PricesRecordedEvent, _Mapping]] = ..., bars_recorded: _Optional[_Union[BarsRecordedEvent, _Mapping]] = ..., observations_wanted: _Optional[_Union[ObservationsWantedEvent, _Mapping]] = ..., want_withdrawn: _Optional[_Union[WantWithdrawnEvent, _Mapping]] = ..., trades_recorded: _Optional[_Union[TradesRecordedEvent, _Mapping]] = ..., quotes_recorded: _Optional[_Union[QuotesRecordedEvent, _Mapping]] = ..., order_updated: _Optional[_Union[OrderUpdatedEvent, _Mapping]] = ..., placement_updated: _Optional[_Union[PlacementUpdatedEvent, _Mapping]] = ..., execution_recorded: _Optional[_Union[ExecutionRecordedEvent, _Mapping]] = ..., unplaced_fact_recorded: _Optional[_Union[UnplacedFactRecordedEvent, _Mapping]] = ..., trading_instruction_changed: _Optional[_Union[TradingInstructionChangedEvent, _Mapping]] = ..., locate_updated: _Optional[_Union[LocateUpdatedEvent, _Mapping]] = ..., report_venue_catalogue: _Optional[_Union[VenueCatalogueEvent, _Mapping]] = ..., outcomes_recorded: _Optional[_Union[OutcomesRecordedEvent, _Mapping]] = ..., replace_merged_instrument: _Optional[_Union[InstrumentReplacedEvent, _Mapping]] = ..., booking_updated: _Optional[_Union[BookingUpdatedEvent, _Mapping]] = ..., alert_changed: _Optional[_Union[AlertChangedEvent, _Mapping]] = ..., price_batch: _Optional[_Union[PriceBatchRequest, _Mapping]] = ..., job_finished: _Optional[_Union[JobFinishedEvent, _Mapping]] = ..., event_group_changed: _Optional[_Union[EventGroup, _Mapping]] = ..., rates_recorded: _Optional[_Union[RatesRecordedEvent, _Mapping]] = ..., liveness_recorded: _Optional[_Union[LivenessRecordedEvent, _Mapping]] = ..., statistics_recorded: _Optional[_Union[StatisticsRecordedEvent, _Mapping]] = ..., lifecycle_event_recorded: _Optional[_Union[LifecycleEventRecordedEvent, _Mapping]] = ..., filings_recorded: _Optional[_Union[FilingsRecordedEvent, _Mapping]] = ..., corporate_actions_recorded: _Optional[_Union[CorporateActionsRecordedEvent, _Mapping]] = ..., series_recorded: _Optional[_Union[SeriesRecordedEvent, _Mapping]] = ...) -> None: ...
 
 class DeliveryMeta(_message.Message):
-    __slots__ = ("message_id", "correlation_id", "causation_id", "published_at_ns", "row", "journal", "cause", "own")
+    __slots__ = ("message_id", "correlation_id", "causation_id", "published_at_ns", "row", "journal", "cause", "own", "subscription_ids")
     MESSAGE_ID_FIELD_NUMBER: _ClassVar[int]
     CORRELATION_ID_FIELD_NUMBER: _ClassVar[int]
     CAUSATION_ID_FIELD_NUMBER: _ClassVar[int]
@@ -5534,6 +5536,7 @@ class DeliveryMeta(_message.Message):
     JOURNAL_FIELD_NUMBER: _ClassVar[int]
     CAUSE_FIELD_NUMBER: _ClassVar[int]
     OWN_FIELD_NUMBER: _ClassVar[int]
+    SUBSCRIPTION_IDS_FIELD_NUMBER: _ClassVar[int]
     message_id: str
     correlation_id: str
     causation_id: str
@@ -5542,7 +5545,8 @@ class DeliveryMeta(_message.Message):
     journal: JournalRef
     cause: ChangeCause
     own: bool
-    def __init__(self, message_id: _Optional[str] = ..., correlation_id: _Optional[str] = ..., causation_id: _Optional[str] = ..., published_at_ns: _Optional[int] = ..., row: _Optional[str] = ..., journal: _Optional[_Union[JournalRef, _Mapping]] = ..., cause: _Optional[_Union[ChangeCause, _Mapping]] = ..., own: bool = ...) -> None: ...
+    subscription_ids: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, message_id: _Optional[str] = ..., correlation_id: _Optional[str] = ..., causation_id: _Optional[str] = ..., published_at_ns: _Optional[int] = ..., row: _Optional[str] = ..., journal: _Optional[_Union[JournalRef, _Mapping]] = ..., cause: _Optional[_Union[ChangeCause, _Mapping]] = ..., own: bool = ..., subscription_ids: _Optional[_Iterable[str]] = ...) -> None: ...
 
 class Lost(_message.Message):
     __slots__ = ("dropped", "rows")
@@ -5551,6 +5555,40 @@ class Lost(_message.Message):
     dropped: int
     rows: _containers.RepeatedScalarFieldContainer[str]
     def __init__(self, dropped: _Optional[int] = ..., rows: _Optional[_Iterable[str]] = ...) -> None: ...
+
+class SubscribeRequest(_message.Message):
+    __slots__ = ("subscription_id", "row", "subjects", "series_keys", "all_series", "expiration_from", "expiration_to", "fields")
+    SUBSCRIPTION_ID_FIELD_NUMBER: _ClassVar[int]
+    ROW_FIELD_NUMBER: _ClassVar[int]
+    SUBJECTS_FIELD_NUMBER: _ClassVar[int]
+    SERIES_KEYS_FIELD_NUMBER: _ClassVar[int]
+    ALL_SERIES_FIELD_NUMBER: _ClassVar[int]
+    EXPIRATION_FROM_FIELD_NUMBER: _ClassVar[int]
+    EXPIRATION_TO_FIELD_NUMBER: _ClassVar[int]
+    FIELDS_FIELD_NUMBER: _ClassVar[int]
+    subscription_id: str
+    row: str
+    subjects: _containers.RepeatedScalarFieldContainer[str]
+    series_keys: _containers.RepeatedCompositeFieldContainer[Identifier]
+    all_series: bool
+    expiration_from: str
+    expiration_to: str
+    fields: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, subscription_id: _Optional[str] = ..., row: _Optional[str] = ..., subjects: _Optional[_Iterable[str]] = ..., series_keys: _Optional[_Iterable[_Union[Identifier, _Mapping]]] = ..., all_series: bool = ..., expiration_from: _Optional[str] = ..., expiration_to: _Optional[str] = ..., fields: _Optional[_Iterable[str]] = ...) -> None: ...
+
+class SubscribeReply(_message.Message):
+    __slots__ = ()
+    def __init__(self) -> None: ...
+
+class UnsubscribeRequest(_message.Message):
+    __slots__ = ("subscription_id",)
+    SUBSCRIPTION_ID_FIELD_NUMBER: _ClassVar[int]
+    subscription_id: str
+    def __init__(self, subscription_id: _Optional[str] = ...) -> None: ...
+
+class UnsubscribeReply(_message.Message):
+    __slots__ = ()
+    def __init__(self) -> None: ...
 
 class ExternalAccount(_message.Message):
     __slots__ = ("external_account_id", "name", "venue_account_type", "account_kind", "account_kind_as_reported")
@@ -9797,3 +9835,9 @@ class CorporateActionsRecordedEvent(_message.Message):
     ACTION_FIELD_NUMBER: _ClassVar[int]
     action: CorporateActionAnnounced
     def __init__(self, action: _Optional[_Union[CorporateActionAnnounced, _Mapping]] = ...) -> None: ...
+
+class SeriesRecordedEvent(_message.Message):
+    __slots__ = ("series",)
+    SERIES_FIELD_NUMBER: _ClassVar[int]
+    series: ListedSeries
+    def __init__(self, series: _Optional[_Union[ListedSeries, _Mapping]] = ...) -> None: ...
