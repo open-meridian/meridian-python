@@ -365,6 +365,18 @@ want is of (amended 2026-10-28, 821)"""
 DECLINE_WANT_REQUEST_SUBJECTS_COUNT = Count(least=1, most=500)
 """meridian.v1.DeclineWantRequest.subjects: names the subjects declined"""
 
+RENEW_WANTS_REQUEST_WANTS_COUNT = Count(least=1, most=500)
+"""meridian.v1.RenewWantsRequest.wants: keeps upstream interest alive for a
+sidecar's open subscriptions (amended 2026-10-30, 885)"""
+
+RENEWED_WANT_SUBJECTS_COUNT = Count(least=1, most=500)
+"""meridian.v1.RenewedWant.subjects: names the subjects a subscription keeps
+current (amended 2026-10-30, 885)"""
+
+RENEWED_WANT_SERIES_KEYS_COUNT = Count(least=0, most=500)
+"""meridian.v1.RenewedWant.series_keys: names the series a chain subscription
+keeps current (amended 2026-10-30, 885)"""
+
 DATASET_ENTITLEMENT_FIELDS_COUNT = Count(least=0, most=64)
 """meridian.v1.DatasetEntitlement.fields: narrows an entitlement to some fields"""
 
@@ -800,9 +812,37 @@ SIDECAR_RECEIVE_LIMIT_RANGE = Range(least=0, most=1024, capped=True)
 """SidecarReceive.limit: bounds what the sidecar holds for a plugin that reads
 slowly"""
 
+DELIVERY_META_SUBSCRIPTION_IDS_COUNT = Count(least=0, most=256)
+"""meridian.plugin.v1.DeliveryMeta.subscription_ids: routes a delivery to the
+views it keeps current (amended 2026-10-30)"""
+
 RECEIVE_REQUEST_SUBJECTS_COUNT = Count(least=0, most=500)
 """meridian.plugin.v1.ReceiveRequest.subjects: names the subjects a plugin
 wants of the conflated rows"""
+
+SUBSCRIBE_REQUEST_SUBSCRIPTION_ID_LENGTH = Length(least=1, most=64)
+"""meridian.plugin.v1.SubscribeRequest.subscription_id: names a subscription so
+the plugin can drop it and route what it hears (amended 2026-10-30)"""
+
+SUBSCRIBE_REQUEST_SUBJECTS_COUNT = Count(least=0, most=500)
+"""meridian.plugin.v1.SubscribeRequest.subjects: narrows a subscription to what
+a page shows (amended 2026-10-30)"""
+
+SUBSCRIBE_REQUEST_SERIES_KEYS_COUNT = Count(least=0, most=500)
+"""meridian.plugin.v1.SubscribeRequest.series_keys: narrows a lake row's
+subscription to named series (amended 2026-10-30)"""
+
+SUBSCRIBE_REQUEST_FIELDS_COUNT = Count(least=0, most=32)
+"""meridian.plugin.v1.SubscribeRequest.fields: narrows what a subscription
+delivers to what a page shows (amended 2026-10-30)"""
+
+SIDECAR_SUBSCRIBE_LIMIT_RANGE = Range(least=0, most=256, capped=False)
+"""SidecarSubscribe.limit: bounds what one sidecar matches for its plugin
+(amended 2026-10-30)"""
+
+UNSUBSCRIBE_REQUEST_SUBSCRIPTION_ID_LENGTH = Length(least=1, most=64)
+"""meridian.plugin.v1.UnsubscribeRequest.subscription_id: names the
+subscription dropped (amended 2026-10-30)"""
 
 PLUGIN_CATALOGUE_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=True)
 """meridian.v1.PluginCatalogueRequest.page_size: bounds a page"""
