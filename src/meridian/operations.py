@@ -37,6 +37,7 @@ from .bounds import (
     RECORD_BARS_REQUEST_BARS_COUNT,
     RECORD_CORPORATE_ACTIONS_REQUEST_ACTIONS_COUNT,
     RECORD_DERIVED_SERIES_REQUEST_VALUES_COUNT,
+    RECORD_FACTORS_REQUEST_FACTORS_COUNT,
     RECORD_FILINGS_REQUEST_FILINGS_COUNT,
     RECORD_HOLDINGS_REPORTS_REQUEST_REPORTS_COUNT,
     RECORD_HOLDINGS_REQUEST_HOLDINGS_COUNT,
@@ -178,6 +179,13 @@ def _arm(oneof: str, **arms: Any) -> dict[str, Any]:
             f"{' and '.join(given)} were given"
         )
     return given
+
+
+def _keyword(name: str, value: Any) -> dict[str, Any]:
+    """A field the wire names by a Python keyword (`yield`), as a keyword
+    argument for the wire's message: the SDK takes it as `yield_` (ruling
+    741), the wire keeps its name."""
+    return {name: value}
 
 
 def _date(value: date | str, name: str) -> str:
@@ -1183,6 +1191,88 @@ def _order_link(value: OrderLink, name: str) -> ops.OrderLink:
 
 
 @dataclass(frozen=True, kw_only=True)
+class QuotedYield:
+    """Contract v29 (ruling 685; W10.4, W11.1): a yield as its source quotes
+    it, a v27 Rate-shaped value -- its value in percent, its convention and
+    its kind after FIX YieldType (235) -- never computed by the plugin.
+
+    The SDK's form of the wire's QuotedYield: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    value: UnitValue | None = None
+    convention: RateConvention | None = None
+    kind: ops.YieldKind | str | None = None
+    to_date: date | str = ""
+
+
+def _quoted_yield(value: QuotedYield, name: str) -> ops.QuotedYield:
+    """A QuotedYield as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, QuotedYield):
+        raise TypeError(f"{name} is a meridian.QuotedYield, not {type(value).__name__}")
+    return ops.QuotedYield(
+        value=None if value.value is None else _unit_value(value.value, f"{name}.value"),
+        convention=None if value.convention is None else _rate_convention(value.convention, f"{name}.convention"),
+        kind=_enum(ops.YieldKind, value.kind, f"{name}.kind"),
+        to_date=_date(value.to_date, f"{name}.to_date"),
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class UnitValue:
+    """A value with its unit (contract v27, the lake's rates slice;
+    spec/the-lake-holds-researchs-kinds, shared addition 3 and Q8;
+    spec/a-public-rates-and-filings-data-plugin, §1 item 2): a Decimal that
+    is not money, in base units, with its unit from a closed list or, for a
+    physical unit, its UCUM code.
+
+    The SDK's form of the wire's UnitValue: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    value: Decimal | int
+    unit: ops.ValueUnit | str | None = None
+    index_base: str = ""
+    ucum_code: str = ""
+
+
+def _unit_value(value: UnitValue, name: str) -> ops.UnitValue:
+    """A UnitValue as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, UnitValue):
+        raise TypeError(f"{name} is a meridian.UnitValue, not {type(value).__name__}")
+    return ops.UnitValue(
+        value=_decimal(value.value, f"{name}.value"),
+        unit=_enum(ops.ValueUnit, value.unit, f"{name}.unit"),
+        index_base=value.index_base,
+        ucum_code=value.ucum_code,
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class RateConvention:
+    """How a rate accrues (FDP item 1).
+
+    The SDK's form of the wire's RateConvention: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    day_count: ops.DayCount | str | None = None
+    compounding: ops.Compounding | str | None = None
+    periods_per_year: int = 0
+
+
+def _rate_convention(value: RateConvention, name: str) -> ops.RateConvention:
+    """A RateConvention as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, RateConvention):
+        raise TypeError(f"{name} is a meridian.RateConvention, not {type(value).__name__}")
+    return ops.RateConvention(
+        day_count=_enum(ops.DayCount, value.day_count, f"{name}.day_count"),
+        compounding=_enum(ops.Compounding, value.compounding, f"{name}.compounding"),
+        periods_per_year=value.periods_per_year,
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
 class OrderChange:
     """What an order's change asks (W11.3).
 
@@ -1546,6 +1636,15 @@ class Allocation:
     error_cause: ops.ErrorCause | str | None = None
     error_text: str = ""
     give_up_answers: Sequence[GiveUpRecord] = ()
+    accrued_interest: Money | None = None
+    markup: Money | None = None
+    prevailing_market_price: Money | None = None
+    prevailing_market_price_basis: ops.PrevailingMarketPriceBasis | str | None = None
+    prevailing_market_price_reference: ops.PrevailingMarketPriceReference | None = None
+    capacity: ops.Capacity | str | None = None
+    execution_time_ns: int = 0
+    execution_time_precision: ops.TimePrecision | str | None = None
+    no_remuneration: bool = False
 
 
 def _allocation(value: Allocation, name: str) -> ops.Allocation:
@@ -1568,6 +1667,15 @@ def _allocation(value: Allocation, name: str) -> ops.Allocation:
         error_cause=_enum(ops.ErrorCause, value.error_cause, f"{name}.error_cause"),
         error_text=value.error_text,
         give_up_answers=[_give_up_record(each, f"{name}.give_up_answers[{i}]") for i, each in enumerate(value.give_up_answers)],
+        accrued_interest=None if value.accrued_interest is None else _money(value.accrued_interest, f"{name}.accrued_interest"),
+        markup=None if value.markup is None else _money(value.markup, f"{name}.markup"),
+        prevailing_market_price=None if value.prevailing_market_price is None else _money(value.prevailing_market_price, f"{name}.prevailing_market_price"),
+        prevailing_market_price_basis=_enum(ops.PrevailingMarketPriceBasis, value.prevailing_market_price_basis, f"{name}.prevailing_market_price_basis"),
+        prevailing_market_price_reference=value.prevailing_market_price_reference,
+        capacity=_enum(ops.Capacity, value.capacity, f"{name}.capacity"),
+        execution_time_ns=value.execution_time_ns,
+        execution_time_precision=_enum(ops.TimePrecision, value.execution_time_precision, f"{name}.execution_time_precision"),
+        no_remuneration=value.no_remuneration,
     )
 
 
@@ -1772,6 +1880,9 @@ class Price:
     price: Money
     basis: ops.PriceBasis | str | None = None
     confidence: Decimal | int | None = None
+    yield_: QuotedYield | None = None
+    spread_bps: Decimal | int | None = None
+    benchmark_instrument_id: str = ""
 
 
 def _price(value: Price, name: str) -> ops.Price:
@@ -1784,6 +1895,9 @@ def _price(value: Price, name: str) -> ops.Price:
         price=_money(value.price, f"{name}.price"),
         basis=_enum(ops.PriceBasis, value.basis, f"{name}.basis"),
         confidence=None if value.confidence is None else _decimal(value.confidence, f"{name}.confidence"),
+        **_keyword("yield", None if value.yield_ is None else _quoted_yield(value.yield_, f"{name}.yield")),
+        spread_bps=None if value.spread_bps is None else _decimal(value.spread_bps, f"{name}.spread_bps"),
+        benchmark_instrument_id=value.benchmark_instrument_id,
     )
 
 
@@ -1935,6 +2049,11 @@ class Trade:
     source_sequence: int = 0
     cancelled: bool = False
     quote_at_trade: QuoteAtTrade | None = None
+    basis: ops.PriceBasis | str | None = None
+    yield_: QuotedYield | None = None
+    spread_bps: Decimal | int | None = None
+    benchmark_instrument_id: str = ""
+    quantity_capped: bool = False
 
 
 def _trade(value: Trade, name: str) -> ops.Trade:
@@ -1950,6 +2069,11 @@ def _trade(value: Trade, name: str) -> ops.Trade:
         source_sequence=value.source_sequence,
         cancelled=value.cancelled,
         quote_at_trade=None if value.quote_at_trade is None else _quote_at_trade(value.quote_at_trade, f"{name}.quote_at_trade"),
+        basis=_enum(ops.PriceBasis, value.basis, f"{name}.basis"),
+        **_keyword("yield", None if value.yield_ is None else _quoted_yield(value.yield_, f"{name}.yield")),
+        spread_bps=None if value.spread_bps is None else _decimal(value.spread_bps, f"{name}.spread_bps"),
+        benchmark_instrument_id=value.benchmark_instrument_id,
+        quantity_capped=value.quantity_capped,
     )
 
 
@@ -2051,6 +2175,14 @@ class Quote:
     bid_quantity: Decimal | int | None = None
     ask_quantity: Decimal | int | None = None
     characteristics: Sequence[ops.QuoteCharacteristic | str] = ()
+    bid_size_capped: bool = False
+    ask_size_capped: bool = False
+    basis: ops.PriceBasis | str | None = None
+    bid_yield: QuotedYield | None = None
+    bid_spread_bps: Decimal | int | None = None
+    ask_yield: QuotedYield | None = None
+    ask_spread_bps: Decimal | int | None = None
+    benchmark_instrument_id: str = ""
 
 
 def _quote(value: Quote, name: str) -> ops.Quote:
@@ -2064,6 +2196,14 @@ def _quote(value: Quote, name: str) -> ops.Quote:
         bid_quantity=None if value.bid_quantity is None else _decimal(value.bid_quantity, f"{name}.bid_quantity"),
         ask_quantity=None if value.ask_quantity is None else _decimal(value.ask_quantity, f"{name}.ask_quantity"),
         characteristics=[_enum(ops.QuoteCharacteristic, each, f"{name}.characteristics[{i}]") for i, each in enumerate(value.characteristics)],
+        bid_size_capped=value.bid_size_capped,
+        ask_size_capped=value.ask_size_capped,
+        basis=_enum(ops.PriceBasis, value.basis, f"{name}.basis"),
+        bid_yield=None if value.bid_yield is None else _quoted_yield(value.bid_yield, f"{name}.bid_yield"),
+        bid_spread_bps=None if value.bid_spread_bps is None else _decimal(value.bid_spread_bps, f"{name}.bid_spread_bps"),
+        ask_yield=None if value.ask_yield is None else _quoted_yield(value.ask_yield, f"{name}.ask_yield"),
+        ask_spread_bps=None if value.ask_spread_bps is None else _decimal(value.ask_spread_bps, f"{name}.ask_spread_bps"),
+        benchmark_instrument_id=value.benchmark_instrument_id,
     )
 
 
@@ -2521,60 +2661,6 @@ def _rate(value: Rate, name: str) -> ops.Rate:
 
 
 @dataclass(frozen=True, kw_only=True)
-class UnitValue:
-    """A value with its unit (contract v27, the lake's rates slice;
-    spec/the-lake-holds-researchs-kinds, shared addition 3 and Q8;
-    spec/a-public-rates-and-filings-data-plugin, §1 item 2): a Decimal that
-    is not money, in base units, with its unit from a closed list or, for a
-    physical unit, its UCUM code.
-
-    The SDK's form of the wire's UnitValue: a number as a Decimal, an amount
-    as a Money, an enum as its value or name, each converted and refused
-    naming its path, as a request's own field is."""
-
-    value: Decimal | int
-    unit: ops.ValueUnit | str | None = None
-    index_base: str = ""
-    ucum_code: str = ""
-
-
-def _unit_value(value: UnitValue, name: str) -> ops.UnitValue:
-    """A UnitValue as the wire carries it, or refused naming `name`."""
-    if not isinstance(value, UnitValue):
-        raise TypeError(f"{name} is a meridian.UnitValue, not {type(value).__name__}")
-    return ops.UnitValue(
-        value=_decimal(value.value, f"{name}.value"),
-        unit=_enum(ops.ValueUnit, value.unit, f"{name}.unit"),
-        index_base=value.index_base,
-        ucum_code=value.ucum_code,
-    )
-
-
-@dataclass(frozen=True, kw_only=True)
-class RateConvention:
-    """How a rate accrues (FDP item 1).
-
-    The SDK's form of the wire's RateConvention: a number as a Decimal, an amount
-    as a Money, an enum as its value or name, each converted and refused
-    naming its path, as a request's own field is."""
-
-    day_count: ops.DayCount | str | None = None
-    compounding: ops.Compounding | str | None = None
-    periods_per_year: int = 0
-
-
-def _rate_convention(value: RateConvention, name: str) -> ops.RateConvention:
-    """A RateConvention as the wire carries it, or refused naming `name`."""
-    if not isinstance(value, RateConvention):
-        raise TypeError(f"{name} is a meridian.RateConvention, not {type(value).__name__}")
-    return ops.RateConvention(
-        day_count=_enum(ops.DayCount, value.day_count, f"{name}.day_count"),
-        compounding=_enum(ops.Compounding, value.compounding, f"{name}.compounding"),
-        periods_per_year=value.periods_per_year,
-    )
-
-
-@dataclass(frozen=True, kw_only=True)
 class RatePercentile:
     """One percentile of a rate's distribution, as the source states it.
 
@@ -2701,6 +2787,14 @@ class LifecycleEvent:
     proposal_basis: Money | None = None
     raw_record: ops.RawRecordRef | None = None
     last_change: ops.JournalRef | None = None
+    redemption_kind: ops.RedemptionEventKind | str | None = None
+    redemption_price: Decimal | int | None = None
+    period_start_date: date | str = ""
+    period_end_date: date | str = ""
+    record_date: date | str = ""
+    factor: Decimal | int | None = None
+    prior_factor: Decimal | int | None = None
+    face_change: Decimal | int | None = None
 
 
 def _lifecycle_event(value: LifecycleEvent, name: str) -> ops.LifecycleEvent:
@@ -2723,6 +2817,14 @@ def _lifecycle_event(value: LifecycleEvent, name: str) -> ops.LifecycleEvent:
         proposal_basis=None if value.proposal_basis is None else _money(value.proposal_basis, f"{name}.proposal_basis"),
         raw_record=value.raw_record,
         last_change=value.last_change,
+        redemption_kind=_enum(ops.RedemptionEventKind, value.redemption_kind, f"{name}.redemption_kind"),
+        redemption_price=None if value.redemption_price is None else _decimal(value.redemption_price, f"{name}.redemption_price"),
+        period_start_date=_date(value.period_start_date, f"{name}.period_start_date"),
+        period_end_date=_date(value.period_end_date, f"{name}.period_end_date"),
+        record_date=_date(value.record_date, f"{name}.record_date"),
+        factor=None if value.factor is None else _decimal(value.factor, f"{name}.factor"),
+        prior_factor=None if value.prior_factor is None else _decimal(value.prior_factor, f"{name}.prior_factor"),
+        face_change=None if value.face_change is None else _decimal(value.face_change, f"{name}.face_change"),
     )
 
 
@@ -2768,6 +2870,7 @@ class DerivedSeries:
     rule: ops.MeasureRef | None = None
     inputs: Sequence[ops.DerivedInput] = ()
     published_by: str = ""
+    money_value: Money | None = None
 
 
 def _derived_series(value: DerivedSeries, name: str) -> ops.DerivedSeries:
@@ -2781,6 +2884,7 @@ def _derived_series(value: DerivedSeries, name: str) -> ops.DerivedSeries:
         rule=value.rule,
         inputs=list(value.inputs),
         published_by=value.published_by,
+        money_value=None if value.money_value is None else _money(value.money_value, f"{name}.money_value"),
     )
 
 
@@ -3012,6 +3116,7 @@ class QualityAssessment:
     version: int = 0
     state: ops.QualityState | str | None = None
     reasons: Sequence[ops.QualityReason | str] = ()
+    data_type: str = ""
 
 
 def _quality_assessment(value: QualityAssessment, name: str) -> ops.QualityAssessment:
@@ -3024,6 +3129,39 @@ def _quality_assessment(value: QualityAssessment, name: str) -> ops.QualityAsses
         version=value.version,
         state=_enum(ops.QualityState, value.state, f"{name}.state"),
         reasons=[_enum(ops.QualityReason, each, f"{name}.reasons[{i}]") for i, each in enumerate(value.reasons)],
+        data_type=value.data_type,
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class Factor:
+    """Contract v29 (W10.4): one month's factor of a pool or a REMIC class,
+    as the agency publishes it; current face is original face times the
+    latest row.
+
+    The SDK's form of the wire's Factor: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    meta: ObservationMeta | None = None
+    factor: Decimal | int
+    factor_month: str = ""
+    record_date: date | str = ""
+    payment_date: date | str = ""
+    coupon_rate: Decimal | int | None = None
+
+
+def _factor(value: Factor, name: str) -> ops.Factor:
+    """A Factor as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, Factor):
+        raise TypeError(f"{name} is a meridian.Factor, not {type(value).__name__}")
+    return ops.Factor(
+        meta=None if value.meta is None else _observation_meta(value.meta, f"{name}.meta"),
+        factor=_decimal(value.factor, f"{name}.factor"),
+        factor_month=value.factor_month,
+        record_date=_date(value.record_date, f"{name}.record_date"),
+        payment_date=_date(value.payment_date, f"{name}.payment_date"),
+        coupon_rate=None if value.coupon_rate is None else _decimal(value.coupon_rate, f"{name}.coupon_rate"),
     )
 
 
@@ -3701,6 +3839,10 @@ class Operations:
         net_member_order_ids: Sequence[str] = (),
         value_date: date | str = "",
         position_effect: ops.PositionEffect | str | None = None,
+        price_basis: ops.PriceBasis | str | None = None,
+        limit_yield: QuotedYield | None = None,
+        limit_spread_bps: Decimal | int | None = None,
+        benchmark_instrument_id: str = "",
         acting_for: str | None = None,
     ) -> ops.ProposeOrderResult:
         """W11.1: W11.1. For a person or a service account; by `portfolio`, the `oms`, or an (stable)."""
@@ -3744,6 +3886,10 @@ class Operations:
             net_member_order_ids=list(net_member_order_ids),
             value_date=_date(value_date, "value_date"),
             position_effect=_enum(ops.PositionEffect, position_effect, "position_effect"),
+            price_basis=_enum(ops.PriceBasis, price_basis, "price_basis"),
+            limit_yield=None if limit_yield is None else _quoted_yield(limit_yield, "limit_yield"),
+            limit_spread_bps=None if limit_spread_bps is None else _decimal(limit_spread_bps, "limit_spread_bps"),
+            benchmark_instrument_id=benchmark_instrument_id,
             acting_for=_assertion(acting_for),
         )
         return await self._operate(self._operations().ProposeOrder, params)
@@ -4029,6 +4175,25 @@ class Operations:
         cross_rate_source: ops.CrossRateSource | str | None = None,
         multi_leg_reporting_type: ops.MultiLegReportingType | str | None = None,
         package_execution_id: str = "",
+        price_basis: ops.PriceBasis | str | None = None,
+        yield_: QuotedYield | None = None,
+        trade_time_precision: ops.TimePrecision | str | None = None,
+        factor_used: Decimal | int | None = None,
+        settlement_date_unknown: bool = False,
+        contra_party_type: ops.ContraPartyType | str | None = None,
+        parties: Sequence[Party] = (),
+        capacity: ops.Capacity | str | None = None,
+        no_remuneration: bool = False,
+        affiliate_back_to_back: bool = False,
+        special_price: bool = False,
+        weighted_average_price: bool = False,
+        primary_market: bool = False,
+        list_offering_price_takedown: bool = False,
+        traded_flat: bool = False,
+        stipulated: bool = False,
+        portfolio_trade: bool = False,
+        special_price_reason: str = "",
+        treasury_trade_modifier: ops.TreasuryTradeModifier | str | None = None,
         acting_for: str | None = None,
     ) -> ops.ReportExecutionResult:
         """W11.11: W11.11. A fact by a connectivity plugin; or, for a person, a manual or (stable)."""
@@ -4070,6 +4235,25 @@ class Operations:
             cross_rate_source=_enum(ops.CrossRateSource, cross_rate_source, "cross_rate_source"),
             multi_leg_reporting_type=_enum(ops.MultiLegReportingType, multi_leg_reporting_type, "multi_leg_reporting_type"),
             package_execution_id=package_execution_id,
+            price_basis=_enum(ops.PriceBasis, price_basis, "price_basis"),
+            **_keyword("yield", None if yield_ is None else _quoted_yield(yield_, "yield")),
+            trade_time_precision=_enum(ops.TimePrecision, trade_time_precision, "trade_time_precision"),
+            factor_used=None if factor_used is None else _decimal(factor_used, "factor_used"),
+            settlement_date_unknown=settlement_date_unknown,
+            contra_party_type=_enum(ops.ContraPartyType, contra_party_type, "contra_party_type"),
+            parties=[_party(each, f"parties[{i}]") for i, each in enumerate(parties)],
+            capacity=_enum(ops.Capacity, capacity, "capacity"),
+            no_remuneration=no_remuneration,
+            affiliate_back_to_back=affiliate_back_to_back,
+            special_price=special_price,
+            weighted_average_price=weighted_average_price,
+            primary_market=primary_market,
+            list_offering_price_takedown=list_offering_price_takedown,
+            traded_flat=traded_flat,
+            stipulated=stipulated,
+            portfolio_trade=portfolio_trade,
+            special_price_reason=special_price_reason,
+            treasury_trade_modifier=_enum(ops.TreasuryTradeModifier, treasury_trade_modifier, "treasury_trade_modifier"),
             acting_for=_assertion(acting_for),
         )
         return await self._operate(self._operations().ReportExecution, params)
@@ -5719,6 +5903,47 @@ class Operations:
         )
         return await self._operate(self._operations().ReadStaleReferenceActionsPermitted, params)
 
+    async def record_factors(
+        self,
+        *,
+        factors: Sequence[Factor] = (),
+        want_id: str = "",
+        acting_for: str | None = None,
+    ) -> ops.RecordFactorsResult:
+        """W10.4: Contract v29 (W10.4): RecordFactors's command, batched, recorded whole or (preview)."""
+        _batch(factors, RECORD_FACTORS_REQUEST_FACTORS_COUNT, "factors")
+        params = ops.RecordFactorsParams(
+            factors=[_factor(each, f"factors[{i}]") for i, each in enumerate(factors)],
+            want_id=want_id,
+            acting_for=_assertion(acting_for),
+        )
+        return await self._operate(self._operations().RecordFactors, params)
+
+    async def list_factors(
+        self,
+        *,
+        subjects: Sequence[SubjectRef] = (),
+        from_date: date | str = "",
+        to_date: date | str = "",
+        sources: ops.SourceChoice | None = None,
+        as_of_ns: int = 0,
+        page_size: int = 0,
+        cursor: str = "",
+        after_watermark: ops.Watermark | None = None,
+    ) -> ops.ListFactorsResult:
+        """W10.6: Contract v29 (W10.6): ListFactors's request, point in time as every read is (preview)."""
+        params = ops.ListFactorsParams(
+            subjects=[_subject_ref(each, f"subjects[{i}]") for i, each in enumerate(subjects)],
+            from_date=_date(from_date, "from_date"),
+            to_date=_date(to_date, "to_date"),
+            sources=sources,
+            as_of_ns=as_of_ns,
+            page_size=page_size,
+            cursor=cursor,
+            after_watermark=after_watermark,
+        )
+        return await self._operate(self._operations().ListFactors, params)
+
     async def list_expirations(
         self,
         *,
@@ -5775,6 +6000,7 @@ class Operations:
         filings_recorded: Callable[[Heard[ops.FilingsRecordedEvent]], Awaitable[None]] | None = None,
         corporate_actions_recorded: Callable[[Heard[ops.CorporateActionsRecordedEvent]], Awaitable[None]] | None = None,
         series_recorded: Callable[[Heard[ops.SeriesRecordedEvent]], Awaitable[None]] | None = None,
+        factors_recorded: Callable[[Heard[ops.FactorsRecordedEvent]], Awaitable[None]] | None = None,
         seed: bool = True,
         subjects: Sequence[str] = (),
     ) -> None:
@@ -5828,6 +6054,7 @@ class Operations:
             "FilingsRecorded": filings_recorded,
             "CorporateActionsRecorded": corporate_actions_recorded,
             "SeriesRecorded": series_recorded,
+            "FactorsRecorded": factors_recorded,
         }
         await self._receive(
             {row: handler for row, handler in handlers.items() if handler is not None},
@@ -6302,5 +6529,14 @@ UNCONFLATED: tuple[ConflatedRow, ...] = (
         caught_up_by="list_corporate_actions",
         records="actions",
         within="action",
+    ),
+    ConflatedRow(
+        name="FactorsRecorded",
+        step="W10.5",
+        arm="factors_recorded",
+        message=ops.FactorsRecordedEvent,
+        caught_up_by="list_factors",
+        records="factors",
+        within="factor",
     ),
 )
