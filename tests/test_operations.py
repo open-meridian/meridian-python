@@ -777,3 +777,69 @@ async def test_the_street_is_read_within_the_scope_the_sidecar_stamps(sidecar) -
     asked, statements = service.operations.reads
     assert asked.account_id == "ACC-1" and asked.page_size == 10
     assert statements.HasField("since")
+
+
+def test_an_enum_reads_the_same_memoised() -> None:
+    """`_enum` keeps each enum type's names (0.33.4): every name, short name
+    and value of every enum the wire defines reads as it did when they were
+    rebuilt on each call, a value no enum defines is refused the same, and a
+    call costs a fraction of the rebuild."""
+    import re
+    import time
+
+    from meridian import operations
+
+    def rebuilt(kind, value, name):  # 0.33.3's, verbatim
+        if value is None or value == "":
+            return None
+        prefix = re.sub(r"(?<!^)(?=[A-Z])", "_", kind.DESCRIPTOR.name).upper() + "_"
+        names = dict(kind.items())
+        short = {
+            n.removeprefix(prefix).lower(): v for n, v in names.items() if n.startswith(prefix)
+        }
+        if isinstance(value, str):
+            if value in names:
+                return names[value]
+            if value in short:
+                return short[value]
+        elif isinstance(value, int) and not isinstance(value, bool) and value in names.values():
+            return value
+        raise ValueError(
+            f"{name} is {value!r}, which {kind.DESCRIPTOR.name} does not define; "
+            f"one of {', '.join(n for n in short if n != 'unspecified') or ', '.join(names)}"
+        )
+
+    def answer(read, kind, value):
+        try:
+            return read(kind, value, "field")
+        except ValueError as refused:
+            return str(refused)
+
+    kinds = [
+        wrapper
+        for module in (operations_pb2, sidecar_pb2)
+        for wrapper in (getattr(module, n) for n in dir(module))
+        if type(wrapper).__name__ == "EnumTypeWrapper"
+    ]
+    assert len(kinds) > 20
+    for kind in kinds:
+        names = dict(kind.items())
+        tried = [*names, *names.values(), None, "", "nonsense", True, 10_000, 1.0]
+        tried += [n.split("_", 1)[-1].lower() for n in names] + [n.lower() for n in names]
+        for value in tried:
+            memoised = answer(operations._enum, kind, value)
+            assert memoised == answer(rebuilt, kind, value), (kind, value)
+
+    kind, value = operations_pb2.AssetClass, "equity"
+    calls = 20_000
+
+    def timed(read) -> float:
+        best = float("inf")
+        for _ in range(3):
+            start = time.perf_counter()
+            for _ in range(calls):
+                read(kind, value, "asset_class")
+            best = min(best, time.perf_counter() - start)
+        return best
+
+    assert timed(operations._enum) * 3 < timed(rebuilt)

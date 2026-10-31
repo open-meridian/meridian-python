@@ -1,0 +1,14 @@
+# open-meridian 0.33.3 to 0.33.4: a fix, on contract v28 (ruling 923):
+# nothing a plugin calls changed shape, so only the pins move.
+from = "0.33.3"
+to = "0.33.4"
+summary = """
+A fix, on contract v28. RawStore.keep_line holds each day's file open and
+flushes each line before it returns, so a line it was told was kept is in its
+file as before, and it remembers only the current day's latest lines rather
+than every line until a restart, so a stream's memory stays flat; received()
+reads a forgotten line's arrival from the line. The typed operations read
+each enum type's names once rather than on every call. Nothing a plugin calls
+changed shape: `meridian plugin migrate` moves the pins and changes no code.
+"""
+breaking = false
