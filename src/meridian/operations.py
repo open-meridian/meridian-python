@@ -124,6 +124,21 @@ def _money(value: Money, name: str) -> ops.Money:
     )
 
 
+#: Each enum type's names, its short names and its values, read once: a row
+#: converts several enums, and a stream sends thousands of rows a second.
+_ENUMS: dict[Any, tuple[dict[str, int], dict[str, int], frozenset[int]]] = {}
+
+
+def _enum_names(kind: Any) -> tuple[dict[str, int], dict[str, int], frozenset[int]]:
+    """`kind`'s names (ASSET_CLASS_EQUITY), its names without the enum's
+    prefix in lower case (equity) and its values, kept for the next call."""
+    prefix = re.sub(r"(?<!^)(?=[A-Z])", "_", kind.DESCRIPTOR.name).upper() + "_"
+    names = dict(kind.items())
+    short = {n.removeprefix(prefix).lower(): v for n, v in names.items() if n.startswith(prefix)}
+    held = _ENUMS[kind] = (names, short, frozenset(names.values()))
+    return held
+
+
 def _enum(kind: Any, value: Any, name: str) -> Any:
     """An enum value as the wire carries it: one `kind` defines, given as the
     value, its name (ASSET_CLASS_EQUITY) or its name without the enum's
@@ -131,15 +146,13 @@ def _enum(kind: Any, value: Any, name: str) -> Any:
     else is refused naming the field, never sent for the sidecar to refuse."""
     if value is None or value == "":
         return None
-    prefix = re.sub(r"(?<!^)(?=[A-Z])", "_", kind.DESCRIPTOR.name).upper() + "_"
-    names = dict(kind.items())
-    short = {n.removeprefix(prefix).lower(): v for n, v in names.items() if n.startswith(prefix)}
+    names, short, values = _ENUMS.get(kind) or _enum_names(kind)
     if isinstance(value, str):
         if value in names:
             return names[value]
         if value in short:
             return short[value]
-    elif isinstance(value, int) and not isinstance(value, bool) and value in names.values():
+    elif isinstance(value, int) and not isinstance(value, bool) and value in values:
         return value
     raise ValueError(
         f"{name} is {value!r}, which {kind.DESCRIPTOR.name} does not define; "

@@ -2,7 +2,7 @@
 
 The Python SDK for building [Open Meridian](https://open-meridian.com) plugins:
 the tools a trader has an AI agent build, and the bots and analytics a
-developer writes. Python 3.11 or newer. This is release 0.33.3; its reference
+developer writes. Python 3.11 or newer. This is release 0.33.4; its reference
 is at [open-meridian.dev](https://open-meridian.dev/api/python-sdk/).
 
 ## Start here
@@ -1960,7 +1960,7 @@ await plugin.receive(observations_wanted=lambda heard: wants.hear(heard, answer)
   raw record names its venue account; a good-till-date order is asked with
   its expiry (`Asked.expire_date`, `.expire_time_ns`).
 
-### Listed options and futures, filings, quality states and latency reported (contract v28; 0.33.0 to 0.33.3)
+### Listed options and futures, filings, quality states and latency reported (contract v28; 0.33.0 to 0.33.4)
 
 0.33.0 declares contract v28 (`meridian.SCHEMA_VERSION`). Breaking; `meridian
 plugin migrate` rewrites what it can (`to_0_33_0`).
@@ -2090,6 +2090,16 @@ plugin migrate` rewrites what it can (`to_0_33_0`).
   expirations = await chains.read_expirations(plugin, underlying)
   series = await chains.read_chain(plugin, underlying, expirations[0].expiration_date, paths=["strike_price"])
   ```
+- **0.33.4, a fix** (ruling 923): two hot spots in a stream's path.
+  `RawStore.keep_line` holds each day's file open (at most 128 at once)
+  and writes and flushes each line before it returns, as before, so a
+  process that dies loses no line it was told was kept; it remembers only
+  the current day's latest 10,000 lines, where it remembered every line
+  until the process restarted, so a stream's memory stays flat. A day's
+  rollover closes and forgets the day before, and `received()` reads a
+  forgotten line's arrival from the line. The typed operations read each
+  enum type's names once rather than on every call. Nothing a plugin calls
+  changed; `meridian plugin migrate` moves the pins.
 
 ## Moving a plugin to a new release
 

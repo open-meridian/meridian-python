@@ -333,6 +333,101 @@ def test_a_live_line_names_its_place_and_a_repeat_names_it_again(tmp_path: Path)
     assert [r["body"] for r in store.records()] == ["a", "b"]
 
 
+def test_a_days_rollover_closes_and_forgets_the_day_before(tmp_path: Path) -> None:
+    store = RawStore(tmp_path, kind="answers")
+    yesterday = [
+        store.keep_line("ticker", name, {"received_at_ns": OCT_1 + i, "body": str(i)})
+        for i, name in enumerate(("X", "Y", "X"))
+    ]
+    assert store._open and store._first and store._lines and store._last
+    today = store.keep_line("ticker", "X", {"received_at_ns": OCT_1 + DAY_NS, "body": "0"})
+    assert today == "answers/2026-10-02/ticker/X.jsonl#0"
+    for held in (store._open, store._lines, store._last, store._first):
+        assert all("/2026-10-02/" in key for key in held), held
+    # What was forgotten is still in its file, and read from it when asked.
+    assert yesterday[2] == "answers/2026-10-01/ticker/X.jsonl#1"
+    assert store.received(yesterday[2], 0) == OCT_1 + 2
+    assert store.get(yesterday[0]) == {"received_at_ns": OCT_1, "body": "0"}
+    # A late line for the day before carries on its numbering.
+    late = store.keep_line("ticker", "X", {"received_at_ns": OCT_1 + 9, "body": "late"})
+    assert late == "answers/2026-10-01/ticker/X.jsonl#2"
+    assert store.received("answers/2026-10-02/ticker/Y.jsonl#0", -1) == -1
+
+
+async def test_a_unit_about_to_move_is_closed_first(tmp_path: Path) -> None:
+    store = RawStore(tmp_path)
+    store.keep_line("ticker", "X", {"received_at_ns": OCT_1, "body": "a"})
+    assert store._open
+    await store.tend(Mover(), 0, "kept", date(2026, 10, 2))
+    assert not store._open and not store._first
+
+
+def test_a_streams_memory_stays_flat(tmp_path: Path) -> None:
+    """0.33.3 remembered 178 B a line until a restart: some 16 MB over these
+    90,000 lines. Bounded, what is held moves only as its tables resize."""
+    import tracemalloc
+
+    from meridian import _raw
+
+    store = RawStore(tmp_path)
+
+    def keep(lines: range) -> None:
+        for i in lines:
+            store.keep_line(
+                "stream", f"N{i % 3}", {"received_at_ns": OCT_1 + i, "body": f"b{i}"}
+            )
+
+    tracemalloc.start()
+    try:
+        keep(range(_raw._REMEMBERED + 1_000))
+        before = tracemalloc.get_traced_memory()[0]
+        keep(range(_raw._REMEMBERED + 1_000, 10 * _raw._REMEMBERED))
+        grown = tracemalloc.get_traced_memory()[0] - before
+    finally:
+        tracemalloc.stop()
+    assert len(store._first) == _raw._REMEMBERED
+    assert grown < 3 * 2**20, f"{grown} bytes grown over {9 * _raw._REMEMBERED} lines"
+    assert sum(u.records for u in store.units()) == 10 * _raw._REMEMBERED
+
+
+def test_at_most_so_many_files_are_held_open(tmp_path: Path) -> None:
+    from meridian import _raw
+
+    store = RawStore(tmp_path)
+    names = _raw._HELD_OPEN + 20
+    for i in range(2 * names):
+        store.keep_line(
+            "stream", f"N{i % names}", {"received_at_ns": OCT_1 + i, "body": f"b{i}"}
+        )
+    assert len(store._open) == _raw._HELD_OPEN
+    assert [store.get(f"responses/2026-10-01/stream/N{n}.jsonl#1") for n in (0, names - 1)] == [
+        {"received_at_ns": OCT_1 + names, "body": f"b{names}"},
+        {"received_at_ns": OCT_1 + 2 * names - 1, "body": f"b{2 * names - 1}"},
+    ]
+
+
+def test_a_crash_mid_day_loses_no_line_kept(tmp_path: Path) -> None:
+    import subprocess
+    import sys
+
+    crash = (
+        "import os, sys\n"
+        "from pathlib import Path\n"
+        "from meridian.edge import RawStore\n"
+        "store = RawStore(Path(sys.argv[1]))\n"
+        "for i in range(500):\n"
+        f"    at = {OCT_1} + i\n"
+        "    store.keep_line('stream', 'X', {'received_at_ns': at, 'body': str(i)})\n"
+        "os._exit(9)  # no cleanup: nothing closed, nothing flushed at exit\n"
+    )
+    died = subprocess.run([sys.executable, "-c", crash, str(tmp_path)], check=False)
+    assert died.returncode == 9
+    store = RawStore(tmp_path)
+    assert [r["body"] for r in store.records()] == [str(i) for i in range(500)]
+    again = store.keep_line("stream", "X", {"received_at_ns": OCT_1 + 900, "body": "after"})
+    assert again == "responses/2026-10-01/stream/X.jsonl#500"
+
+
 # ── Connectivity's placement bookkeeping ────────────────────────────────
 
 
