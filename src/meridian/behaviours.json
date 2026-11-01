@@ -6,7 +6,7 @@
     {
       "module": "chains",
       "since": "0.35.0",
-      "says": "An SDK carrying helpers.chains writes a series' 21-character OSI symbol from its root, expiration, right and strike, reads one back, and refuses what no OSI symbol holds.\n",
+      "says": "An SDK carrying helpers.chains writes a series' 21-character OSI symbol from its root, expiration, right and strike, reads one back -- its strike a plain decimal, never in exponent form -- and refuses what no OSI symbol holds.\n",
       "cases": [
         {
           "name": "an-osi-symbol-is-written-in-21-characters",
@@ -52,6 +52,40 @@
               "expiration": "2026-12-18",
               "right": "C",
               "strike": "150"
+            }
+          }
+        },
+        {
+          "name": "a-whole-strike-is-read-back-without-an-exponent",
+          "subject": "helpers.chains.osi_terms",
+          "kind": "value",
+          "call": "osi_terms",
+          "args": {
+            "symbol": "SPY   270115P00500000"
+          },
+          "expect": {
+            "value": {
+              "root": "SPY",
+              "expiration": "2027-01-15",
+              "right": "P",
+              "strike": "500"
+            }
+          }
+        },
+        {
+          "name": "a-fractional-strike-is-read-back-as-a-plain-decimal",
+          "subject": "helpers.chains.osi_terms",
+          "kind": "value",
+          "call": "osi_terms",
+          "args": {
+            "symbol": "XYZ   270115C00001500"
+          },
+          "expect": {
+            "value": {
+              "root": "XYZ",
+              "expiration": "2027-01-15",
+              "right": "C",
+              "strike": "1.5"
             }
           }
         },

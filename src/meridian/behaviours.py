@@ -113,10 +113,9 @@ async def run_async(adapters: Mapping[str, Adapter]) -> Report:
 def plain(value: Any) -> Any:
     """A value as a case writes it: a Decimal or a date as its text, a tuple
     as a list."""
-    if isinstance(value, Decimal):
-        # Its digits, never an exponent: 150, not 1.5E+2.
-        return format(value, "f")
-    if isinstance(value, date):
+    if isinstance(value, Decimal | date):
+        # As the SDK writes it: a case compares the text, so an exponent
+        # (1.5E+2 for 150) fails it.
         return str(value)
     if isinstance(value, tuple | list):
         return [plain(each) for each in value]

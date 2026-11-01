@@ -84,6 +84,13 @@ def osi_symbol(
     return f"{root.upper():<6}{expiration:%y%m%d}{right}{int(thousandths):08d}"
 
 
+def _plain(value: Decimal) -> Decimal:
+    """A normalized number written without an exponent: 150, never 1.5E+2;
+    1.5 as it is."""
+    exponent = value.as_tuple().exponent
+    return value.quantize(Decimal(1)) if isinstance(exponent, int) and exponent > 0 else value
+
+
 def osi_terms(symbol: str) -> tuple[str, date, str, Decimal]:
     """An OSI symbol's root, expiration, `C` or `P`, and strike."""
     found = _OSI.match(symbol)
@@ -91,7 +98,7 @@ def osi_terms(symbol: str) -> tuple[str, date, str, Decimal]:
         raise ValueError(f"{symbol!r} is not a 21-character OSI symbol")
     day = found.group("day")
     expiration = date(2000 + int(day[:2]), int(day[2:4]), int(day[4:]))
-    strike = (Decimal(found.group("strike")) / 1000).normalize()
+    strike = _plain((Decimal(found.group("strike")) / 1000).normalize())
     return found.group("root").rstrip(), expiration, found.group("right"), strike
 
 
