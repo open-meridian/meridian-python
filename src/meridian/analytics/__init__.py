@@ -611,8 +611,10 @@ class Jobs:
     a loss (`catch_up`), by sequence.
 
         jobs = analytics.Jobs()
-        await plugin.receive(job_finished=jobs.heard, ...)   # beside its other rows
-        answer = await jobs.run(plugin, job)
+        answer = await jobs.run(self, job)     # self: the role's class
+
+        async def on_job_finished(self, heard):     # on the role's class
+            await jobs.heard(heard)
 
     `run` waits for a job answered later by the finishing heard, or, every
     `poll_seconds`, by reading the finished after the last sequence seen, at

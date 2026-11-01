@@ -15,7 +15,7 @@ the source does not publish is no row, never a zero.
 
     from meridian.roles.data import rates
 
-    feed = rates.Feed(plugin, "ust", wants=wants)
+    feed = rates.Feed(self, "ust", wants=wants)      # self: the data role's class
     curve = await feed.subject(("symbol", "PAR_NOMINAL", "ust"))   # the curve's record
     rows = feed.curve(curve, "ust_par", "par_yield",
                       {"1 Mo": "4.12", "3 Mo": "4.09", "10 Yr": "4.21", "20 Yr": None},
@@ -259,14 +259,14 @@ class Feed:
 
     def __init__(
         self,
-        plugin: Any,
+        role: Any,
         source_name: str,
         *,
         wants: Any = None,
         day_zone: str = "UTC",
         clock_ns: Any = time.time_ns,
     ) -> None:
-        self.plugin = plugin
+        self.role = role
         self.source_name = source_name
         self.wants = wants
         self.zone = ZoneInfo(day_zone)
@@ -277,7 +277,7 @@ class Feed:
         self.missed: dict[tuple[tuple[str, str, str], ...], tuple[str, int, int]] = {}
 
     def dataset(self, key: str) -> str:
-        return f"{self.plugin.identity.instance_id}:{key}"
+        return f"{self.role.plugin.identity.instance_id}:{key}"
 
     async def subject(
         self,
@@ -305,7 +305,7 @@ class Feed:
         elif now < again_ns:
             return ""
         asked = [ops.Identifier(scheme=s, value=v, source=o) for s, v, o in named]
-        found = await self.plugin.resolve_identifier(
+        found = await self.role.resolve_identifier(
             identifiers=asked,
             as_of_ns=self.clock_ns(),
             stated_asset_class="referential",
@@ -320,7 +320,7 @@ class Feed:
         if misses:
             log.info("a rate's record is still not held: %s", named)
             return ""
-        await self.plugin.report_missing_instrument(
+        await self.role.report_missing_instrument(
             source=self.source_name,
             identifiers=asked,
             as_of_ns=self.clock_ns(),
@@ -388,7 +388,7 @@ class Feed:
                 source_times=(
                     [SourceTime(kind="published", at_ns=published_ns)] if published_ns else []
                 ),
-                raw=self.plugin.raw_record(raw_key[:256]) if raw_key else None,
+                raw=self.role.plugin.raw_record(raw_key[:256]) if raw_key else None,
             ),
             kind=kind,
             value=value if isinstance(value, UnitValue) else percent(value),
@@ -429,13 +429,13 @@ class Feed:
         sent = 0
         for start in range(0, len(rows), 500):
             batch = list(rows[start : start + 500])
-            await self.plugin.record_rates(rates=batch, want_id=want_id)
+            await self.role.record_rates(rates=batch, want_id=want_id)
             sent += len(batch)
         return sent
 
 
 async def read_curve(
-    plugin: Any,
+    role: Any,
     subject: str,
     business_date: dt.date | str,
     *,
@@ -450,7 +450,7 @@ async def read_curve(
     out: list[ops.Rate] = []
     cursor = ""
     while True:
-        page = await plugin.list_rates(
+        page = await role.list_rates(
             subjects=[SubjectRef(entity_id=subject)],
             kinds=list(kinds),
             tenors=[tenor(t) for t in tenors],

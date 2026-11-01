@@ -63,8 +63,11 @@ class Source:
 
 def client(**caller: Any) -> tuple[PageClient, Recorder]:
     pages = meridian.Pages("Brokerage")
-    custody.account_pages(pages, Source, what="This plugin brings brokerage accounts in")
     recorder = Recorder("brokerage-1")
+    held = recorder.bind(custody.Role())
+    custody.account_pages(
+        pages, Source, what="This plugin brings brokerage accounts in", role=lambda: held
+    )
     recorder.answer(
         "ReadAccountsForLinking",
         lambda _: ops.ReadAccountsForLinkingResult(

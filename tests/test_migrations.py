@@ -102,7 +102,7 @@ def test_every_release_since_the_first_recorded_has_its_step() -> None:
         ("0.6.0", "0.6.1"),
         ("0.6.1", "0.7.0"),
     ]
-    assert (steps[-1].source, steps[-1].target) == ("0.33.5", "0.34.0")
+    assert (steps[-1].source, steps[-1].target) == ("0.34.0", "0.35.0")
     # A release that moves the version records its step, if only the pins.
     assert steps[-1].target == SDK
 
@@ -230,6 +230,11 @@ def test_listed_as_migrated_is_left_as_it_is() -> None:
                 ("statement-external-account", "src/desk/page.py", 77),
                 ("declaration-not-named", "pyproject.toml", 18),
                 ("connect-names-the-declaration", "src/desk/__main__.py", 22),
+                # From 0.35.0 its entry point connects by hand, and its page
+                # and its recording act on the connection.
+                ("connect-to-run", "src/desk/__main__.py", 22),
+                ("act-on-the-connection", "src/desk/page.py", 77),
+                ("act-on-the-connection", "src/desk/record.py", 20),
             ],
         ),
         (
@@ -237,6 +242,8 @@ def test_listed_as_migrated_is_left_as_it_is() -> None:
             [
                 ("docs-not-in-image", "Dockerfile", 5),
                 ("declaration-not-named", "pyproject.toml", 24),
+                ("connect-to-run", "src/snaptrade/__main__.py", 12),
+                ("act-on-the-connection", "src/snaptrade/contract.py", 42),
             ],
         ),
     ],
@@ -251,6 +258,207 @@ def test_the_recorded_plugins_are_as_the_later_steps_leave_them(
     assert left_by_hand(result) == by_hand
 
 
+# ── 0.34.0 to 0.35.0: each role is one generated class ───────────────────
+
+#: Each 0.34.0 plugin of a role's shape, what 0.35.0's step rewrites in it,
+#: and what it leaves by hand: the data template as written (a single role,
+#: wholly rewritten but for its suite test's hearing), the pricing
+#: template's, a broker holding three roles in Alpaca's shape (the lake made
+#: a class, the Trader's handlers dropped, its entry point, custody class and
+#: page by hand), and a reading plugin hearing for its subjects (by hand).
+V35 = {
+    "lake": (
+        {
+            "src/lake/__main__.py": {"template-entry-to-run": 1},
+            "src/lake/convert.py": {
+                "self-plugin-act-to-self": 5,
+                "receive-to-role-methods": 4,
+                "template-entry-to-run": 1,
+            },
+            "src/lake/page.py": {"receive-to-role-methods": 1},
+            "tests/test_page.py": {"receive-to-role-methods": 1},
+            "tests/test_suite.py": {"receive-to-role-methods": 4},
+        },
+        [
+            ("suite-producer-to-role", "tests/test_page.py", 36),
+            ("suite-producer-to-role", "tests/test_suite.py", 102),
+            ("suite-producer-to-role", "tests/test_suite.py", 135),
+            ("suite-producer-to-role", "tests/test_suite.py", 144),
+        ],
+    ),
+    "quote": (
+        {
+            "src/quote/__main__.py": {"template-entry-to-run": 1},
+            "tests/test_page.py": {"common-logic-renamed": 1},
+            "tests/test_suite.py": {"common-logic-renamed": 3},
+        },
+        [("suite-producer-to-role", "tests/test_suite.py", 70)],
+    ),
+    "broker": (
+        {
+            "src/broker/__main__.py": {
+                "receive-to-role-methods": 4,
+                "common-logic-renamed": 5,
+            },
+            "src/broker/lake.py": {
+                "self-plugin-act-to-self": 2,
+                "receive-to-role-methods": 5,
+            },
+            "tests/test_broker.py": {"receive-to-role-methods": 2},
+        },
+        [
+            ("connect-to-run", "src/broker/__main__.py", 24),
+            ("act-on-the-connection", "src/broker/book.py", 15),
+            ("act-on-the-connection", "src/broker/page.py", 12),
+        ],
+    ),
+    "reader": (
+        {},
+        [
+            ("connect-to-run", "src/reader/__main__.py", 11),
+            ("receive-not-rewritten", "src/reader/__main__.py", 14),
+            ("act-on-the-connection", "src/reader/report.py", 16),
+        ],
+    ),
+}
+
+
+@pytest.mark.parametrize("name", sorted(V35))
+def test_each_role_shape_migrates_to_0_35_as_recorded(tmp_path: Path, name: str) -> None:
+    rewrote, by_hand = V35[name]
+    result = migrated(f"{name}-0.34.0", "0.34.0", "0.35.0", tmp_path)
+    assert tree(tmp_path) == tree(FIXTURES / f"{name}-0.35.0")
+    assert {path: rules for step in result.steps for path, rules in step.rewrote.items()} == (
+        rewrote
+    )
+    assert left_by_hand(result) == by_hand
+
+
+@pytest.mark.parametrize("name", sorted(V35))
+def test_each_role_shape_as_migrated_is_left_as_it_is(name: str) -> None:
+    result = migrate(plugin_files(FIXTURES / f"{name}-0.35.0"), "0.34.0", "0.35.0")
+    assert result.files == {}
+    # A stand-in the step took from a class is said once, as it is taken.
+    again = [
+        each
+        for each in V35[name][1]
+        if each != ("suite-producer-to-role", "tests/test_page.py", 36)
+    ]
+    assert left_by_hand(result) == again
+
+
+#: The by-hand work each fixture's findings name, done as a person would:
+#: a suite test hearing through `recorder.receive` bound and heard instead.
+BY_HAND = {
+    "lake": [
+        (
+            "    converter = Converter(vendor or Vendor())  # type: ignore[arg-type]",
+            '    converter = Recorder("reference-1").bind(Converter(vendor or Vendor()))',
+        ),
+        (
+            "from meridian.testing import PageClient\n",
+            "from meridian.suites import Recorder\nfrom meridian.testing import PageClient\n",
+        ),
+        (
+            "await recorder.receive(observations_wanted=plugin.on_observations_wanted)",
+            "await recorder.hear(plugin)",
+        ),
+        (
+            "await recorder.receive(want_withdrawn=plugin.on_want_withdrawn)",
+            "await recorder.hear(plugin)",
+        ),
+    ],
+    "quote": [
+        (
+            "await recorder.receive(price_batch=recorder.bind(pricing.Pricer(MODELS)).heard)",
+            "await recorder.hear(recorder.bind(pricing.Pricer(MODELS)))",
+        )
+    ],
+}
+
+
+@pytest.mark.parametrize("name", sorted(V35))
+def test_each_role_shape_passes_its_own_tests_once_its_findings_are_done(
+    tmp_path: Path, name: str
+) -> None:
+    """With only the work the findings name done -- none for the broker's and
+    the reader's tests -- each passes its own tests against this SDK."""
+    migrated(f"{name}-0.34.0", "0.34.0", "0.35.0", tmp_path)
+    for old, new in BY_HAND.get(name, []):
+        for path in (tmp_path / "tests").glob("*.py"):
+            path.write_text(path.read_text().replace(old, new))
+    own_tests_pass(tmp_path)
+
+
+def test_a_class_given_two_roles_events_or_a_lambda_is_left_by_hand() -> None:
+    files = {
+        "pyproject.toml": '[tool.meridian]\nroles = ["data", "signal"]\n',
+        "src/p/__main__.py": textwrap.dedent(
+            """\
+            import meridian
+            from .work import Work
+
+            async def run():
+                async with await meridian.connect() as plugin:
+                    work = Work(plugin)
+                    await plugin.receive(want_withdrawn=work.gone, trades_recorded=work.trade)
+                    await plugin.receive(observations_wanted=lambda heard: None)
+            """
+        ),
+        "src/p/work.py": textwrap.dedent(
+            """\
+            class Work:
+                def __init__(self, plugin):
+                    self.plugin = plugin
+
+                async def gone(self, heard): ...
+
+                async def trade(self, heard): ...
+            """
+        ),
+    }
+    result = migrate(files, "0.34.0", "0.35.0")
+    assert result.files == {}
+    assert left_by_hand(result) == [
+        ("connect-to-run", "src/p/__main__.py", 5),
+        ("receive-not-rewritten", "src/p/__main__.py", 7),
+        ("receive-not-rewritten", "src/p/__main__.py", 8),
+    ]
+
+
+def test_a_role_class_missing_a_required_event_is_named() -> None:
+    files = {
+        "pyproject.toml": '[tool.meridian]\nroles = ["connectivity"]\n',
+        "src/p/desk.py": textwrap.dedent(
+            """\
+            from meridian.roles import connectivity
+
+            class Desk(connectivity.Role):
+                async def on_placement_updated(self, heard): ...
+            """
+        ),
+    }
+    result = migrate(files, "0.34.0", "0.35.0")
+    assert left_by_hand(result) == [("required-event-missing", "src/p/desk.py", 3)]
+
+
+def test_the_steps_role_surfaces_are_0_35s() -> None:
+    """The step's record of each role's surface is the generated bases' as
+    0.35.0 carries them."""
+    if not SDK.startswith("0.35."):
+        pytest.skip("the step's surfaces are 0.35.0's; later releases may add rows")
+    import importlib
+
+    from meridian.migrations.to_0_35_0.rewrite import SURFACES
+    from meridian.roles._generated import ROLES
+
+    for role in ROLES:
+        base = importlib.import_module(f"meridian.roles._generated.{role}").Role
+        assert SURFACES[role]["events"] == dict(base.EVENTS)
+        assert SURFACES[role]["required"] == sorted(base.REQUIRED)
+        assert SURFACES[role]["acts"] == list(base.ACTS)
+
+
 # ── Held to the framework's rules ────────────────────────────────────────
 
 
@@ -260,6 +468,13 @@ def test_the_recorded_plugins_are_as_the_later_steps_leave_them(
         ("desk-0.5.0", "0.5.0", "0.7.0"),
         ("snaptrade-0.6.1", "0.6.1", "0.7.0"),
         ("listed-0.33.5", "0.33.5", "0.34.0"),
+        # Held out until meridian-cli carries 0.35.0's check (TODO: CLI 0.1.55,
+        # then pin it in the Makefile's MERIDIAN_CLI): its template-shape rule
+        # asks for `meridian.connect(` and must take `meridian.run(` and
+        # `run_async(` too, and its new rule fails a declared role with no
+        # `<role>.Role` class registered (ruling 1015). Then add
+        # ("lake-0.34.0", "0.34.0", "0.35.0"), ("quote-0.34.0", "0.34.0", "0.35.0"),
+        # ("broker-0.34.0", "0.34.0", "0.35.0") and ("reader-0.34.0", "0.34.0", "0.35.0").
     ],
 )
 def test_each_migrated_plugin_passes_plugin_check(
@@ -1213,7 +1428,8 @@ def test_the_re_exports_run_as_the_modules_they_replace(tmp_path: Path) -> None:
         from meridian.roles.data import pairs
         from meridian.suites import Recorder
 
-        work = dgm.Dgm(Recorder("one"), pairs_venue.market(), products.ProductMap())
+        # From 0.35 the feed is a data role class, bound to its connection.
+        work = Recorder("one").bind(dgm.Dgm(pairs_venue.market(), products.ProductMap()))
         assert isinstance(work, pairs.Feed) and work.stream_factory is not None
         store = raw.RawStore(tmp_path / "storage")
         assert store.kind == "answers" and raw.WINDOW_DAYS == 9
@@ -1307,7 +1523,10 @@ def test_a_trading_layer_becomes_a_re_export_of_the_sdks_connectivity(tmp_path: 
 
         trading = importlib.import_module("br.trading")
         assert trading.Noted is connectivity.Sent and trading.PRICE_PLACES == 6
-        trader = trading.Trader(Recorder("br"), lambda: None, now=lambda: datetime.now(UTC))
+        # From 0.35 the Trader is the connectivity role class, bound to its connection.
+        trader = Recorder("br").bind(
+            trading.Trader(lambda: None, now=lambda: datetime.now(UTC))
+        )
         assert isinstance(trader, connectivity.Trader)
         assert str(trader.market_zone) == "Asia/Tokyo" and trader.price_places == 6
         assert trading.fill_price(Decimal(0), None, Decimal(3), Decimal(1)) == (

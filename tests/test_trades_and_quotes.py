@@ -17,7 +17,7 @@ from decimal import Decimal
 import pytest
 
 import meridian
-from conftest import FakeSidecar, Stream
+from conftest import FakeSidecar, Stream, receive, row_of
 from meridian import (
     DatasetDeclaration,
     DatasetLicence,
@@ -108,7 +108,7 @@ async def data_plugin(sidecar: tuple[FakeSidecar, str]) -> meridian.Plugin:
     service.instance_id = INSTANCE
     service.roles = ("data",)
     return await meridian.connect(
-        address, heartbeat=False, declaration=Declaration(catalogue=CATALOGUE)
+        address, heartbeat=False, declaration=Declaration(catalogue=CATALOGUE), roles=[]
     )
 
 
@@ -119,7 +119,7 @@ async def heard_until(
     **handlers: object,
 ) -> None:
     """Receive with `handlers` until `done()` holds, then stop."""
-    task = asyncio.create_task(reader.receive(**handlers))  # type: ignore[arg-type]
+    task = asyncio.create_task(receive(reader, **handlers))  # type: ignore[arg-type]
     try:
         for _ in range(200):
             if done():  # type: ignore[operator]
@@ -140,9 +140,9 @@ async def test_a_trade_is_recorded_its_price_resolved_and_a_withdrawal_a_new_ver
     service, _ = sidecar
     plugin = await data_plugin(sidecar)
     try:
-        first = await plugin.record_trades(trades=[trade(1)])
-        withdrawn = await plugin.record_trades(trades=[trade(1, cancelled=True)])
-        again = await plugin.record_trades(trades=[trade(1, cancelled=True)])
+        first = await plugin._acts.record_trades(trades=[trade(1)])
+        withdrawn = await plugin._acts.record_trades(trades=[trade(1, cancelled=True)])
+        again = await plugin._acts.record_trades(trades=[trade(1, cancelled=True)])
     finally:
         await plugin.leave()
     assert (first.recorded, withdrawn.restated, again.unchanged) == (1, 1, 1)
@@ -164,11 +164,11 @@ async def test_a_batch_of_trades_or_quotes_is_refused_outside_1_to_500_before_se
     plugin = await data_plugin(sidecar)
     try:
         with pytest.raises(ValueError, match="trades"):
-            await plugin.record_trades(trades=[])
+            await plugin._acts.record_trades(trades=[])
         with pytest.raises(ValueError, match="quotes"):
-            await plugin.record_quotes(quotes=[quote(f"q{n}", "1") for n in range(501)])
+            await plugin._acts.record_quotes(quotes=[quote(f"q{n}", "1") for n in range(501)])
         with pytest.raises(ValueError, match=r"trades\[0\]\.aggressor"):
-            await plugin.record_trades(
+            await plugin._acts.record_trades(
                 trades=[
                     Trade(meta=trade(1).meta, price=trade(1).price, quantity=1, aggressor="up")
                 ]
@@ -186,14 +186,14 @@ async def test_a_one_sided_quote_is_recorded_and_one_in_two_assets_refused(sidec
     service, _ = sidecar
     plugin = await data_plugin(sidecar)
     try:
-        answered = await plugin.record_quotes(quotes=[quote("q1", "62431.26")])
+        answered = await plugin._acts.record_quotes(quotes=[quote("q1", "62431.26")])
         mixed = Quote(
             meta=quote("q2", "1").meta,
             bid=Money(Decimal("62431.26"), "USD"),
             ask=Money(Decimal("62431.27"), instrument_id=USDC),
         )
         with pytest.raises(meridian.CallFailed, match=r"quotes\[0\]: a quote's two sides"):
-            await plugin.record_quotes(quotes=[mixed])
+            await plugin._acts.record_quotes(quotes=[mixed])
     finally:
         await plugin.leave()
     assert answered.recorded == 1
@@ -207,23 +207,23 @@ async def test_a_one_sided_quote_is_recorded_and_one_in_two_assets_refused(sidec
 async def test_trades_are_read_over_a_range_within_a_day_or_after_a_watermark(sidecar) -> None:
     service, address = sidecar
     writer = await data_plugin(sidecar)
-    reader = await meridian.connect(address, heartbeat=False)
+    reader = await meridian.connect(address, heartbeat=False, roles=[])
     try:
-        first = await writer.record_trades(trades=[trade(1), trade(2, at=HOUR + SECOND)])
+        first = await writer._acts.record_trades(trades=[trade(1), trade(2, at=HOUR + SECOND)])
         # A late print: recorded after, valid before the range a reader read.
-        await writer.record_trades(trades=[trade(3, at=HOUR - 60 * SECOND)])
-        ranged = await reader.list_trades(
+        await writer._acts.record_trades(trades=[trade(3, at=HOUR - 60 * SECOND)])
+        ranged = await reader._acts.list_trades(
             subjects=[SubjectRef(entity_id=BTC)],
             valid_from_ns=HOUR,
             valid_until_ns=HOUR + 60 * SECOND,
         )
-        caught = await reader.list_trades(
+        caught = await reader._acts.list_trades(
             subjects=[SubjectRef(entity_id=BTC)],
             sources=SourceChoice(side_by_side=True),
             after_watermark=first.watermark,
         )
         with pytest.raises(meridian.CallFailed, match="within one day"):
-            await reader.list_trades(
+            await reader._acts.list_trades(
                 subjects=[SubjectRef(entity_id=BTC)],
                 valid_from_ns=HOUR,
                 valid_until_ns=HOUR + NS_A_DAY + 1,
@@ -239,16 +239,16 @@ async def test_trades_are_read_over_a_range_within_a_day_or_after_a_watermark(si
 async def test_the_latest_quotes_are_one_per_venue_and_asset(sidecar) -> None:
     service, address = sidecar
     writer = await data_plugin(sidecar)
-    reader = await meridian.connect(address, heartbeat=False)
+    reader = await meridian.connect(address, heartbeat=False, roles=[])
     try:
-        await writer.record_quotes(
+        await writer._acts.record_quotes(
             quotes=[
                 quote("usd-1", "62431.26"),
                 quote("usd-2", "62431.50", at=HOUR + SECOND),
                 quote("usdc-1", "62440.10", in_usdc=True),
             ]
         )
-        latest = await reader.list_quotes(subjects=[SubjectRef(entity_id=BTC)])
+        latest = await reader._acts.list_quotes(subjects=[SubjectRef(entity_id=BTC)])
     finally:
         await reader.leave()
         await writer.leave()
@@ -278,11 +278,11 @@ async def test_every_trade_is_heard_and_a_loss_caught_up_after_the_watermark_las
 ) -> None:
     service, address = sidecar
     writer = await data_plugin(sidecar)
-    await writer.record_trades(trades=[trade(1), trade(2)])
+    await writer._acts.record_trades(trades=[trade(1), trade(2)])
     one, two = service.operations.lake.published
     # Lost on the stream: recorded while the reader was too slow, one a late
     # print valid before what it had heard.
-    await writer.record_trades(trades=[trade(3), trade(4, at=HOUR - 60 * SECOND)])
+    await writer._acts.record_trades(trades=[trade(3), trade(4, at=HOUR - 60 * SECOND)])
     three, four = service.operations.lake.published[2:]
     service.operations.streams = [
         Stream(
@@ -301,7 +301,7 @@ async def test_every_trade_is_heard_and_a_loss_caught_up_after_the_watermark_las
     async def traded(row: meridian.Heard[ops.TradesRecordedEvent]) -> None:
         heard.append(row)
 
-    reader = await meridian.connect(address, heartbeat=False)
+    reader = await meridian.connect(address, heartbeat=False, roles=[])
     try:
         await heard_until(
             service, reader, lambda: len(heard) >= 4, trades_recorded=traded, subjects=[BTC]
@@ -330,9 +330,9 @@ async def test_quotes_are_heard_latest_first_per_asset_never_one_asset_for_anoth
 ) -> None:
     service, address = sidecar
     writer = await data_plugin(sidecar)
-    await writer.record_quotes(quotes=[quote("usd-1", "62431.26")])
-    await writer.record_quotes(quotes=[quote("usdc-1", "62440.10", in_usdc=True)])
-    await writer.record_quotes(quotes=[quote("usd-2", "62431.50", at=HOUR + SECOND)])
+    await writer._acts.record_quotes(quotes=[quote("usd-1", "62431.26")])
+    await writer._acts.record_quotes(quotes=[quote("usdc-1", "62440.10", in_usdc=True)])
+    await writer._acts.record_quotes(quotes=[quote("usd-2", "62431.50", at=HOUR + SECOND)])
     usd_1, usdc_1, usd_2 = service.operations.lake.published
     service.operations.streams = [
         Stream(
@@ -350,7 +350,7 @@ async def test_quotes_are_heard_latest_first_per_asset_never_one_asset_for_anoth
     async def quoted(row: meridian.Heard[ops.QuotesRecordedEvent]) -> None:
         heard.append(row)
 
-    reader = await meridian.connect(address, heartbeat=False)
+    reader = await meridian.connect(address, heartbeat=False, roles=[])
     try:
         await heard_until(
             service,
@@ -431,7 +431,7 @@ def reading(role: str) -> dict[str, object]:
                 return None
 
             recorder.answer(row, lambda _: message)
-            await recorder.receive(**{arm: heard}, subjects=[BTC])
+            await recorder._hear({row_of(arm): heard})
 
         return produce
 

@@ -22,7 +22,7 @@ import grpc
 import pytest
 
 import meridian
-from conftest import FakeSidecar, Stream
+from conftest import FakeSidecar, Stream, receive, row_of
 from meridian import (
     Bar,
     CallFailed,
@@ -134,7 +134,7 @@ async def data_plugin(sidecar: tuple[FakeSidecar, str]) -> meridian.Plugin:
     service.instance_id = INSTANCE
     service.roles = ("data",)
     return await meridian.connect(
-        address, heartbeat=False, declaration=Declaration(catalogue=CATALOGUE)
+        address, heartbeat=False, declaration=Declaration(catalogue=CATALOGUE), roles=[]
     )
 
 
@@ -207,7 +207,7 @@ async def test_a_catalogue_from_a_plugin_not_holding_data_is_refused_by_the_side
     _, address = sidecar
     with pytest.raises(meridian.Refused, match="data"):
         await meridian.connect(
-            address, heartbeat=False, declaration=Declaration(catalogue=CATALOGUE)
+            address, heartbeat=False, declaration=Declaration(catalogue=CATALOGUE), roles=[]
         )
 
 
@@ -219,12 +219,12 @@ async def test_a_batch_is_refused_outside_1_to_500_before_anything_is_sent(sidec
     plugin = await data_plugin(sidecar)
     try:
         with pytest.raises(ValueError, match="prices holds 0 rows; a batch is 1 to 500"):
-            await plugin.record_prices(prices=[])
+            await plugin._acts.record_prices(prices=[])
         many = [close("1", row_key=f"r{n}") for n in range(501)]
         with pytest.raises(ValueError, match="prices holds 501 rows"):
-            await plugin.record_prices(prices=many)
+            await plugin._acts.record_prices(prices=many)
         assert service.operations.sent == []
-        done = await plugin.record_prices(prices=many[:500])
+        done = await plugin._acts.record_prices(prices=many[:500])
         assert done.recorded == 500
         assert done.watermark.partitions[0].sequence == 500
     finally:
@@ -237,7 +237,7 @@ async def test_a_close_is_recorded_its_money_resolved_dated_to_the_cash_instrume
     service, _ = sidecar
     plugin = await data_plugin(sidecar)
     try:
-        done = await plugin.record_prices(prices=[close("62431.27")])
+        done = await plugin._acts.record_prices(prices=[close("62431.27")])
         assert (done.recorded, done.restated, done.unchanged) == (1, 0, 0)
         (kept,) = service.operations.lake.rows
         assert kept.price.currency_code == "USD"
@@ -246,7 +246,7 @@ async def test_a_close_is_recorded_its_money_resolved_dated_to_the_cash_instrume
         assert kept.meta.business_date == "2026-10-08"  # a date, as its ISO text
         assert (kept.meta.version, kept.meta.sequence) == (1, 1)
         # A code that names a new instrument from a date resolves by the row's.
-        await plugin.record_prices(
+        await plugin._acts.record_prices(
             prices=[
                 close("1", day=date(2026, 6, 30), money=Money(Decimal(1), "XTS"), row_key="a"),
                 close("1", day=date(2026, 7, 1), money=Money(Decimal(1), "XTS"), row_key="b"),
@@ -267,17 +267,19 @@ async def test_a_token_is_named_by_its_instrument_never_by_a_code(sidecar) -> No
         stable = close(
             "2410.5", subject=ETH, money=Money(Decimal("2410.5"), instrument_id=USDC)
         )
-        await plugin.record_prices(prices=[stable])
+        await plugin._acts.record_prices(prices=[stable])
         assert service.operations.lake.rows[0].price.instrument_id == USDC
         assert not service.operations.lake.rows[0].price.currency_code
         with pytest.raises(CallFailed, match=r"prices\[0\]\.price\.currency_code: USDC"):
-            await plugin.record_prices(prices=[close("1", money=Money(Decimal(1), "USDC"))])
+            await plugin._acts.record_prices(
+                prices=[close("1", money=Money(Decimal(1), "USDC"))]
+            )
         with pytest.raises(CallFailed, match="two assets"):
-            await plugin.record_prices(
+            await plugin._acts.record_prices(
                 prices=[close("1", money=Money(Decimal(1), "USD", instrument_id=USDC))]
             )
         with pytest.raises(ValueError, match="names no asset"):
-            await plugin.record_prices(prices=[close("1", money=Money(Decimal(1)))])
+            await plugin._acts.record_prices(prices=[close("1", money=Money(Decimal(1)))])
     finally:
         await plugin.leave()
 
@@ -288,10 +290,10 @@ async def test_the_forming_day_is_restated_and_a_repeat_by_value_changes_nothing
     service, _ = sidecar
     plugin = await data_plugin(sidecar)
     try:
-        await plugin.record_prices(prices=[close("764.2")])
-        again = await plugin.record_prices(prices=[close("764.20")])
+        await plugin._acts.record_prices(prices=[close("764.2")])
+        again = await plugin._acts.record_prices(prices=[close("764.20")])
         assert (again.recorded, again.unchanged) == (0, 1)
-        filled = await plugin.record_prices(prices=[close("765.01")])
+        filled = await plugin._acts.record_prices(prices=[close("765.01")])
         assert filled.restated == 1
         first, second = service.operations.lake.rows
         assert first.meta.row_key == second.meta.row_key
@@ -305,7 +307,7 @@ async def test_a_row_the_sidecar_refuses_is_named_by_its_item_and_field(sidecar)
     plugin = await data_plugin(sidecar)
     try:
         with pytest.raises(CallFailed, match=r"prices\[1\]\.meta\.source\.dataset"):
-            await plugin.record_prices(
+            await plugin._acts.record_prices(
                 prices=[close("1"), close("1", dataset=f"{INSTANCE}:hourly", row_key="x")]
             )
         stranger = close("1")
@@ -320,7 +322,7 @@ async def test_a_row_the_sidecar_refuses_is_named_by_its_item_and_field(sidecar)
             price=Money(Decimal(1), "USD"),
         )
         with pytest.raises(CallFailed, match=r"prices\[0\]\.meta\.source\.venue_id"):
-            await plugin.record_prices(prices=[stranger])
+            await plugin._acts.record_prices(prices=[stranger])
     finally:
         await plugin.leave()
 
@@ -349,12 +351,12 @@ async def test_a_bar_without_a_vwap_is_recorded_and_one_in_two_assets_refused(si
         )
 
     try:
-        done = await plugin.record_bars(bars=[bar(Money(Decimal("62431.27"), "USD"))])
+        done = await plugin._acts.record_bars(bars=[bar(Money(Decimal("62431.27"), "USD"))])
         assert done.recorded == 1
         (kept,) = service.operations.lake.rows
         assert not kept.HasField("vwap") and not kept.HasField("trade_count")
         with pytest.raises(CallFailed, match="one asset"):
-            await plugin.record_bars(bars=[bar(Money(Decimal(1), instrument_id=USDC))])
+            await plugin._acts.record_bars(bars=[bar(Money(Decimal(1), instrument_id=USDC))])
     finally:
         await plugin.leave()
 
@@ -381,16 +383,18 @@ async def test_a_date_is_a_date_and_text_that_is_no_date_is_refused_naming_it(si
             with pytest.raises(
                 ValueError, match=r"prices\[0\]\.meta\.business_date .* no date"
             ):
-                await plugin.record_prices(prices=[bad])
+                await plugin._acts.record_prices(prices=[bad])
         moment = datetime(2026, 10, 8, 16, 0, tzinfo=UTC)
         with pytest.raises(TypeError, match="business_date is a date, not a moment"):
-            await plugin.list_prices(subjects=[SubjectRef(entity_id=BTC)], business_date=moment)
+            await plugin._acts.list_prices(
+                subjects=[SubjectRef(entity_id=BTC)], business_date=moment
+            )
         assert service.operations.sent == []
         # A date, or its ISO text, crosses as the text.
-        await plugin.list_prices(
+        await plugin._acts.list_prices(
             subjects=[SubjectRef(entity_id=BTC)], business_date=date(2026, 10, 8)
         )
-        await plugin.list_prices(
+        await plugin._acts.list_prices(
             subjects=[SubjectRef(entity_id=BTC)], business_date="2026-10-08"
         )
         assert [r.business_date for r in service.operations.reads] == ["2026-10-08"] * 2
@@ -401,14 +405,14 @@ async def test_a_date_is_a_date_and_text_that_is_no_date_is_refused_naming_it(si
 async def test_every_date_field_takes_a_date(sidecar) -> None:
     """Not the lake's alone: the dictionary types each of these `date`."""
     service, address = sidecar
-    plugin = await meridian.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False, roles=[])
     try:
-        await plugin.record_holdings_statement(
+        await plugin._acts.record_holdings_statement(
             source="toy", external_statement_id="S", as_of_date=date(2026, 9, 12)
         )
         assert service.operations.sent[-1].as_of_date == "2026-09-12"
         with pytest.raises(ValueError, match="as_of_date is '2026-13-01', which is no date"):
-            await plugin.record_holdings_statement(source="toy", as_of_date="2026-13-01")
+            await plugin._acts.record_holdings_statement(source="toy", as_of_date="2026-13-01")
     finally:
         await plugin.leave()
 
@@ -417,9 +421,9 @@ async def test_every_date_field_takes_a_date(sidecar) -> None:
 
 
 async def recorded_two_datasets(plugin: meridian.Plugin) -> None:
-    await plugin.record_prices(prices=[close("62431.27")])
+    await plugin._acts.record_prices(prices=[close("62431.27")])
     live = close("62440.00", dataset=LIVE, row_key="live-1")
-    await plugin.record_prices(prices=[live])
+    await plugin._acts.record_prices(prices=[live])
 
 
 async def test_a_reader_reads_by_business_date_by_default_named_or_side_by_side(
@@ -430,7 +434,7 @@ async def test_a_reader_reads_by_business_date_by_default_named_or_side_by_side(
     subjects = [SubjectRef(entity_id=BTC), SubjectRef(entity_id="LCL-NOBODY")]
     try:
         await recorded_two_datasets(plugin)
-        by_date = await plugin.list_prices(
+        by_date = await plugin._acts.list_prices(
             subjects=subjects, kinds=["close"], business_date=date(2026, 10, 8)
         )
         assert [p.meta.source.dataset for p in by_date.prices] == [DAILY]
@@ -439,13 +443,13 @@ async def test_a_reader_reads_by_business_date_by_default_named_or_side_by_side(
         assert missed.subject.entity_id == "LCL-NOBODY"
         assert missed.reason == ops.UNANSWERED_REASON_NOT_COVERED
         service.operations.lake.priority["meridian.v1.Price"] = [LIVE, DAILY]
-        default = await plugin.list_prices(subjects=subjects[:1])
+        default = await plugin._acts.list_prices(subjects=subjects[:1])
         assert [p.meta.source.dataset for p in default.prices] == [LIVE]
-        named = await plugin.list_prices(
+        named = await plugin._acts.list_prices(
             subjects=subjects[:1], sources=SourceChoice(named=[DAILY])
         )
         assert [p.meta.source.dataset for p in named.prices] == [DAILY]
-        both = await plugin.list_prices(
+        both = await plugin._acts.list_prices(
             subjects=subjects[:1], sources=SourceChoice(side_by_side=True)
         )
         assert sorted(p.meta.source.dataset for p in both.prices) == [DAILY, LIVE]
@@ -458,19 +462,19 @@ async def test_a_read_as_of_a_recorded_time_answers_what_the_lake_knew_then(side
     service, _ = sidecar
     plugin = await data_plugin(sidecar)
     try:
-        await plugin.record_prices(prices=[close("764.2")])
+        await plugin._acts.record_prices(prices=[close("764.2")])
         then = service.operations.lake.rows[0].meta.recorded_at_ns
-        await plugin.record_prices(prices=[close("765.01")])
+        await plugin._acts.record_prices(prices=[close("765.01")])
         asked = {"subjects": [SubjectRef(entity_id=BTC)], "business_date": date(2026, 10, 8)}
-        now = await plugin.list_prices(**asked)
-        before = await plugin.list_prices(**asked, as_of_ns=then)
+        now = await plugin._acts.list_prices(**asked)
+        before = await plugin._acts.list_prices(**asked, as_of_ns=then)
         assert [(p.meta.version, meridian.as_money(p.price).amount) for p in now.prices] == [
             (2, Decimal("765.01"))
         ]
         assert [(p.meta.version, meridian.as_money(p.price).amount) for p in before.prices] == [
             (1, Decimal("764.2"))
         ]
-        bars = await plugin.list_bars(
+        bars = await plugin._acts.list_bars(
             subjects=[SubjectRef(entity_id=BTC)], valid_from_ns=DAY, valid_until_ns=DAY + 1
         )
         assert list(bars.bars) == [] and bars.unanswered
@@ -483,7 +487,7 @@ async def test_a_reader_learns_the_datasets_it_may_read_with_their_catalogue_ent
 ) -> None:
     plugin = await data_plugin(sidecar)
     try:
-        listed = await plugin.list_datasets()
+        listed = await plugin._acts.list_datasets()
         assert [d.dataset for d in listed.datasets] == [DAILY, LIVE]
         assert listed.datasets[0].declaration.day_time_zone == "Etc/UTC"
         assert {licence.dataset: licence.kept for licence in listed.licences} == {
@@ -501,15 +505,15 @@ async def test_a_venue_resolves_by_its_mic_and_one_not_held_is_reported(sidecar)
     service, _ = sidecar
     plugin = await data_plugin(sidecar)
     try:
-        found = await plugin.resolve_venue(
+        found = await plugin._acts.resolve_venue(
             identifiers=[meridian.Identifier(scheme="iso10383", value="XNAS")], as_of_ns=DAY
         )
         assert found.found and found.venue.venue_id == "VEN-01JA00000000000000XNAS"
-        missed = await plugin.resolve_venue(
+        missed = await plugin._acts.resolve_venue(
             identifiers=[meridian.Identifier(scheme="iso10383", value="XXXX")], as_of_ns=DAY
         )
         assert not missed.found and missed.miss_reason == ops.MISS_REASON_NOT_FOUND
-        await plugin.report_missing_venue(
+        await plugin._acts.report_missing_venue(
             source="coinbase",
             identifiers=[meridian.Identifier(scheme="iso10383", value="XXXX")],
             as_of_ns=DAY,
@@ -528,13 +532,15 @@ async def test_a_data_plugin_reads_the_record_of_an_instrument_another_source_re
     service, _ = sidecar
     plugin = await data_plugin(sidecar)
     try:
-        found = await plugin.resolve_instrument(instrument_id=ELSEWHERE, as_of_ns=DAY)
+        found = await plugin._acts.resolve_instrument(instrument_id=ELSEWHERE, as_of_ns=DAY)
         assert found.found
         assert [(i.scheme, i.value, i.source) for i in found.instrument.identifiers] == [
             ("cusip", "46090E103", ""),
             ("symbol", "QQQ", "snaptrade"),
         ]
-        missing = await plugin.resolve_instrument(instrument_id="LCL-NOT-HELD", as_of_ns=DAY)
+        missing = await plugin._acts.resolve_instrument(
+            instrument_id="LCL-NOT-HELD", as_of_ns=DAY
+        )
         assert not missing.found
         assert [r.instrument_id for r in service.operations.sent[-2:]] == [
             ELSEWHERE,
@@ -568,15 +574,17 @@ async def test_a_data_plugin_hears_a_want_records_against_it_and_declines_what_i
     async def wanted(heard: meridian.Heard[ops.ObservationsWantedEvent]) -> None:
         want = heard.message
         day = date.fromisoformat(want.business_date)
-        await plugin.record_prices(prices=[close("62431.27", day=day)], want_id=want.want_id)
-        await plugin.decline_want(
+        await plugin._acts.record_prices(
+            prices=[close("62431.27", day=day)], want_id=want.want_id
+        )
+        await plugin._acts.decline_want(
             want_id=want.want_id,
             subjects=[meridian.SubjectRef(entity_id="LCL-NOT-COVERED")],
             reason="not_covered",
         )
         answered.set()
 
-    task = asyncio.create_task(plugin.receive(observations_wanted=wanted))
+    task = asyncio.create_task(receive(plugin, observations_wanted=wanted))
     try:
         await asyncio.wait_for(answered.wait(), 5)
     finally:
@@ -597,9 +605,9 @@ async def test_a_reader_hears_prices_latest_first_for_its_subjects_with_their_da
 ) -> None:
     service, address = sidecar
     writer = await data_plugin(sidecar)
-    await writer.record_prices(prices=[close("764.2")])
-    await writer.record_prices(prices=[close("765.01")])
-    await writer.record_prices(prices=[close("770", day=date(2026, 10, 9))])
+    await writer._acts.record_prices(prices=[close("764.2")])
+    await writer._acts.record_prices(prices=[close("765.01")])
+    await writer._acts.record_prices(prices=[close("770", day=date(2026, 10, 9))])
     first, restated, day_9 = service.operations.lake.published
     # Recorded after the read, under the same key: heard.
     day_10 = ops.PricesRecordedEvent()
@@ -621,8 +629,8 @@ async def test_a_reader_hears_prices_latest_first_for_its_subjects_with_their_da
     async def price(row: meridian.Heard[ops.PricesRecordedEvent]) -> None:
         heard.append(row)
 
-    reader = await meridian.connect(address, heartbeat=False)
-    task = asyncio.create_task(reader.receive(prices_recorded=price, subjects=[BTC, BTC]))
+    reader = await meridian.connect(address, heartbeat=False, roles=[])
+    task = asyncio.create_task(receive(reader, prices_recorded=price, subjects=[BTC, BTC]))
     try:
         for _ in range(100):
             reads = [r for r in service.operations.reads if isinstance(r, ops.ListPricesParams)]
@@ -650,16 +658,16 @@ async def test_a_reader_hears_prices_latest_first_for_its_subjects_with_their_da
 
 async def test_more_than_500_subjects_are_refused_before_the_stream_opens(sidecar) -> None:
     service, address = sidecar
-    plugin = await meridian.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False, roles=[])
 
     async def price(_: object) -> None:
         return None
 
     try:
         with pytest.raises(ValueError, match="subjects names 501; at most 500"):
-            await plugin.receive(prices_recorded=price, subjects=[f"S{n}" for n in range(501)])
+            await receive(plugin, prices_recorded=price, subjects=[f"S{n}" for n in range(501)])
         with pytest.raises(TypeError, match="not one string"):
-            await plugin.receive(prices_recorded=price, subjects=BTC)
+            await receive(plugin, prices_recorded=price, subjects=BTC)
         assert service.operations.received == []
     finally:
         await plugin.leave()
@@ -668,10 +676,10 @@ async def test_more_than_500_subjects_are_refused_before_the_stream_opens(sideca
 async def test_a_reader_refused_a_read_is_told_so(sidecar) -> None:
     service, address = sidecar
     service.operations.refuse = (grpc.StatusCode.PERMISSION_DENIED, "not entitled")
-    plugin = await meridian.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False, roles=[])
     try:
         with pytest.raises(meridian.NotGranted):
-            await plugin.list_prices(subjects=[SubjectRef(entity_id=BTC)])
+            await plugin._acts.list_prices(subjects=[SubjectRef(entity_id=BTC)])
     finally:
         await plugin.leave()
 
@@ -1025,7 +1033,7 @@ def producers(**mutations: bool) -> dict[str, object]:
             want.subjects.extend(ops.SubjectRef(entity_id=s) for s in subjects)
             recorder.answer("ObservationsWanted", lambda _: want)
             recorder.answer("ResolveInstrument", lambda _: RECORD_ELSEWHERE)
-            await recorder.receive(observations_wanted=toy.on_want)
+            await recorder._hear({"ObservationsWanted": toy.on_want})
 
         return produce
 
@@ -1034,7 +1042,7 @@ def producers(**mutations: bool) -> dict[str, object]:
         recorder.answer(
             "WantWithdrawn", lambda _: [ops.WantWithdrawnEvent(want_id="WNT-1", dataset=DAILY)]
         )
-        await recorder.receive(want_withdrawn=toy.on_withdrawn)
+        await recorder._hear({"WantWithdrawn": toy.on_withdrawn})
 
     async def streamed(recorder: Recorder) -> None:
         toy = ToyDataPlugin(recorder, **mutations)
@@ -1046,7 +1054,7 @@ def producers(**mutations: bool) -> dict[str, object]:
             standing=True,
         )
         recorder.answer("ObservationsWanted", lambda _: want)
-        await recorder.receive(observations_wanted=toy.on_trades_wanted)
+        await recorder._hear({"ObservationsWanted": toy.on_trades_wanted})
 
     outcome = outcome_producer
 
@@ -1281,7 +1289,7 @@ def test_the_recorder_answers_a_batch_of_rates_with_its_count() -> None:
                       series="PAR")
             for tenor, value in (("1 Mo", "4.12"), ("10 Yr", "4.21"))
         ]  # fmt: skip
-        return await feed.plugin.record_rates(rates=rows)
+        return await feed.role.record_rates(rates=rows)
 
     answer = asyncio.run(answered())
     assert isinstance(answer, ops.RecordRatesResult) and answer.recorded == 2
@@ -1454,11 +1462,11 @@ def test_a_forming_day_recorded_as_a_new_row_fails_the_suite() -> None:
 async def test_a_heard_row_is_kept_on_its_row_and_a_case_hearing_nothing_fails() -> None:
     recorder = Recorder("toy-1")
     toy = ToyDataPlugin(recorder)
-    await recorder.receive(observations_wanted=toy.on_want)  # nothing delivered
+    await recorder._hear({"ObservationsWanted": toy.on_want})  # nothing delivered
     case = suite("data").case("a-want-recorded-against")
     assert check(case, recorder) == "expect[0]: nothing was heard on ObservationsWanted"
     recorder.answer("ObservationsWanted", lambda _: WANT)
-    await recorder.receive(observations_wanted=toy.on_want)
+    await recorder._hear({"ObservationsWanted": toy.on_want})
     assert recorder.on("ObservationsWanted") == [WANT]
     assert check(case, recorder) is None
 
@@ -1487,7 +1495,7 @@ def test_a_reading_role_hears_and_reads_as_its_suite_asks() -> None:
                 return None
 
             recorder.answer(row, lambda _: message)
-            await recorder.receive(**{arm: heard})
+            await recorder._hear({row_of(arm): heard})
 
         return produce
 

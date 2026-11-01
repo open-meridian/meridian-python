@@ -489,7 +489,7 @@ def test_a_pricing_plugin_passes_its_suite_with_the_built_in_model(tmp_path: Pat
     def delivered(*batches: ops.PriceBatchRequest):  # type: ignore[no-untyped-def]
         async def produce(recorder: Recorder) -> None:
             recorder.answer("PriceBatch", lambda _: list(batches))
-            await recorder.receive(price_batch=pricing.Pricer(recorder, models).heard)
+            await recorder.hear(recorder.bind(pricing.Pricer(models)))
 
         return produce
 
@@ -504,7 +504,7 @@ def test_a_pricing_plugin_passes_its_suite_with_the_built_in_model(tmp_path: Pat
                 batches=[_batch(_unit("1.00"))] if p.after_sequence < 17 else [], sequence=17
             ),
         )
-        await pricing.Pricer(recorder, models, sequence=again).catch_up()
+        await recorder.bind(pricing.Pricer(models, sequence=again)).catch_up()
 
     days = [_unit("226.10", ops.SCENARIO_KIND_HISTORICAL_DAY, "2026-10-15")]
     report = run(
@@ -525,14 +525,14 @@ async def test_a_model_raising_leaves_the_whole_batch_unanswered() -> None:
         raise ValueError("no close")
 
     recorder = Recorder("pricing-1")
-    pricer = pricing.Pricer(recorder, {"quoted_price": broken})
+    pricer = recorder.bind(pricing.Pricer({"quoted_price": broken}))
     assert await pricer.answer(_batch(_unit("1.00"), _unit("2.00"))) is None
     assert recorder.on("AnswerPriceBatch") == [] and "no close" in pricer.unanswered["PBT-17"]
 
 
 async def test_a_batch_is_answered_under_each_units_scenario() -> None:
     recorder = Recorder("pricing-1")
-    await pricing.Pricer(recorder, {"quoted_price": pricing.reference_model}).answer(
+    await recorder.bind(pricing.Pricer({"quoted_price": pricing.reference_model})).answer(
         _batch(_unit("10.00", ops.SCENARIO_KIND_HISTORICAL_DAY, "2026-10-15"), _unit("11.00"))
     )
     (answered,) = recorder.on("AnswerPriceBatch")
@@ -754,7 +754,7 @@ async def test_model_tokens_ride_the_heartbeat(
 ) -> None:
     service, address = sidecar
     monkeypatch.setattr(meridian.client, "HEARTBEAT_SECONDS", 0.01)
-    plugin = await meridian.connect(address)
+    plugin = await meridian.connect(address, roles=[])
     try:
         plugin.count_model_tokens(
             "in-cluster/qwen2.5-7b", 120, 30, subject="local|ada", client_name="Claude"
@@ -778,7 +778,7 @@ async def test_model_tokens_ride_the_heartbeat(
 
 async def test_a_65th_model_token_count_is_refused(sidecar: tuple[Any, str]) -> None:
     _, address = sidecar
-    plugin = await meridian.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False, roles=[])
     try:
         for n in range(64):
             plugin.count_model_tokens(f"endpoint-{n}", 1, 1)
@@ -802,11 +802,12 @@ async def test_an_event_contract_is_sent_with_its_ticker_beside_its_symbol() -> 
     from fake_venues import contracts_venue
 
     recorder = Recorder("fakev-1")
-    feed = event_contracts.Feed(
-        recorder,
-        contracts_venue.market(contracts_venue.NOW_NS),
-        event_contracts.ContractMap(),
-        clock_ns=lambda: contracts_venue.NOW_NS,
+    feed = recorder.bind(
+        event_contracts.Feed(
+            contracts_venue.market(contracts_venue.NOW_NS),
+            event_contracts.ContractMap(),
+            clock_ns=lambda: contracts_venue.NOW_NS,
+        )
     )
     await feed.member_id("BASE-1")
     (resolve,) = recorder.on("ResolveIdentifier")
@@ -822,11 +823,13 @@ async def test_a_venue_with_no_mic_names_its_ticker_by_its_venue_id() -> None:
     market = contracts_venue.market(contracts_venue.NOW_NS)
     market.venue_identifiers = (("symbol", "fakev", "fakev"),)
     recorder = Recorder("fakev-1")
-    feed = event_contracts.Feed(recorder, market, event_contracts.ContractMap())
+    feed = recorder.bind(event_contracts.Feed(market, event_contracts.ContractMap()))
     ticker = await feed._ticker(await feed.contract("BASE-1"))  # type: ignore[arg-type]
     assert ticker is not None and ticker.scheme == "ticker"
     assert ticker.source.startswith("VEN-")
-    unheld = event_contracts.Feed(Recorder("fakev-2"), market, event_contracts.ContractMap())
+    unheld = Recorder("fakev-2").bind(
+        event_contracts.Feed(market, event_contracts.ContractMap())
+    )
     unheld.plugin.answer(
         "ResolveVenue",
         lambda _: ops.ResolveVenueResult(found=False, miss_reason=ops.MISS_REASON_NOT_FOUND),

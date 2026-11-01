@@ -50,6 +50,7 @@ latency.
 """
 
 from ..._numbers import number
+from .._generated.connectivity import Role
 from ._bookkeeping import (
     Placed,
     Sent,
@@ -109,6 +110,7 @@ from ._trader import (
 )
 
 __all__ = [
+    "Role",
     "AccountTrading",
     "CONNECTION",
     "ENABLE_TRADING",

@@ -25,8 +25,9 @@ from typing import Any
 from ..client import Setting
 from ..figures import Figure
 from ._figures import Value, ordered
+from ._generated.reporting import Role
 
-__all__ = ["DatasetRead", "DatasetsRead", "figures", "reporting_currency"]
+__all__ = ["Role", "DatasetRead", "DatasetsRead", "figures", "reporting_currency"]
 
 
 def reporting_currency(

@@ -14,9 +14,9 @@ A plugin's pages are declared where their views are, each with the levels it
 serves, and refused to a session at any other (`Pages`, in `meridian.pages`).
 The few figures it reports about its own work, which core draws on its Summary
 under Manage, go on its heartbeat (`plugin.figures = [Figure(...)]`, in
-`meridian.figures`). What its roles hear it receives with a handler per row,
-seeded, followed and caught up from the store (`plugin.receive(...)`, each
-change a `Heard`, in `meridian.receive`). The book of record (contract v8) is
+`meridian.figures`). What its roles hear is each role class's `on_<row>`
+methods (from 0.35), seeded, followed and caught up from the store, each
+change a `Heard` (`meridian.receive`). The book of record (contract v8) is
 written by an operations plugin and read by five roles through the typed
 operations -- record_opening_balance, record_break, record_account_figures,
 handle_break, resolve_break, list_positions, list_breaks,
@@ -290,6 +290,30 @@ book's seven fixed-income records are reported and proposed through
 `meridian.helpers.lifecycle`, and the contract's money rules and accrual are
 `meridian.helpers.debt`; the engine's curve and bond measures are
 `analytics.DEBT_MEASURES`.
+
+From 0.35.0 (spec/each-role-is-one-generated-class; rulings 1004, 1005 and
+1009 to 1023) each role is one class. A plugin writes one class per role it
+holds, extending that role's base, `meridian.roles.<role>.Role`, which
+design's generator writes from the matrix and the suites: the role's acts
+are methods on `self` (`await self.record_prices(...)`), and its events
+`on_<row>` methods (`on_observations_wanted`), abstract where the role's
+suite requires them, so a class missing one is refused naming it. The
+classes are registered together on one connection by the process's entry
+point, `meridian.run(declaration=..., roles=[...], pages=..., port=...,
+on_settings=..., figures=...)` (`run_async` as a coroutine), which runs
+each class's `on_start()`, hears every row the classes hear on one stream
+(each class's `seed`, `subjects()` and `hear_again()`), runs each `run()`,
+restarted after a backoff when it fails, and its `on_stop()`. The
+connection, `Plugin`, keeps only what is the whole plugin's -- its
+identity, settings, health and figures, storage, tickets, views -- reached
+from a role class as `self.plugin`; it makes no act and `receive` is gone.
+`meridian.connect(..., roles=[...])` is the context manager beneath
+`run`. The SDK's common logic is role classes a plugin registers or
+subclasses: `connectivity.Trader`, `pricing.Pricer`, and the data feeds
+(`data.pairs.Feed`, `data.listings.Feed`, `data.event_contracts.Feed`).
+The suites drive a class through `Recorder.bind(role)` and
+`Recorder.hear(role)`, and `meridian.behaviours` holds the SDK's helpers
+and common logic to the behaviour cases every SDK runs.
 """
 
 # Each role's common part (contract v20, spec/plugin-pages-follow-their-role).
@@ -300,6 +324,7 @@ from . import (
     helpers,  # noqa: E402
     roles,  # noqa: E402  (after what it imports)
 )
+from ._run import run, run_async
 from ._settings import (
     account_currency,
     ceilings_from,
@@ -788,6 +813,8 @@ __all__ = [
     "is_demo",
     "reached_environment",
     "roles",
+    "run",
+    "run_async",
     "runs_as",
     "sample_data",
     "quality_thresholds",

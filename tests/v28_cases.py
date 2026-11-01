@@ -18,6 +18,7 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 
 import meridian
+from conftest import row_of
 from meridian.helpers import chains, lifecycle, packages
 from meridian.plugin.v1 import operations_pb2 as ops
 from meridian.roles import Latency, ems, signal
@@ -52,7 +53,7 @@ def heard(row: str, arm: str, message: object) -> Producer:
         async def kept(_: object) -> None:
             return None
 
-        await recorder.receive(**{arm: kept})
+        await recorder._hear({row_of(arm): kept})
 
     return produce
 

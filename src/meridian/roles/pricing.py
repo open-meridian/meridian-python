@@ -11,8 +11,11 @@ every unit, in the base currency the unit's inputs convert to, and reads
 nothing else for the job. It is never called by a client; a batch reaches
 the instance it names alone (matrix/directed.tsv).
 
-    pricer = pricing.Pricer(plugin, {"quoted_price": my_model})
-    await pricer.run()           # the batches waiting, then each one heard
+    meridian.run(declaration=DECLARATION, roles=[pricing.Pricer({"quoted_price": my_model})])
+
+`Pricer` is the pricing role's class (SDK 0.35, `pricing.Role`): on start
+the batches still waiting are answered (`on_start`), then each one heard
+(`on_price_batch`). A plugin registers it as it is, or subclasses it.
 
 **A model** is a function of one unit -- `(batch, unit) -> Money` -- its value
 per unit; `reference_model` is the built-in models' own computation
@@ -47,13 +50,13 @@ import tempfile
 from collections.abc import Awaitable, Callable, Mapping
 from decimal import Decimal
 from pathlib import Path
-from typing import Any
 
 from ..operations import Money, PricedUnit, ScenarioKey, as_money
 from ..plugin.v1 import operations_pb2 as ops
 from ..receive import Heard
+from ._generated.pricing import Role
 
-__all__ = ["Model", "Pricer", "Sequence", "reference_model", "scenario_of"]
+__all__ = ["Role", "Model", "Pricer", "Sequence", "reference_model", "scenario_of"]
 
 log = logging.getLogger("meridian.roles.pricing")
 
@@ -123,20 +126,19 @@ class Sequence:
         os.replace(temporary, self.path)
 
 
-class Pricer:
+class Pricer(Role):
     """A pricing plugin's work: every batch answered, from its models, by
-    model id. `plugin` is a `meridian.Plugin`, or the suites' `Recorder`."""
+    model id. The pricing role's class (SDK 0.35): registered with
+    `meridian.run(roles=[...])`, or bound to the suites' `Recorder`."""
 
     def __init__(
         self,
-        plugin: Any,
         models: Mapping[str, Model],
         *,
         sequence: Sequence | None = None,
     ) -> None:
         if not models:
             raise ValueError("a pricing plugin implements at least one model id")
-        self.plugin = plugin
         self.models = dict(models)
         self.sequence = sequence or Sequence()
         self.answered = 0
@@ -171,15 +173,15 @@ class Pricer:
             log.warning("batch %s left unanswered: %s", batch.batch_id, failed)
             self.sequence.note(int(batch.sequence))
             return None
-        answered: ops.AnswerPriceBatchResult = await self.plugin.answer_price_batch(
+        answered: ops.AnswerPriceBatchResult = await self.answer_price_batch(
             batch_id=batch.batch_id, values=values, sensitivities=()
         )
         self.answered += 1
         self.sequence.note(int(batch.sequence))
         return answered
 
-    async def heard(self, heard: Heard[ops.PriceBatchRequest]) -> None:
-        """A `receive` handler for the price-batch row."""
+    async def on_price_batch(self, heard: Heard[ops.PriceBatchRequest]) -> None:
+        """A batch routed to this instance, heard: answered."""
         await self.answer(heard.message)
 
     async def catch_up(self) -> int:
@@ -188,7 +190,7 @@ class Pricer:
         count = 0
         after = self.sequence.value
         while True:
-            page = await self.plugin.list_price_batches(after_sequence=after)
+            page = await self.list_price_batches(after_sequence=after)
             batches = sorted(page.batches, key=lambda each: each.sequence)
             for batch in batches:
                 await self.answer(batch)
@@ -197,10 +199,9 @@ class Pricer:
                 return count
             after = int(page.sequence)
 
-    async def run(self) -> None:
-        """The batches waiting, then each one heard, until cancelled."""
+    async def on_start(self) -> None:
+        """The batches still waiting, answered before any is heard."""
         await self.catch_up()
-        await self.plugin.receive(price_batch=self.heard)
 
 
 def per_unit(value: Decimal, instrument_id: str) -> Money:

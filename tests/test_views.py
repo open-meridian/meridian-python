@@ -115,7 +115,7 @@ async def settled() -> None:
 
 async def test_a_view_is_its_snapshot_then_the_deliveries_above_it(lake) -> None:
     fake, address = lake
-    plugin = await meridian.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False, roles=[])
     view = await plugin.subscribe(
         "QuotesRecorded", subjects=[EURUSD], fields=["meridian.v1.Quote.bid"]
     )
@@ -139,7 +139,7 @@ async def test_a_view_is_its_snapshot_then_the_deliveries_above_it(lake) -> None
 
 async def test_a_loss_marker_reads_the_view_again(lake) -> None:
     fake, address = lake
-    plugin = await meridian.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False, roles=[])
     view = await plugin.subscribe("QuotesRecorded", subjects=[EURUSD])
     assert fake.reads == 1
     # A change the stream dropped, the store holding it: an injected gap.
@@ -158,7 +158,7 @@ async def test_a_loss_marker_reads_the_view_again(lake) -> None:
 
 async def test_one_view_is_shared_by_two_pages_and_dropped_after_its_linger(lake) -> None:
     fake, address = lake
-    plugin = await meridian.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False, roles=[])
     first = await plugin.subscribe("QuotesRecorded", subjects=[EURUSD], linger=0.2)
     second = await plugin.subscribe("QuotesRecorded", subjects=[EURUSD], linger=0.2)
     assert len(fake.subscribed) == 1, "identical selectors are one subscription"
@@ -182,7 +182,7 @@ async def test_entitlements_changed_while_a_view_is_open_reach_it_as_delivered(l
     """The sidecar decides the mask (meridian-core's test); the view keeps
     whatever whole state is delivered, a field withdrawn left unset."""
     fake, address = lake
-    plugin = await meridian.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False, roles=[])
     view = await plugin.subscribe("QuotesRecorded", subjects=[EURUSD])
     masked = quote(12, "1.1002")
     masked.ClearField("bid_quantity")
@@ -196,7 +196,7 @@ async def test_entitlements_changed_while_a_view_is_open_reach_it_as_delivered(l
 
 async def test_the_page_channel_conflates_per_key_over_250_ms(lake) -> None:
     fake, address = lake
-    plugin = await meridian.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False, roles=[])
     view = await plugin.subscribe("QuotesRecorded", subjects=[EURUSD])
     snapshot = view.snapshot()
     assert snapshot["sequence"] == "0", "nothing changed since the snapshot"
@@ -225,7 +225,7 @@ async def test_a_live_channel_is_served_as_om_live_reads_it(lake, tmp_path) -> N
     from meridian.testing import caller_header
 
     fake, address = lake
-    plugin = await meridian.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False, roles=[])
     (tmp_path / "base.html").write_text("{% block content %}{% endblock %}")
     pages = Pages(templates=tmp_path)
 

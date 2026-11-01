@@ -172,15 +172,15 @@ def variation(
     )  # fmt: skip
 
 
-async def report(plugin: Any, event: LifecycleEvent, *, acting_for: str | None = None) -> Any:
+async def report(role: Any, event: LifecycleEvent, *, acting_for: str | None = None) -> Any:
     """Record an event as the broker stated it, applied once: its key is the
     plugin's instance and the broker's own ID for the event (the raw
     record's key where the broker gives none)."""
     own = event.external_event_id or (event.raw_record.key if event.raw_record else "")
     if not own:
         raise ValueError("a reported lifecycle event names the broker's ID or its raw record")
-    key = f"{plugin.identity.instance_id}:{own}"
-    return await plugin.record_lifecycle_event(
+    key = f"{role.plugin.identity.instance_id}:{own}"
+    return await role.record_lifecycle_event(
         event=event, idempotency_key=key[:128], acting_for=acting_for
     )
 
@@ -243,13 +243,13 @@ def exercise_by_exception(
 
 
 async def propose(
-    plugin: Any, events: Sequence[LifecycleEvent], *, acting_for: str | None = None
+    role: Any, events: Sequence[LifecycleEvent], *, acting_for: str | None = None
 ) -> Any:
     """Propose the expected events, each in its account, recorded as
     proposed; nothing sent where there are none."""
     if not events:
         return None
-    return await plugin.propose_lifecycle_events(events=list(events), acting_for=acting_for)
+    return await role.propose_lifecycle_events(events=list(events), acting_for=acting_for)
 
 
 # ── operations: a proposal no report answered ────────────────────────────
@@ -271,14 +271,12 @@ def due_for_release(
     return now >= morning if morning.tzinfo else now.replace(tzinfo=None) >= morning
 
 
-async def release(
-    plugin: Any, event_id: str, note: str, *, acting_for: str | None = None
-) -> Any:
+async def release(role: Any, event_id: str, note: str, *, acting_for: str | None = None) -> Any:
     """Release a proposal no report answered, with the note kept on its
     entry (decisions/031)."""
     if not note.strip():
         raise ValueError("a release carries a note")
-    return await plugin.release_lifecycle_event(
+    return await role.release_lifecycle_event(
         event_id=event_id, note=note, acting_for=acting_for
     )
 
@@ -287,7 +285,7 @@ async def release(
 
 
 async def read_events(
-    plugin: Any,
+    role: Any,
     account_id: str,
     from_date: date | str,
     to_date: date | str,
@@ -300,7 +298,7 @@ async def read_events(
     rows: list[ops.LifecycleEvent] = []
     cursor = ""
     while True:
-        page = await plugin.list_lifecycle_events(
+        page = await role.list_lifecycle_events(
             account_id=account_id, from_date=from_date, to_date=to_date, kinds=list(kinds),
             cursor=cursor,
         )  # fmt: skip
@@ -587,7 +585,7 @@ def expected_paydown(
 
 
 async def settle_claim(
-    plugin: Any, event: Any, note: str, *, acting_for: str | None = None
+    role: Any, event: Any, note: str, *, acting_for: str | None = None
 ) -> Any:
     """A person marks a factor revision's open claim settled (992): the
     difference received or paid, said in the note, through
@@ -595,4 +593,4 @@ async def settle_claim(
     claim, as the book refuses one already booked."""
     if not debt.open_claims([event]):
         raise ValueError(f"{event.event_id} is no open factor revision claim")
-    return await release(plugin, event.event_id, note, acting_for=acting_for)
+    return await release(role, event.event_id, note, acting_for=acting_for)

@@ -5,14 +5,15 @@ is the SDK's now, each plugin keeping only its broker's client and the
 adapter that reads the broker's words into this module's (`Venue`).
 
     trader = connectivity.Trader(
-        plugin, lambda: venue,                # the plugin's adapter, or None until set up
+        lambda: venue,                        # the plugin's adapter, or None until set up
         now=lambda: datetime.now(UTC), market_zone=ZoneInfo("America/New_York"),
         sent=connectivity.Sent(storage / "trading" / "sent.json"),
         enabled=connectivity.Sent(storage / "trading" / "enabled.json"),
         watched=connectivity.Watched(storage / "trading" / "originated.json"),
         scope=lambda: scope,
+        poll_seconds=lambda: 5.0,
     )
-    await trader.run(poll_seconds=lambda: 5.0)
+    meridian.run(declaration=DECLARATION, roles=[trader])   # the connectivity role (0.35)
 
 **What it does.** It hears each placement naming its own instance, and no
 other's. For each queued one it reads the placement's order from the book
@@ -117,7 +118,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, tzinfo
 from decimal import Decimal
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 from ..._numbers import number
 from ...client import AccountScope
@@ -134,6 +135,7 @@ from ...operations import (
     as_decimal,
 )
 from ...plugin.v1 import operations_pb2 as ops
+from .._generated.connectivity import Role
 from ._bookkeeping import (
     Sent,
     VenueRefused,
@@ -532,12 +534,17 @@ class Shown:
     error: str = ""
 
 
-class Trader:
-    """The connectivity role's work, against one venue."""
+class Trader(Role):
+    """The connectivity role's work, against one venue: the connectivity
+    role's class (SDK 0.35), registered with `meridian.run(roles=[...])` or
+    bound to the suites' `Recorder`, or subclassed by a plugin adding its
+    own events. It reads the book itself on start, so it is not seeded."""
+
+    #: The book is read on start (`start`), so nothing is seeded.
+    seed = False
 
     def __init__(
         self,
-        plugin: Any,
         venue: Callable[[], Venue | None],
         *,
         now: Callable[[], datetime],
@@ -551,8 +558,11 @@ class Trader:
         charged: Sent | None = None,
         latency: Any = None,
         session: str = "orders",
+        poll_seconds: Callable[[], float] | float = 5.0,
     ) -> None:
-        self._plugin = plugin
+        #: How long between its reads of the venue's orders (0.35: given
+        #: here, where `run` took it before).
+        self.poll_seconds = poll_seconds
         #: From 0.32.0 (contract v27): the plugin's `roles.Latency`, where it
         #: keeps one, and the name of the session its venue calls make --
         #: each call's duration its round trip, a placement sent to the
@@ -575,7 +585,6 @@ class Trader:
         self._venue = venue
         self._now = now
         self._scope = scope
-        self.me: str = plugin.identity.instance_id
         self._sent = sent if sent is not None else Sent(None)
         self.enabled = enabled if enabled is not None else Sent(None)
         self.instructions: dict[tuple[Any, ...], ops.TradingInstruction] = {}
@@ -602,6 +611,11 @@ class Trader:
         #: then is the start's to find.
         self.started = asyncio.Event()
 
+    @property
+    def me(self) -> str:
+        """This plugin's instance: the placements naming it are its own."""
+        return str(self.plugin.identity.instance_id)
+
     def _trade_date(self, at: datetime, zone: tzinfo | None = None) -> date:
         """The date a fill's time falls on in the listing market's zone: the
         order's, where the venue states one, else the Trader's."""
@@ -624,7 +638,7 @@ class Trader:
         return _ns(self._now())
 
     def _raw(self, key: str) -> ops.RawRecordRef:
-        reference: ops.RawRecordRef = self._plugin.raw_record(key or "unkept")
+        reference: ops.RawRecordRef = self.plugin.raw_record(key or "unkept")
         return reference
 
     def mapped(self) -> frozenset[str]:
@@ -657,7 +671,7 @@ class Trader:
     async def start(self) -> None:
         """On start: the instructions in force, its placements' orders, to
         work again what it was working; then its catalogue."""
-        listed = await self._plugin.list_trading_instructions()
+        listed = await self.list_trading_instructions()
         for instruction in listed.instructions:
             self._hold(instruction)
         await self.catch_up(since=None)
@@ -666,7 +680,7 @@ class Trader:
     async def catch_up(self, since: ops.Watermark | None) -> None:
         cursor = ""
         while True:
-            listed = await self._plugin.list_orders(since=since, cursor=cursor)
+            listed = await self.list_orders(since=since, cursor=cursor)
             orders = {order.order_id: order for order in listed.orders}
             for order in listed.orders:
                 for placement in order.placements:
@@ -761,7 +775,7 @@ class Trader:
         return True
 
     async def _order_of(self, placement: ops.Placement) -> ops.Order | None:
-        listed = await self._plugin.list_orders(account_id=placement.account_id)
+        listed = await self.list_orders(account_id=placement.account_id)
         for order in listed.orders:
             if order.order_id == placement.order_id:
                 found: ops.Order = order
@@ -770,14 +784,14 @@ class Trader:
 
     # ── Hearing ─────────────────────────────────────────────────────────
 
-    async def on_placement(self, heard: Any) -> None:
+    async def on_placement_updated(self, heard: Any) -> None:
         placement: ops.Placement = heard.message.placement
         if placement.connectivity_instance_id != self.me or not self.started.is_set():
             return
         async with self._lock:
             await self._resume(placement, None, ())
 
-    async def on_execution(self, heard: Any) -> None:
+    async def on_execution_recorded(self, heard: Any) -> None:
         """An execution this plugin reported, as the book recorded it
         (contract v23): an accept's placement adopted where the placement's
         delivery has not come yet; a DK said, the venue told nothing."""
@@ -811,7 +825,7 @@ class Trader:
                     )
                 )
 
-    async def on_instruction(self, heard: Any) -> None:
+    async def on_trading_instruction_changed(self, heard: Any) -> None:
         instruction: ops.TradingInstruction = heard.message.instruction
         if not self.started.is_set():
             # Read on start, with every instruction in force.
@@ -868,7 +882,7 @@ class Trader:
             if worked.ended or worked.cancel_sent:
                 continue
             if accounts is None:
-                listed = await self._plugin.list_orders()
+                listed = await self.list_orders()
                 accounts = {o.order_id: str(o.account_id) for o in listed.orders}
             account = accounts.get(worked.order_id, "")
             if account and not self._covers(instruction, account):
@@ -926,7 +940,7 @@ class Trader:
         if why:
             await self._reject_unsupported(venue, placement, why)
             return
-        found = await self._plugin.resolve_instrument(instrument_id=order.instrument_id)
+        found = await self.resolve_instrument(instrument_id=order.instrument_id)
         symbol = symbol_of(found.instrument, venue.source) if found.found else ""
         if not symbol:
             await self._reject_unsupported(
@@ -947,7 +961,7 @@ class Trader:
             return
         sent_at = self._clock_ns()
         placed = await place_once(
-            self._plugin,
+            self,
             self._sent,
             pid,
             lambda: self._call(venue.place, code, asked),
@@ -1019,7 +1033,7 @@ class Trader:
             venue.keep, "offered", {"call": "stating what the venue offers", "stated": stated}
         )
         log.info("rejected %s unsupported: %s", placement.placement_id, why)
-        await self._plugin.report_placement(
+        await self.report_placement(
             placement_id=placement.placement_id,
             event=ops.PLACEMENT_EVENT_REJECTED,
             rejection_reason=ops.REJECTION_REASON_UNSUPPORTED,
@@ -1031,7 +1045,7 @@ class Trader:
         venue = self._venue()
         if order is None or venue is None:
             return None
-        found = await self._plugin.resolve_instrument(instrument_id=order.instrument_id)
+        found = await self.resolve_instrument(instrument_id=order.instrument_id)
         worked = Worked(
             placement_id=placement.placement_id,
             order_id=order.order_id,
@@ -1058,7 +1072,7 @@ class Trader:
         quotes read on each poll and recorded on the placement."""
         worked.asked = asked
         requested = await place_once(
-            self._plugin,
+            self,
             self._sent,
             worked.placement_id,
             lambda: self._call(venue.request_quotes, worked.code, asked),  # type: ignore[attr-defined]
@@ -1084,10 +1098,10 @@ class Trader:
             return held
         identifier = ops.Identifier(scheme="symbol", value=dealer, source=venue.source)
         now = _ns(self._now())
-        found = await self._plugin.resolve_venue(identifiers=[identifier], as_of_ns=now)
+        found = await self.resolve_venue(identifiers=[identifier], as_of_ns=now)
         venue_id = found.venue.venue_id if found.found else ""
         if not venue_id:
-            await self._plugin.report_missing_venue(
+            await self.report_missing_venue(
                 source=venue.source,
                 identifiers=[identifier],
                 as_of_ns=now,
@@ -1127,7 +1141,7 @@ class Trader:
                 continue
             raw = self._raw(quote.raw_key or key)
             if quote_id:
-                await self._plugin.report_placement_quote(
+                await self.report_placement_quote(
                     placement_id=worked.placement_id,
                     quote_id=quote_id,
                     outcome=outcome,
@@ -1140,11 +1154,11 @@ class Trader:
             side = venue.sides_said.get(quote.side, 0)
             if not dealer_id or not side:
                 continue
-            done = await self._plugin.report_placement_quote(
+            done = await self.report_placement_quote(
                 placement_id=worked.placement_id,
                 dealer_id=dealer_id,
                 dealer_quote_id=quote.dealer_quote_id,
-                side=side,
+                side=cast(Any, side),
                 price=Money(quote.price, worked.currency),
                 quantity=quote.quantity,
                 received_at_ns=_ns(quote.received_at or self._now()),
@@ -1197,7 +1211,7 @@ class Trader:
         try:
             record, key = await self._call(accept, worked.code, worked.rfq_request, said, asked)
         except VenueRefused as refused:
-            await self._plugin.report_placement_quote(
+            await self.report_placement_quote(
                 placement_id=worked.placement_id,
                 quote_id=picked,
                 outcome=ops.PLACEMENT_QUOTE_OUTCOME_EXPIRED,
@@ -1208,7 +1222,7 @@ class Trader:
         except VenueUnanswered:
             worked.unanswered = True
             return
-        await self._plugin.report_placement_quote(
+        await self.report_placement_quote(
             placement_id=worked.placement_id,
             quote_id=picked,
             outcome=ops.PLACEMENT_QUOTE_OUTCOME_ACCEPTED,
@@ -1217,7 +1231,7 @@ class Trader:
         )
         for other in placement.quotes:
             if other.quote_id != picked and other.outcome == ops.PLACEMENT_QUOTE_OUTCOME_OPEN:
-                await self._plugin.report_placement_quote(
+                await self.report_placement_quote(
                     placement_id=worked.placement_id,
                     quote_id=other.quote_id,
                     outcome=ops.PLACEMENT_QUOTE_OUTCOME_NOT_PICKED,
@@ -1283,7 +1297,7 @@ class Trader:
             log.info("%s: the cancel was not answered: %s", worked.placement_id, lost)
             return
         if cause is not None:
-            await self._plugin.request_placement_change(
+            await self.request_placement_change(
                 placement_id=worked.placement_id,
                 change=PlacementChange(kind=ops.PLACEMENT_CHANGE_KIND_CANCEL),
                 reason=reason,
@@ -1340,7 +1354,7 @@ class Trader:
                 },
             )
             log.info("%s: the replace was rejected unsupported: %s", worked.placement_id, why)
-            await self._plugin.report_placement(
+            await self.report_placement(
                 placement_id=worked.placement_id,
                 event=ops.PLACEMENT_EVENT_REJECTED,
                 rejection_reason=ops.REJECTION_REASON_UNSUPPORTED,
@@ -1384,9 +1398,9 @@ class Trader:
             worked.seen = None
             worked.venue_order_id = now_id
             self.venue_orders.add(now_id)
-        await self._plugin.report_placement(
+        await self.report_placement(
             placement_id=worked.placement_id,
-            event=event,
+            event=cast(Any, event),
             venue_order_id=now_id,
             quantity=quantity,
             limit_price=(
@@ -1400,7 +1414,7 @@ class Trader:
     ) -> None:
         """The venue refused a change: the placement rejected while it works,
         the request ending refused, the venue's code and words as reported."""
-        await self._plugin.report_placement(
+        await self.report_placement(
             placement_id=worked.placement_id,
             event=ops.PLACEMENT_EVENT_REJECTED,
             rejection_reason=ops.REJECTION_REASON_VENUE_REJECTED,
@@ -1569,7 +1583,7 @@ class Trader:
         else:
             return
         traded = self._trade_date(at, record.market_zone)
-        settles = await self._plugin.compute_date(
+        settles = await self.compute_date(
             settlement=ops.SettlementDateInputs(
                 instrument_id=held.instrument_id, trade_date=traded.isoformat()
             ),
@@ -1580,10 +1594,10 @@ class Trader:
         if not computed and not stated:
             return
         derived = execution_id(held.venue_order_id, record.filled)
-        done = await self._plugin.report_execution(
+        done = await self.report_execution(
             venue_account_code=code,
             instrument_id=held.instrument_id,
-            side=held.side,
+            side=cast(Any, held.side),
             venue_order_id=held.venue_order_id,
             venue_client_order_id=held.client_order_id,
             venue_execution_id=derived,
@@ -1631,13 +1645,13 @@ class Trader:
         if not identifiers:
             return False
         currency = order.currency if order is not None else ""
-        found = await self._plugin.resolve_identifier(
+        found = await self.resolve_identifier(
             identifiers=identifiers, as_of_ns=_ns(at), stated_currency=currency
         )
         if not (found.found and found.instrument_id):
             if not held.missing:
                 held.missing = True
-                await self._plugin.report_missing_instrument(
+                await self.report_missing_instrument(
                     source=venue.source,
                     identifiers=identifiers,
                     as_of_ns=_ns(at),
@@ -1649,7 +1663,7 @@ class Trader:
         if currency:
             held.currency = currency
             return True
-        record = await self._plugin.resolve_instrument(instrument_id=held.instrument_id)
+        record = await self.resolve_instrument(instrument_id=held.instrument_id)
         held.currency = (
             record.instrument.currency if record.found else ""
         ) or self.default_currency
@@ -1663,10 +1677,10 @@ class Trader:
                 break
             busted = held.executions.get(fill, "")
             if busted:
-                await self._plugin.report_execution(
+                await self.report_execution(
                     venue_account_code=held.code,
                     instrument_id=held.instrument_id,
-                    side=held.side,
+                    side=cast(Any, held.side),
                     venue_order_id=held.venue_order_id,
                     venue_execution_id=bust_id(fill),
                     kind=ops.EXECUTION_KIND_VENUE_REPORTED,
@@ -1758,12 +1772,12 @@ class Trader:
             if worked.unknown != record.status:
                 worked.unknown = record.status
                 await report_status_not_mapped(
-                    self._plugin, worked.placement_id, record.status, venue.source, key
+                    self, worked.placement_id, record.status, venue.source, key
                 )
             return
         if category == REJECTED and not worked.ended:
             worked.ended = "rejected"
-            await self._plugin.report_placement(
+            await self.report_placement(
                 placement_id=worked.placement_id,
                 event=ops.PLACEMENT_EVENT_REJECTED,
                 rejection_reason=ops.REJECTION_REASON_VENUE_REJECTED,
@@ -1780,7 +1794,7 @@ class Trader:
             worked.unknown = ""
             if worked.venue_order_id:
                 self.venue_orders.add(worked.venue_order_id)
-            await self._plugin.report_placement(
+            await self.report_placement(
                 placement_id=worked.placement_id,
                 event=ops.PLACEMENT_EVENT_ACKNOWLEDGED,
                 venue_order_id=worked.venue_order_id,
@@ -1818,7 +1832,7 @@ class Trader:
         await self._fills(venue, worked, record, key, fill)
         if category in (CANCELLED, EXPIRED) and not worked.ended:
             worked.ended = ENDING[category]
-            await self._plugin.report_placement(
+            await self.report_placement(
                 placement_id=worked.placement_id,
                 event=(
                     ops.PLACEMENT_EVENT_CANCELLED
@@ -1828,14 +1842,14 @@ class Trader:
                 raw_record=self._raw(key),
             )
         elif category == SUSPENDED:
-            await self._plugin.report_placement(
+            await self.report_placement(
                 placement_id=worked.placement_id,
                 event=ops.PLACEMENT_EVENT_SUSPENDED,
                 raw_record=self._raw(key),
             )
         elif category == DONE_FOR_DAY and not worked.done_for_day:
             worked.done_for_day = True
-            await self._plugin.report_placement(
+            await self.report_placement(
                 placement_id=worked.placement_id,
                 event=ops.PLACEMENT_EVENT_DONE_FOR_DAY,
                 raw_record=self._raw(key),
@@ -1883,7 +1897,7 @@ class Trader:
         at = at or self._now()
         traded = self._trade_date(at, record.market_zone)
         await self._symbol_filled(venue, worked, record, at)
-        settles = await self._plugin.compute_date(
+        settles = await self.compute_date(
             settlement=ops.SettlementDateInputs(
                 instrument_id=worked.instrument_id, trade_date=traded.isoformat()
             ),
@@ -1905,7 +1919,7 @@ class Trader:
         if self.latency is not None and kind == ops.EXECUTION_KIND_VENUE_REPORTED:
             self.latency.fill_delay(self.session, self._clock_ns() - _ns(at))
         derived = execution_id(worked.venue_order_id, own)
-        done = await self._plugin.report_execution(
+        done = await self.report_execution(
             placement_id=worked.placement_id,
             venue_account_code=worked.code,
             venue_order_id=worked.venue_order_id,
@@ -1940,7 +1954,7 @@ class Trader:
             return
         worked.symbols.add(said)
         identifiers = [ops.Identifier(scheme="symbol", value=said, source=venue.source)]
-        found = await self._plugin.resolve_identifier(identifiers=identifiers, as_of_ns=_ns(at))
+        found = await self.resolve_identifier(identifiers=identifiers, as_of_ns=_ns(at))
         if found.found:
             if found.instrument_id != worked.instrument_id:
                 log.warning(
@@ -1951,7 +1965,7 @@ class Trader:
                     worked.instrument_id,
                 )
             return
-        await self._plugin.report_missing_instrument(
+        await self.report_missing_instrument(
             source=venue.source,
             identifiers=identifiers,
             as_of_ns=_ns(at),
@@ -1970,7 +1984,7 @@ class Trader:
                     "%s: no execution in the book for %s to bust", worked.placement_id, fill
                 )
                 continue
-            await self._plugin.report_execution(
+            await self.report_execution(
                 placement_id=worked.placement_id,
                 venue_account_code=worked.code,
                 venue_order_id=worked.venue_order_id,
@@ -1991,7 +2005,7 @@ class Trader:
             worked.average = None
 
     async def _execution_in_book(self, worked: Worked, fill: str) -> str:
-        listed = await self._plugin.list_orders()
+        listed = await self.list_orders()
         for execution in listed.executions:
             if (
                 execution.placement_id == worked.placement_id
@@ -2087,7 +2101,7 @@ class Trader:
         if noted in self.charged:
             return
         self.charged.note(noted)
-        await self._plugin.report_charge(
+        await self.report_charge(
             placement_id=placement_id,
             fee=Fee(
                 kind=str(charge["kind"]),
@@ -2135,7 +2149,7 @@ class Trader:
             said = (offered, environment, types)
             if code in self.published and self.published[code] == said:
                 continue
-            await self._plugin.report_venue_catalogue(
+            await self.report_venue_catalogue(
                 catalogue=VenueCatalogue(
                     venue_account_code=code,
                     # The environment the session reached (contract v26).
@@ -2160,39 +2174,35 @@ class Trader:
 
     # ── Running ─────────────────────────────────────────────────────────
 
-    async def run(self, poll_seconds: Callable[[], float], hear: bool = True) -> None:
-        """Start, hear placements and instructions (unless the plugin hears
-        them for it, beside its other rows), and poll until cancelled."""
-        while self._venue() is None:
-            await asyncio.sleep(1)
-        await self.start()
-        self.started.set()
-        hearing = (
-            asyncio.create_task(
-                self._plugin.receive(
-                    placement_updated=self.on_placement,
-                    trading_instruction_changed=self.on_instruction,
-                    execution_recorded=self.on_execution,
-                    seed=False,
-                )
-            )
-            if hear
-            else None
-        )
-        try:
-            while True:
-                try:
-                    await self.poll()
-                    await self.publish()
-                except MeridianError as failed:
-                    self.shown.error = str(failed)
-                    log.warning("this poll stopped: %s", failed)
-                await asyncio.sleep(poll_seconds())
-        finally:
-            if hearing is not None:
-                hearing.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await hearing
+    async def on_start(self) -> None:
+        """Its latency sent through it, and, where its venue is set up, the
+        book read (`start`) before anything is heard."""
+        if self.latency is not None and getattr(self.latency, "role", None) is None:
+            self.latency.role = self
+        if self._venue() is not None and not self.started.is_set():
+            await self.start()
+            self.started.set()
+
+    async def run(self) -> None:
+        """Once its venue is set up, the book read where `on_start` could not,
+        then the venue's orders polled every `poll_seconds`, until
+        cancelled. Placements and instructions are heard meanwhile
+        (`on_placement_updated`, `on_trading_instruction_changed`,
+        `on_execution_recorded`)."""
+        if not self.started.is_set():
+            while self._venue() is None:
+                await asyncio.sleep(1)
+            await self.start()
+            self.started.set()
+        while True:
+            try:
+                await self.poll()
+                await self.publish()
+            except MeridianError as failed:
+                self.shown.error = str(failed)
+                log.warning("this poll stopped: %s", failed)
+            every = self.poll_seconds
+            await asyncio.sleep(every() if callable(every) else every)
 
 
 def symbol_of(record: ops.InstrumentRecord, source: str) -> str:

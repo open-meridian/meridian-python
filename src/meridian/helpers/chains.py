@@ -217,7 +217,7 @@ def statistic(
 
 
 async def read_expirations(
-    plugin: Any,
+    role: Any,
     underlying_id: str,
     expiration_from: date | str = "",
     expiration_to: date | str = "",
@@ -233,8 +233,8 @@ async def read_expirations(
     chooses its expiration with this, then reads only that expiration's
     series (`read_chain`), never every series to keep each date once. A
     reader not entitled to the chain's dataset is named in the answer's
-    `unanswered`; `plugin.list_expirations` returns the whole answer."""
-    answer = await plugin.list_expirations(
+    `unanswered`; the role's `list_expirations` returns the whole answer."""
+    answer = await role.list_expirations(
         underlying_id=underlying_id,
         instrument_type=instrument_type,
         expiration_from=expiration_from,
@@ -244,7 +244,7 @@ async def read_expirations(
 
 
 async def read_chain(
-    plugin: Any,
+    role: Any,
     underlying_id: str,
     expiration_from: date | str,
     expiration_to: date | str = "",
@@ -263,7 +263,7 @@ async def read_chain(
     rows: list[ops.ListedSeries] = []
     cursor = ""
     while True:
-        page = await plugin.list_series(
+        page = await role.list_series(
             subjects=[SubjectRef(entity_id=underlying_id)],
             instrument_type=instrument_type,
             expiration_from=expiration_from,
@@ -278,7 +278,7 @@ async def read_chain(
 
 
 async def read_open_interest(
-    plugin: Any,
+    role: Any,
     underlying_id: str,
     business_date: date | str = "",
     *,
@@ -294,7 +294,7 @@ async def read_open_interest(
     rows: list[ops.Statistic] = []
     cursor = ""
     while True:
-        page = await plugin.list_statistics(
+        page = await role.list_statistics(
             subjects=[SubjectRef(entity_id=underlying_id)],
             kinds=["open_interest"],
             business_date=business_date,
@@ -311,7 +311,7 @@ async def read_open_interest(
 
 
 async def want_series(
-    plugin: Any,
+    role: Any,
     underlying_id: str,
     series_key: Sequence[ops.Identifier],
     *,
@@ -322,7 +322,7 @@ async def want_series(
     """Ask for a series' `INS-` record (W6.37): the deployment holds one
     already, the platform mints it under the deployment's series request
     rule, or the request waits for an admin; the answer says which."""
-    return await plugin.request_series_records(
+    return await role.request_series_records(
         series=[
             SeriesWant(
                 series_key=tuple(series_key),

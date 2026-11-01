@@ -17,13 +17,14 @@ import pytest
 import meridian
 from conftest import FakeSidecar
 from meridian import CallFailed, Identifier, Money, NotGranted, NotLinked
+from meridian.operations import Operations
 from meridian.plugin.v1 import operations_pb2
 from meridian.v1 import sidecar_pb2
 
 
 async def connected(sidecar: tuple[FakeSidecar, str]) -> meridian.Plugin:
     _, address = sidecar
-    return await meridian.connect(address, heartbeat=False)
+    return await meridian.connect(address, heartbeat=False, roles=[])
 
 
 def integer_and_scale(sent: operations_pb2.Decimal) -> tuple[int, int]:
@@ -34,7 +35,7 @@ async def test_a_number_crosses_as_its_integer_and_its_own_scale(sidecar) -> Non
     service, _ = sidecar
     plugin = await connected(sidecar)
     try:
-        result = await plugin.record_holding(
+        result = await plugin._acts.record_holding(
             statement_id="S-1",
             quantity=Decimal("12.5"),
             market_value=Money(Decimal("2812.50"), "USD"),
@@ -72,7 +73,7 @@ async def test_a_number_reads_back_exactly_as_it_was_sent(sidecar, quantity: Dec
     service, _ = sidecar
     plugin = await connected(sidecar)
     try:
-        await plugin.record_holding(
+        await plugin._acts.record_holding(
             quantity=quantity, market_value=Money(Decimal("0.00"), "USD")
         )
     finally:
@@ -105,7 +106,7 @@ async def test_a_number_that_cannot_cross_exactly_is_refused_before_anything_is_
     plugin = await connected(sidecar)
     try:
         with pytest.raises(refusal, match=says):
-            await plugin.record_holding(
+            await plugin._acts.record_holding(
                 quantity=quantity,  # type: ignore[arg-type]
                 market_value=Money(Decimal(0), "USD"),
             )
@@ -130,7 +131,7 @@ async def test_an_amount_is_a_money_and_refused_like_any_number(
     plugin = await connected(sidecar)
     try:
         with pytest.raises(refusal, match=says):
-            await plugin.record_holding(
+            await plugin._acts.record_holding(
                 quantity=Decimal(1),
                 market_value=market_value,  # type: ignore[arg-type]
             )
@@ -141,9 +142,9 @@ async def test_an_amount_is_a_money_and_refused_like_any_number(
 
 def test_the_sidecars_own_fields_are_not_offered() -> None:
     # A plugin cannot set what it has no parameter for (stamped.tsv).
-    holding = inspect.signature(meridian.Plugin.record_holding).parameters
-    status = inspect.signature(meridian.Plugin.report_sync_status).parameters
-    missing = inspect.signature(meridian.Plugin.report_missing_instrument).parameters
+    holding = inspect.signature(Operations.record_holding).parameters
+    status = inspect.signature(Operations.report_sync_status).parameters
+    missing = inspect.signature(Operations.report_missing_instrument).parameters
     assert "account_id" not in holding and "account_id" not in status
     assert "publisher_instance_id" not in missing
     assert "external_account_id" in holding
@@ -153,7 +154,7 @@ async def test_identifiers_travel_as_the_plugin_facing_mirror(sidecar) -> None:
     service, _ = sidecar
     plugin = await connected(sidecar)
     try:
-        answer = await plugin.resolve_identifier(
+        answer = await plugin._acts.resolve_identifier(
             identifiers=[Identifier(scheme="symbol", value="AAPL", source="snaptrade")],
             as_of_ns=1,
         )
@@ -174,7 +175,7 @@ async def test_an_asset_class_is_the_enums_in_the_spelling_it_was_ruled(sidecar,
     service, _ = sidecar
     plugin = await connected(sidecar)
     try:
-        await plugin.report_missing_instrument(
+        await plugin._acts.report_missing_instrument(
             source="snaptrade",
             asset_class=given,
             identifiers=[Identifier(scheme="symbol", value="VTI", source="snaptrade")],
@@ -190,8 +191,8 @@ async def test_a_miss_may_say_no_class(sidecar) -> None:
     service, _ = sidecar
     plugin = await connected(sidecar)
     try:
-        await plugin.report_missing_instrument(source="snaptrade", asset_class="")
-        await plugin.report_missing_instrument(source="snaptrade")
+        await plugin._acts.report_missing_instrument(source="snaptrade", asset_class="")
+        await plugin._acts.report_missing_instrument(source="snaptrade")
     finally:
         await plugin.leave()
     assert [s.asset_class for s in service.operations.sent] == [0, 0]  # type: ignore[attr-defined]
@@ -207,7 +208,7 @@ async def test_an_asset_class_the_contract_does_not_define_is_refused_before_sen
     plugin = await connected(sidecar)
     try:
         with pytest.raises(ValueError, match="asset_class") as refused:
-            await plugin.report_missing_instrument(source="snaptrade", asset_class=given)
+            await plugin._acts.report_missing_instrument(source="snaptrade", asset_class=given)
     finally:
         await plugin.leave()
     assert "equity, debt, fund, derivative, crypto_asset, event_contract, cash" in str(
@@ -234,7 +235,7 @@ async def test_a_refusal_is_raised_in_this_packages_terms(
     plugin = await connected(sidecar)
     try:
         with pytest.raises(raised) as caught:
-            await plugin.record_holdings_statement(source="snaptrade", expected_rows=1)
+            await plugin._acts.record_holdings_statement(source="snaptrade", expected_rows=1)
     finally:
         await plugin.leave()
     assert "RecordHoldingsStatement" in str(caught.value)
@@ -259,7 +260,7 @@ async def test_an_unlinked_external_account_is_told_by_its_code(sidecar) -> None
     plugin = await connected(sidecar)
     try:
         with pytest.raises(NotLinked) as caught:
-            await plugin.record_holding(quantity=1, external_account_id="st-acct-9902")
+            await plugin._acts.record_holding(quantity=1, external_account_id="st-acct-9902")
     finally:
         await plugin.leave()
     # Still what a plugin catching a refusal caught before the code.
@@ -285,7 +286,7 @@ async def test_the_words_alone_never_make_a_refusal_not_linked(sidecar, metadata
     plugin = await connected(sidecar)
     try:
         with pytest.raises(CallFailed) as caught:
-            await plugin.record_holding(quantity=1, external_account_id="st-acct-9902")
+            await plugin._acts.record_holding(quantity=1, external_account_id="st-acct-9902")
     finally:
         await plugin.leave()
     assert not isinstance(caught.value, NotLinked)
@@ -314,8 +315,8 @@ async def test_a_command_carries_the_person_it_is_sent_for_as_it_was_handed_over
             "market_value": Money(Decimal(1), "USD"),
             "external_account_id": "ext-1",
         }
-        await plugin.record_holding(**holding, acting_for=header)
-        await plugin.record_holding(**holding)
+        await plugin._acts.record_holding(**holding, acting_for=header)
+        await plugin._acts.record_holding(**holding)
     finally:
         await plugin.leave()
     for_ada, as_itself = service.operations.sent
@@ -328,9 +329,9 @@ def test_commands_and_the_deployments_accounts_are_sent_for_a_person() -> None:
     exception is the deployment's configuration, which a plugin reads only
     acting for a deployment admin (W4.9, W6.4)."""
     for sent_for in ("record_holding", "link_external_account", "read_accounts_for_linking"):
-        assert "acting_for" in inspect.signature(getattr(meridian.Plugin, sent_for)).parameters
-    assert "acting_for" not in inspect.signature(meridian.Plugin.resolve_identifier).parameters
-    assert "acting_for" not in inspect.signature(meridian.Plugin.report_sync_status).parameters
+        assert "acting_for" in inspect.signature(getattr(Operations, sent_for)).parameters
+    assert "acting_for" not in inspect.signature(Operations.resolve_identifier).parameters
+    assert "acting_for" not in inspect.signature(Operations.report_sync_status).parameters
 
 
 def _header() -> tuple[object, str]:
@@ -354,10 +355,10 @@ async def test_a_link_names_an_account_a_new_one_or_neither_for_the_admin(sideca
     service, _ = sidecar
     plugin = await connected(sidecar)
     try:
-        existing = await plugin.link_external_account(
+        existing = await plugin._acts.link_external_account(
             external_account_id="st-acct-4471", account_id="ACC-1", acting_for=header
         )
-        created = await plugin.link_external_account(
+        created = await plugin._acts.link_external_account(
             external_account_id="st-acct-4471",
             new_account_name="Fidelity Brokerage",
             new_account_custodian="Fidelity",
@@ -366,7 +367,7 @@ async def test_a_link_names_an_account_a_new_one_or_neither_for_the_admin(sideca
             new_account_note="Linked from SnapTrade.",
             acting_for=header,
         )
-        removed = await plugin.link_external_account(
+        removed = await plugin._acts.link_external_account(
             external_account_id="st-acct-4471", acting_for=header
         )
     finally:
@@ -403,7 +404,7 @@ async def test_the_deployments_accounts_are_read_for_the_admin(sidecar) -> None:
     service, _ = sidecar
     plugin = await connected(sidecar)
     try:
-        read = await plugin.read_accounts_for_linking(acting_for=header)
+        read = await plugin._acts.read_accounts_for_linking(acting_for=header)
     finally:
         await plugin.leave()
     assert [(a.account_id, a.name) for a in read.accounts] == [("ACC-1", "Growth")]
@@ -430,10 +431,10 @@ async def test_what_the_venue_did_not_report_is_sent_unset_and_never_as_zero(
     service, _ = sidecar
     plugin = await connected(sidecar)
     try:
-        await plugin.record_holding(
+        await plugin._acts.record_holding(
             quantity=Decimal("12.5"), side=meridian.HoldingSide.HOLDING_SIDE_LONG
         )
-        await plugin.record_holding(
+        await plugin._acts.record_holding(
             quantity=Decimal("12.5"),
             side=meridian.HoldingSide.HOLDING_SIDE_LONG,
             settle_date_quantity=Decimal("0"),
@@ -456,7 +457,7 @@ async def test_a_holding_carries_its_side_its_settled_quantity_and_an_assumed_cu
     service, _ = sidecar
     plugin = await connected(sidecar)
     try:
-        await plugin.record_holding(
+        await plugin._acts.record_holding(
             instrument_id="INS-TSLA",
             side=meridian.HoldingSide.HOLDING_SIDE_SHORT,
             quantity=Decimal("-100"),
@@ -489,7 +490,7 @@ async def test_an_optional_number_is_refused_like_any_other_when_it_is_given(
     plugin = await connected(sidecar)
     try:
         with pytest.raises(refusal, match=says):
-            await plugin.record_holding(quantity=Decimal(1), **{field: value})
+            await plugin._acts.record_holding(quantity=Decimal(1), **{field: value})
     finally:
         await plugin.leave()
     assert service.operations.sent == []
@@ -499,7 +500,7 @@ async def test_a_statement_carries_the_venues_figures_as_reported(sidecar) -> No
     service, _ = sidecar
     plugin = await connected(sidecar)
     try:
-        await plugin.record_holdings_statement(
+        await plugin._acts.record_holdings_statement(
             source="etrade",
             external_statement_id="84001234/1757376000000000000",
             expected_rows=1,
@@ -508,7 +509,7 @@ async def test_a_statement_carries_the_venues_figures_as_reported(sidecar) -> No
             currency_assumed=True,
         )
         with pytest.raises(TypeError, match="maintenance_excess is a meridian.Money"):
-            await plugin.record_holdings_statement(
+            await plugin._acts.record_holdings_statement(
                 source="etrade",
                 maintenance_excess=Decimal("1"),
             )
@@ -525,7 +526,7 @@ async def test_a_connector_reports_the_accounts_it_reaches(sidecar) -> None:
     service, _ = sidecar
     plugin = await connected(sidecar)
     try:
-        published = await plugin.report_external_accounts(
+        published = await plugin._acts.report_external_accounts(
             accounts=[
                 meridian.ExternalAccount(
                     external_account_id="SNAP-ACC-1",
@@ -545,7 +546,7 @@ async def test_a_sync_status_says_why_and_how_fresh(sidecar) -> None:
     service, _ = sidecar
     plugin = await connected(sidecar)
     try:
-        await plugin.report_sync_status(
+        await plugin._acts.report_sync_status(
             source="etrade",
             external_account_id="84001234",
             state=meridian.SyncState.SYNC_STATE_NEEDS_SIGN_IN,
@@ -563,7 +564,7 @@ async def test_a_statement_names_its_account_and_its_figures_per_segment(sidecar
     service, _ = sidecar
     plugin = await connected(sidecar)
     try:
-        await plugin.record_holdings_statement(
+        await plugin._acts.record_holdings_statement(
             source="pb-standin",
             external_account_id="PB-7781",
             institution="the prime broker",
@@ -606,7 +607,7 @@ async def test_a_holding_carries_its_cost_and_lots_as_reported(sidecar) -> None:
     service, _ = sidecar
     plugin = await connected(sidecar)
     try:
-        await plugin.record_holding(
+        await plugin._acts.record_holding(
             quantity=Decimal("-100"),
             average_cost=Money(Decimal("189.00"), "USD"),
             lots=[
@@ -633,7 +634,7 @@ async def test_a_holding_carries_what_cannot_move_as_reported(sidecar) -> None:
     service, _ = sidecar
     plugin = await connected(sidecar)
     try:
-        await plugin.record_holding(
+        await plugin._acts.record_holding(
             quantity=Decimal("12.5"),
             available_quantity=Decimal("8.5"),
             not_available_quantity=Decimal("4"),
@@ -649,7 +650,7 @@ async def test_a_holding_carries_what_cannot_move_as_reported(sidecar) -> None:
             ],
             external_account_id="ext-1",
         )
-        await plugin.record_holding(quantity=Decimal("12.5"), external_account_id="ext-1")
+        await plugin._acts.record_holding(quantity=Decimal("12.5"), external_account_id="ext-1")
     finally:
         await plugin.leave()
     stated, silent = service.operations.sent
@@ -692,7 +693,7 @@ async def test_a_number_inside_a_lot_is_refused_naming_its_path(
     plugin = await connected(sidecar)
     try:
         with pytest.raises(refusal, match=says):
-            await plugin.record_holding(
+            await plugin._acts.record_holding(
                 quantity=Decimal(1), external_account_id="ext-1", **given
             )
     finally:
@@ -748,7 +749,7 @@ async def test_a_statement_the_sidecar_would_refuse_is_refused_before_sending(
     plugin = await connected(sidecar)
     try:
         with pytest.raises(ValueError, match=says):
-            await plugin.record_holdings_statement(external_account_id="ext-1", **given)
+            await plugin._acts.record_holdings_statement(external_account_id="ext-1", **given)
     finally:
         await plugin.leave()
     assert service.operations.sent == []
@@ -769,8 +770,8 @@ async def test_the_street_is_read_within_the_scope_the_sidecar_stamps(sidecar) -
     service.operations.store = Street()
     plugin = await connected(sidecar)
     try:
-        read = await plugin.list_custodial_positions(account_id="ACC-1", page_size=10)
-        await plugin.list_statements(since=operations_pb2.Watermark())
+        read = await plugin._acts.list_custodial_positions(account_id="ACC-1", page_size=10)
+        await plugin._acts.list_statements(since=operations_pb2.Watermark())
     finally:
         await plugin.leave()
     assert [held.account_id for held in read.positions] == ["ACC-1"]

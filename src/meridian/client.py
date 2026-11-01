@@ -77,6 +77,7 @@ if TYPE_CHECKING:
 
     from .declaration import Declaration, Storage
     from .pages import Pages
+    from .roles._role import RoleBase
 
 #: The contract version this SDK was built for, sent at registration (W4.1). A
 #: sidecar older than this refuses the plugin at the door, naming both versions,
@@ -1250,14 +1251,35 @@ def _caller_metadata(for_caller: Caller | str) -> tuple[tuple[str, str], ...]:
     return ((CALLER_METADATA, header),)
 
 
+class _ActsOf(Operations):
+    """Every act, made through one connection: the SDK's own reads (a
+    stream's catch-up, a view's) and nothing a plugin calls. A plugin makes
+    an act on the role object holding it (SDK 0.35)."""
+
+    def __init__(self, plugin: Plugin) -> None:
+        self._plugin = plugin
+
+    async def _operate(
+        self, method: Callable[[Any], Awaitable[_Answer]], params: Any
+    ) -> _Answer:
+        return await self._plugin._operate(method, params)
+
+    def _operations(self) -> Any:
+        return self._plugin._operations()
+
+
 @dataclass
-class Plugin(Operations):
-    """A registered plugin.
+class Plugin:
+    """A registered plugin: the connection, holding what is plugin-wide.
 
     Built by `connect`, which registers before returning, so an instance of this
-    is always one that was admitted. Its typed operations -- `record_holding`,
-    `resolve_identifier` and the rest -- are generated from the contract into
-    `Operations`, one per workflow step its roles may take.
+    is always one that was admitted. From SDK 0.35 (spec/each-role-is-one-
+    generated-class) it holds only what is the whole plugin's -- its identity,
+    settings, health and figures, storage and raw records, tickets, views,
+    access and account scope, leaving -- and no act: each role's acts are on
+    that role's class (`meridian.roles.<role>.Role`), registered on it with
+    `meridian.run(roles=[...])` or `connect(roles=[...])`, and what its roles
+    hear is each class's `on_<row>` methods.
     """
 
     identity: Identity
@@ -1289,6 +1311,15 @@ class Plugin(Operations):
     # The algorithm identifiers its declaration names (contract v22), which
     # `runs_as` holds a call's `algorithm_id` to before sending it.
     _algorithms: tuple[str, ...] = field(default=(), repr=False)
+    # The role classes registered on it whose roles it was launched with
+    # (SDK 0.35), and the declaration it registered.
+    _roles: tuple[Any, ...] = field(default=(), repr=False)
+    _declaration: Any = field(default=None, repr=False)
+
+    @property
+    def _acts(self) -> Operations:
+        """Every act through this connection, for the SDK's own reads."""
+        return _ActsOf(self)
 
     def raw_record(self, key: str) -> Any:
         """A reference to a raw record in this plugin's own storage, by its
@@ -1905,21 +1936,6 @@ class Plugin(Operations):
     def _operations(self) -> Any:
         return self._operations_stub
 
-    async def _receive(
-        self,
-        handlers: dict[str, Callable[[Any], Awaitable[None]] | None],
-        *,
-        seed: bool,
-        subjects: Sequence[str] = (),
-    ) -> None:
-        """What `receive` hears, seeded, followed and caught up (W4.3): the
-        rows given a handler, and no others; the rows delivered latest value
-        first for `subjects` (contract v18)."""
-        self._check_open()
-        from .receive import follow
-
-        await follow(self, handlers, seed=seed, subjects=subjects)
-
     async def _operate(
         self, method: Callable[[Any], Awaitable[_Answer]], params: Any
     ) -> _Answer:
@@ -2025,8 +2041,19 @@ async def connect(
     settings: Sequence[Setting] | type = (),
     reads_external_accounts: bool = False,
     declaration: Declaration | None = None,
+    roles: Sequence[RoleBase],
 ) -> Plugin:
-    """Register with the sidecar and return the admitted plugin.
+    """Register with the sidecar and return the admitted plugin, the role
+    classes in `roles` registered on it.
+
+    From SDK 0.35 (spec/each-role-is-one-generated-class) `roles` is
+    required: the plugin's classes, one per role it holds, each extending
+    that role's `meridian.roles.<role>.Role` (none for a plugin holding no
+    role). Two for one role are refused before anything is sent, naming the
+    role. A class for a role the instance was not launched with is not
+    registered, and the log says so (ruling 1015). `meridian.run` is the
+    process entry point built on this; `connect` is for a script or a test
+    driving its classes itself.
 
     The address defaults to `MERIDIAN_SIDECAR_ADDRESS`, then to loopback. No
     other configuration is read, because there is no other configuration: the
@@ -2065,6 +2092,7 @@ async def connect(
     from ._settings import declared_by
     from .declaration import Declaration as _Declaration
 
+    given = _registered_roles(roles)
     settings = declared_by(settings)
 
     if declaration is None:
@@ -2142,7 +2170,22 @@ async def connect(
         _declared=tuple(settings),
         _storage=storage,
         _algorithms=tuple(held.algorithm_id for held in declaration.algorithms),
+        _declaration=declaration,
     )
+    held_roles = []
+    for role in given:
+        if role.role in plugin.identity.roles:
+            role._bind(plugin)
+            held_roles.append(role)
+        else:
+            logging.getLogger("meridian.run").warning(
+                "%s is not started: this instance was not launched with the %s role "
+                "(it holds %s)",
+                type(role).__name__,
+                role.role,
+                ", ".join(plugin.identity.roles) or "none",
+            )
+    plugin._roles = tuple(held_roles)
     if heartbeat:
         plugin._heartbeat = asyncio.create_task(plugin._beat())
     # What `runs_as` calls through, until it leaves (contract v21).
@@ -2154,6 +2197,32 @@ async def connect(
 
     report_ready()
     return plugin
+
+
+def _registered_roles(roles: Sequence[RoleBase]) -> tuple[RoleBase, ...]:
+    """The role classes given, each one a role's class and at most one per
+    role, or refused before anything is sent (SDK 0.35)."""
+    from .roles._role import RoleBase as _RoleBase
+
+    if isinstance(roles, _RoleBase) or not isinstance(roles, Sequence):
+        raise TypeError(
+            "roles is a list of the plugin's role classes, one per role it holds: "
+            "roles=[Lake(...)]"
+        )
+    by_role: dict[str, str] = {}
+    for role in roles:
+        if not isinstance(role, _RoleBase) or not role.role:
+            raise TypeError(
+                f"roles holds {role!r}, which is no role class: each is an instance of a "
+                "class extending meridian.roles.<role>.Role"
+            )
+        if role.role in by_role:
+            raise ValueError(
+                f"two classes are registered for the {role.role} role ({by_role[role.role]} "
+                f"and {type(role).__name__}): a plugin registers one class per role"
+            )
+        by_role[role.role] = type(role).__name__
+    return tuple(roles)
 
 
 #: The plugin `connect` registered last and which has not left: the one a

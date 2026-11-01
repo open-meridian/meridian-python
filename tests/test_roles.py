@@ -159,6 +159,7 @@ async def test_every_declaration_names_its_roles_and_registers_on_two_roles(
         heartbeat=False,
         interface=meridian.Interface(port=8000, title="Desk", pages=pages),
         settings=SETTINGS,
+        roles=[],
     ) as plugin:
         assert plugin.identity.roles == ROLES
     (sent,) = service.registered
@@ -204,10 +205,14 @@ async def test_a_declaration_naming_no_role_or_a_stranger_is_refused_on_two_role
                 address,
                 heartbeat=False,
                 interface=meridian.Interface(port=8000, title="Desk", pages=[page]),
+                roles=[],
             )
     with pytest.raises(Refused, match="the setting poll serves ems"):
         await meridian.connect(
-            address, heartbeat=False, settings=[meridian.Setting("poll", int, roles=["ems"])]
+            address,
+            heartbeat=False,
+            settings=[meridian.Setting("poll", int, roles=["ems"])],
+            roles=[],
         )
 
 
@@ -222,6 +227,7 @@ async def test_a_plugin_holding_one_role_names_nothing_and_changes_nothing(
         heartbeat=False,
         interface=meridian.Interface(port=8000, title="Statements", pages=[page]),
         settings=[meridian.Setting("api_key", secret=True)],
+        roles=[],
     ):
         pass
     (sent,) = service.registered

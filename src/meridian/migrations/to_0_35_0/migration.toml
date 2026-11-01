@@ -1,0 +1,168 @@
+# open-meridian 0.34.0 to 0.35.0: each role is one generated class
+# (spec/each-role-is-one-generated-class; rulings 1001 to 1005, 1009 to 1023
+# and 601). Breaking: a role's acts leave the connection for the role's
+# class, and `receive` is gone. No contract change: the SDK declares the same
+# contract version as 0.34.0.
+from = "0.34.0"
+to = "0.35.0"
+summary = """
+Each role is one class. A plugin writes one class per role it holds,
+extending that role's base, meridian.roles.<role>.Role, which design's
+generator writes from the matrix and the suites: the role's acts are its
+methods (await self.record_prices(...)), its events on_<row> methods
+(on_observations_wanted), the ones the role's suite requires abstract, so a
+class missing one is refused naming it. meridian.run(declaration=...,
+roles=[...], pages=..., port=..., on_settings=..., figures=...) is the
+process entry point: it registers the classes on one connection, runs each
+class's on_start(), hears one stream for every class (seed, subjects(),
+hear_again() per class), runs each run(), restarted after a backoff when it
+fails, and each on_stop(). The connection, meridian.Plugin, keeps only what
+is the whole plugin's -- identity, settings, health, figures, storage, raw
+records, tickets, views, access, account scope -- reached from a class as
+self.plugin; it makes no act, and receive is gone. meridian.connect(...)
+requires roles=[...]. Seven roles gain a module (compliance, confirmation,
+oms, portfolio, reference, servicing, settlement), so every role is
+meridian.roles.<role>.
+
+The SDK's common logic is role classes: connectivity.Trader (on_placement_updated,
+on_trading_instruction_changed, on_execution_recorded; poll_seconds given to
+it), pricing.Pricer (on_price_batch), and the data feeds pairs.Feed,
+event_contracts.Feed and listings.Feed (on_observations_wanted,
+on_want_withdrawn), none given the connection. A helper making an act is
+given the role object (data.Wants(self, ...), roles.Latency(self),
+chains.read_chain(self, ...)), never the connection (ruling 1023). The
+suites' Recorder binds a class (recorder.bind(Lake(...))) and hands it what
+it hears (await recorder.hear(lake)).
+
+This step makes a class of each receive call whose handlers are one
+class's methods on one declared role's events, drops the SDK's own logic
+from receive calls, renames the SDK's methods and arguments, moves acts on
+self.plugin onto self inside a role class, and replaces an entry point the
+templates wrote and the plugin left unchanged. What it leaves by hand: an
+entry point connecting by hand, an act on the connection, a receive call it
+could not split, a role class lacking a required event, a suite test hearing
+through recorder.receive, and 924's helpers a plugin adopts by hand.
+"""
+breaking = true
+rewrite = "rewrite.py"
+
+[[rewrites]]
+rule = "receive-to-role-methods"
+what = """a `<conn>.receive(<row>=<obj>.<method>, ...)` call whose handlers are all \
+methods of one class the plugin defines, on the events of one role it declares: that \
+class gains the role's base (`data.Role`), each handler method is renamed `on_<row>` \
+(and every reference to it), `seed=False` becomes the class's `seed = False`, a \
+`plugin` field or `self.plugin = plugin` it was given leaves it (its constructor's \
+first argument dropped where it is called, a recorder's call becoming \
+`recorder.bind(...)`), and the call is removed -- an awaited statement, or a \
+`create_task` assigned to a name and that name's `cancel()`; the object is \
+registered with `meridian.run(roles=[...])` where the entry point is replaced, and \
+named by `connect-to-run` where it is not"""
+
+[[rewrites]]
+rule = "sdk-handlers-dropped"
+what = """entries of a `receive` call whose handlers are the SDK's own common logic -- \
+a Trader's `on_placement`, `on_instruction` and `on_execution`, a Pricer's `heard` -- \
+removed, the call with them where none is left, since that logic is a role class \
+registered by itself"""
+
+[[rewrites]]
+rule = "common-logic-renamed"
+what = """the SDK's common logic as role classes: a Trader's `on_placement`, \
+`on_instruction` and `on_execution` called or named as `on_placement_updated`, \
+`on_trading_instruction_changed` and `on_execution_recorded`; a data feed's `on_want` \
+and `on_withdrawn` as `on_observations_wanted` and `on_want_withdrawn`, a listings \
+feed's `seed(symbols)` as `seed_symbols`, a pairs feed's `record_trades(subjects, ...)` \
+and `record_quotes(subjects, ...)` as `record_trades_of` and `record_quotes_of`, an \
+event-contract feed's `record_outcomes(...)` and `record_bars(...)` as \
+`record_outcomes_of` and `record_bars_of` (the role's acts keep those names); \
+`Trader.run(poll_seconds, hear=...)`'s `poll_seconds` moved to the Trader's \
+constructor and `hear` dropped; and the connection given first to a Trader, a Pricer, \
+a feed or a plugin's class subclassing one dropped, a recorder's call becoming \
+`recorder.bind(...)`"""
+
+[[rewrites]]
+rule = "self-plugin-act-to-self"
+what = """inside a class that is, or now is, a role class, `self.plugin.<act>(...)` and \
+`self._plugin.<act>(...)` where the act is the role's become `self.<act>(...)`; and a \
+helper given `self.plugin` or `self._plugin` (`data.Wants(self.plugin, ...)`, \
+`roles.Latency(self.plugin)`, `chains.read_chain(self.plugin, ...)`) is given `self`"""
+
+[[rewrites]]
+rule = "template-entry-to-run"
+what = """an entry point (`src/<package>/__main__.py`) a role's template wrote at 0.34.0 \
+and the plugin left unchanged -- the data, reporting, operations, connectivity or \
+pricing template's -- replaced with 0.35.0's, which registers the plugin's classes with \
+`meridian.run(roles=[...])`"""
+
+[[rewrites]]
+rule = "listings-edge-glue-dropped"
+what = """`at_the_edge` methods, and a `_record` override whose body only calls \
+`at_the_edge` and then `super()._record`, deleted from classes subclassing \
+`data.listings.Feed`, once the SDK's feed does both (924's item 4)"""
+
+[[rewrites]]
+rule = "copied-bodies-to-sdk"
+what = """a class or function whose body is, with vendor names normalised, one the \
+data-plugin fit review found copied between plugins -- a rate limiter and its 429 loop, \
+`_changed`, `again`, `licences` -- replaced by the SDK's import, its call sites left \
+where the signatures differ (924's items 3, 6 and 9), once the SDK carries each"""
+
+[[by_hand]]
+rule = "connect-to-run"
+what = """an entry point that connects with `meridian.connect` and wires its work by \
+hand: its receive tasks, its loops, its pages and its settings"""
+instead = """move it to `meridian.run(declaration=DECLARATION, roles=[...], pages=pages, \
+port=PORT, on_settings=..., figures=...)`: one class per role it declares, each the \
+class this step made or the SDK's (`connectivity.Trader`, `pricing.Pricer`, a data feed), \
+its start in `on_start`, its loop in `run`; the settings delivered to `on_settings`, the \
+figures answered by `figures`. Drop the tasks the classes now run (a feed's \
+`keep_current`, a Trader's `run`)"""
+
+[[by_hand]]
+rule = "act-on-the-connection"
+what = """an act made on the connection outside a role class -- `plugin.<act>(...)`, \
+`request.plugin.<act>(...)`, in a page's handler or in a function given the \
+connection -- which the connection no longer makes"""
+instead = """make it on the role object holding the act: `self.<act>(...)` inside the \
+role's class; in a page, the role object the plugin gives its pages (a closure or the \
+state they share, ruling 1014); in a function, the role object passed in its place. \
+The finding names each declared role whose acts include it"""
+
+[[by_hand]]
+rule = "receive-not-rewritten"
+what = """a `receive` call no rewrite reached: a lambda or a function as a handler, \
+handlers of several classes, events of several roles not split by the SDK's own \
+logic, or a call whose result is used otherwise"""
+instead = """move each handler to the `on_<row>` method of the class of the role that \
+hears the row, one class per role, and register the classes with \
+`meridian.run(roles=[...])`; a class reading the store itself on start sets \
+`seed = False`, and names its lake subjects in `subjects()`"""
+
+[[by_hand]]
+rule = "required-event-missing"
+what = """a role class lacking an event its role's suite requires, which is refused \
+when it is made"""
+instead = """implement the `on_<row>` method, or register the SDK's common-logic class \
+for the role, which implements it (`connectivity.Trader`, `pricing.Pricer`, a data \
+feed)"""
+
+[[by_hand]]
+rule = "suite-producer-to-role"
+what = """a suite test hearing through `recorder.receive(...)`, which the recorder no \
+longer has; or a test giving a class this step made a role class a stand-in for the \
+connection, which the class no longer takes"""
+instead = """bind the plugin's class to the recorder and hand it what it hears: \
+`lake = recorder.bind(Lake(...))`, `recorder.answer(row, ...)`, \
+`await recorder.hear(lake)`; a stand-in answering the class's acts becomes a \
+`meridian.suites.Recorder` subclass the class is bound to"""
+
+[[by_hand]]
+rule = "helper-adopted"
+what = """a plugin's own copy of what 924's helpers now carry, adopted by hand: the \
+supervisor's constructors, the chains feed, the listings pages, the timetable, the \
+calendars, the FX pairs feed, the licence terms; each named with what it replaces"""
+instead = """replace it with the SDK's (`meridian.helpers.sessions`, `.pacing`, \
+`.calendars`; `meridian.roles.data.option_chains`, `.listings`' pages, \
+`data.Timetable`, `data.pairs.Feed(conflate_first=True)`), and keep only the vendor's \
+own words"""

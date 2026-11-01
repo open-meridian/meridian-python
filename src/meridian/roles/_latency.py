@@ -10,7 +10,7 @@ counts-array index for `lowest_ns` 1000 and 2 significant digits, so core
 merges two snapshots by adding their counts. Recording is an index and an
 increment. Every value is recorded, never sampled.
 
-    latency = roles.Latency(plugin)
+    latency = roles.Latency(self)                      # self: the role's class
     latency.rtt("pricing-stream", 41_000_000)          # a ping to its pong
     latency.age("oanda-1:live", AGE_HOP_EDGE, now_ns - source_ns)
     await latency.report()                             # every 10 seconds
@@ -47,6 +47,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from ..bounds import REPORT_LATENCY_REQUEST_SNAPSHOTS_COUNT
+from ..errors import NotRegistered
 from ..operations import LatencySnapshot
 from ..plugin.v1 import operations_pb2 as ops
 
@@ -272,12 +273,15 @@ class Latency:
 
     def __init__(
         self,
-        plugin: Any,
+        role: Any = None,
         *,
         clock_ns: Any = time.time_ns,
         ceilings: Any = None,
     ) -> None:
-        self.plugin = plugin
+        #: The role object holding `report_latency` that `report` sends
+        #: through (SDK 0.35): given here, or set once the role's class is
+        #: made, as `connectivity.Trader` sets it on start.
+        self.role = role
         self.clock_ns = clock_ns
         self.ceilings = ceilings
         self.sessions: dict[str, _Session] = {}
@@ -432,7 +436,9 @@ class Latency:
         for start in range(0, len(taken), most):
             batch = taken[start : start + most]
             try:
-                await self.plugin.report_latency(snapshots=batch)
+                if self.role is None:
+                    raise NotRegistered("no role object holding report_latency is given")
+                await self.role.report_latency(snapshots=batch)
             except Exception as failed:  # noqa: BLE001 - kept, said on the page; never stops the plugin
                 self.refused = str(failed)
                 continue
@@ -528,7 +534,8 @@ def source_ns(row: Any) -> int:
 @dataclass
 class Liveness:
     """The latest liveness heard per dataset and venue (W10.5, W10.9;
-    ruling 418), from `receive(liveness_recorded=liveness.heard)` and a
+    ruling 418), from a role class's `on_liveness_recorded` calling
+    `liveness.heard` and a
     listing's `DatasetRef.liveness`, for a value's confirmed time."""
 
     alive: dict[tuple[str, str], int] = field(default_factory=dict)

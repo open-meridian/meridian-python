@@ -205,7 +205,7 @@ async def test_the_heartbeat_carries_the_figures_as_they_stand(
     """Each heartbeat replaces the last list, so every one carries it."""
     service, address = sidecar
     monkeypatch.setattr(meridian.client, "HEARTBEAT_SECONDS", 0.01)
-    plugin = await meridian.connect(address)
+    plugin = await meridian.connect(address, roles=[])
     try:
         figures = [Figure("Connections", 3, state="warn"), Figure("Last read", READ_AT)]
         plugin.figures = figures
@@ -224,7 +224,7 @@ async def test_report_sends_the_figures_now_and_they_stand_after(
     sidecar: tuple[FakeSidecar, str],
 ) -> None:
     service, address = sidecar
-    plugin = await meridian.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False, roles=[])
     try:
         await plugin.report(healthy=True, figures=[Figure("Accounts reached", 7)])
         await plugin.report(healthy=False, detail="brokerage credentials rejected")
@@ -243,7 +243,7 @@ async def test_figures_past_a_bound_are_refused_before_anything_is_sent(
 ) -> None:
     """Nothing is set and nothing sent: the last list stands."""
     service, address = sidecar
-    plugin = await meridian.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False, roles=[])
     try:
         plugin.figures = [Figure("Connections", 3)]
         with pytest.raises(ValueError, match="9 figures; a plugin reports at most 8"):

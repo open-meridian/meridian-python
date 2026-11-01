@@ -12,8 +12,11 @@ follows each to the record it became with a `CurrentIdMap`; a plugin that
 keeps none needs neither.
 
     ids = meridian.CurrentIdMap()
-    await ids.catch_up(plugin)                       # on start: every replacement
-    await plugin.receive(replace_merged_instrument=ids.heard, order_updated=...)
+    await ids.catch_up(self)                         # in on_start: every replacement
+
+    async def on_replace_merged_instrument(self, heard):   # on the role's class
+        await ids.heard(heard)
+
     ids.current("LCL-01J...")                        # "INS-..." once it resolved
     ids.same(held_id, order.instrument_id)           # one record now?
 
@@ -27,8 +30,8 @@ data (W3.24), each published version immutable. A `TemplateCatalogue` lists
 them and reads one at a version, keeping each version read:
 
     catalogue = meridian.TemplateCatalogue()
-    await catalogue.load(plugin, asset_class="equity")
-    template = await catalogue.template(plugin, record.template_id, record.template_version)
+    await catalogue.load(self, asset_class="equity")         # self: the role's class
+    template = await catalogue.template(self, record.template_id, record.template_version)
     required = [field.path for field in template.fields if field.required]
 
 `reads-the-template-catalogue`, in every role's suite, is answered by the
@@ -84,8 +87,8 @@ class CurrentIdMap:
         return True
 
     async def heard(self, heard: Heard[ops.InstrumentReplacedEvent]) -> None:
-        """A `receive` handler for the instrument-replaced row:
-        `plugin.receive(replace_merged_instrument=ids.heard, ...)`."""
+        """The instrument-replaced row, heard: called from a role class's
+        `on_replace_merged_instrument` (SDK 0.35)."""
         self.apply(heard.message)
 
     async def catch_up(self, operations: Any) -> int:

@@ -71,8 +71,9 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import contextvars
 import logging
-from collections.abc import Awaitable, Callable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
@@ -168,6 +169,12 @@ class Heard(Generic[Message]):
 
 Handler = Callable[[Heard[Any]], Awaitable[None]]
 
+#: True while the stream's first seeding is handed on (SDK 0.35): a role
+#: class whose `seed` is False is not handed it, though another class
+#: hearing the same row is (spec/each-role-is-one-generated-class, ruling
+#: 1013).
+seeding: contextvars.ContextVar[bool] = contextvars.ContextVar("seeding", default=False)
+
 
 @dataclass
 class _Point:
@@ -249,7 +256,7 @@ class _Follower:
         answered: the point everything it returned is had to at least. A row
         naming no account (contract v22: the trading instructions, its
         `account_param` empty) is read whole, its query given no account."""
-        method = getattr(self.plugin, row.caught_up_by)
+        method = getattr(self.plugin._acts, row.caught_up_by)
         scoped = {row.account_param: account} if row.account_param else {}
         watermark = (
             None
@@ -331,13 +338,15 @@ class _Follower:
                 continue
             await self._hand(row, self._as_message(row, record), caught_up=True)
 
-    async def seed(self, *, handing: bool) -> None:
+    async def seed(self, *, handing: bool | Collection[str]) -> None:
         """Every row's records across the read scope, as the store holds them
-        now: the plugin's start."""
+        now: the plugin's start, handed on where `handing` (every row, or the
+        rows it names)."""
         for row in self.rows:
             records, answered = await self._read(row, "", None)
             self.read_to[row.name] = answered
-            await self._apply(row, records, answered, None, handing)
+            hands = handing if isinstance(handing, bool) else row.name in handing
+            await self._apply(row, records, answered, None, hands)
 
     async def catch_up(self, row: DeliveredRow, account: str) -> None:
         """One account's changes since the last it had, handed on."""
@@ -480,7 +489,7 @@ class _Latest:
         if name not in self.datasets and name not in self.asked:
             self.asked.add(name)
             try:
-                answer = await self.plugin.list_datasets()
+                answer = await self.plugin._acts.list_datasets()
             except MeridianError as failed:
                 _log.info("the datasets could not be listed (%s); heard without them", failed)
             else:
@@ -585,7 +594,7 @@ class _Latest:
         for row in self.rows:
             if not row.caught_up_by or (names is not None and row.name not in names):
                 continue
-            method = getattr(self.plugin, row.caught_up_by)
+            method = getattr(self.plugin._acts, row.caught_up_by)
             prefix = row.caught_up_by.upper()
             most: int = getattr(bounds, f"{prefix}_REQUEST_SUBJECTS_COUNT").most
             size: int = getattr(bounds, f"{prefix}_REQUEST_PAGE_SIZE_RANGE").most
@@ -651,7 +660,7 @@ class _InFull(_Latest):
             seen = self.seen[row.name]
             if not seen or (names is not None and row.name not in names):
                 continue
-            method = getattr(self.plugin, row.caught_up_by)
+            method = getattr(self.plugin._acts, row.caught_up_by)
             prefix = row.caught_up_by.upper()
             most: int = getattr(bounds, f"{prefix}_REQUEST_SUBJECTS_COUNT").most
             size: int = getattr(bounds, f"{prefix}_REQUEST_PAGE_SIZE_RANGE").most
@@ -747,7 +756,7 @@ class _Sequenced:
         for row in self.rows:
             if names is not None and row.name not in names:
                 continue
-            method = getattr(self.plugin, row.caught_up_by)
+            method = getattr(self.plugin._acts, row.caught_up_by)
             after = self.seen[row.name]
             while True:
                 page = await method(after_sequence=after)
@@ -770,23 +779,38 @@ async def follow(
     plugin: Plugin,
     handlers: Mapping[str, Handler | None],
     *,
-    seed: bool,
-    subjects: Sequence[str] = (),
+    seed: bool | Collection[str],
+    subjects: Sequence[str] | Callable[[], Sequence[str]] = (),
+    reopen: asyncio.Event | None = None,
 ) -> None:
-    """Hear the rows given a handler until cancelled (Operations.receive)."""
+    """Hear the rows given a handler until cancelled: the one stream every
+    role class registered on the plugin hears through (SDK 0.35).
+
+    `seed` is whether, or for which rows, what the store holds is handed on
+    at the start. `subjects` are the lake's subjects the stream names, or
+    what answers them, read again each time the stream opens; setting
+    `reopen` opens it again at once, catching up as after a broken stream
+    (`Role.hear_again()`)."""
     given = {name: handler for name, handler in handlers.items() if handler is not None}
     rows = [row for row in DELIVERED if row.name in given]
     latest_rows = [row for row in CONFLATED if row.name in given]
     full_rows = [row for row in UNCONFLATED if row.name in given]
     sequenced_rows = [row for row in SEQUENCED if row.name in given]
     if not rows and not latest_rows and not full_rows and not sequenced_rows:
-        raise ValueError("receive() names no row to hear: give a handler for at least one")
-    if isinstance(subjects, str):
-        raise TypeError("subjects is a sequence of entity IDs, not one string")
-    wanted = tuple(dict.fromkeys(subjects))
-    if not bounds.RECEIVE_REQUEST_SUBJECTS_COUNT.admits(len(wanted)):
-        most = bounds.RECEIVE_REQUEST_SUBJECTS_COUNT.most
-        raise ValueError(f"subjects names {len(wanted)}; at most {most}")
+        raise ValueError("follow() names no row to hear: give a handler for at least one")
+    seeded = set(given) if seed is True else set() if seed is False else set(seed)
+
+    def named() -> tuple[str, ...]:
+        said = subjects() if callable(subjects) else subjects
+        if isinstance(said, str):
+            raise TypeError("subjects is a sequence of entity IDs, not one string")
+        wanted = tuple(dict.fromkeys(said))
+        if not bounds.RECEIVE_REQUEST_SUBJECTS_COUNT.admits(len(wanted)):
+            most = bounds.RECEIVE_REQUEST_SUBJECTS_COUNT.most
+            raise ValueError(f"subjects names {len(wanted)}; at most {most}")
+        return wanted
+
+    wanted = named()
     follower = _Follower(plugin, rows, given)
     latest = _Latest(plugin, latest_rows, given, wanted)
     full = _InFull(plugin, full_rows, given, wanted)
@@ -794,10 +818,15 @@ async def follow(
     # One listing of the datasets, shared: each is learned once.
     full.datasets, full.asked = latest.datasets, latest.asked
     watching = asyncio.create_task(_watch_scope(plugin, follower)) if rows else None
-    started = False
+    started = opened = False
     wait = RETRY_SECONDS
     try:
         while True:
+            if opened:
+                # The subjects as they stand now, read again on every open.
+                latest.subjects = full.subjects = wanted = named()
+            opened = True
+            reopening = False
             call = plugin._operations().Receive(
                 ops.ReceiveRequest(
                     rows=[
@@ -808,6 +837,9 @@ async def follow(
                     ],
                     subjects=list(wanted),
                 )
+            )
+            asked_again = (
+                asyncio.create_task(_cancel_when(reopen, call)) if reopen is not None else None
             )
             try:
                 # Answered once the sidecar has subscribed, so nothing changed
@@ -824,10 +856,16 @@ async def follow(
                 again = started
                 async with follower.lock:
                     if not started:
-                        await follower.seed(handing=seed)
-                        if seed:
-                            await latest.read()
-                        await sequenced.read(handing=seed)
+                        token = seeding.set(True)
+                        try:
+                            await follower.seed(handing=seeded)
+                            seeded_latest = {row.name for row in latest_rows} & seeded
+                            if seeded_latest:
+                                await latest.read(seeded_latest)
+                            for row in sequenced_rows:
+                                await sequenced.read({row.name}, handing=row.name in seeded)
+                        finally:
+                            seeding.reset(token)
                         started = True
                     else:
                         await follower.catch_up_all()
@@ -864,23 +902,40 @@ async def follow(
                             continue
                         await follower.delivered(delivery)
                         if which == "lost":
-                            named = set(delivery.lost.rows)
-                            await latest.read(named or None)
-                            await full.read(named or None)
-                            await sequenced.read(named or None)
+                            named_rows = set(delivery.lost.rows)
+                            await latest.read(named_rows or None)
+                            await full.read(named_rows or None)
+                            await sequenced.read(named_rows or None)
                 _log.warning("the delivery stream ended; opening it again")
-            except grpc.aio.AioRpcError as failed:
-                if failed.code() is grpc.StatusCode.PERMISSION_DENIED:
-                    raise NotGranted("Receive", failed.details() or "") from failed
-                if failed.code() not in _BROKEN:
+            except asyncio.CancelledError:
+                if not _asked_again(reopen):
                     raise
-                _log.warning("the delivery stream broke (%s); opening it again", failed.code())
+                reopening = True
+            except grpc.aio.AioRpcError as failed:
+                if _asked_again(reopen):
+                    reopening = True
+                elif failed.code() is grpc.StatusCode.PERMISSION_DENIED:
+                    raise NotGranted("Receive", failed.details() or "") from failed
+                elif failed.code() not in _BROKEN:
+                    raise
+                else:
+                    _log.warning(
+                        "the delivery stream broke (%s); opening it again", failed.code()
+                    )
             except CallFailed as failed:
                 if failed.kind not in ("no handler", "timeout", "handler error"):
                     raise
                 _log.warning("a read to catch up failed (%s); trying again", failed)
             finally:
                 call.cancel()
+                if asked_again is not None:
+                    asked_again.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await asked_again
+            if reopening and reopen is not None:
+                reopen.clear()
+                _log.info("opening the delivery stream again: its subjects changed")
+                continue
             await asyncio.sleep(wait)
             wait = min(wait * 2, RETRY_MOST_SECONDS)
     finally:
@@ -888,6 +943,21 @@ async def follow(
             watching.cancel()
             with contextlib.suppress(asyncio.CancelledError, Exception):
                 await watching
+
+
+async def _cancel_when(reopen: asyncio.Event, call: Any) -> None:
+    """The stream's call cancelled once a role class asks it opened again."""
+    await reopen.wait()
+    call.cancel()
+
+
+def _asked_again(reopen: asyncio.Event | None) -> bool:
+    """Whether the stream ended because it was asked to open again, rather
+    than because the plugin is stopping."""
+    if reopen is None or not reopen.is_set():
+        return False
+    task = asyncio.current_task()
+    return task is None or task.cancelling() == 0
 
 
 async def _watch_scope(plugin: Plugin, follower: _Follower) -> None:

@@ -140,12 +140,13 @@ def test_an_event_contract_plugin_doing_the_wrong_thing_fails_the_suite(
 
 
 def _pairs(lake: Recorder) -> pairs.Feed:
-    return pairs.Feed(
-        lake,
-        pairs_venue.market(),
-        pairs.ProductMap(),
-        clock_ns=lambda: NOW_NS,
-        stream_factory=pairs_venue.STREAM,
+    return lake.bind(
+        pairs.Feed(
+            pairs_venue.market(),
+            pairs.ProductMap(),
+            clock_ns=lambda: NOW_NS,
+            stream_factory=pairs_venue.STREAM,
+        )
     )
 
 
@@ -177,14 +178,16 @@ async def test_a_pairs_feed_streams_what_stands_and_stops_when_withdrawn() -> No
     assert sorted(feed.streams) == ["BTC-USD", "BTC-USDC"]
     assert feed.stream.health.state == "off" and feed.backfilled == {btc}
     lake.answer("WantWithdrawn", lambda _: [ops.WantWithdrawnEvent(want_id="WNT-S")])
-    await lake.receive(want_withdrawn=feed.on_withdrawn)
+    await lake._hear({"WantWithdrawn": feed.on_want_withdrawn})
     assert feed.streams == {} and not feed.standing
 
 
 async def test_an_event_contract_feed_records_an_outcome_once_and_its_later_stages() -> None:
     lake = Lake(contracts_venue.VENUE)
-    feed = event_contracts.Feed(
-        lake, contracts_venue.market(), event_contracts.ContractMap(), clock_ns=lambda: NOW_NS
+    feed = lake.bind(
+        event_contracts.Feed(
+            contracts_venue.market(), event_contracts.ContractMap(), clock_ns=lambda: NOW_NS
+        )
     )
     subject = await lake.held(feed, "RESOLVED-1")
     await feed.record_live([subject], data_type="meridian.v1.Price")
@@ -223,8 +226,8 @@ async def test_an_outcome_carries_the_venues_challenge_deadline_where_it_reports
     ends_ns = ChallengedMarket.CHALLENGE_ENDS_NS
     for market, ends in ((ContractsMarket(NOW_NS), 0), (ChallengedMarket(NOW_NS), ends_ns)):
         lake = Lake(contracts_venue.VENUE)
-        feed = event_contracts.Feed(
-            lake, market, event_contracts.ContractMap(), clock_ns=lambda: NOW_NS
+        feed = lake.bind(
+            event_contracts.Feed(market, event_contracts.ContractMap(), clock_ns=lambda: NOW_NS)
         )
         subject = await lake.held(feed, "RESOLVED-1")
         await feed.record_live([subject], data_type="meridian.v1.Price")
@@ -303,8 +306,10 @@ async def test_a_record_holding_every_stated_identifier_is_not_resolved_again(
 
 async def test_a_mic_venues_record_holding_the_symbol_alone_is_not_complete() -> None:
     lake = Lake(contracts_venue.VENUE)
-    feed = event_contracts.Feed(
-        lake, contracts_venue.market(), event_contracts.ContractMap(), clock_ns=lambda: NOW_NS
+    feed = lake.bind(
+        event_contracts.Feed(
+            contracts_venue.market(), event_contracts.ContractMap(), clock_ns=lambda: NOW_NS
+        )
     )
     contract = await feed.contract("BASE-1")
     assert contract is not None
@@ -334,8 +339,10 @@ async def test_the_stated_ticker_names_the_mic_or_else_the_venue_masters_id(
     market: type[ContractsMarket],
 ) -> None:
     lake = Lake(contracts_venue.VENUE)
-    feed = event_contracts.Feed(
-        lake, market(NOW_NS), event_contracts.ContractMap(), clock_ns=lambda: NOW_NS
+    feed = lake.bind(
+        event_contracts.Feed(
+            market(NOW_NS), event_contracts.ContractMap(), clock_ns=lambda: NOW_NS
+        )
     )
     contract = await feed.contract("BASE-1")
     assert contract is not None
@@ -353,8 +360,10 @@ async def test_a_record_holding_the_venues_ticker_alone_is_named_by_it(
     venue's own code, matched whether its source is the MIC or the VEN- ID,
     and the symbol reported beside it."""
     lake = Lake(contracts_venue.VENUE)
-    feed = event_contracts.Feed(
-        lake, market(NOW_NS), event_contracts.ContractMap(), clock_ns=lambda: NOW_NS
+    feed = lake.bind(
+        event_contracts.Feed(
+            market(NOW_NS), event_contracts.ContractMap(), clock_ns=lambda: NOW_NS
+        )
     )
     source = await _ticker_source(feed)
     subject = lake.instruments.hold(
@@ -371,8 +380,10 @@ async def test_a_record_holding_the_venues_ticker_alone_is_named_by_it(
 
 async def test_another_venues_ticker_is_not_this_venues_code() -> None:
     lake = Lake(contracts_venue.VENUE)
-    feed = event_contracts.Feed(
-        lake, contracts_venue.market(), event_contracts.ContractMap(), clock_ns=lambda: NOW_NS
+    feed = lake.bind(
+        event_contracts.Feed(
+            contracts_venue.market(), event_contracts.ContractMap(), clock_ns=lambda: NOW_NS
+        )
     )
     subject = lake.instruments.hold(
         "INS-ELSEWHERE", ops.Identifier(scheme="ticker", value="BASE-1", source="XOTH"),
@@ -503,10 +514,14 @@ def _checks(venue: SimpleNamespace) -> EventContractsChecks:
 
 
 def _bars_feed(lake: Lake, market: ContractsMarket | None = None) -> event_contracts.Feed:
-    return event_contracts.Feed(
-        lake, market or BarsMarket(), event_contracts.ContractMap(), clock_ns=lambda: NOW_NS,
-        bars_declared=contracts_catalogue("bars")[0],
-    )  # fmt: skip
+    return lake.bind(
+        event_contracts.Feed(
+            market or BarsMarket(),
+            event_contracts.ContractMap(),
+            clock_ns=lambda: NOW_NS,
+            bars_declared=contracts_catalogue("bars")[0],
+        )
+    )
 
 
 @pytest.mark.parametrize(
@@ -593,10 +608,14 @@ async def test_kept_bars_are_read_on_from_where_the_map_left_them(tmp_path: Path
     await feed.record_live([subject], data_type="meridian.v1.Price")
     await feed.keep_bars(once=True)
     later = NOW_NS + 2 * HOUR
-    again = event_contracts.Feed(
-        lake, BarsMarket(later), event_contracts.ContractMap(kept), clock_ns=lambda: later,
-        bars_declared=contracts_catalogue("bars")[0],
-    )  # fmt: skip
+    again = lake.bind(
+        event_contracts.Feed(
+            BarsMarket(later),
+            event_contracts.ContractMap(kept),
+            clock_ns=lambda: later,
+            bars_declared=contracts_catalogue("bars")[0],
+        )
+    )
     assert again.contracts.load()
     await again.keep_bars(once=True)
     [(code, interval, first_ns, until_ns)] = again.market.asked  # type: ignore[attr-defined]
@@ -658,11 +677,11 @@ async def test_no_bar_is_read_past_a_contracts_close_once_kept_to_it() -> None:
 
 async def test_keep_bars_is_refused_without_the_hook_or_the_bars_dataset() -> None:
     lake = Lake(contracts_venue.VENUE)
-    plain = event_contracts.Feed(lake, ContractsMarket(), event_contracts.ContractMap())
+    plain = lake.bind(event_contracts.Feed(ContractsMarket(), event_contracts.ContractMap()))
     assert not plain.keeps_bars and plain.wants.keys == ("live", "outcomes")
     with pytest.raises(TypeError, match="answers no bars"):
         await plain.keep_bars(contracts_catalogue("bars")[0], once=True)
-    kept = event_contracts.Feed(lake, BarsMarket(), event_contracts.ContractMap())
+    kept = lake.bind(event_contracts.Feed(BarsMarket(), event_contracts.ContractMap()))
     assert kept.wants.keys == ("live", "outcomes", "bars")
     with pytest.raises(ValueError, match="'bars'"):
         await kept.keep_bars(contracts_catalogue("trades")[0], once=True)
@@ -684,10 +703,11 @@ async def test_a_standing_want_of_bars_is_kept_by_keep_bars_never_polled_live() 
 
 def test_a_session_day_ending_after_midnight_is_the_date_it_ends_on() -> None:
     declared = replace(contracts_catalogue("bars")[0], day_end_minute=17 * 60)
-    feed = event_contracts.Feed(
-        Lake(contracts_venue.VENUE), BarsMarket(), event_contracts.ContractMap(),
-        bars_declared=declared,
-    )  # fmt: skip
+    feed = Lake(contracts_venue.VENUE).bind(
+        event_contracts.Feed(
+            BarsMarket(), event_contracts.ContractMap(), bars_declared=declared
+        )
+    )
     five_pm = ny_day_starts(DAY_BEFORE) + 17 * HOUR
     assert feed.business_date(five_pm - 1) == DAY_BEFORE
     assert feed.business_date(five_pm) == date(2026, 10, 10)

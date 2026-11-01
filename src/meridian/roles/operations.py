@@ -34,8 +34,10 @@ from typing import Any
 from ..client import Setting
 from ..figures import Figure
 from ._figures import Value, ordered
+from ._generated.operations import Role
 
 __all__ = [
+    "Role",
     "BreaksRead",
     "OpeningBalancesRead",
     "ReconciliationsRead",

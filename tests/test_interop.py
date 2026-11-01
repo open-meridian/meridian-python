@@ -29,6 +29,7 @@ import pytest
 import meridian
 import meridian.edge
 import meridian.testing
+from conftest import receive
 from meridian import CallFailed, Money, NotLinked
 from meridian.operations import CustodialActivity
 from meridian.plugin.v1 import operations_pb2, operations_pb2_grpc
@@ -66,7 +67,7 @@ def address() -> str:
 
 @pytest.fixture
 async def plugin():
-    connected = await meridian.connect(address(), heartbeat=False)
+    connected = await meridian.connect(address(), heartbeat=False, roles=[])
     try:
         yield connected
     finally:
@@ -101,8 +102,8 @@ async def test_the_same_statement_twice_is_recognised_not_duplicated(plugin) -> 
         "read_at_ns": NOW,
         "expected_rows": 1,
     }
-    first = await plugin.record_holdings_statement(**statement)
-    second = await plugin.record_holdings_statement(**statement)
+    first = await plugin._acts.record_holdings_statement(**statement)
+    second = await plugin._acts.record_holdings_statement(**statement)
     assert second.already_recorded
     assert second.statement_id == first.statement_id
 
@@ -128,10 +129,10 @@ async def test_a_set_nothing_matches_is_answered_with_a_minted_record(plugin) ->
         "stated_currency": "USD",
         "stated_description": "Synthetic Interop Corp. common stock",
     }
-    reply = await plugin.resolve_identifier(**asked)
+    reply = await plugin._acts.resolve_identifier(**asked)
     assert reply.found
     assert reply.provisional and reply.instrument_id.startswith("LCL-")
-    again = await plugin.resolve_identifier(**asked)
+    again = await plugin._acts.resolve_identifier(**asked)
     assert again.instrument_id == reply.instrument_id
     assert not again.minted
 
@@ -145,7 +146,9 @@ async def test_a_source_thinner_than_the_minimum_is_answered_not_found(plugin) -
     as an unrecognized security (W9.3)."""
     symbol = meridian.Identifier(scheme="symbol", value="ZZTHIN1", source="interop")
     for stated in ({}, {"stated_description": "ZZ Thin One"}):
-        reply = await plugin.resolve_identifier(identifiers=[symbol], as_of_ns=NOW, **stated)
+        reply = await plugin._acts.resolve_identifier(
+            identifiers=[symbol], as_of_ns=NOW, **stated
+        )
         assert not reply.found, stated
         assert not reply.minted and not reply.instrument_id, stated
         assert reply.miss_reason == operations_pb2.MISS_REASON_NOT_FOUND, stated
@@ -170,6 +173,7 @@ async def test_a_required_setting_the_deployment_holds_nothing_for_is_named() ->
         address(),
         heartbeat=False,
         settings=[meridian.Setting("api_key", required=True, secret=True)],
+        roles=[],
     ) as plugin:
         stream = plugin.settings()
         async with asyncio.timeout(10):
@@ -342,7 +346,7 @@ async def test_a_calendar_and_a_date_are_answered_by_the_v22_instrument_store(pl
     asked of a calendar not held answered so, never guessed."""
     from datetime import date
 
-    read = await plugin.read_calendar(
+    read = await plugin._acts.read_calendar(
         calendar_id="CAL-01JAE0000000000000INTEROP",
         from_date=date(2026, 10, 1),
         to_date=date(2026, 10, 31),
@@ -350,7 +354,7 @@ async def test_a_calendar_and_a_date_are_answered_by_the_v22_instrument_store(pl
     assert not read.found
     assert read.calendar_id == "CAL-01JAE0000000000000INTEROP"
 
-    asked = await plugin.compute_date(
+    asked = await plugin._acts.compute_date(
         business_day=meridian.BusinessDayInputs(
             date="2026-10-12", calendars=["CAL-01JAE0000000000000INTEROP"]
         )
@@ -369,7 +373,7 @@ async def test_an_algorithm_is_held_to_the_versions_declaration_by_the_v22_sidec
     declared = meridian.Declaration(
         algorithms=[meridian.AlgorithmDeclaration("twap-v1", "Time-weighted slices.")]
     )
-    plugin = await meridian.connect(address(), heartbeat=False, declaration=declared)
+    plugin = await meridian.connect(address(), heartbeat=False, declaration=declared, roles=[])
     try:
         close = {"account_id": "ACC-1", "break_ids": ["BRK-1"]}
         async with meridian.runs_as("custody", algorithm_id="twap-v1") as act:
@@ -509,7 +513,7 @@ async def test_a_holding_for_an_unlinked_external_account_is_refused_as_such(plu
     unique. Told by the code the sidecar sends beside the status, not by its
     words (spec/typed-sidecar-operations, section 7).
     """
-    opened = await plugin.record_holdings_statement(
+    opened = await plugin._acts.record_holdings_statement(
         source="interop",
         external_statement_id=f"typed-{uuid.uuid4()}",
         external_account_id=LINKED,
@@ -518,7 +522,7 @@ async def test_a_holding_for_an_unlinked_external_account_is_refused_as_such(plu
         expected_rows=1,
     )
     with pytest.raises(NotLinked) as refused:
-        await plugin.record_holding(
+        await plugin._acts.record_holding(
             statement_id=opened.statement_id,
             instrument_id="INS-interop-1",
             quantity=Decimal("12.5"),
@@ -529,7 +533,7 @@ async def test_a_holding_for_an_unlinked_external_account_is_refused_as_such(plu
 
     # And a statement naming one, from contract v7, the same way (W2.2).
     with pytest.raises(NotLinked):
-        await plugin.record_holdings_statement(
+        await plugin._acts.record_holdings_statement(
             source="interop",
             external_statement_id=f"typed-{uuid.uuid4()}",
             external_account_id=f"unlinked-{uuid.uuid4().hex[:8]}",
@@ -540,7 +544,7 @@ async def test_a_holding_for_an_unlinked_external_account_is_refused_as_such(plu
 
 
 async def test_a_miss_is_reported_by_its_typed_operation(plugin) -> None:
-    published = await plugin.report_missing_instrument(
+    published = await plugin._acts.report_missing_instrument(
         source="interop",
         asset_class="equity",
         identifiers=[meridian.Identifier(scheme="symbol", value="ZZZZ", source="interop")],
@@ -568,7 +572,7 @@ async def test_the_smallest_and_largest_holdings_reach_the_street_store(plugin) 
     """Through the SDK, the sidecar and the street store, for an account linked
     and writable. The street store says each row resolved; what it kept is read
     back by the target that ran this suite."""
-    opened = await plugin.record_holdings_statement(
+    opened = await plugin._acts.record_holdings_statement(
         source="interop",
         external_statement_id=f"scale-{uuid.uuid4()}",
         external_account_id=LINKED,
@@ -577,7 +581,7 @@ async def test_the_smallest_and_largest_holdings_reach_the_street_store(plugin) 
         expected_rows=len(ROUND_TRIPS),
     )
     for instrument_id, quantity in ROUND_TRIPS.items():
-        recorded = await plugin.record_holding(
+        recorded = await plugin._acts.record_holding(
             statement_id=opened.statement_id,
             instrument_id=instrument_id,
             side=meridian.HoldingSide.HOLDING_SIDE_LONG,
@@ -590,7 +594,7 @@ async def test_the_smallest_and_largest_holdings_reach_the_street_store(plugin) 
 
 async def test_a_float_is_refused_by_the_sdk_naming_the_field(plugin) -> None:
     with pytest.raises(TypeError, match="quantity is a Decimal or an int, not float"):
-        await plugin.record_holding(
+        await plugin._acts.record_holding(
             statement_id="unused",
             quantity=0.1,  # type: ignore[arg-type]
             market_value=Money(Decimal(0), "USD"),
@@ -609,7 +613,7 @@ async def test_a_number_past_the_wire_is_refused_by_the_sdk(
     plugin, quantity: Decimal, says: str
 ) -> None:
     with pytest.raises(ValueError, match=says):
-        await plugin.record_holding(
+        await plugin._acts.record_holding(
             statement_id="unused",
             quantity=quantity,
             market_value=Money(Decimal(0), "USD"),
@@ -697,7 +701,7 @@ async def statement(
     from the account and the time it read, as no venue has one of its own;
     naming the account it read, and its figures as the account's as a whole,
     the set with no segment (contract v7)."""
-    opened = await plugin.record_holdings_statement(
+    opened = await plugin._acts.record_holdings_statement(
         source=source,
         external_statement_id=f"{LINKED}/{NOW}/{uuid.uuid4().hex[:8]}",
         external_account_id=LINKED,
@@ -727,7 +731,7 @@ async def test_a_snaptrade_shaped_account_records_holdings_with_no_value_and_cas
         ("INS-interop-cash-usd", Decimal("1520.35"), Decimal("1020.35")),
         ("INS-interop-cash-cad", Decimal("250.00"), None),
     ]:
-        recorded = await plugin.record_holding(
+        recorded = await plugin._acts.record_holding(
             statement_id=opened,
             instrument_id=instrument_id,
             side=LONG,
@@ -736,7 +740,7 @@ async def test_a_snaptrade_shaped_account_records_holdings_with_no_value_and_cas
             external_account_id=LINKED,
         )
         assert recorded.resolved, instrument_id
-    fund = await plugin.record_holding(
+    fund = await plugin._acts.record_holding(
         statement_id=opened,
         instrument_id="INS-interop-snaptrade-spaxx",
         side=LONG,
@@ -756,7 +760,7 @@ async def test_cash_is_named_by_its_currency_under_iso4217(plugin) -> None:
     is asked again, and the record found is the master's, not minted."""
     reply = None
     for _ in range(20):
-        reply = await plugin.resolve_identifier(
+        reply = await plugin._acts.resolve_identifier(
             identifiers=[meridian.Identifier(scheme="iso4217", value="USD")], as_of_ns=NOW
         )
         if reply.found:
@@ -781,7 +785,7 @@ async def test_an_etrade_shaped_account_records_a_signed_short_and_its_figures(p
         maintenance_excess=Money(Decimal("23000.00"), "USD"),
         currency_assumed=True,
     )
-    recorded = await plugin.record_holding(
+    recorded = await plugin._acts.record_holding(
         statement_id=opened,
         instrument_id="INS-interop-etrade-tsla",
         side=SHORT,
@@ -795,7 +799,7 @@ async def test_an_etrade_shaped_account_records_a_signed_short_and_its_figures(p
 
 async def test_a_kalshi_shaped_no_position_is_a_short_row_of_its_one_contract(plugin) -> None:
     opened = await statement(plugin, "interop-kalshi", 1)
-    recorded = await plugin.record_holding(
+    recorded = await plugin._acts.record_holding(
         statement_id=opened,
         instrument_id="INS-interop-kalshi-rain",
         side=SHORT,
@@ -811,7 +815,7 @@ async def test_a_schwab_shaped_long_and_short_of_one_instrument_are_two_rows(plu
         (LONG, Decimal("200"), Decimal("84000.00")),
         (SHORT, Decimal("-50"), Decimal("-21000.00")),
     ]:
-        recorded = await plugin.record_holding(
+        recorded = await plugin._acts.record_holding(
             statement_id=opened,
             instrument_id="INS-interop-schwab-msft",
             side=side,
@@ -836,7 +840,7 @@ async def test_a_side_missing_or_contradicted_is_refused_by_the_street_store(
 ) -> None:
     opened = await statement(plugin, "interop", 1)
     with pytest.raises(CallFailed) as refused:
-        await plugin.record_holding(
+        await plugin._acts.record_holding(
             statement_id=opened,
             instrument_id="INS-interop-refused",
             side=side,
@@ -849,7 +853,7 @@ async def test_a_side_missing_or_contradicted_is_refused_by_the_street_store(
 async def test_a_connector_reports_the_accounts_it_reaches_linked_or_not(plugin) -> None:
     """Published before anything is recorded, so an account nobody has linked
     is reported rather than refused."""
-    published = await plugin.report_external_accounts(
+    published = await plugin._acts.report_external_accounts(
         accounts=[
             meridian.ExternalAccount(
                 external_account_id=LINKED, name="Interop", venue_account_type="Individual"
@@ -870,7 +874,7 @@ async def test_an_unlinked_accounts_sync_status_is_published_and_its_holding_ref
     """Ruled 2026-09-28: a sync status describes the connection, so it is not
     refused for want of a link; a holding from the same account still is."""
     unlinked = f"unlinked-{uuid.uuid4().hex[:8]}"
-    published = await plugin.report_sync_status(
+    published = await plugin._acts.report_sync_status(
         source="interop",
         external_account_id=unlinked,
         state=meridian.SyncState.SYNC_STATE_HOLDINGS_UNAVAILABLE,
@@ -879,7 +883,7 @@ async def test_an_unlinked_accounts_sync_status_is_published_and_its_holding_ref
     assert published.message_id
     opened = await statement(plugin, "interop", 1)
     with pytest.raises(NotLinked):
-        await plugin.record_holding(
+        await plugin._acts.record_holding(
             statement_id=opened,
             instrument_id="INS-interop-unlinked",
             side=LONG,
@@ -890,7 +894,7 @@ async def test_an_unlinked_accounts_sync_status_is_published_and_its_holding_ref
 
 @pytest.mark.parametrize("state", list(meridian.SyncState.values()))
 async def test_every_sync_state_is_published_with_its_freshness(plugin, state) -> None:
-    published = await plugin.report_sync_status(
+    published = await plugin._acts.report_sync_status(
         source="interop",
         external_account_id=LINKED,
         connection_healthy=state == meridian.SyncState.SYNC_STATE_CURRENT,
@@ -916,7 +920,7 @@ async def test_every_sync_state_is_published_with_its_freshness(plugin, state) -
 async def test_an_account_kind_and_a_type_as_reported_beside_not_known_are_published(
     plugin,
 ) -> None:
-    published = await plugin.report_external_accounts(
+    published = await plugin._acts.report_external_accounts(
         accounts=[
             meridian.ExternalAccount(
                 external_account_id=LINKED, name="Interop", account_kind="margin"
@@ -936,7 +940,7 @@ async def test_an_account_kind_and_a_type_as_reported_beside_not_known_are_publi
 
 async def test_the_venues_own_type_from_an_earlier_plugin_is_still_accepted(plugin) -> None:
     # Deprecated in v11, accepted for the notice its stability gives.
-    published = await plugin.report_external_accounts(
+    published = await plugin._acts.report_external_accounts(
         accounts=[
             meridian.ExternalAccount(
                 external_account_id=LINKED, name="Interop", venue_account_type="Individual"
@@ -966,7 +970,7 @@ async def test_a_value_as_reported_with_a_part_missing_or_too_long_is_refused_na
     # language might: the sidecar checks the shape and length, and nothing
     # else.
     with pytest.raises(CallFailed) as refused:
-        await plugin.report_external_accounts(
+        await plugin._acts.report_external_accounts(
             accounts=[
                 meridian.ExternalAccount(
                     external_account_id=LINKED,
@@ -981,7 +985,7 @@ async def test_a_value_as_reported_with_a_part_missing_or_too_long_is_refused_na
 async def test_a_raw_record_naming_another_plugin_is_refused(plugin) -> None:
     opened = await statement(plugin, "interop-edge-refused", 1)
     with pytest.raises(CallFailed) as refused:
-        await plugin.record_holding(
+        await plugin._acts.record_holding(
             statement_id=opened,
             instrument_id="INS-interop-edge-refused",
             side=LONG,
@@ -995,7 +999,7 @@ async def test_a_raw_record_naming_another_plugin_is_refused(plugin) -> None:
 
 async def test_a_row_carries_its_raw_record_pending_and_what_the_plugin_closed(plugin) -> None:
     opened = await statement(plugin, "interop-edge", 1)
-    recorded = await plugin.record_holding(
+    recorded = await plugin._acts.record_holding(
         statement_id=opened,
         instrument_id="INS-interop-edge-vti",
         side=LONG,
@@ -1022,7 +1026,7 @@ async def test_a_backfill_amends_a_past_row_and_run_twice_adds_nothing(plugin) -
     external = f"{LINKED}/backfill/{uuid.uuid4().hex[:8]}"
 
     async def opening() -> operations_pb2.RecordHoldingsStatementResult:
-        return await plugin.record_holdings_statement(
+        return await plugin._acts.record_holdings_statement(
             source="interop-backfill",
             external_statement_id=external,
             external_account_id=LINKED,
@@ -1032,7 +1036,7 @@ async def test_a_backfill_amends_a_past_row_and_run_twice_adds_nothing(plugin) -
         )
 
     first = await opening()
-    await plugin.record_holding(
+    await plugin._acts.record_holding(
         statement_id=first.statement_id,
         instrument_id="INS-interop-backfill",
         side=LONG,
@@ -1042,7 +1046,7 @@ async def test_a_backfill_amends_a_past_row_and_run_twice_adds_nothing(plugin) -
     again = await opening()
     assert again.already_recorded and again.statement_id == first.statement_id
     for _ in range(2):
-        amended = await plugin.record_holding(
+        amended = await plugin._acts.record_holding(
             statement_id=again.statement_id,
             instrument_id="INS-interop-backfill",
             side=LONG,
@@ -1053,7 +1057,7 @@ async def test_a_backfill_amends_a_past_row_and_run_twice_adds_nothing(plugin) -
         )
         assert amended.holding_id == "", "no new row is recorded"
     with pytest.raises(meridian.CallFailed) as refused:
-        await plugin.record_holding(
+        await plugin._acts.record_holding(
             statement_id=again.statement_id,
             instrument_id="INS-interop-never-recorded",
             side=LONG,
@@ -1087,7 +1091,7 @@ async def operations():
         raise RuntimeError(
             "MERIDIAN_OPERATIONS_SIDECAR_ADDRESS is not set; `make interop` sets it"
         )
-    connected = await meridian.connect(_OPERATIONS, heartbeat=False)
+    connected = await meridian.connect(_OPERATIONS, heartbeat=False, roles=[])
     try:
         yield connected
     finally:
@@ -1100,7 +1104,7 @@ async def unscoped():
         raise RuntimeError(
             "MERIDIAN_UNSCOPED_SIDECAR_ADDRESS is not set; `make interop` sets it"
         )
-    connected = await meridian.connect(_UNSCOPED, heartbeat=False)
+    connected = await meridian.connect(_UNSCOPED, heartbeat=False, roles=[])
     try:
         yield connected
     finally:
@@ -1113,7 +1117,7 @@ async def recorded(plugin, instrument_id: str, quantity: str) -> str:
     opened = await statement(
         plugin, HEARD, 1, net_liquidation=Money(Decimal("93550.00"), "USD")
     )
-    row = await plugin.record_holding(
+    row = await plugin._acts.record_holding(
         statement_id=opened,
         instrument_id=instrument_id,
         side=LONG,
@@ -1164,7 +1168,8 @@ class Hearing:
 
 def listening(plugin, hearing: Hearing, *, seed: bool) -> asyncio.Task[None]:
     return asyncio.create_task(
-        plugin.receive(
+        receive(
+            plugin,
             statement_recorded=hearing.statement,
             custodial_position_updated=hearing.position,
             seed=seed,
@@ -1233,16 +1238,16 @@ async def test_an_operations_plugin_reads_its_scope_and_is_refused_outside_it(
     account when it names one in its scope, and a refusal before the read
     leaves when it names one outside."""
     opened = await recorded(plugin, "INS-interop-read", "3")
-    whole = await operations.list_custodial_positions(page_size=500)
+    whole = await operations._acts.list_custodial_positions(page_size=500)
     assert {held.account_id for held in whole.positions} == {ACCOUNT}
     assert whole.as_of.partitions[0].partition == "street"
-    named = await operations.list_custodial_positions(account_id=ACCOUNT, page_size=500)
+    named = await operations._acts.list_custodial_positions(account_id=ACCOUNT, page_size=500)
     assert "INS-interop-read" in {held.instrument_id for held in named.positions}
 
-    statements = await operations.list_statements(account_id=ACCOUNT, page_size=500)
+    statements = await operations._acts.list_statements(account_id=ACCOUNT, page_size=500)
     read = [each for each in statements.statements if each.statement_id == opened]
     assert len(read) == 1 and read[0].rows_received == 1
-    since = await operations.list_statements(
+    since = await operations._acts.list_statements(
         account_id=ACCOUNT, since=statements.as_of, page_size=500
     )
     assert len(since.statements) == 0, "nothing completed since"
@@ -1250,7 +1255,7 @@ async def test_an_operations_plugin_reads_its_scope_and_is_refused_outside_it(
     with pytest.raises(
         meridian.NotGranted, match="ACC-ELSEWHERE is not in this plugin's read scope"
     ):
-        await operations.list_custodial_positions(account_id="ACC-ELSEWHERE")
+        await operations._acts.list_custodial_positions(account_id="ACC-ELSEWHERE")
 
 
 async def test_a_plugin_whose_scope_is_empty_reads_and_hears_nothing(plugin, unscoped) -> None:
@@ -1264,10 +1269,10 @@ async def test_a_plugin_whose_scope_is_empty_reads_and_hears_nothing(plugin, uns
     finally:
         await stopped(task)
     assert hearing.positions == [] and hearing.statements == []
-    assert len((await unscoped.list_custodial_positions()).positions) == 0
-    assert len((await unscoped.list_statements()).statements) == 0
+    assert len((await unscoped._acts.list_custodial_positions()).positions) == 0
+    assert len((await unscoped._acts.list_statements()).statements) == 0
     with pytest.raises(meridian.NotGranted):
-        await unscoped.list_statements(account_id=ACCOUNT)
+        await unscoped._acts.list_statements(account_id=ACCOUNT)
 
 
 async def test_a_plugin_started_again_reads_what_changed_while_it_was_away(
@@ -1334,7 +1339,7 @@ def reinvestment(
 
 
 async def report_activity(plugin, external_activity_id: str, trade_date: str = "2026-09-30"):
-    return await plugin.record_activity(
+    return await plugin._acts.record_activity(
         external_account_id=LINKED,
         source="interop",
         activity=reinvestment(plugin, external_activity_id, trade_date),
@@ -1366,7 +1371,9 @@ class Heard:
 
 def hearing_activity(plugin, heard: Heard, *, seed: bool) -> asyncio.Task[None]:
     return asyncio.create_task(
-        plugin.receive(activity_recorded=heard.hear, sync_status_recorded=heard.hear, seed=seed)
+        receive(
+            plugin, activity_recorded=heard.hear, sync_status_recorded=heard.hear, seed=seed
+        )
     )
 
 
@@ -1376,7 +1383,7 @@ async def test_an_activity_is_recorded_once_and_read_with_how_far_back_the_histo
     """W2.10, W2.11, W2.13: recorded against the linked account, a redelivery
     answered as already recorded, and read back with the history_from the
     account's latest sync status said."""
-    await plugin.report_sync_status(
+    await plugin._acts.report_sync_status(
         source="interop",
         external_account_id=LINKED,
         state="SYNC_STATE_CURRENT",
@@ -1392,7 +1399,7 @@ async def test_an_activity_is_recorded_once_and_read_with_how_far_back_the_histo
 
     read = None
     for _ in range(50):
-        read = await operations.list_activities(account_id=ACCOUNT, page_size=500)
+        read = await operations._acts.list_activities(account_id=ACCOUNT, page_size=500)
         if read.history_from:
             break
         await asyncio.sleep(0.2)
@@ -1407,7 +1414,7 @@ async def test_an_activity_is_recorded_once_and_read_with_how_far_back_the_histo
     assert str(meridian.as_money(kept.activity.amount).amount) == "-3.27"
     assert kept.cause.instance_id == plugin.identity.instance_id
 
-    dated = await operations.list_activities(
+    dated = await operations._acts.list_activities(
         account_id=ACCOUNT, trade_date_from="2026-10-01", page_size=500
     )
     assert first.activity_id not in {each.activity_id for each in dated.activities}
@@ -1424,7 +1431,7 @@ async def test_an_operations_plugin_hears_activity_and_the_sync_status_with_thei
         await asyncio.sleep(1)  # the stream is open and the sidecar subscribed
         identifier = f"interop-{uuid.uuid4()}"
         recorded_activity = await report_activity(plugin, identifier)
-        await plugin.report_sync_status(
+        await plugin._acts.report_sync_status(
             source="interop",
             external_account_id=LINKED,
             state="SYNC_STATE_NEEDS_SIGN_IN",
@@ -1454,7 +1461,7 @@ async def test_an_operations_plugin_hears_activity_and_the_sync_status_with_thei
     assert status.message.status.external_account_id == LINKED
     assert not status.own and status.cause.instance_id == plugin.identity.instance_id
 
-    latest = await operations.list_sync_statuses(account_id=ACCOUNT)
+    latest = await operations._acts.list_sync_statuses(account_id=ACCOUNT)
     assert [each.status.state for each in latest.statuses] == [
         operations_pb2.SYNC_STATE_NEEDS_SIGN_IN
     ]
@@ -1468,22 +1475,22 @@ async def test_an_unlinked_accounts_activity_is_refused_and_its_sync_status_reac
     reads and hears nothing (W4.11)."""
     activity = reinvestment(plugin, f"interop-{uuid.uuid4()}")
     with pytest.raises(NotLinked):
-        await plugin.record_activity(
+        await plugin._acts.record_activity(
             external_account_id="ext-nobody-linked", source="interop", activity=activity
         )
-    await plugin.report_sync_status(
+    await plugin._acts.report_sync_status(
         source="interop",
         external_account_id="ext-nobody-linked",
         state="SYNC_STATE_DISABLED",
         observed_at_ns=NOW,
     )
     await asyncio.sleep(1)
-    everything = await operations.list_sync_statuses(page_size=500)
+    everything = await operations._acts.list_sync_statuses(page_size=500)
     assert all(each.status.account_id == ACCOUNT for each in everything.statuses)
-    assert len((await unscoped.list_activities()).activities) == 0
-    assert len((await unscoped.list_sync_statuses()).statuses) == 0
+    assert len((await unscoped._acts.list_activities()).activities) == 0
+    assert len((await unscoped._acts.list_sync_statuses()).statuses) == 0
     with pytest.raises(meridian.NotGranted):
-        await unscoped.list_activities(account_id=ACCOUNT)
+        await unscoped._acts.list_activities(account_id=ACCOUNT)
 
 
 # ── Contract v15: an activity re-resolved ───────────────────────────────────
@@ -1505,7 +1512,7 @@ def linked_by(person: str) -> meridian.Provenance:
 async def report_plan_activity(plugin, external_activity_id: str):
     """A reinvestment under the plan's code OQKR, which nothing resolves yet."""
     activity = reinvestment(plugin, external_activity_id)
-    return await plugin.record_activity(
+    return await plugin._acts.record_activity(
         external_account_id=LINKED,
         source="interop",
         activity=CustodialActivity(
@@ -1525,7 +1532,7 @@ async def report_plan_activity(plugin, external_activity_id: str):
 async def re_resolve(
     plugin, external_activity_id: str, instrument_id: str = "INS-interop-vigix"
 ):
-    return await plugin.re_resolve_activity(
+    return await plugin._acts.re_resolve_activity(
         external_account_id=LINKED,
         source="interop",
         external_activity_id=external_activity_id,
@@ -1544,7 +1551,7 @@ async def test_an_activity_is_re_resolved_beside_its_first_record_heard_and_read
     identifier = f"interop-{uuid.uuid4()}"
     first = await report_plan_activity(plugin, identifier)
     heard = Heard()
-    task = asyncio.create_task(operations.receive(activity_re_resolved=heard.hear, seed=False))
+    task = asyncio.create_task(receive(operations, activity_re_resolved=heard.hear))
     try:
         await asyncio.sleep(1)  # the stream is open and the sidecar subscribed
         done = await re_resolve(plugin, identifier)
@@ -1571,7 +1578,7 @@ async def test_an_activity_is_re_resolved_beside_its_first_record_heard_and_read
         first.activity_id
     ) == 1, "answered as already recorded, and heard once"
 
-    read = await operations.list_activities(account_id=ACCOUNT, page_size=500)
+    read = await operations._acts.list_activities(account_id=ACCOUNT, page_size=500)
     kept = [each for each in read.activities if each.activity_id == first.activity_id]
     assert len(kept) == 1 and kept[0].activity.instrument_id == "", "as first recorded"
     assert kept[0].activity.instrument_as_reported.code == "OQKR"
@@ -1587,7 +1594,7 @@ async def test_a_re_resolution_missed_is_caught_up_from_a_read(plugin, operation
     await re_resolve(plugin, identifier, "INS-interop-vfiax")
 
     heard = Heard()
-    task = asyncio.create_task(operations.receive(activity_re_resolved=heard.hear, seed=True))
+    task = asyncio.create_task(receive(operations, activity_re_resolved=heard.hear))
     try:
         caught = await heard.until(
             lambda h: (
@@ -1613,7 +1620,7 @@ async def test_a_re_resolution_of_nothing_recorded_or_an_unlinked_account_is_ref
         await re_resolve(plugin, identifier)
     assert identifier in str(refused.value) and "no activity is recorded" in str(refused.value)
     with pytest.raises(NotLinked):
-        await plugin.re_resolve_activity(
+        await plugin._acts.re_resolve_activity(
             external_account_id="ext-nobody-linked",
             source="interop",
             external_activity_id=identifier,
@@ -1641,7 +1648,10 @@ async def test_a_custody_plugin_declares_its_kinds_and_says_what_its_storage_hol
     storage taken on the heartbeat; a kind the declaration does not name
     refused there."""
     async with await meridian.connect(
-        address(), heartbeat=False, declaration=meridian.Declaration(storage=ARCHIVE_KINDS)
+        address(),
+        heartbeat=False,
+        declaration=meridian.Declaration(storage=ARCHIVE_KINDS),
+        roles=[],
     ) as plugin:
         stream = plugin.settings()
         async with asyncio.timeout(10):
@@ -1690,7 +1700,10 @@ async def test_a_units_move_is_recorded_and_one_the_sidecar_refuses_is_named(
     monkeypatch.setenv("MERIDIAN_STORAGE_DIR", str(granted))
     monkeypatch.setenv("MERIDIAN_ARCHIVE_DIR", str(archive))
     async with await meridian.connect(
-        address(), heartbeat=False, declaration=meridian.Declaration(storage=ARCHIVE_KINDS)
+        address(),
+        heartbeat=False,
+        declaration=meridian.Declaration(storage=ARCHIVE_KINDS),
+        roles=[],
     ) as plugin:
         # What the SDK checks before sending, sent past it to the sidecar.
         for kind, outcome in (

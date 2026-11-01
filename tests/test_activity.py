@@ -18,14 +18,13 @@ recorded, and heard typed.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable
 from decimal import Decimal
 from typing import Any
 
 import pytest
 
 import meridian
-from conftest import FakeSidecar
+from conftest import FakeSidecar, receive
 from meridian import (
     ActivityKind,
     ActivityRef,
@@ -36,7 +35,6 @@ from meridian import (
     Provenance,
     RawRecordRef,
 )
-from meridian.operations import Operations
 from meridian.plugin.v1 import operations_pb2 as ops
 
 EXTERNAL = "SNAP-ACC-1"
@@ -65,17 +63,17 @@ def reinvestment(identifier: str = "a3f0c2d4", **more: Any) -> CustodialActivity
 
 async def connected(sidecar: tuple[FakeSidecar, str]) -> meridian.Plugin:
     _, address = sidecar
-    return await meridian.connect(address, heartbeat=False)
+    return await meridian.connect(address, heartbeat=False, roles=[])
 
 
 async def test_an_activity_crosses_as_the_custodian_stated_it(sidecar) -> None:
     service, _ = sidecar
     plugin = await connected(sidecar)
     try:
-        first = await plugin.record_activity(
+        first = await plugin._acts.record_activity(
             external_account_id=EXTERNAL, source="snaptrade", activity=reinvestment()
         )
-        again = await plugin.record_activity(
+        again = await plugin._acts.record_activity(
             external_account_id=EXTERNAL, source="snaptrade", activity=reinvestment()
         )
     finally:
@@ -97,7 +95,7 @@ async def test_a_value_the_custodian_did_not_state_is_unset(sidecar) -> None:
     service, _ = sidecar
     plugin = await connected(sidecar)
     try:
-        await plugin.record_activity(
+        await plugin._acts.record_activity(
             external_account_id=EXTERNAL,
             source="snaptrade",
             activity=reinvestment(
@@ -123,7 +121,7 @@ async def test_a_kind_that_does_not_convert_travels_as_reported(sidecar) -> None
         scheme="snaptrade:activity-type", code="OPTIONEXPIRATION", text="OPTIONEXPIRATION"
     )
     try:
-        await plugin.record_activity(
+        await plugin._acts.record_activity(
             external_account_id=EXTERNAL,
             source="snaptrade",
             activity=reinvestment(kind=None, kind_as_reported=reported),
@@ -150,7 +148,7 @@ async def test_an_activity_the_wire_cannot_carry_is_refused_naming_its_path(
     plugin = await connected(sidecar)
     try:
         with pytest.raises((ValueError, TypeError), match=says):
-            await plugin.record_activity(
+            await plugin._acts.record_activity(
                 external_account_id=EXTERNAL, source="snaptrade", activity=reinvestment(**given)
             )
     finally:
@@ -162,32 +160,32 @@ async def test_activity_is_read_by_trade_date_with_the_sources_history_from(side
     service, _ = sidecar
     plugin = await connected(sidecar)
     try:
-        await plugin.report_sync_status(
+        await plugin._acts.report_sync_status(
             source="snaptrade",
             external_account_id=EXTERNAL,
             state=meridian.SyncState.SYNC_STATE_CURRENT,
             history_from="2024-10-04",
         )
         for n, date in enumerate(("2026-09-30", "2026-09-08", "2026-09-15", "2026-10-01")):
-            await plugin.record_activity(
+            await plugin._acts.record_activity(
                 external_account_id=EXTERNAL,
                 source="snaptrade",
                 activity=reinvestment(f"A-{n}", trade_date=date),
             )
-        first = await plugin.list_activities(
+        first = await plugin._acts.list_activities(
             account_id="ACC-1",
             trade_date_from="2026-09-08",
             trade_date_to="2026-09-30",
             page_size=2,
         )
-        rest = await plugin.list_activities(
+        rest = await plugin._acts.list_activities(
             account_id="ACC-1",
             trade_date_from="2026-09-08",
             trade_date_to="2026-09-30",
             page_size=2,
             cursor=first.next_cursor,
         )
-        since = await plugin.list_activities(account_id="ACC-1", since=first.as_of)
+        since = await plugin._acts.list_activities(account_id="ACC-1", since=first.as_of)
     finally:
         await plugin.leave()
     dates = [a.activity.trade_date for a in [*first.activities, *rest.activities]]
@@ -209,12 +207,12 @@ async def test_the_latest_sync_status_of_each_connection_is_read(sidecar) -> Non
             (EXTERNAL, meridian.SyncState.SYNC_STATE_NEEDS_SIGN_IN),
             ("SNAP-ACC-9", meridian.SyncState.SYNC_STATE_CURRENT),
         ):
-            await plugin.report_sync_status(
+            await plugin._acts.report_sync_status(
                 source="snaptrade", external_account_id=external, state=state
             )
-        latest = await plugin.list_sync_statuses()
-        mine = await plugin.list_sync_statuses(account_id="ACC-1")
-        every = await plugin.list_sync_statuses(
+        latest = await plugin._acts.list_sync_statuses()
+        mine = await plugin._acts.list_sync_statuses(account_id="ACC-1")
+        every = await plugin._acts.list_sync_statuses(
             since=ops.Watermark(partitions=[ops.PartitionSequence(partition="street")])
         )
     finally:
@@ -239,7 +237,7 @@ async def test_a_break_names_the_activity_that_explains_it(sidecar) -> None:
         trade_date="2026-09-30",
     )
     try:
-        await plugin.record_break(
+        await plugin._acts.record_break(
             account_id="ACC-1",
             candidate_causes=[
                 meridian.BreakCause(
@@ -259,12 +257,12 @@ async def test_a_break_names_the_activity_that_explains_it(sidecar) -> None:
 async def test_activity_and_sync_statuses_are_heard_typed(sidecar) -> None:
     """Seeded from what the street keeps, each record handed on once."""
     service, address = sidecar
-    reporter = await meridian.connect(address, heartbeat=False)
+    reporter = await meridian.connect(address, heartbeat=False, roles=[])
     try:
-        await reporter.record_activity(
+        await reporter._acts.record_activity(
             external_account_id=EXTERNAL, source="snaptrade", activity=reinvestment()
         )
-        await reporter.report_sync_status(
+        await reporter._acts.report_sync_status(
             source="snaptrade",
             external_account_id=EXTERNAL,
             state=meridian.SyncState.SYNC_STATE_NEEDS_SIGN_IN,
@@ -286,9 +284,9 @@ async def test_activity_and_sync_statuses_are_heard_typed(sidecar) -> None:
         if activities:
             both.set()
 
-    plugin = await meridian.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False, roles=[])
     task = asyncio.create_task(
-        plugin.receive(activity_recorded=activity, sync_status_recorded=status)
+        receive(plugin, activity_recorded=activity, sync_status_recorded=status)
     )
     try:
         await asyncio.wait_for(both.wait(), timeout=5)
@@ -313,16 +311,19 @@ async def test_receive_hands_on_only_the_rows_given_a_handler() -> None:
     compared what it was handed, broke on rows it never asked for."""
     handed: dict[str, Any] = {}
 
-    class Hearing(Operations):
-        async def _receive(
-            self, handlers: dict[str, Callable[[Any], Awaitable[None]] | None], *, seed: bool
-        ) -> None:
-            handed.update(handlers, seed=seed)
+    import meridian.receive as receiving
+
+    async def follow(plugin: Any, handlers: dict[str, Any], **kept: Any) -> None:
+        handed.update(handlers, seed=kept["seed"])
 
     async def statement(heard: Heard[ops.StatementRecordedEvent]) -> None:
         return None
 
-    await Hearing().receive(statement_recorded=statement, seed=False)
+    real, receiving.follow = receiving.follow, follow  # type: ignore[assignment]
+    try:
+        await receive(object(), statement_recorded=statement, seed=False)
+    finally:
+        receiving.follow = real
     assert handed == {"StatementRecorded": statement, "seed": False}
 
 
@@ -351,7 +352,7 @@ def unresolved(identifier: str) -> CustodialActivity:
 async def re_resolve(
     plugin: meridian.Plugin, identifier: str, instrument_id: str = "INS-VIGIX"
 ) -> ops.ReResolveActivityResult:
-    return await plugin.re_resolve_activity(
+    return await plugin._acts.re_resolve_activity(
         external_account_id=EXTERNAL,
         source="snaptrade",
         external_activity_id=identifier,
@@ -365,13 +366,13 @@ async def test_an_activity_is_re_resolved_beside_its_first_record(sidecar) -> No
     service, _ = sidecar
     plugin = await connected(sidecar)
     try:
-        first = await plugin.record_activity(
+        first = await plugin._acts.record_activity(
             external_account_id=EXTERNAL, source="snaptrade", activity=unresolved("401k-1")
         )
         done = await re_resolve(plugin, "401k-1")
         again = await re_resolve(plugin, "401k-1")
         moved = await re_resolve(plugin, "401k-1", "INS-VFIAX")
-        read = await plugin.list_activities(account_id="ACC-1")
+        read = await plugin._acts.list_activities(account_id="ACC-1")
     finally:
         await plugin.leave()
     assert (done.activity_id, done.already_recorded) == (first.activity_id, False)
@@ -407,9 +408,9 @@ async def test_a_re_resolution_of_nothing_recorded_is_refused(sidecar) -> None:
 
 async def test_a_re_resolution_is_heard_typed_and_caught_up_from_a_read(sidecar) -> None:
     _, address = sidecar
-    reporter = await meridian.connect(address, heartbeat=False)
+    reporter = await meridian.connect(address, heartbeat=False, roles=[])
     try:
-        first = await reporter.record_activity(
+        first = await reporter._acts.record_activity(
             external_account_id=EXTERNAL, source="snaptrade", activity=unresolved("401k-2")
         )
         await re_resolve(reporter, "401k-2")
@@ -423,8 +424,8 @@ async def test_a_re_resolution_is_heard_typed_and_caught_up_from_a_read(sidecar)
         heard.append(each)
         one.set()
 
-    plugin = await meridian.connect(address, heartbeat=False)
-    task = asyncio.create_task(plugin.receive(activity_re_resolved=re_resolved))
+    plugin = await meridian.connect(address, heartbeat=False, roles=[])
+    task = asyncio.create_task(receive(plugin, activity_re_resolved=re_resolved))
     try:
         await asyncio.wait_for(one.wait(), timeout=5)
         await asyncio.sleep(0.1)

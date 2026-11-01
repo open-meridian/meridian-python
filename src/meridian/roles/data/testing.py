@@ -329,29 +329,31 @@ def wanted(
 
 
 async def hear(recorder: Recorder, feed: Any, event: ops.ObservationsWantedEvent) -> None:
-    """The want delivered to the plugin's own handler, through its receive."""
+    """The want delivered to the feed's `on_observations_wanted`, as the
+    recorder's `hear` hands it."""
     recorder.answer("ObservationsWanted", lambda _: event)
-    await recorder.receive(observations_wanted=feed.on_want)
+    await recorder._hear({"ObservationsWanted": feed.on_observations_wanted})
 
 
 def _pairs_feed(
     venue: Any, recorder: Recorder, market: Any = None, now_ns: int | None = None, **kw: Any
 ) -> pairs.Feed:
     at = venue.NOW_NS if now_ns is None else now_ns
-    return pairs.Feed(
-        recorder,
-        market or venue.market(at, **kw),
-        pairs.ProductMap(),
-        clock_ns=lambda: at,
-        stream_factory=venue.STREAM,
+    return recorder.bind(
+        pairs.Feed(
+            market or venue.market(at, **kw),
+            pairs.ProductMap(),
+            clock_ns=lambda: at,
+            stream_factory=venue.STREAM,
+        )
     )
 
 
 def _contracts_feed(venue: Any, recorder: Recorder, **kw: Any) -> event_contracts.Feed:
-    return event_contracts.Feed(
-        recorder, venue.market(venue.NOW_NS, **kw), event_contracts.ContractMap(),
+    return recorder.bind(event_contracts.Feed(
+        venue.market(venue.NOW_NS, **kw), event_contracts.ContractMap(),
         clock_ns=lambda: venue.NOW_NS,
-    )  # fmt: skip
+    ))  # fmt: skip
 
 
 def _mutated(feed: Any, mutations: dict[str, Any]) -> Any:
@@ -636,7 +638,7 @@ def pairs_producers(venue: Any, **mutations: Any) -> dict[str, Producer]:
                 ops.WantWithdrawnEvent(want_id="WNT-2", dataset=feed.dataset(pairs.LIVE))
             ],
         )
-        await recorder.receive(want_withdrawn=feed.on_withdrawn)
+        await recorder._hear({"WantWithdrawn": feed.on_want_withdrawn})
         await feed.current(daily=True)  # one pass keeping current: nothing stands now
 
     async def stream_on(
@@ -686,7 +688,7 @@ def pairs_producers(venue: Any, **mutations: Any) -> dict[str, Producer]:
         feed, store = made_on(recorder)
         _mutated(feed, mutations)
         subject = await held(store, feed, venue.ONE_SIDED_BASE)
-        await feed.record_quotes([subject])
+        await feed.record_quotes_of([subject])
 
     async def restarted(recorder: Recorder) -> None:
         # The plugin started again: the lake holds the last trade this
@@ -843,7 +845,7 @@ def event_contract_producers(venue: Any, **mutations: Any) -> dict[str, Producer
         )  # fmt: skip
         recorder.answer("WantWithdrawn", lambda _: [ops.WantWithdrawnEvent(
             want_id="WNT-2", dataset=feed.dataset(event_contracts.LIVE))])  # fmt: skip
-        await recorder.receive(want_withdrawn=feed.on_withdrawn)
+        await recorder._hear({"WantWithdrawn": feed.on_want_withdrawn})
         await feed.current()  # one pass keeping current: nothing stands now
 
     def outcome(code: str | None, later: tuple[Path, ...] = ()) -> Producer | None:
@@ -857,7 +859,7 @@ def event_contract_producers(venue: Any, **mutations: Any) -> dict[str, Producer
             feed, store = made_on(recorder, mutate=True)
             subject = await held(store, feed, code)
             await feed.name([subject])
-            await feed.record_outcomes([feed.contracts.serving(subject)])
+            await feed.record_outcomes_of([feed.contracts.serving(subject)])
             for directory in later:
                 feed.market = venue.market(venue.NOW_NS, directory=directory)
                 await feed.watch_outcomes()
@@ -1300,7 +1302,7 @@ class PairsChecks(_PageChecks):
         assert len(lake.on("RecordPrices")) == sent + 1
         assert {r.kind for r in lake.rows()} == {ops.PRICE_KIND_LAST}
         lake.answer("WantWithdrawn", lambda _: ops.WantWithdrawnEvent(want_id="WNT-9"))
-        await lake.receive(want_withdrawn=feed.on_withdrawn)
+        await lake._hear({"WantWithdrawn": feed.on_want_withdrawn})
         await feed.current()
         assert not feed.standing and len(lake.on("RecordPrices")) == sent + 1
 
@@ -1579,7 +1581,7 @@ class PairsChecks(_PageChecks):
         feed, _ = await self._streaming(lake)
         assert sorted(feed.streams) == self.venue.STREAM_NAMES
         lake.answer("WantWithdrawn", lambda _: [ops.WantWithdrawnEvent(want_id="WNT-S")])
-        await lake.receive(want_withdrawn=feed.on_withdrawn)
+        await lake._hear({"WantWithdrawn": feed.on_want_withdrawn})
         assert feed.streams == {}
 
     async def test_the_stream_records_every_trade_and_reads_back_the_gap_a_drop_leaves(
@@ -2177,7 +2179,7 @@ class EventContractsChecks(_PageChecks):
         await feed.current()
         assert len(lake.on("RecordQuotes")) == before + 1
         lake.answer("WantWithdrawn", lambda _: [ops.WantWithdrawnEvent(want_id="WNT-9")])
-        await lake.receive(want_withdrawn=feed.on_withdrawn)
+        await lake._hear({"WantWithdrawn": feed.on_want_withdrawn})
         await feed.current()
         assert not feed.standing and len(lake.on("RecordQuotes")) == before + 1
 
@@ -2488,7 +2490,7 @@ class EventContractsChecks(_PageChecks):
         async def resolved() -> None:
             subject = await lake.held(feed, self.venue.RESOLVED)
             await feed.name([subject])
-            await feed.record_outcomes([feed.contracts.serving(subject)])
+            await feed.record_outcomes_of([feed.contracts.serving(subject)])
 
         asyncio.run(resolved())
         tool = PageClient(self.venue.page.pages).call_tool("read_datasets", level="admin")

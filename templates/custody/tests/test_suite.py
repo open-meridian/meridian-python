@@ -65,7 +65,7 @@ def position(**given: Any) -> dict[str, Any]:
 
 def converted(step: Callable[[Converter], Awaitable[None]]) -> Producer:
     async def produce(recorder: Recorder) -> None:
-        await step(Converter(recorder))
+        await step(recorder.bind(Converter()))
 
     return produce
 
@@ -94,7 +94,7 @@ async def ambiguous(recorder: Recorder) -> None:
             found=False, miss_reason=ops.MISS_REASON_AMBIGUOUS
         ),
     )
-    await Converter(recorder).statement(
+    await recorder.bind(Converter()).statement(
         account(positions=[position(kind="WARRANT", kind_name="Warrant")]), CONNECTION, DAY
     )
 
@@ -109,7 +109,7 @@ async def thinly_described(recorder: Recorder) -> None:
             found=False, miss_reason=ops.MISS_REASON_NOT_FOUND
         ),
     )
-    await Converter(recorder).statement(
+    await recorder.bind(Converter()).statement(
         account(positions=[position(symbol="ZZTOP", description="")]), CONNECTION, DAY
     )
 

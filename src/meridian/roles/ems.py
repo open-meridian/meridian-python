@@ -16,9 +16,9 @@ declared delay plus the ceiling, and only in session (`in_session`):
                                latency=latency, liveness=liveness)
     stale = check.stale(price, dataset=ref, asset_class="equity", sessions=sessions)
     if stale is not None and check.refuses:
-        await check.hold(plugin, order_id, stale)      # the order held, its cause typed
+        await check.hold(self, order_id, stale)      # the order held, its cause typed
     else:
-        await plugin.create_placement(..., **check.placement(stale))
+        await self.create_placement(..., **check.placement(stale))
 
 Past the ceiling the admin's choice applies: **refuse** -- no placement, the
 order held with `HOLD_CAUSE_REFERENCE_PRICE_STALE` naming the dataset, age
@@ -28,8 +28,8 @@ and ceiling -- or **warn** -- the placement sent carrying its
 this is the plugin's check. From 0.33.0 (contract v28, rulings 517 and 600)
 the admin's choice is within what the deployment admin permits: the check
 reads `ReadStaleReferenceActionsPermitted` at the plugin's own role
-(`await check.permitted(plugin)`), and `warn` is honoured only where the
-deployment permits it; refuse is always permitted, and the default.
+(`await check.permitted(self)`, self the `ems` role's class), and `warn` is
+honoured only where the deployment permits it; refuse is always permitted, and the default.
 
 **An RFQ placement's quotes** (`open_quotes`): the dealers' quotes standing
 on it, best first for its side, from which a person picks
@@ -46,9 +46,10 @@ from typing import Any
 
 from ..operations import as_decimal
 from ..plugin.v1 import operations_pb2 as ops
+from ._generated.ems import Role
 from ._latency import Latency, Liveness, confirmed_ns, in_session
 
-__all__ = ["REFUSE", "WARN", "ReferenceCheck", "after_ns", "open_quotes"]
+__all__ = ["Role", "REFUSE", "WARN", "ReferenceCheck", "after_ns", "open_quotes"]
 
 #: `stale_reference_action`'s two values.
 REFUSE, WARN = "refuse", "warn"
@@ -87,11 +88,11 @@ class ReferenceCheck:
     def refuses(self) -> bool:
         return self.action != WARN or self.warn_permitted is False
 
-    async def permitted(self, plugin: Any) -> bool:
+    async def permitted(self, role: Any) -> bool:
         """Read the stale-reference actions the deployment admin permits
         (`ReadStaleReferenceActionsPermitted`, at the plugin's own role,
         ruling 600): whether `warn` is among them, kept for `refuses`."""
-        answer = await plugin.read_stale_reference_actions_permitted()
+        answer = await role.read_stale_reference_actions_permitted()
         self.warn_permitted = bool(answer.warn_permitted)
         return self.warn_permitted
 
@@ -125,11 +126,11 @@ class ReferenceCheck:
         return ops.StaleReference(dataset=name, age_ns=age, ceiling_ns=ceiling)
 
     async def hold(
-        self, plugin: Any, order_id: str, stale: ops.StaleReference, reason: str = ""
+        self, role: Any, order_id: str, stale: ops.StaleReference, reason: str = ""
     ) -> Any:
         """Refuse: the order held, its cause typed and what the check found
         named (W11.7); a person places again once the price is fresh."""
-        return await plugin.set_working_condition(
+        return await role.set_working_condition(
             order_id=order_id,
             condition="held",
             set=True,

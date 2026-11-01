@@ -67,11 +67,11 @@ contract-diff:
 # PyPI depends on nothing by URL (PyPI refuses that) and a plugin installs one
 # thing. `make vendor-schema` moves the copy to SCHEMA_REV; `check-vendored`
 # fails when the two disagree, as core's check-codegen does for its bindings.
-# meridian-schema's main at 7911820 (contract v29, DESIGN29 at 17f9a78:
-# fixed income, the queued items and the suites' about markers, as amended
-# at core stage E and by ruling 1006's text), its gen/ and boundaries/
-# vendored here byte for byte.
-SCHEMA_REV := 79118200a051df68c3de7e5e6b6ced23bf29fc8d
+# meridian-schema's sdk-035 at 42a5b6c (contract v29, as main at 7911820,
+# with boundaries/behaviours.json beside the suites: the behaviour cases
+# every SDK runs, SDK 0.35), its gen/ and boundaries/ vendored here byte for
+# byte. Moved to schema main once that branch merges.
+SCHEMA_REV := 42a5b6cd1bb3f2723fdca503ccae9f59b7e4ac66
 SCHEMA_REPO := https://github.com/open-meridian/meridian-schema.git
 SCRATCH     := .schema-scratch
 
@@ -80,7 +80,7 @@ define fetch_schema
 	&& git -C $(SCRATCH) fetch -q --depth 1 $(SCHEMA_REPO) $(SCHEMA_REV) \
 	&& git -C $(SCRATCH) checkout -q FETCH_HEAD -- gen/python/meridian/v1 gen/python/meridian/plugin \
 		gen/python/meridian/bounds.py boundaries/suites.json boundaries/fields.json \
-		boundaries/transitions.json
+		boundaries/transitions.json boundaries/behaviours.json
 endef
 
 vendor-schema:
@@ -92,8 +92,9 @@ vendor-schema:
 		&& cp $(SCRATCH)/boundaries/suites.json src/meridian/suites.json \
 		&& cp $(SCRATCH)/boundaries/fields.json src/meridian/fields.json \
 		&& cp $(SCRATCH)/boundaries/transitions.json src/meridian/transitions.json \
+		&& cp $(SCRATCH)/boundaries/behaviours.json src/meridian/behaviours.json \
 		&& rm -rf $(SCRATCH)
-	@echo "vendor-schema: src/meridian/v1, src/meridian/plugin, src/meridian/bounds.py, the role suites, the data dictionary and the order's transitions are meridian-schema at $(SCHEMA_REV)"
+	@echo "vendor-schema: src/meridian/v1, src/meridian/plugin, src/meridian/bounds.py, the role suites, the data dictionary, the order's transitions and the behaviour cases are meridian-schema at $(SCHEMA_REV)"
 
 check-vendored:
 	@$(fetch_schema) || { echo "check-vendored: could not fetch meridian-schema at $(SCHEMA_REV)" >&2; rm -rf $(SCRATCH); exit 1; }
@@ -102,8 +103,9 @@ check-vendored:
 		&& diff $(SCRATCH)/gen/python/meridian/bounds.py src/meridian/bounds.py >/dev/null \
 		&& diff $(SCRATCH)/boundaries/suites.json src/meridian/suites.json >/dev/null \
 		&& diff $(SCRATCH)/boundaries/fields.json src/meridian/fields.json >/dev/null \
-		&& diff $(SCRATCH)/boundaries/transitions.json src/meridian/transitions.json >/dev/null; then \
-		rm -rf $(SCRATCH); echo "check-vendored OK: meridian.v1, meridian.plugin.v1, meridian.bounds, the role suites, the data dictionary and the order's transitions are meridian-schema at $(SCHEMA_REV)"; \
+		&& diff $(SCRATCH)/boundaries/transitions.json src/meridian/transitions.json >/dev/null \
+		&& diff $(SCRATCH)/boundaries/behaviours.json src/meridian/behaviours.json >/dev/null; then \
+		rm -rf $(SCRATCH); echo "check-vendored OK: meridian.v1, meridian.plugin.v1, meridian.bounds, the role suites, the data dictionary, the order's transitions and the behaviour cases are meridian-schema at $(SCHEMA_REV)"; \
 	else \
 		rm -rf $(SCRATCH); echo "check-vendored FAILED: src/meridian/v1 is not meridian-schema at $(SCHEMA_REV). Run 'make vendor-schema'." >&2; exit 1; \
 	fi

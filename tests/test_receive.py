@@ -17,7 +17,7 @@ import grpc
 import pytest
 
 import meridian
-from conftest import FakeSidecar, Stream
+from conftest import FakeSidecar, Stream, receive
 from meridian import Heard, NotGranted
 from meridian.plugin.v1 import operations_pb2 as ops
 
@@ -167,9 +167,10 @@ async def hearing(
     service.operations.store = store
     service.operations.streams = streams
     heard = Heard_(wanted=wanted)
-    plugin = await meridian.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False, roles=[])
     task = asyncio.create_task(
-        plugin.receive(
+        receive(
+            plugin,
             custodial_position_updated=heard.position,
             statement_recorded=heard.statement if statements else None,
             seed=seed,
@@ -325,11 +326,11 @@ async def test_a_row_its_roles_do_not_hear_is_refused(sidecar) -> None:
         grpc.StatusCode.PERMISSION_DENIED,
         "StatementRecorded is not a row this plugin's roles hear",
     )
-    plugin = await meridian.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False, roles=[])
     try:
         with pytest.raises(NotGranted, match="not a row this plugin's roles hear"):
             await asyncio.wait_for(
-                plugin.receive(statement_recorded=Heard_().statement), timeout=5
+                receive(plugin, statement_recorded=Heard_().statement), timeout=5
             )
     finally:
         await plugin.leave()
@@ -337,10 +338,10 @@ async def test_a_row_its_roles_do_not_hear_is_refused(sidecar) -> None:
 
 async def test_receive_names_a_row(sidecar) -> None:
     _, address = sidecar
-    plugin = await meridian.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False, roles=[])
     try:
         with pytest.raises(ValueError, match="names no row"):
-            await plugin.receive()
+            await receive(plugin)
     finally:
         await plugin.leave()
 
@@ -354,6 +355,10 @@ class _Instructions:
 
     def __init__(self) -> None:
         self.calls: list[dict] = []
+
+    @property
+    def _acts(self) -> _Instructions:
+        return self
 
     async def list_trading_instructions(self, **keywords) -> ops.ListTradingInstructionsResult:
         self.calls.append(keywords)

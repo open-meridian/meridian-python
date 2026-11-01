@@ -27,9 +27,6 @@ rather than mapped to a read the plugin never makes.
 
 from __future__ import annotations
 
-from typing import cast
-
-import meridian
 from meridian.plugin.v1 import operations_pb2 as ops
 from meridian.roles import Latency
 from meridian.suites import Producer, Recorder, run, suite
@@ -43,7 +40,8 @@ DAY = 1_791_417_600_000_000_000  # 2026-10-09 00:00 UTC, when the lake asks
 
 
 def converter(recorder: Recorder) -> Converter:
-    return Converter(cast(meridian.Plugin, recorder))
+    """The plugin's data role class, bound to the recorder (SDK 0.35)."""
+    return recorder.bind(Converter())
 
 
 def daily(symbol: str) -> Producer:
@@ -99,7 +97,7 @@ def wanted(symbol: str | None) -> Producer:
             business_date="2026-10-08",
         )
         recorder.answer("ObservationsWanted", lambda _: want)
-        await recorder.receive(observations_wanted=plugin.on_want)
+        await recorder.hear(plugin)
 
     return produce
 
@@ -132,7 +130,7 @@ async def elsewhere(recorder: Recorder) -> None:
         business_date="2026-10-08",
     )
     recorder.answer("ObservationsWanted", lambda _: want)
-    await recorder.receive(observations_wanted=plugin.on_want)
+    await recorder.hear(plugin)
 
 
 async def withdrawn(recorder: Recorder) -> None:
@@ -141,7 +139,7 @@ async def withdrawn(recorder: Recorder) -> None:
         "WantWithdrawn",
         lambda _: [ops.WantWithdrawnEvent(want_id="WNT-1", dataset=f"{INSTANCE}:daily")],
     )
-    await recorder.receive(want_withdrawn=plugin.on_withdrawn)
+    await recorder.hear(plugin)
 
 
 async def licences(recorder: Recorder) -> None:
