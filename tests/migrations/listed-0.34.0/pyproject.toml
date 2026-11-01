@@ -12,6 +12,9 @@ requires-python = ">=3.11"
 # is the same version.
 dependencies = ["open-meridian==0.34.0"]
 
+[project.scripts]
+listed = "listed.__main__:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
