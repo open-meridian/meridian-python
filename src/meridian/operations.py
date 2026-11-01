@@ -2795,6 +2795,8 @@ class LifecycleEvent:
     factor: Decimal | int | None = None
     prior_factor: Decimal | int | None = None
     face_change: Decimal | int | None = None
+    cost_change: Money | None = None
+    execution_id: str = ""
 
 
 def _lifecycle_event(value: LifecycleEvent, name: str) -> ops.LifecycleEvent:
@@ -2825,6 +2827,8 @@ def _lifecycle_event(value: LifecycleEvent, name: str) -> ops.LifecycleEvent:
         factor=None if value.factor is None else _decimal(value.factor, f"{name}.factor"),
         prior_factor=None if value.prior_factor is None else _decimal(value.prior_factor, f"{name}.prior_factor"),
         face_change=None if value.face_change is None else _decimal(value.face_change, f"{name}.face_change"),
+        cost_change=None if value.cost_change is None else _money(value.cost_change, f"{name}.cost_change"),
+        execution_id=value.execution_id,
     )
 
 
@@ -3149,6 +3153,9 @@ class Factor:
     record_date: date | str = ""
     payment_date: date | str = ""
     coupon_rate: Decimal | int | None = None
+    wac: Decimal | int | None = None
+    wam: int | None = None
+    wala: int | None = None
 
 
 def _factor(value: Factor, name: str) -> ops.Factor:
@@ -3162,6 +3169,9 @@ def _factor(value: Factor, name: str) -> ops.Factor:
         record_date=_date(value.record_date, f"{name}.record_date"),
         payment_date=_date(value.payment_date, f"{name}.payment_date"),
         coupon_rate=None if value.coupon_rate is None else _decimal(value.coupon_rate, f"{name}.coupon_rate"),
+        wac=None if value.wac is None else _decimal(value.wac, f"{name}.wac"),
+        **_stated(wam=value.wam),
+        **_stated(wala=value.wala),
     )
 
 

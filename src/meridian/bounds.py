@@ -86,6 +86,10 @@ SCENARIO_AXIS_STEPS_COUNT = Count(least=1, most=32)
 SHOCK_BUCKETS_COUNT = Count(least=0, most=32)
 """meridian.v1.Shock.buckets: states a bucketed shock's values"""
 
+LOT_FACTOR_MONTH_AWAITED_LENGTH = Length(least=0, most=6)
+"""meridian.v1.Lot.factor_month_awaited: marks a lot whose cost is at a
+provisional factor (992)"""
+
 LIST_POSITIONS_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=True)
 """meridian.v1.ListPositionsRequest.page_size: bounds a page"""
 
@@ -171,6 +175,10 @@ the market (FIX 5149)"""
 REPORT_EXECUTION_REQUEST_SPECIAL_PRICE_REASON_LENGTH = Length(least=0, most=50)
 """meridian.v1.ReportExecutionRequest.special_price_reason: states why a trade
 was away from the market (FIX 5149)"""
+
+EXECUTION_FACTOR_MONTH_AWAITED_LENGTH = Length(least=0, most=6)
+"""meridian.v1.Execution.factor_month_awaited: marks a fill priced at a
+provisional factor (992)"""
 
 ACCOUNT_RECORD_CUSTODIAN_LENGTH = Length(least=0, most=200)
 """meridian.v1.AccountRecord.custodian: says where the account is held, for a

@@ -1315,6 +1315,7 @@ class NotEvaluatedReason(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     NOT_EVALUATED_REASON_FIT_FAILED: _ClassVar[NotEvaluatedReason]
     NOT_EVALUATED_REASON_INPUT_QUARANTINED: _ClassVar[NotEvaluatedReason]
     NOT_EVALUATED_REASON_TERMS_INCOMPLETE: _ClassVar[NotEvaluatedReason]
+    NOT_EVALUATED_REASON_NOT_SUPPORTED: _ClassVar[NotEvaluatedReason]
 
 class ConversionDerivation(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
@@ -1405,6 +1406,7 @@ class LifecycleEventKind(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     LIFECYCLE_EVENT_KIND_TBA_ALLOCATION: _ClassVar[LifecycleEventKind]
     LIFECYCLE_EVENT_KIND_STRIP: _ClassVar[LifecycleEventKind]
     LIFECYCLE_EVENT_KIND_RECONSTITUTION: _ClassVar[LifecycleEventKind]
+    LIFECYCLE_EVENT_KIND_FACTOR_REVISION: _ClassVar[LifecycleEventKind]
 
 class LifecycleEventState(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
@@ -1413,6 +1415,7 @@ class LifecycleEventState(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     LIFECYCLE_EVENT_STATE_ANSWERED: _ClassVar[LifecycleEventState]
     LIFECYCLE_EVENT_STATE_BOOKED: _ClassVar[LifecycleEventState]
     LIFECYCLE_EVENT_STATE_SUPERSEDED: _ClassVar[LifecycleEventState]
+    LIFECYCLE_EVENT_STATE_CLAIM_OPEN: _ClassVar[LifecycleEventState]
 
 class RedemptionEventKind(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
@@ -2303,6 +2306,7 @@ NOT_EVALUATED_REASON_BELOW_INTRINSIC: NotEvaluatedReason
 NOT_EVALUATED_REASON_FIT_FAILED: NotEvaluatedReason
 NOT_EVALUATED_REASON_INPUT_QUARANTINED: NotEvaluatedReason
 NOT_EVALUATED_REASON_TERMS_INCOMPLETE: NotEvaluatedReason
+NOT_EVALUATED_REASON_NOT_SUPPORTED: NotEvaluatedReason
 CONVERSION_DERIVATION_UNSPECIFIED: ConversionDerivation
 CONVERSION_DERIVATION_DIRECT: ConversionDerivation
 CONVERSION_DERIVATION_INVERTED: ConversionDerivation
@@ -2363,11 +2367,13 @@ LIFECYCLE_EVENT_KIND_ACCRETION: LifecycleEventKind
 LIFECYCLE_EVENT_KIND_TBA_ALLOCATION: LifecycleEventKind
 LIFECYCLE_EVENT_KIND_STRIP: LifecycleEventKind
 LIFECYCLE_EVENT_KIND_RECONSTITUTION: LifecycleEventKind
+LIFECYCLE_EVENT_KIND_FACTOR_REVISION: LifecycleEventKind
 LIFECYCLE_EVENT_STATE_UNSPECIFIED: LifecycleEventState
 LIFECYCLE_EVENT_STATE_PROPOSED: LifecycleEventState
 LIFECYCLE_EVENT_STATE_ANSWERED: LifecycleEventState
 LIFECYCLE_EVENT_STATE_BOOKED: LifecycleEventState
 LIFECYCLE_EVENT_STATE_SUPERSEDED: LifecycleEventState
+LIFECYCLE_EVENT_STATE_CLAIM_OPEN: LifecycleEventState
 REDEMPTION_EVENT_KIND_UNSPECIFIED: RedemptionEventKind
 REDEMPTION_EVENT_KIND_MATURITY: RedemptionEventKind
 REDEMPTION_EVENT_KIND_FULL_CALL: RedemptionEventKind
@@ -7199,7 +7205,7 @@ class BookPosition(_message.Message):
     def __init__(self, account_id: _Optional[str] = ..., instrument_id: _Optional[str] = ..., side: _Optional[_Union[HoldingSide, str]] = ..., trade_date_quantity: _Optional[_Union[Decimal, _Mapping]] = ..., settled_quantity: _Optional[_Union[Decimal, _Mapping]] = ..., not_stated_quantity: _Optional[_Union[Decimal, _Mapping]] = ..., pending: _Optional[_Iterable[_Union[PendingSettlement, _Mapping]]] = ..., lots: _Optional[_Iterable[_Union[Lot, _Mapping]]] = ..., opened_from: _Optional[_Iterable[_Union[OpeningSource, _Mapping]]] = ..., effective_date: _Optional[str] = ..., last_change: _Optional[_Union[JournalRef, _Mapping]] = ..., removed: bool = ..., encumbrances: _Optional[_Iterable[_Union[Encumbrance, _Mapping]]] = ..., free_quantity: _Optional[_Union[Decimal, _Mapping]] = ..., free_basis: _Optional[_Union[FreeBasis, str]] = ..., sleeve: _Optional[str] = ...) -> None: ...
 
 class Lot(_message.Message):
-    __slots__ = ("lot_id", "open_quantity", "original_quantity", "terms", "opened_by", "relieved_by", "adjusted_by", "sleeve", "reliefs")
+    __slots__ = ("lot_id", "open_quantity", "original_quantity", "terms", "opened_by", "relieved_by", "adjusted_by", "sleeve", "reliefs", "factor_month_awaited")
     LOT_ID_FIELD_NUMBER: _ClassVar[int]
     OPEN_QUANTITY_FIELD_NUMBER: _ClassVar[int]
     ORIGINAL_QUANTITY_FIELD_NUMBER: _ClassVar[int]
@@ -7209,6 +7215,7 @@ class Lot(_message.Message):
     ADJUSTED_BY_FIELD_NUMBER: _ClassVar[int]
     SLEEVE_FIELD_NUMBER: _ClassVar[int]
     RELIEFS_FIELD_NUMBER: _ClassVar[int]
+    FACTOR_MONTH_AWAITED_FIELD_NUMBER: _ClassVar[int]
     lot_id: str
     open_quantity: Decimal
     original_quantity: Decimal
@@ -7218,7 +7225,8 @@ class Lot(_message.Message):
     adjusted_by: _containers.RepeatedCompositeFieldContainer[JournalRef]
     sleeve: str
     reliefs: _containers.RepeatedCompositeFieldContainer[LotRelief]
-    def __init__(self, lot_id: _Optional[str] = ..., open_quantity: _Optional[_Union[Decimal, _Mapping]] = ..., original_quantity: _Optional[_Union[Decimal, _Mapping]] = ..., terms: _Optional[_Union[LotTerms, _Mapping]] = ..., opened_by: _Optional[_Union[JournalRef, _Mapping]] = ..., relieved_by: _Optional[_Iterable[_Union[JournalRef, _Mapping]]] = ..., adjusted_by: _Optional[_Iterable[_Union[JournalRef, _Mapping]]] = ..., sleeve: _Optional[str] = ..., reliefs: _Optional[_Iterable[_Union[LotRelief, _Mapping]]] = ...) -> None: ...
+    factor_month_awaited: str
+    def __init__(self, lot_id: _Optional[str] = ..., open_quantity: _Optional[_Union[Decimal, _Mapping]] = ..., original_quantity: _Optional[_Union[Decimal, _Mapping]] = ..., terms: _Optional[_Union[LotTerms, _Mapping]] = ..., opened_by: _Optional[_Union[JournalRef, _Mapping]] = ..., relieved_by: _Optional[_Iterable[_Union[JournalRef, _Mapping]]] = ..., adjusted_by: _Optional[_Iterable[_Union[JournalRef, _Mapping]]] = ..., sleeve: _Optional[str] = ..., reliefs: _Optional[_Iterable[_Union[LotRelief, _Mapping]]] = ..., factor_month_awaited: _Optional[str] = ...) -> None: ...
 
 class LotRelief(_message.Message):
     __slots__ = ("relieved_by", "quantity", "proceeds", "trade_date")
@@ -8067,7 +8075,7 @@ class PlacementQuote(_message.Message):
     def __init__(self, quote_id: _Optional[str] = ..., dealer_id: _Optional[str] = ..., dealer_quote_id: _Optional[str] = ..., side: _Optional[_Union[Side, str]] = ..., price: _Optional[_Union[Money, _Mapping]] = ..., quantity: _Optional[_Union[Decimal, _Mapping]] = ..., received_at_ns: _Optional[int] = ..., valid_until_ns: _Optional[int] = ..., outcome: _Optional[_Union[PlacementQuoteOutcome, str]] = ..., raw_record: _Optional[_Union[RawRecordRef, _Mapping]] = ...) -> None: ...
 
 class Execution(_message.Message):
-    __slots__ = ("execution_id", "order_id", "placement_id", "account_id", "instrument_id", "sleeve", "side", "quantity", "price", "trade_time_ns", "trade_date", "venue_execution_id", "kind", "source", "finality", "fees", "settlement_date", "computed_settlement_date", "settlement_date_basis", "supersedes", "venue_id", "uti", "prior_uti", "upi", "given_up_to", "trade_chain_reference", "settlement_counterparty", "person_roles", "raw_record", "last_change", "effective_date", "counterparty", "liquidity_indicator", "uti_generated_by", "state", "venue_order_id", "dk_reason", "dk_text", "venue_client_order_id", "give_up_answers", "cross_rate_source", "multi_leg_reporting_type", "package_execution_id", "price_basis", "trade_time_precision", "factor_used", "settlement_date_unknown", "contra_party_type", "parties", "capacity", "no_remuneration", "affiliate_back_to_back", "special_price", "weighted_average_price", "primary_market", "list_offering_price_takedown", "traded_flat", "stipulated", "portfolio_trade", "special_price_reason", "treasury_trade_modifier")
+    __slots__ = ("execution_id", "order_id", "placement_id", "account_id", "instrument_id", "sleeve", "side", "quantity", "price", "trade_time_ns", "trade_date", "venue_execution_id", "kind", "source", "finality", "fees", "settlement_date", "computed_settlement_date", "settlement_date_basis", "supersedes", "venue_id", "uti", "prior_uti", "upi", "given_up_to", "trade_chain_reference", "settlement_counterparty", "person_roles", "raw_record", "last_change", "effective_date", "counterparty", "liquidity_indicator", "uti_generated_by", "state", "venue_order_id", "dk_reason", "dk_text", "venue_client_order_id", "give_up_answers", "cross_rate_source", "multi_leg_reporting_type", "package_execution_id", "price_basis", "trade_time_precision", "factor_used", "settlement_date_unknown", "contra_party_type", "parties", "capacity", "no_remuneration", "affiliate_back_to_back", "special_price", "weighted_average_price", "primary_market", "list_offering_price_takedown", "traded_flat", "stipulated", "portfolio_trade", "special_price_reason", "treasury_trade_modifier", "factor_taken", "factor_month_awaited")
     EXECUTION_ID_FIELD_NUMBER: _ClassVar[int]
     ORDER_ID_FIELD_NUMBER: _ClassVar[int]
     PLACEMENT_ID_FIELD_NUMBER: _ClassVar[int]
@@ -8130,6 +8138,8 @@ class Execution(_message.Message):
     PORTFOLIO_TRADE_FIELD_NUMBER: _ClassVar[int]
     SPECIAL_PRICE_REASON_FIELD_NUMBER: _ClassVar[int]
     TREASURY_TRADE_MODIFIER_FIELD_NUMBER: _ClassVar[int]
+    FACTOR_TAKEN_FIELD_NUMBER: _ClassVar[int]
+    FACTOR_MONTH_AWAITED_FIELD_NUMBER: _ClassVar[int]
     execution_id: str
     order_id: str
     placement_id: str
@@ -8191,7 +8201,9 @@ class Execution(_message.Message):
     portfolio_trade: bool
     special_price_reason: str
     treasury_trade_modifier: TreasuryTradeModifier
-    def __init__(self, execution_id: _Optional[str] = ..., order_id: _Optional[str] = ..., placement_id: _Optional[str] = ..., account_id: _Optional[str] = ..., instrument_id: _Optional[str] = ..., sleeve: _Optional[str] = ..., side: _Optional[_Union[Side, str]] = ..., quantity: _Optional[_Union[Decimal, _Mapping]] = ..., price: _Optional[_Union[Money, _Mapping]] = ..., trade_time_ns: _Optional[int] = ..., trade_date: _Optional[str] = ..., venue_execution_id: _Optional[str] = ..., kind: _Optional[_Union[ExecutionKind, str]] = ..., source: _Optional[_Union[ExecutionSource, str]] = ..., finality: _Optional[_Union[Finality, _Mapping]] = ..., fees: _Optional[_Iterable[_Union[Fee, _Mapping]]] = ..., settlement_date: _Optional[str] = ..., computed_settlement_date: _Optional[str] = ..., settlement_date_basis: _Optional[_Union[DateBasis, _Mapping]] = ..., supersedes: _Optional[str] = ..., venue_id: _Optional[str] = ..., uti: _Optional[str] = ..., prior_uti: _Optional[str] = ..., upi: _Optional[str] = ..., given_up_to: _Optional[str] = ..., trade_chain_reference: _Optional[str] = ..., settlement_counterparty: _Optional[str] = ..., person_roles: _Optional[_Union[PersonRoles, _Mapping]] = ..., raw_record: _Optional[_Union[RawRecordRef, _Mapping]] = ..., last_change: _Optional[_Union[JournalRef, _Mapping]] = ..., effective_date: _Optional[str] = ..., counterparty: _Optional[_Union[Party, _Mapping]] = ..., liquidity_indicator: _Optional[_Union[LiquidityIndicator, str]] = ..., uti_generated_by: _Optional[str] = ..., state: _Optional[_Union[ExecutionState, str]] = ..., venue_order_id: _Optional[str] = ..., dk_reason: _Optional[_Union[DkReason, str]] = ..., dk_text: _Optional[str] = ..., venue_client_order_id: _Optional[str] = ..., give_up_answers: _Optional[_Iterable[_Union[GiveUpRecord, _Mapping]]] = ..., cross_rate_source: _Optional[_Union[CrossRateSource, str]] = ..., multi_leg_reporting_type: _Optional[_Union[MultiLegReportingType, str]] = ..., package_execution_id: _Optional[str] = ..., price_basis: _Optional[_Union[PriceBasis, str]] = ..., trade_time_precision: _Optional[_Union[TimePrecision, str]] = ..., factor_used: _Optional[_Union[Decimal, _Mapping]] = ..., settlement_date_unknown: bool = ..., contra_party_type: _Optional[_Union[ContraPartyType, str]] = ..., parties: _Optional[_Iterable[_Union[Party, _Mapping]]] = ..., capacity: _Optional[_Union[Capacity, str]] = ..., no_remuneration: bool = ..., affiliate_back_to_back: bool = ..., special_price: bool = ..., weighted_average_price: bool = ..., primary_market: bool = ..., list_offering_price_takedown: bool = ..., traded_flat: bool = ..., stipulated: bool = ..., portfolio_trade: bool = ..., special_price_reason: _Optional[str] = ..., treasury_trade_modifier: _Optional[_Union[TreasuryTradeModifier, str]] = ..., **kwargs) -> None: ...
+    factor_taken: Decimal
+    factor_month_awaited: str
+    def __init__(self, execution_id: _Optional[str] = ..., order_id: _Optional[str] = ..., placement_id: _Optional[str] = ..., account_id: _Optional[str] = ..., instrument_id: _Optional[str] = ..., sleeve: _Optional[str] = ..., side: _Optional[_Union[Side, str]] = ..., quantity: _Optional[_Union[Decimal, _Mapping]] = ..., price: _Optional[_Union[Money, _Mapping]] = ..., trade_time_ns: _Optional[int] = ..., trade_date: _Optional[str] = ..., venue_execution_id: _Optional[str] = ..., kind: _Optional[_Union[ExecutionKind, str]] = ..., source: _Optional[_Union[ExecutionSource, str]] = ..., finality: _Optional[_Union[Finality, _Mapping]] = ..., fees: _Optional[_Iterable[_Union[Fee, _Mapping]]] = ..., settlement_date: _Optional[str] = ..., computed_settlement_date: _Optional[str] = ..., settlement_date_basis: _Optional[_Union[DateBasis, _Mapping]] = ..., supersedes: _Optional[str] = ..., venue_id: _Optional[str] = ..., uti: _Optional[str] = ..., prior_uti: _Optional[str] = ..., upi: _Optional[str] = ..., given_up_to: _Optional[str] = ..., trade_chain_reference: _Optional[str] = ..., settlement_counterparty: _Optional[str] = ..., person_roles: _Optional[_Union[PersonRoles, _Mapping]] = ..., raw_record: _Optional[_Union[RawRecordRef, _Mapping]] = ..., last_change: _Optional[_Union[JournalRef, _Mapping]] = ..., effective_date: _Optional[str] = ..., counterparty: _Optional[_Union[Party, _Mapping]] = ..., liquidity_indicator: _Optional[_Union[LiquidityIndicator, str]] = ..., uti_generated_by: _Optional[str] = ..., state: _Optional[_Union[ExecutionState, str]] = ..., venue_order_id: _Optional[str] = ..., dk_reason: _Optional[_Union[DkReason, str]] = ..., dk_text: _Optional[str] = ..., venue_client_order_id: _Optional[str] = ..., give_up_answers: _Optional[_Iterable[_Union[GiveUpRecord, _Mapping]]] = ..., cross_rate_source: _Optional[_Union[CrossRateSource, str]] = ..., multi_leg_reporting_type: _Optional[_Union[MultiLegReportingType, str]] = ..., package_execution_id: _Optional[str] = ..., price_basis: _Optional[_Union[PriceBasis, str]] = ..., trade_time_precision: _Optional[_Union[TimePrecision, str]] = ..., factor_used: _Optional[_Union[Decimal, _Mapping]] = ..., settlement_date_unknown: bool = ..., contra_party_type: _Optional[_Union[ContraPartyType, str]] = ..., parties: _Optional[_Iterable[_Union[Party, _Mapping]]] = ..., capacity: _Optional[_Union[Capacity, str]] = ..., no_remuneration: bool = ..., affiliate_back_to_back: bool = ..., special_price: bool = ..., weighted_average_price: bool = ..., primary_market: bool = ..., list_offering_price_takedown: bool = ..., traded_flat: bool = ..., stipulated: bool = ..., portfolio_trade: bool = ..., special_price_reason: _Optional[str] = ..., treasury_trade_modifier: _Optional[_Union[TreasuryTradeModifier, str]] = ..., factor_taken: _Optional[_Union[Decimal, _Mapping]] = ..., factor_month_awaited: _Optional[str] = ..., **kwargs) -> None: ...
 
 class Finality(_message.Message):
     __slots__ = ("level", "at_ns")
@@ -10229,7 +10241,7 @@ class Statistic(_message.Message):
     def __init__(self, meta: _Optional[_Union[ObservationMeta, _Mapping]] = ..., kind: _Optional[_Union[StatisticKind, str]] = ..., value: _Optional[_Union[UnitValue, _Mapping]] = ...) -> None: ...
 
 class LifecycleEvent(_message.Message):
-    __slots__ = ("event_id", "account_id", "instrument_id", "kind", "state", "quantity", "event_date", "deliveries", "cash", "settlement_price", "external_event_id", "answers_event_id", "proposal_basis", "raw_record", "last_change", "redemption_kind", "redemption_price", "period_start_date", "period_end_date", "record_date", "factor", "prior_factor", "face_change")
+    __slots__ = ("event_id", "account_id", "instrument_id", "kind", "state", "quantity", "event_date", "deliveries", "cash", "settlement_price", "external_event_id", "answers_event_id", "proposal_basis", "raw_record", "last_change", "redemption_kind", "redemption_price", "period_start_date", "period_end_date", "record_date", "factor", "prior_factor", "face_change", "cost_change", "execution_id")
     EVENT_ID_FIELD_NUMBER: _ClassVar[int]
     ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
     INSTRUMENT_ID_FIELD_NUMBER: _ClassVar[int]
@@ -10253,6 +10265,8 @@ class LifecycleEvent(_message.Message):
     FACTOR_FIELD_NUMBER: _ClassVar[int]
     PRIOR_FACTOR_FIELD_NUMBER: _ClassVar[int]
     FACE_CHANGE_FIELD_NUMBER: _ClassVar[int]
+    COST_CHANGE_FIELD_NUMBER: _ClassVar[int]
+    EXECUTION_ID_FIELD_NUMBER: _ClassVar[int]
     event_id: str
     account_id: str
     instrument_id: str
@@ -10276,7 +10290,9 @@ class LifecycleEvent(_message.Message):
     factor: Decimal
     prior_factor: Decimal
     face_change: Decimal
-    def __init__(self, event_id: _Optional[str] = ..., account_id: _Optional[str] = ..., instrument_id: _Optional[str] = ..., kind: _Optional[_Union[LifecycleEventKind, str]] = ..., state: _Optional[_Union[LifecycleEventState, str]] = ..., quantity: _Optional[_Union[Decimal, _Mapping]] = ..., event_date: _Optional[str] = ..., deliveries: _Optional[_Iterable[_Union[LifecycleDelivery, _Mapping]]] = ..., cash: _Optional[_Union[Money, _Mapping]] = ..., settlement_price: _Optional[_Union[Money, _Mapping]] = ..., external_event_id: _Optional[str] = ..., answers_event_id: _Optional[str] = ..., proposal_basis: _Optional[_Union[Money, _Mapping]] = ..., raw_record: _Optional[_Union[RawRecordRef, _Mapping]] = ..., last_change: _Optional[_Union[JournalRef, _Mapping]] = ..., redemption_kind: _Optional[_Union[RedemptionEventKind, str]] = ..., redemption_price: _Optional[_Union[Decimal, _Mapping]] = ..., period_start_date: _Optional[str] = ..., period_end_date: _Optional[str] = ..., record_date: _Optional[str] = ..., factor: _Optional[_Union[Decimal, _Mapping]] = ..., prior_factor: _Optional[_Union[Decimal, _Mapping]] = ..., face_change: _Optional[_Union[Decimal, _Mapping]] = ...) -> None: ...
+    cost_change: Money
+    execution_id: str
+    def __init__(self, event_id: _Optional[str] = ..., account_id: _Optional[str] = ..., instrument_id: _Optional[str] = ..., kind: _Optional[_Union[LifecycleEventKind, str]] = ..., state: _Optional[_Union[LifecycleEventState, str]] = ..., quantity: _Optional[_Union[Decimal, _Mapping]] = ..., event_date: _Optional[str] = ..., deliveries: _Optional[_Iterable[_Union[LifecycleDelivery, _Mapping]]] = ..., cash: _Optional[_Union[Money, _Mapping]] = ..., settlement_price: _Optional[_Union[Money, _Mapping]] = ..., external_event_id: _Optional[str] = ..., answers_event_id: _Optional[str] = ..., proposal_basis: _Optional[_Union[Money, _Mapping]] = ..., raw_record: _Optional[_Union[RawRecordRef, _Mapping]] = ..., last_change: _Optional[_Union[JournalRef, _Mapping]] = ..., redemption_kind: _Optional[_Union[RedemptionEventKind, str]] = ..., redemption_price: _Optional[_Union[Decimal, _Mapping]] = ..., period_start_date: _Optional[str] = ..., period_end_date: _Optional[str] = ..., record_date: _Optional[str] = ..., factor: _Optional[_Union[Decimal, _Mapping]] = ..., prior_factor: _Optional[_Union[Decimal, _Mapping]] = ..., face_change: _Optional[_Union[Decimal, _Mapping]] = ..., cost_change: _Optional[_Union[Money, _Mapping]] = ..., execution_id: _Optional[str] = ...) -> None: ...
 
 class LifecycleDelivery(_message.Message):
     __slots__ = ("instrument_id", "quantity", "price")
@@ -10469,20 +10485,26 @@ class QualityAssessment(_message.Message):
     def __init__(self, dataset: _Optional[str] = ..., row_key: _Optional[str] = ..., version: _Optional[int] = ..., state: _Optional[_Union[QualityState, str]] = ..., reasons: _Optional[_Iterable[_Union[QualityReason, str]]] = ..., assessed_by_instance: _Optional[str] = ..., data_type: _Optional[str] = ...) -> None: ...
 
 class Factor(_message.Message):
-    __slots__ = ("meta", "factor", "factor_month", "record_date", "payment_date", "coupon_rate")
+    __slots__ = ("meta", "factor", "factor_month", "record_date", "payment_date", "coupon_rate", "wac", "wam", "wala")
     META_FIELD_NUMBER: _ClassVar[int]
     FACTOR_FIELD_NUMBER: _ClassVar[int]
     FACTOR_MONTH_FIELD_NUMBER: _ClassVar[int]
     RECORD_DATE_FIELD_NUMBER: _ClassVar[int]
     PAYMENT_DATE_FIELD_NUMBER: _ClassVar[int]
     COUPON_RATE_FIELD_NUMBER: _ClassVar[int]
+    WAC_FIELD_NUMBER: _ClassVar[int]
+    WAM_FIELD_NUMBER: _ClassVar[int]
+    WALA_FIELD_NUMBER: _ClassVar[int]
     meta: ObservationMeta
     factor: Decimal
     factor_month: str
     record_date: str
     payment_date: str
     coupon_rate: Decimal
-    def __init__(self, meta: _Optional[_Union[ObservationMeta, _Mapping]] = ..., factor: _Optional[_Union[Decimal, _Mapping]] = ..., factor_month: _Optional[str] = ..., record_date: _Optional[str] = ..., payment_date: _Optional[str] = ..., coupon_rate: _Optional[_Union[Decimal, _Mapping]] = ...) -> None: ...
+    wac: Decimal
+    wam: int
+    wala: int
+    def __init__(self, meta: _Optional[_Union[ObservationMeta, _Mapping]] = ..., factor: _Optional[_Union[Decimal, _Mapping]] = ..., factor_month: _Optional[str] = ..., record_date: _Optional[str] = ..., payment_date: _Optional[str] = ..., coupon_rate: _Optional[_Union[Decimal, _Mapping]] = ..., wac: _Optional[_Union[Decimal, _Mapping]] = ..., wam: _Optional[int] = ..., wala: _Optional[int] = ...) -> None: ...
 
 class Expiration(_message.Message):
     __slots__ = ("expiration_date", "series_count")
