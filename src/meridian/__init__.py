@@ -277,6 +277,19 @@ the environment its session reached on its venue catalogue
 guard. A plugin calling a model counts its tokens on its heartbeat
 (`plugin.count_model_tokens`), and asks the lake one bounded query
 (`plugin.query_lake`).
+
+From 0.34.0 (contract v29) fixed income is held, valued and serviced in the
+book: an agency's data plugin records each held pool's or class's factor
+(`plugin.record_factors`, each a `Factor`; `meridian.roles.debt.factor`),
+read and heard by the readers (`list_factors`, `factors_recorded=`); a
+price, trade or quote states its `PriceBasis` and, beside it, a yield as
+its source quotes it (`QuotedYield`) or a spread to a benchmark; a capped
+size is at least. A debt order is in face at a price per 100, a yield or a
+spread, and a fill's `price` is always the dollar price per 100 of face. The
+book's seven fixed-income records are reported and proposed through
+`meridian.roles.lifecycle`, and the contract's money rules and accrual are
+`meridian.roles.debt`; the engine's curve and bond measures are
+`analytics.DEBT_MEASURES`.
 """
 
 # Each role's common part (contract v20, spec/plugin-pages-follow-their-role).
@@ -381,6 +394,7 @@ from .operations import (
     Eligibility,
     Encumbrance,
     ExternalAccount,
+    Factor,
     Fee,
     Filing,
     Finality,
@@ -416,6 +430,8 @@ from .operations import (
     QualityAssessment,
     Quote,
     QuoteAtTrade,
+    QuotedYield,
+    RateConvention,
     RatingAction,
     ReceiptQuote,
     ReportedCollateral,
@@ -480,6 +496,7 @@ from .plugin.v1.operations_pb2 import (
     CollateralDirection,
     ComputedAs,
     DatasetRef,
+    DayCount,
     Eligible,
     ErrorCause,
     EventGroup,
@@ -504,6 +521,7 @@ from .plugin.v1.operations_pb2 import (
     ProvenanceKind,
     QuoteCharacteristic,
     RawRecordRef,
+    RedemptionEventKind,
     ReplacementCause,
     ResolvedByEntries,
     Reversal,
@@ -524,6 +542,7 @@ from .plugin.v1.operations_pb2 import (
     UnansweredReason,
     VenueKind,
     VenueRecord,
+    YieldKind,
 )
 from .receive import Heard
 from .replacements import CurrentIdMap, TemplateCatalogue
@@ -588,6 +607,7 @@ __all__ = [
     "DateBasis",
     "DateCheck",
     "DateRuleRef",
+    "DayCount",
     "Declaration",
     "DerivedSeries",
     "Eligibility",
@@ -598,6 +618,7 @@ __all__ = [
     "EventGroupFlag",
     "EventGroups",
     "ExternalAccount",
+    "Factor",
     "Fee",
     "Figure",
     "FigureKey",
@@ -671,10 +692,13 @@ __all__ = [
     "Quote",
     "QuoteAtTrade",
     "QuoteCharacteristic",
+    "QuotedYield",
     "RatingAction",
+    "RateConvention",
     "RawRecordRef",
     "ReceiptQuote",
     "RecordKind",
+    "RedemptionEventKind",
     "Refused",
     "RefusedSetting",
     "ReplacementCause",
@@ -748,6 +772,7 @@ __all__ = [
     "VenueStrategy",
     "WhatIf",
     "WhatIfTrade",
+    "YieldKind",
     "account_currency",
     "analytics",
     "as_decimal",

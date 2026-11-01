@@ -132,6 +132,22 @@ guard read, and the lake's bounded query; the `ems`'s five cases of the
 agents' demo-only guard; the `pricing` suite; and custody's thin holding
 about `securities`, not presented by a custodian holding only cash and
 currencies.
+
+From contract v29 every reader case carries an `about` marker (Track E,
+638 widened by 661), so a plugin whose work never reads a kind -- facts,
+holdings, ratings, factors, an outcome -- names the case in
+`not_presented`, with why, rather than mapping it; so do the required acts
+and latency reports a plugin genuinely never makes (942): ordering a
+listed series (`listed series`), proposing a package (`packages`),
+releasing an unreported expiry (`lifecycle events`), a pre-trade check's
+data age where the `ems` checks no reference price (`pre-trade price
+checks`), and a feed's delay where the source states no publication time
+(`publication times`, 667). The cases the SDK answers itself are about
+`replacements`, `templates` and `event groups`, and still answered for a
+plugin mapping none. v29's own cases are the factor's: the data suite's
+`records-a-pools-factor` (`about: factors`, `meridian.roles.debt.factor`)
+and each reader's `reads-a-pools-factors` and `hears-a-factor-recorded`
+(`debt.read_factors`; `factors_recorded=`).
 """
 
 from __future__ import annotations
@@ -410,6 +426,9 @@ def _ordinary(row: str, params: Any, n: int, *, provisional: bool = False) -> Me
         return ops.RecordSeriesResult(recorded=len(params.series))
     if row == "RecordStatistics":
         return ops.RecordStatisticsResult(recorded=len(params.statistics))
+    if row == "RecordFactors":
+        # Contract v29: an agency's factors, recorded whole.
+        return ops.RecordFactorsResult(recorded=len(params.factors))
     if row == "ResolveVenue":
         return ops.ResolveVenueResult(
             found=True, venue=ops.VenueRecord(venue_id=f"VEN-suite-{n}")

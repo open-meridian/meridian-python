@@ -33,6 +33,7 @@ from typing import Any
 
 from ..operations import (
     DerivedSeries,
+    Money,
     ObservationMeta,
     SavedScenario,
     Scenario,
@@ -61,11 +62,11 @@ __all__ = [
 def derived(
     subject_id: str,
     series: str,
-    value: Decimal | int,
+    value: Decimal | int | Money,
     business_date: date | str,
     *,
     dataset: str,
-    unit: str,
+    unit: str = "",
     definition: str,
     version: int,
     inputs: Iterable[tuple[str, int]],
@@ -73,7 +74,12 @@ def derived(
 ) -> DerivedSeries:
     """One value of a derived series for a business date: its subject, its
     own name for the series, the value and its unit, the rule (definition
-    and version) and each dataset read with the as-of it was read at."""
+    and version) and each dataset read with the as-of it was read at. From
+    contract v29 (638) a value in money is a `Money` naming its cash
+    instrument, carried in `money_value` with no unit, since a `UnitValue`
+    never carries a currency."""
+    if not isinstance(value, Money) and not unit:
+        raise ValueError("a derived value that is no Money names its unit")
     day = business_date if isinstance(business_date, str) else business_date.isoformat()
     read = [ops.DerivedInput(dataset=d, as_of_ns=at) for d, at in inputs]
     if not read:
@@ -87,7 +93,8 @@ def derived(
             business_date=day,
         ),
         series=series,
-        value=UnitValue(value=value, unit=unit),
+        value=None if isinstance(value, Money) else UnitValue(value=value, unit=unit),
+        money_value=value if isinstance(value, Money) else None,
         rule=ops.MeasureRef(definition=definition, version=version),
         inputs=read,
     )

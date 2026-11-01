@@ -23,7 +23,28 @@ each their own record (decisions/031), as the broker states them:
   passed and the statement no longer shows the position (`due_for_release`);
 - **a reader** (`operations`, `servicing`, `portfolio`, `reporting`) reads
   an account's events for a range of dates (`read_events`) and hears each
-  one recorded (`LifecycleEventRecorded`).
+  one recorded (`LifecycleEventRecorded`); from contract v29 (740) a read
+  naming no account answers every account in the reader's scope.
+
+**Fixed income** (contract v29, sdk-contract/fixed-income-contract; rulings
+680 to 683, 988 and 991 to 993; W9.16 to W9.18). Seven more records on a
+debt record, `quantity` its face, each reported as the custodian states it:
+`coupon_received` (its cash, the period and record date; the book books it
+as two cash lines, the purchased accrued returned and the income, 988),
+`redemption` (maturity, a full or partial call, a put or a sinking-fund
+draw at its price per 100), `paydown` (a pool's or a tranche's principal,
+the factors it fell between), `accretion` (a Z class's face, an IO's
+notional; no cash), `tba_allocation` (the TBA's lots closed and each pool
+delivered opened in original face), `strip` and `reconstitution`.
+`servicing` proposes the flows it can expect from the terms and the lake
+(W9.17): each coupon on its payment date from the face held at the record
+date (`expected_coupon`), each maturity (`expected_maturity`) and each
+paydown or accretion from the agency's published factors
+(`expected_paydown`) -- never a partial call, a put, a TBA allocation, a
+strip or a reconstitution, which only a report states. The book's own
+factor revision (992) is never reported or proposed; one still owed after
+settlement (`LIFECYCLE_EVENT_STATE_CLAIM_OPEN`, `debt.open_claims`) is
+marked settled by a person through `operations` (`settle_claim`).
 """
 
 from __future__ import annotations
@@ -31,10 +52,12 @@ from __future__ import annotations
 from collections.abc import Sequence
 from datetime import date, datetime, time
 from decimal import Decimal
+from fractions import Fraction
 from typing import Any
 
 from ..operations import LifecycleDelivery, LifecycleEvent, Money
 from ..plugin.v1 import operations_pb2 as ops
+from . import debt
 
 #: The OCC's exercise-by-exception threshold: in the money by this or more.
 EXERCISE_THRESHOLD = Decimal("0.01")
@@ -271,7 +294,9 @@ async def read_events(
     *,
     kinds: Sequence[str] = (),
 ) -> list[ops.LifecycleEvent]:
-    """An account's lifecycle events dated in the range, every page read."""
+    """An account's lifecycle events dated in the range, every page read;
+    from contract v29 (740) `account_id` empty reads every account in the
+    reader's scope, each event naming its account."""
     rows: list[ops.LifecycleEvent] = []
     cursor = ""
     while True:
@@ -283,3 +308,291 @@ async def read_events(
         cursor = page.next_cursor
         if not cursor:
             return rows
+
+
+# ── Fixed income: what a custodian reports (contract v29) ───────────────
+
+
+def coupon_received(
+    account_id: str,
+    instrument_id: str,
+    face: Decimal | int,
+    payment_date: date | str,
+    cash: Money,
+    *,
+    period_start: date | str,
+    period_end: date | str,
+    record_date: date | str = "",
+    external_event_id: str = "",
+    raw_record: ops.RawRecordRef | None = None,
+) -> LifecycleEvent:
+    """A coupon received on a debt record as the custodian states it: the
+    face it was paid on, its cash (the whole coupon; the book books the
+    purchased accrued returned apart from the income, 988 -- add back a
+    custodian's purchased accrued line with `debt.coupon_split`), its
+    period and record date."""
+    if Decimal(cash.amount) <= 0:
+        raise ValueError(f"a coupon received is cash received, not {cash.amount}")
+    return LifecycleEvent(
+        account_id=account_id, instrument_id=instrument_id, kind="coupon_received",
+        quantity=face, event_date=payment_date, cash=cash, period_start_date=period_start,
+        period_end_date=period_end, record_date=record_date,
+        external_event_id=external_event_id, raw_record=raw_record,
+    )  # fmt: skip
+
+
+def redemption(
+    account_id: str,
+    instrument_id: str,
+    face: Decimal | int,
+    event_date: date | str,
+    kind: ops.RedemptionEventKind | str,
+    price_per100: Decimal | int,
+    *,
+    cash: Money | None = None,
+    external_event_id: str = "",
+    raw_record: ops.RawRecordRef | None = None,
+) -> LifecycleEvent:
+    """A redemption -- `maturity`, `full_call`, `partial_call`, `put` or
+    `sinking_fund` -- of the face redeemed at its price per 100 of face, its
+    cash as stated; where none is stated the book takes face times the price
+    times 0.01 (W9.16)."""
+    return LifecycleEvent(
+        account_id=account_id, instrument_id=instrument_id, kind="redemption",
+        quantity=face, event_date=event_date, redemption_kind=kind,
+        redemption_price=price_per100, cash=cash, external_event_id=external_event_id,
+        raw_record=raw_record,
+    )  # fmt: skip
+
+
+def paydown(
+    account_id: str,
+    instrument_id: str,
+    original_face: Decimal | int,
+    event_date: date | str,
+    prior_factor: Decimal | int | str,
+    factor: Decimal | int | str,
+    cash: Money,
+    *,
+    external_event_id: str = "",
+    raw_record: ops.RawRecordRef | None = None,
+) -> LifecycleEvent:
+    """A pool's or a tranche's principal returned, as the custodian states
+    it: the original face held (the lots keep it, 680), the factors it fell
+    between and the cash, the factor's fall times original face."""
+    prior, now = Decimal(prior_factor), Decimal(factor)
+    if now >= prior:
+        raise ValueError(f"a paydown's factor falls: {prior} to {now} is an accretion")
+    return LifecycleEvent(
+        account_id=account_id, instrument_id=instrument_id, kind="paydown",
+        quantity=original_face, event_date=event_date, prior_factor=prior, factor=now,
+        cash=cash, external_event_id=external_event_id, raw_record=raw_record,
+    )  # fmt: skip
+
+
+def accretion(
+    account_id: str,
+    instrument_id: str,
+    original_face: Decimal | int,
+    event_date: date | str,
+    prior_factor: Decimal | int | str,
+    factor: Decimal | int | str,
+    *,
+    external_event_id: str = "",
+    raw_record: ops.RawRecordRef | None = None,
+) -> LifecycleEvent:
+    """A Z class's face increase, or an IO's notional fall: the factors
+    beside it and the face change, signed, original face times their
+    difference; no cash, and no lot changes (the factor carries the face)."""
+    prior, now = Decimal(prior_factor), Decimal(factor)
+    return LifecycleEvent(
+        account_id=account_id, instrument_id=instrument_id, kind="accretion",
+        quantity=original_face, event_date=event_date, prior_factor=prior, factor=now,
+        face_change=(now - prior) * Decimal(original_face),
+        external_event_id=external_event_id, raw_record=raw_record,
+    )  # fmt: skip
+
+
+def _exchanged(
+    kind: str,
+    account_id: str,
+    instrument_id: str,
+    face: Decimal | int,
+    event_date: date | str,
+    deliveries: Sequence[tuple[str, Decimal | int, Money | None]],
+    external_event_id: str,
+    raw_record: ops.RawRecordRef | None,
+) -> LifecycleEvent:
+    if not deliveries:
+        raise ValueError(f"a {kind.replace('_', ' ')} names what it delivered")
+    if len(deliveries) > 512:
+        raise ValueError(f"a {kind.replace('_', ' ')} names at most 512 deliveries")
+    return LifecycleEvent(
+        account_id=account_id, instrument_id=instrument_id, kind=kind, quantity=face,
+        event_date=event_date,
+        deliveries=[
+            LifecycleDelivery(instrument_id=i, quantity=q, price=p) for i, q, p in deliveries
+        ],
+        external_event_id=external_event_id, raw_record=raw_record,
+    )  # fmt: skip
+
+
+def tba_allocation(
+    account_id: str,
+    tba_id: str,
+    face: Decimal | int,
+    event_date: date | str,
+    pools: Sequence[tuple[str, Decimal | int, Money | None]],
+    *,
+    external_event_id: str = "",
+    raw_record: ops.RawRecordRef | None = None,
+) -> LifecycleEvent:
+    """A TBA's allocation at the 48-hour pool notice (681): its lots closed
+    and each pool delivered -- its record, its original face and its price
+    -- opened, the TBA's cost carried to them by face. A delivery outside
+    SIFMA's variance is recorded as reported, a break, never refused."""
+    return _exchanged(
+        "tba_allocation", account_id, tba_id, face, event_date, pools, external_event_id,
+        raw_record,
+    )  # fmt: skip
+
+
+def strip(
+    account_id: str,
+    bond_id: str,
+    face: Decimal | int,
+    event_date: date | str,
+    components: Sequence[tuple[str, Decimal | int, Money | None]],
+    *,
+    external_event_id: str = "",
+    raw_record: ops.RawRecordRef | None = None,
+) -> LifecycleEvent:
+    """A whole bond exchanged for its STRIPS components (each `TINT` or
+    `TPRN` record `stripped_from` it, its face and price), the basis
+    allocated by relative value."""
+    return _exchanged(
+        "strip", account_id, bond_id, face, event_date, components, external_event_id,
+        raw_record,
+    )  # fmt: skip
+
+
+def reconstitution(
+    account_id: str,
+    bond_id: str,
+    face: Decimal | int,
+    event_date: date | str,
+    components: Sequence[tuple[str, Decimal | int, Money | None]],
+    *,
+    external_event_id: str = "",
+    raw_record: ops.RawRecordRef | None = None,
+) -> LifecycleEvent:
+    """STRIPS components exchanged back for their whole bond, as `strip`."""
+    return _exchanged(
+        "reconstitution", account_id, bond_id, face, event_date, components,
+        external_event_id, raw_record,
+    )  # fmt: skip
+
+
+# ── Fixed income: servicing, what to expect (W9.17) ─────────────────────
+
+
+def expected_coupon(
+    account_id: str,
+    instrument_id: str,
+    face: Decimal | int,
+    *,
+    coupon_rate: Decimal | int | str,
+    day_count: Any,
+    period_start: date | str,
+    period_end: date | str,
+    payment_date: date | str,
+    currency: str,
+    record_date: date | str = "",
+    frequency: int = 2,
+) -> LifecycleEvent:
+    """The coupon a debt record held at its record date pays: the face held
+    times the rate (percent a year) times the period's fraction by the
+    record's day count, rounded to the cent half-even, with its period. A
+    floater's rate is the index the lake holds plus its spread, named in
+    the proposal's note by the caller."""
+    fraction = debt.year_fraction(
+        day_count, period_start, period_end, period=(period_start, period_end),
+        frequency=frequency,
+    )  # fmt: skip
+    cash = debt.to_cent(
+        Fraction(Decimal(face)) * Fraction(Decimal(coupon_rate)) / 100 * fraction
+    )
+    return LifecycleEvent(
+        account_id=account_id, instrument_id=instrument_id, kind="coupon_received",
+        quantity=face, event_date=payment_date, cash=Money(cash, currency),
+        period_start_date=period_start, period_end_date=period_end, record_date=record_date,
+    )  # fmt: skip
+
+
+def expected_maturity(
+    account_id: str,
+    instrument_id: str,
+    face: Decimal | int,
+    maturity_date: date | str,
+    *,
+    currency: str,
+    price_per100: Decimal | int = 100,
+) -> LifecycleEvent:
+    """A debt record's maturity: the face held redeemed at par (or the
+    terms' price per 100), its cash face times the price times 0.01."""
+    return LifecycleEvent(
+        account_id=account_id, instrument_id=instrument_id, kind="redemption",
+        quantity=face, event_date=maturity_date, redemption_kind="maturity",
+        redemption_price=price_per100,
+        cash=Money(debt.percent_of_par(face, price_per100), currency),
+    )  # fmt: skip
+
+
+def expected_paydown(
+    account_id: str,
+    instrument_id: str,
+    original_face: Decimal | int,
+    prior: Any,
+    current: Any,
+    *,
+    currency: str,
+    interest_only: bool = False,
+) -> LifecycleEvent | None:
+    """What a pool's or a tranche's month brings, from the agency's two
+    published `Factor` rows (W9.17), on the latter's payment date: a
+    paydown where the factor fell (its cash the fall times original face,
+    rounded to the cent half-even), an accretion where it rose (a Z class)
+    or where an IO's notional fell (`interest_only`, no cash); None where
+    it did not move. The proposal carries the factors it was made from."""
+    from ..operations import as_decimal
+
+    was, now = as_decimal(prior.factor), as_decimal(current.factor)
+    if current.factor_month <= prior.factor_month:
+        raise ValueError(
+            f"the current factor's month {current.factor_month} is not after"
+            f" {prior.factor_month}"
+        )
+    if was == now:
+        return None
+    on = current.payment_date
+    if not on:
+        raise ValueError(f"the factor for {current.factor_month} states no payment date")
+    if now > was or interest_only:
+        return accretion(account_id, instrument_id, original_face, on, was, now)
+    return LifecycleEvent(
+        account_id=account_id, instrument_id=instrument_id, kind="paydown",
+        quantity=original_face, event_date=on, prior_factor=was, factor=now,
+        cash=Money(debt.paydown_cash(original_face, was, now), currency),
+    )  # fmt: skip
+
+
+async def settle_claim(
+    plugin: Any, event: Any, note: str, *, acting_for: str | None = None
+) -> Any:
+    """A person marks a factor revision's open claim settled (992): the
+    difference received or paid, said in the note, through
+    `ReleaseLifecycleEvent`; refused here for any event that is no open
+    claim, as the book refuses one already booked."""
+    if not debt.open_claims([event]):
+        raise ValueError(f"{event.event_id} is no open factor revision claim")
+    return await release(plugin, event.event_id, note, acting_for=acting_for)

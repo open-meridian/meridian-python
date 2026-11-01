@@ -68,6 +68,7 @@ from ..receive import Heard
 from ._canonical import answer_hash, canonical, decimal_text
 
 __all__ = [
+    "DEBT_MEASURES",
     "EVENT_MEASURES",
     "SERVED_VERSIONS",
     "STANDARD_MEASURES",
@@ -85,8 +86,30 @@ __all__ = [
     "what_if",
 ]
 
+#: Contract v29's curve and bond measures (W12.1; rulings 688 and 994; ENG1
+#: §3), each at version 1, `computed_as: model`: a debt position's accrued
+#: interest, a bond's yield, price, risk, key-rate durations and spreads,
+#: the Treasury curve, a pool's historical prepayment and its WAL at its own
+#: CPR (996), and the make-whole amount. A term v29's engine does not
+#: compute is not evaluated `NOT_EVALUATED_REASON_NOT_SUPPORTED`, naming it
+#: (997), and a callable bond minted without its calls
+#: `NOT_EVALUATED_REASON_TERMS_INCOMPLETE`.
+DEBT_MEASURES = (
+    "accrued_interest",
+    "bond_yield",
+    "bond_price",
+    "bond_risk",
+    "key_rate_durations",
+    "bond_spread",
+    "treasury_curve",
+    "historical_prepayment",
+    "wal_at_cpr",
+    "make_whole_amount",
+)
 #: The standard measure definitions: v26's eight (the v26 plan's question
-#: 226) and from contract v27 `execution_cost` (W12.1, the gaps spec's C).
+#: 226), from contract v27 `execution_cost` (W12.1, the gaps spec's C), and
+#: from contract v29 the ten `DEBT_MEASURES` and the options page's
+#: `expected_move` (639).
 STANDARD_MEASURES = (
     "market_value",
     "exposure",
@@ -97,6 +120,8 @@ STANDARD_MEASURES = (
     "resolution_payoff",
     "implied_distribution",
     "execution_cost",
+    *DEBT_MEASURES,
+    "expected_move",
 )
 #: The latest version of each standard definition the component serves:
 #: from contract v27 `pnl` version 2, realized P&L beside unrealized

@@ -314,9 +314,20 @@ class Baseline:
         return state, reasons
 
 
+def data_type(row: Any) -> str:
+    """The kind of row an assessment assesses, by its message's full name as
+    a want names it (`meridian.v1.Price`, `meridian.v1.Bar`; contract v29,
+    628): a wire row's, or an SDK row's by its class."""
+    descriptor = getattr(row, "DESCRIPTOR", None)
+    name = descriptor.name if descriptor is not None else type(row).__name__
+    return f"meridian.v1.{name}"
+
+
 def assessment(row: Any, state: str, reasons: Sequence[str]) -> QualityAssessment:
     """A signal's assessment of a recorded row's version (heard or read):
-    its dataset, row key and version, the new state and why."""
+    its dataset, row key and version, the new state and why; from contract
+    v29 (628) the kind of row it is (`data_type`), so a day's close and its
+    bar, which share a row key, escalate apart."""
     meta = row.meta
     return QualityAssessment(
         dataset=meta.source.dataset,
@@ -324,4 +335,5 @@ def assessment(row: Any, state: str, reasons: Sequence[str]) -> QualityAssessmen
         version=int(meta.version),
         state=state,
         reasons=tuple(reasons),
+        data_type=data_type(row),
     )
