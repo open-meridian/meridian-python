@@ -429,12 +429,16 @@ _QUALITY = (
 )
 #: What no venue listing pairs or event contracts publishes (contract v28).
 #: Nor, from the amendment of 2026-10-31 (ruling 955), a figure its publisher
-#: computes itself, which a data plugin records as a derived series.
+#: computes itself, which a data plugin records as a derived series; nor,
+#: from contract v29, an agency's factor for a pool or a REMIC class.
 _NO_PUBLISHERS_FIGURES = {"records-a-derived-series": "it publishes no figure of its own"}
+#: The data suite's case contract v29 adds, about `factors`.
+_FACTORS = {"records-a-pools-factor": "it publishes no pool's or class's factor"}
 _NO_CHAINS_OR_FILINGS = {
     **{case: "it lists no option chains" for case in _CHAINS},
     **{case: "it publishes no filings" for case in _FILINGS},
     **_NO_PUBLISHERS_FIGURES,
+    **_FACTORS,
 }
 PAIRS_NOT_PRESENTED = {
     **{case: "a pairs venue publishes no rates" for case in _RATES},

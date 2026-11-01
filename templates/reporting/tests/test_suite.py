@@ -75,68 +75,6 @@ async def reporting_currency(recorder: Recorder) -> None:
     assert await report(recorder).currency(DAY) == "LCL-CASH-USD"
 
 
-# The settlement calendars' reads every role holds (contract v22): a plugin
-# needing a calendar's days or a settlement date asks core, the deployment's
-# one answer, and never works one out itself.
-async def reads_a_calendar(recorder: Recorder) -> None:
-    await recorder.read_calendar(
-        calendar_id="CAL-01JAE0000000000000000USSS",
-        from_date="2026-10-01",
-        to_date="2026-10-31",
-    )
-
-
-async def asks_for_a_settlement_date(recorder: Recorder) -> None:
-    await recorder.compute_date(
-        settlement=ops.SettlementDateInputs(instrument_id="LCL-1", trade_date="2026-10-09")
-    )
-
-
-# The order path's reads (contract v22): the orders in scope, caught up
-# after a loss from the watermark last seen, their fills heard, and an
-# order's history for who decided and who executed it.
-async def orders_read(recorder: Recorder) -> None:
-    first = await recorder.list_orders()
-    await recorder.list_orders(since=first.as_of)
-
-
-async def an_order_and_its_fill_heard(recorder: Recorder) -> None:
-    async def heard(_: object) -> None:
-        return None
-
-    recorder.answer("OrderUpdated", lambda _: ops.OrderUpdatedEvent())
-    recorder.answer("ExecutionRecorded", lambda _: ops.ExecutionRecordedEvent())
-    await recorder.receive(order_updated=heard, execution_recorded=heard)
-
-
-async def an_orders_history(recorder: Recorder) -> None:
-    await recorder.read_order_history(account_id="ACC-1", order_id="ORD-1")
-
-
-async def bookings_heard_and_read(recorder: Recorder) -> None:
-    """Contract v24: an order booked to its accounts, heard, and the bookings
-    read, each allocation an account's part to report."""
-
-    async def heard(_: object) -> None:
-        return None
-
-    recorder.answer("BookingUpdated", lambda _: ops.BookingUpdatedEvent())
-    await recorder.receive(booking_updated=heard)
-    await recorder.list_bookings(account_id="ACC-1")
-
-
-async def alerts_heard_and_read(recorder: Recorder) -> None:
-    """Contract v24: an alert raised, heard, and the alerts read for a
-    person's report."""
-
-    async def heard(_: object) -> None:
-        return None
-
-    recorder.answer("AlertChanged", lambda _: ops.AlertChangedEvent())
-    await recorder.receive(alert_changed=heard)
-    await recorder.list_alerts(account_id="ACC-1")
-
-
 async def a_job_run_and_read(recorder: Recorder) -> None:
     """Contract v26: the accounts' market value asked of the analytics
     component, answered later, its finishing heard and its answer read."""
@@ -261,6 +199,13 @@ async def ratings_read(recorder: Recorder) -> None:
     await report(recorder).ratings(APPLE)
 
 
+POOL = "INS-01JC29UMBS0000000000000001"
+
+
+async def factors_read(recorder: Recorder) -> None:
+    await report(recorder).factors(POOL, DAY, DAY)
+
+
 PRODUCERS: dict[str, Producer] = {
     "reads-the-datasets-it-may-read": datasets,
     "reads-a-business-dates-closes": valued,
@@ -268,13 +213,6 @@ PRODUCERS: dict[str, Producer] = {
     "reads-daily-bars-over-a-range": valued,
     "hears-a-bar-recorded": a_bar_heard,
     "resolves-its-reporting-currency": reporting_currency,
-    "reads-orders-and-catches-up": orders_read,
-    "hears-an-order-and-an-execution": an_order_and_its_fill_heard,
-    "reads-an-orders-history-for-the-person-roles": an_orders_history,
-    "reads-a-calendar": reads_a_calendar,
-    "asks-for-a-settlement-date": asks_for_a_settlement_date,
-    "hears-and-reads-bookings": bookings_heard_and_read,
-    "hears-and-reads-alerts": alerts_heard_and_read,
     "runs-a-job-and-reads-its-answer": a_job_run_and_read,
     "catches-up-finished-jobs": finished_jobs_caught_up,
     "queries-the-lake-within-bounds": a_bounded_query,
@@ -319,15 +257,37 @@ PRODUCERS: dict[str, Producer] = {
         "dividend",
         "dividends_heard",
     ),
+    # Contract v29: a pool's factors read, and each month's heard.
+    "reads-a-pools-factors": factors_read,
+    "hears-a-factor-recorded": hearing(
+        "FactorsRecorded",
+        ops.FactorsRecordedEvent(factor=ops.Factor()),
+        "factors_recorded",
+        "factor",
+        "factors_heard",
+    ),
 }
 
 
 #: A case about something this plugin never reports on is not presented,
 #: with why, rather than mapped (its `about`): this board values prices, and
-#: no event contract's outcome (contract v23). Value event contracts and
-#: map the case.
+#: no event contract's outcome (contract v23); and from contract v29, when
+#: every read carries its `about` (Track E), the reads its work never makes:
+#: it values positions at a close, so it reads no orders, fills, order
+#: histories, bookings or alerts, no settlement calendar and no settlement
+#: date. Report on any of them and map the case to the plugin's own read.
+_NO_ORDERS = "this board values positions at a close; it reads no orders"
 NOT_PRESENTED: dict[str, str] = {
     "hears-and-reads-an-outcome": "this board values prices, and no event contract's outcome",
+    "reads-orders-and-catches-up": _NO_ORDERS,
+    "hears-an-order-and-an-execution": _NO_ORDERS,
+    "reads-an-orders-history-for-the-person-roles": _NO_ORDERS,
+    "hears-and-reads-bookings": "this board values positions at a close; it reads no bookings",
+    "hears-and-reads-alerts": "this board values positions at a close; it reads no alerts",
+    "reads-a-calendar": "this board values positions at a close; it reads no calendar",
+    "asks-for-a-settlement-date": (
+        "this board values positions at a close; it asks no settlement date"
+    ),
 }
 
 

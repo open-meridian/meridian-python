@@ -399,3 +399,56 @@ def test_a_listing_counts_each_datasets_rows_by_state_and_a_quarantined_read_say
     listed = ops.DatasetRef(dataset="d", valid_count=3, suspicious_count=1, invalid_count=2)
     assert (listed.valid_count, listed.suspicious_count, listed.invalid_count) == (3, 1, 2)
     assert ops.UNANSWERED_REASON_QUARANTINED != ops.UNANSWERED_REASON_SOURCE_SILENT
+
+
+# ── The widened `about` markers (Track E 6, 10 and 13) ──────────────────
+
+
+#: The required acts and latency reports contract v29 marks (942, 667),
+#: each by the role whose suite holds it and the kind of work it is about.
+ACTS_A_PLUGIN_MAY_NEVER_MAKE = [
+    ("ems", "asks-for-a-series-it-wants-to-order", "listed series"),
+    ("oms", "asks-for-a-series-it-wants-to-order", "listed series"),
+    ("portfolio", "asks-for-a-series-it-wants-to-order", "listed series"),
+    ("signal", "asks-for-a-series-it-wants-to-order", "listed series"),
+    ("portfolio", "proposes-a-package", "packages"),
+    ("operations", "releases-an-unreported-expiry", "lifecycle events"),
+    ("ems", "reports-its-pre-trade-checks-data-age", "pre-trade price checks"),
+    ("data", "reports-its-feed-delay", "publication times"),
+]
+
+
+@pytest.mark.parametrize(("role", "name", "about"), ACTS_A_PLUGIN_MAY_NEVER_MAKE)
+def test_an_act_a_plugin_genuinely_never_makes_is_not_presented_with_why(
+    role: str, name: str, about: str
+) -> None:
+    from meridian.suites import run, suite
+
+    assert suite(role).case(name).about == about
+    why = f"this plugin's work involves no {about}"
+    report = run(role, {}, not_presented={name: why})
+    assert report.not_presented == {name: why} and name not in report.failures
+    unsaid = run(role, {}, not_presented={name: " "})
+    assert "says why" in unsaid.failures[name]
+
+
+def test_every_case_that_only_reads_or_hears_carries_its_about() -> None:
+    """Contract v29 (638 widened by 661): every reader case may be marked not
+    presented, with why, by a plugin whose work never reads its kind."""
+    from meridian.suites import HEARD, suites
+
+    def reads(row: str) -> bool:
+        # A connectivity plugin's catalogue is its own report, which the
+        # `ems` hears: an act in the connectivity suite, never a read.
+        return row.startswith(("List", "Read")) or (
+            row in HEARD and not row.startswith("Report")
+        )
+
+    unmarked = [
+        (role, case.name)
+        for role, held in suites().items()
+        for case in held.cases
+        if all(reads(e.row) for e in case.expect)
+        and not (case.about or case.about_field or case.closed_list)
+    ]
+    assert unmarked == []
