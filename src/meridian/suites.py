@@ -68,15 +68,17 @@ presented by a plugin whose venue never states it:
 
 A case may name a row the plugin hears rather than sends (a want delivered to
 a data plugin, contract v18; an activity recorded, to an operations plugin): the
-plugin hears it through its own `receive`, called on the recorder, which
-hands each row given a handler what `answer` gives for it -- the delivered
-message, or a list of them -- and returns, where a sidecar's stream stays
-open. What it handed on is kept on that row as what was sent, so the case
-checks it beside what the plugin sent after:
+plugin's role class is bound to the recorder (`recorder.bind(Lake(...))`,
+SDK 0.35) and hears it through `recorder.hear(lake)`, which hands each row
+the class hears what `answer` gives for it -- the delivered message, or a
+list of them -- to its `on_<row>` method and returns, where a sidecar's
+stream stays open. What it handed on is kept on that row as what was sent,
+so the case checks it beside what the plugin sent after:
 
     async def a_want_recorded_against(recorder):
+        lake = recorder.bind(Lake(State()))
         recorder.answer("ObservationsWanted", lambda _: synthetic_want())
-        await recorder.receive(observations_wanted=MyDataPlugin(recorder).on_want)
+        await recorder.hear(lake)
 
     report = run("data", {"a-want-recorded-against": a_want_recorded_against, ...})
 
@@ -158,12 +160,15 @@ from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from importlib import resources
-from typing import Any, cast
+from typing import Any, TypeVar, cast
 
 from google.protobuf.message import Message
 
 from .operations import CONFLATED, DELIVERED, SEQUENCED, UNCONFLATED, Operations, as_decimal
 from .plugin.v1 import operations_pb2 as ops
+from .roles._role import RoleBase
+
+_Role = TypeVar("_Role", bound=RoleBase)
 
 #: The rows a plugin hears rather than sends, by name.
 HEARD = frozenset(
@@ -305,6 +310,13 @@ class Recorder(Operations):
         self._answers: dict[str, Callable[[Message], Message | Sequence[Message]]] = {}
 
     @property
+    def plugin(self) -> Recorder:
+        """The connection the recorder stands in for, itself: so the
+        recorder serves where a role object is asked for (a helper given
+        one), as a role class bound to it does (SDK 0.35)."""
+        return self
+
+    @property
     def identity(self) -> Any:
         """The instance the recorder stands in for, as a plugin's identity."""
         from .client import Identity
@@ -338,23 +350,28 @@ class Recorder(Operations):
             return self._answers[row](params)
         return _ordinary(row, params, len(self.sent), provisional=self.provisional)
 
-    async def _receive(
-        self,
-        handlers: dict[str, Callable[[Any], Awaitable[None]] | None],
-        *,
-        seed: bool,
-        subjects: Sequence[str] = (),
-    ) -> None:
-        """Each row given a handler handed what `answer` gives for it, in
-        order, and kept as heard; then returns, where a sidecar's stream
-        stays open."""
+    def bind(self, role: _Role) -> _Role:
+        """Register a plugin's role class on this recorder, as `meridian.run`
+        registers it on the connection (SDK 0.35): its acts are recorded
+        here, and `self.plugin` is this recorder. Returns the class."""
+        role._bind(self)
+        return role
+
+    async def hear(self, role: RoleBase) -> None:
+        """Each row `role` hears -- its role's required events and each
+        optional one it overrides -- handed what `answer` gives for it, in
+        order, to its `on_<row>` method, and kept as heard; then returns,
+        where a sidecar's stream stays open. `bind` it first."""
+        await self._hear({row: getattr(role, role.EVENTS[row]) for row in role.heard_rows()})
+
+    async def _hear(self, handlers: Mapping[str, Callable[[Any], Awaitable[None]]]) -> None:
         from .receive import Heard
 
         for row, handler in handlers.items():
             reply = self._answers.get(row)
-            if handler is None or reply is None:
+            if reply is None:
                 continue
-            given = reply(ops.ReceiveRequest(rows=[row], subjects=list(subjects)))
+            given = reply(ops.ReceiveRequest(rows=[row]))
             delivered = (
                 list(given) if isinstance(given, list | tuple) else [cast(Message, given)]
             )
@@ -584,7 +601,7 @@ async def follows_a_replacement(recorder: Recorder) -> None:
     recorder.answer("ReplaceMergedInstrument", lambda _: resolved)
     recorder.answer("ListReplacements", replacements)
     ids = CurrentIdMap()
-    await recorder.receive(replace_merged_instrument=ids.heard)
+    await recorder._hear({"ReplaceMergedInstrument": ids.heard})
     await ids.catch_up(recorder)
     if ids.current(_PROVISIONAL) != _MERGED_INTO:
         raise AssertionError(
@@ -643,7 +660,7 @@ async def hears_and_reads_an_event_group(recorder: Recorder) -> None:
         lambda _: ops.ListEventGroupsResult(event_groups=[version(1), version(2)], sequence=2),
     )
     groups = EventGroups()
-    await recorder.receive(event_group_changed=groups.heard)
+    await recorder._hear({"EventGroupChanged": groups.heard})
     await groups.read(recorder, instrument_ids=[_MEMBERS[0]])
     held = groups.holding(_MEMBERS[0])
     if not held or held[0].version != 2:

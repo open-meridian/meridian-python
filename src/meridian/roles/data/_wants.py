@@ -2,7 +2,7 @@
 (W10.9) and the venue it names (W3.14): the bookkeeping every data plugin
 does the same, whatever its venue, kept once here.
 
-    wants = data.Wants(plugin, keys=("daily", "live"))
+    wants = data.Wants(self, keys=("daily", "live"))    # self: the data role's class
 
     async def answer(want, key, subjects, kinds) -> dict[str, str]:
         if want.standing:
@@ -11,10 +11,11 @@ does the same, whatever its venue, kept once here.
         await wants.record("prices", rows, key, want.want_id)
         return {subject: "not_covered" for subject in not_served}
 
-    await plugin.receive(
-        observations_wanted=lambda heard: wants.hear(heard, answer),
-        want_withdrawn=lambda heard: wants.withdraw(heard.message.want_id),
-    )
+    async def on_observations_wanted(self, heard):          # on the data role's class
+        await wants.hear(heard, answer)
+
+    async def on_want_withdrawn(self, heard):
+        wants.withdraw(heard.message.want_id)
 
 `hear` counts the want, asks the plugin's `answer` for what it declines by
 subject and reason -- an answer that raises declines every subject
@@ -126,7 +127,10 @@ Answer = Callable[
 class Wants:
     """A data plugin's wants and what it sent the lake (see the module)."""
 
-    plugin: Any
+    #: The data role object its acts are made on (SDK 0.35): the plugin's
+    #: data role class, or the suites' `Recorder`; the instance's ID is its
+    #: `plugin.identity`.
+    role: Any
     #: Its declared datasets' keys, as `DatasetDeclaration.key` names them.
     keys: tuple[str, ...]
     clock_ns: Callable[[], int] = time.time_ns
@@ -166,12 +170,12 @@ class Wants:
 
     def dataset(self, key: str) -> str:
         """A dataset as rows name it: the instance, a colon and the key."""
-        return f"{self.plugin.identity.instance_id}:{key}"
+        return f"{self.role.plugin.identity.instance_id}:{key}"
 
     def key_of(self, dataset: str) -> str:
         """The key of one of its own datasets; empty for another's."""
         instance, _, key = dataset.partition(":")
-        return key if instance == self.plugin.identity.instance_id else ""
+        return key if instance == self.role.plugin.identity.instance_id else ""
 
     def sent_to(self, key: str) -> Counts:
         """What it sent the dataset `key` since it started."""
@@ -204,7 +208,7 @@ class Wants:
         raises, the batches before it sent and counted."""
         if kind not in KINDS:
             raise ValueError(f"{kind!r} is not one of {', '.join(KINDS)}")
-        call = getattr(self.plugin, f"record_{kind}")
+        call = getattr(self.role, f"record_{kind}")
         live = not want_id or want_id in self.standing
         if self.latency is not None and live:
             for row in rows:
@@ -227,7 +231,7 @@ class Wants:
         source's heartbeat or poll, which confirms every value in force,
         recorded once for the dataset `key` and the venue (`venue_id`, empty
         for its consolidated view) -- never a row. How many the lake kept."""
-        done = await self.plugin.record_liveness(
+        done = await self.role.record_liveness(
             liveness=[
                 ops.DatasetLiveness(
                     dataset=self.dataset(key),
@@ -265,7 +269,7 @@ class Wants:
         for subject, reason in declined.items():
             by_reason.setdefault(reason, []).append(subject)
         for reason, subjects in sorted(by_reason.items()):
-            await self.plugin.decline_want(
+            await self.role.decline_want(
                 want_id=want_id,
                 subjects=[SubjectRef(entity_id=s) for s in subjects],
                 reason=reason,
@@ -329,7 +333,7 @@ class Wants:
         if not self.reads_licences:
             return self.licensed
         try:
-            answered = await self.plugin.list_datasets()
+            answered = await self.role.list_datasets()
         except NotGranted:
             log.warning("this data plugin may not read its datasets' licences")
             self.reads_licences = False
@@ -350,10 +354,10 @@ class _Counted:
     key: str
 
     async def list_trades(self, **asked: Any) -> Any:
-        return await self.wants.plugin.list_trades(**asked)
+        return await self.wants.role.list_trades(**asked)
 
     async def record_trades(self, **sent: Any) -> Any:
-        done = await self.wants.plugin.record_trades(**sent)
+        done = await self.wants.role.record_trades(**sent)
         self.wants.count(done, self.key)
         return done
 
@@ -364,7 +368,7 @@ class _Counted:
 History = Callable[[ops.Trade], Awaitable[Sequence[Trade]]]
 
 
-async def backfill_restart(plugin: Any, subjects: Sequence[str], history: History) -> int:
+async def backfill_restart(role: Any, subjects: Sequence[str], history: History) -> int:
     """Backfill a restart's gap (contract v20, W10.6), before resuming the
     stream: read the last trade this instance recorded of each subject in
     `subjects` (`list_trades(..., latest_recorded=True)`, its own rows only,
@@ -379,14 +383,14 @@ async def backfill_restart(plugin: Any, subjects: Sequence[str], history: Histor
         asked_for = [SubjectRef(entity_id=each) for each in subjects[start : start + BATCH]]
         cursor = ""
         while True:
-            answer = await plugin.list_trades(
+            answer = await role.list_trades(
                 subjects=asked_for, latest_recorded=True, cursor=cursor
             )
             for last in answer.trades:
                 missed = list(await history(last))
                 for at in range(0, len(missed), BATCH):
                     batch = missed[at : at + BATCH]
-                    await plugin.record_trades(trades=batch)
+                    await role.record_trades(trades=batch)
                     sent += len(batch)
             cursor = answer.next_cursor
             if not cursor:
@@ -406,7 +410,7 @@ class Venue:
 
     async def resolve(
         self,
-        plugin: Any,
+        role: Any,
         identifiers: Sequence[tuple[str, str, str]],
         source: str,
         now_ns: int,
@@ -416,13 +420,13 @@ class Venue:
         if self.asked:
             return self.venue_id
         named = [ops.Identifier(scheme=s, value=v, source=o) for s, v, o in identifiers]
-        found = await plugin.resolve_venue(identifiers=named, as_of_ns=now_ns)
+        found = await role.resolve_venue(identifiers=named, as_of_ns=now_ns)
         self.asked = True
         if found.found and found.venue.venue_id:
             self.venue_id, self.missing = found.venue.venue_id, False
         else:
             self.venue_id, self.missing = "", True
-            await plugin.report_missing_venue(
+            await role.report_missing_venue(
                 source=source,
                 identifiers=named,
                 as_of_ns=now_ns,

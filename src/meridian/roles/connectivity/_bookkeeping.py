@@ -11,7 +11,7 @@ is asked about, never sent again:
 
     sent = connectivity.Sent(storage / "trading" / "sent.json")
     outcome = await connectivity.place_once(
-        plugin, sent, placement.placement_id,
+        self, sent, placement.placement_id,      # self: the connectivity role's class
         lambda: venue.place(code, asked),        # the plugin's own send
         source="tradier",
     )
@@ -143,7 +143,7 @@ class Placed:
 
 
 async def place_once(
-    plugin: Any,
+    role: Any,
     sent: Sent,
     placement_id: str,
     send: Callable[[], Awaitable[tuple[Any, str]]],
@@ -162,7 +162,7 @@ async def place_once(
     try:
         answer, raw_key = await send()
     except VenueRefused as refused:
-        await plugin.report_placement(
+        await role.report_placement(
             placement_id=placement_id,
             event=ops.PLACEMENT_EVENT_REJECTED,
             rejection_reason=ops.REJECTION_REASON_VENUE_REJECTED,
@@ -171,15 +171,15 @@ async def place_once(
                 code=(refused.code or "?")[:128],
                 text=(refused.text or "the venue refused the order")[:256],
             ),
-            raw_record=plugin.raw_record(refused.raw_key or "unkept"),
+            raw_record=role.plugin.raw_record(refused.raw_key or "unkept"),
         )
         return Placed("rejected", raw_key=refused.raw_key)
     except VenueUnanswered as lost:
-        await plugin.report_placement(
+        await role.report_placement(
             placement_id=placement_id,
             event=ops.PLACEMENT_EVENT_OUTCOME_UNKNOWN,
             unknown_reason=ops.UNKNOWN_REASON_REQUEST_UNANSWERED,
-            raw_record=plugin.raw_record(lost.raw_key or "unkept"),
+            raw_record=role.plugin.raw_record(lost.raw_key or "unkept"),
         )
         return Placed("unknown", raw_key=lost.raw_key)
     return Placed("placed", answer, raw_key)
@@ -197,11 +197,11 @@ def resolve_unanswered(
 
 
 async def report_status_not_mapped(
-    plugin: Any, placement_id: str, status: str, source: str, raw_key: str
+    role: Any, placement_id: str, status: str, source: str, raw_key: str
 ) -> None:
     """A status the plugin's mapping does not know: outcome unknown, `venue
     status not mapped`, the status as reported under `<source>:order-status`."""
-    await plugin.report_placement(
+    await role.report_placement(
         placement_id=placement_id,
         event=ops.PLACEMENT_EVENT_OUTCOME_UNKNOWN,
         unknown_reason=ops.UNKNOWN_REASON_VENUE_STATUS_NOT_MAPPED,
@@ -210,7 +210,7 @@ async def report_status_not_mapped(
             code=status[:128] or "?",
             text=status[:256] or "?",
         ),  # fmt: skip
-        raw_record=plugin.raw_record(raw_key or "unkept"),
+        raw_record=role.plugin.raw_record(raw_key or "unkept"),
     )
 
 

@@ -11,15 +11,16 @@ named person, or derived by a named rule.
 
     from meridian.edge import as_reported, derived
 
-    await plugin.report_external_accounts(accounts=[meridian.ExternalAccount(
+    # in the custody role's class (SDK 0.35): its acts on self
+    await self.report_external_accounts(accounts=[meridian.ExternalAccount(
         external_account_id="ACC-1",
         account_kind="ACCOUNT_KIND_UNSPECIFIED",
         account_kind_as_reported=as_reported("myvendor:account-type", "INDIVIDUAL"),
     )])
-    await plugin.record_holding(
+    await self.record_holding(
         ...,
         quantity=net_cash,
-        raw_record=plugin.raw_record("balances/ACC-1/2026-09-08"),
+        raw_record=self.plugin.raw_record("balances/ACC-1/2026-09-08"),
         provenance=[derived("quantity", "cash net of money market funds counted in cash")],
     )
 

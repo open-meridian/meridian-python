@@ -71,7 +71,7 @@ class Companies:
     """Company records resolved by an identifier the source states, each
     asked once per process; a miss remembered as empty."""
 
-    plugin: Any
+    role: Any
     held: dict[tuple[str, str], str] = field(default_factory=dict)
 
     async def resolve(self, scheme: str, value: str) -> str:
@@ -79,7 +79,7 @@ class Companies:
         key = (scheme, value)
         if key not in self.held:
             try:
-                answer = await self.plugin.resolve_company(
+                answer = await self.role.resolve_company(
                     identifiers=[ops.Identifier(scheme=scheme, value=value)]
                 )
                 self.held[key] = answer.company_id

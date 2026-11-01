@@ -31,6 +31,7 @@ from datetime import date
 from decimal import Decimal
 
 import meridian
+from conftest import row_of
 from meridian.plugin.v1 import operations_pb2 as ops
 from meridian.suites import ANSWERED_BY_SDK, Recorder
 from meridian.testing import caller_header
@@ -68,7 +69,7 @@ def hearing(*rows: tuple[str, str, object]) -> Producer:
                 return None
 
             handlers[arm] = heard
-        await recorder.receive(**handlers)
+        await recorder._hear({row_of(arm): handler for arm, handler in handlers.items()})
 
     return produce
 
@@ -370,7 +371,7 @@ async def hears_nothing_of_another_instance(recorder: Recorder) -> None:
     async def heard(_: object) -> None:
         return None
 
-    await recorder.receive(placement_updated=heard)
+    await recorder._hear({"PlacementUpdated": heard})
 
 
 PAUSE_HEARD = (
@@ -1172,7 +1173,7 @@ async def runs_a_job_and_reads_its_answer(recorder: Recorder) -> None:
     held = analytics.measures_of((await recorder.list_measure_definitions()).definitions)
     assert "exposure" in held
     jobs = analytics.Jobs(poll_seconds=0.01, timeout_seconds=1)
-    await recorder.receive(job_finished=jobs.heard)
+    await recorder._hear({"JobFinished": jobs.heard})
     answer = await jobs.run(
         recorder,
         analytics.job(analytics.measure("exposure", by=["asset_class"]), accounts=[ACCOUNT]),
@@ -1300,7 +1301,7 @@ async def hears_a_datasets_liveness(recorder: Recorder) -> None:
     liveness = Liveness()
     alive = ops.DatasetLiveness(dataset="oanda-1:live", alive_at_ns=1_792_300_000_000_000_000)
     recorder.answer("LivenessRecorded", lambda _: ops.LivenessRecordedEvent(liveness=alive))
-    await recorder.receive(liveness_recorded=liveness.heard)
+    await recorder._hear({"LivenessRecorded": liveness.heard})
     assert liveness.at("oanda-1:live") == alive.alive_at_ns
 
 

@@ -17,13 +17,14 @@ import pytest
 import meridian
 from conftest import FakeSidecar
 from meridian import CallFailed, CommandRefused, Money
+from meridian.operations import Operations
 from meridian.plugin.v1 import operations_pb2
 from meridian.v1 import sidecar_pb2
 
 
 async def connected(sidecar: tuple[FakeSidecar, str]) -> meridian.Plugin:
     _, address = sidecar
-    return await meridian.connect(address, heartbeat=False)
+    return await meridian.connect(address, heartbeat=False, roles=[])
 
 
 def opening_position() -> meridian.OpeningPosition:
@@ -49,7 +50,7 @@ async def test_an_opening_balance_carries_its_lots_its_source_and_its_key(sideca
     service, _ = sidecar
     plugin = await connected(sidecar)
     try:
-        reply = await plugin.record_opening_balance(
+        reply = await plugin._acts.record_opening_balance(
             account_id="ACC-1",
             as_of_date="2026-09-08",
             sources=[
@@ -95,7 +96,9 @@ async def test_a_number_inside_a_lot_is_refused_naming_its_path(sidecar) -> None
     )
     try:
         with pytest.raises(ValueError, match=r"positions\[1\]\.lots\[0\]\.quantity"):
-            await plugin.record_opening_balance(account_id="ACC-1", positions=[position, bad])
+            await plugin._acts.record_opening_balance(
+                account_id="ACC-1", positions=[position, bad]
+            )
     finally:
         await plugin.leave()
     assert service.operations.sent == []
@@ -105,7 +108,7 @@ async def test_a_break_takes_one_subject_and_two_are_refused_naming_the_oneof(si
     service, _ = sidecar
     plugin = await connected(sidecar)
     try:
-        await plugin.record_break(
+        await plugin._acts.record_break(
             account_id="ACC-1",
             position=meridian.PositionKey(instrument_id="INS-AAPL", side="long"),
             category="trade_date_quantity",
@@ -123,13 +126,13 @@ async def test_a_break_takes_one_subject_and_two_are_refused_naming_the_oneof(si
             idempotency_key="break:ACC-1:STMT-2:AAPL",
         )
         with pytest.raises(ValueError, match="subject takes one of position, figure"):
-            await plugin.record_break(
+            await plugin._acts.record_break(
                 account_id="ACC-1",
                 position=meridian.PositionKey(instrument_id="INS-AAPL", side="long"),
                 figure=meridian.FigureKey(figure="collateral.quantity"),
             )
         with pytest.raises(ValueError, match=r"differences\[0\]\.book\.value takes one of"):
-            await plugin.record_break(
+            await plugin._acts.record_break(
                 account_id="ACC-1",
                 differences=[
                     meridian.BreakDifference(
@@ -153,7 +156,7 @@ async def test_a_resolution_is_one_of_its_kinds_for_a_person(sidecar) -> None:
     service, _ = sidecar
     plugin = await connected(sidecar)
     try:
-        await plugin.resolve_break(
+        await plugin._acts.resolve_break(
             account_id="ACC-1",
             break_ids=["BRK-1"],
             reason="books the buy",
@@ -170,11 +173,11 @@ async def test_a_resolution_is_one_of_its_kinds_for_a_person(sidecar) -> None:
                 ],
             ),
         )
-        await plugin.resolve_break(
+        await plugin._acts.resolve_break(
             account_id="ACC-1", break_ids=["BRK-3"], reason="r", explanation="custodian error"
         )
         with pytest.raises(ValueError, match="resolution takes one of"):
-            await plugin.resolve_break(
+            await plugin._acts.resolve_break(
                 account_id="ACC-1",
                 break_ids=["BRK-4"],
                 explanation="one",
@@ -189,14 +192,14 @@ async def test_a_resolution_is_one_of_its_kinds_for_a_person(sidecar) -> None:
     assert meridian.as_decimal(line.quantity) == Decimal("2.5")
     assert explained.WhichOneof("resolution") == "explanation"
     # An empty string is still an arm: only None is unset.
-    assert "acting_for" in inspect.signature(meridian.Plugin.resolve_break).parameters
+    assert "acting_for" in inspect.signature(Operations.resolve_break).parameters
 
 
 async def test_a_stated_cost_is_the_other_arm_of_a_basis_adjustment(sidecar) -> None:
     service, _ = sidecar
     plugin = await connected(sidecar)
     try:
-        await plugin.resolve_break(
+        await plugin._acts.resolve_break(
             account_id="ACC-1",
             break_ids=["BRK-5"],
             reason="the custodian's cost",
@@ -210,7 +213,7 @@ async def test_a_stated_cost_is_the_other_arm_of_a_basis_adjustment(sidecar) -> 
             ),
         )
         with pytest.raises(ValueError, match="cost takes one of"):
-            await plugin.resolve_break(
+            await plugin._acts.resolve_break(
                 account_id="ACC-1",
                 adjustment=meridian.Adjustment(
                     basis_adjustments=[
@@ -234,7 +237,7 @@ async def test_breaks_close_as_cleared_citing_the_statement_for_a_person(sidecar
     service, _ = sidecar
     plugin = await connected(sidecar)
     try:
-        await plugin.close_breaks_as_cleared(
+        await plugin._acts.close_breaks_as_cleared(
             account_id="ACC-1",
             break_ids=["BRK-2", "BRK-3"],
             cleared_at=meridian.StreetRecordRef(statement_id="STMT-3", as_of_date="2026-09-10"),
@@ -248,14 +251,14 @@ async def test_breaks_close_as_cleared_citing_the_statement_for_a_person(sidecar
     assert list(sent.break_ids) == ["BRK-2", "BRK-3"]
     assert sent.cleared_at.statement_id == "STMT-3"
     assert sent.idempotency_key == "cleared:ACC-1:STMT-3"
-    assert "acting_for" in inspect.signature(meridian.Plugin.close_breaks_as_cleared).parameters
+    assert "acting_for" in inspect.signature(Operations.close_breaks_as_cleared).parameters
 
 
 async def test_encumbrances_are_recorded_from_a_statement_as_the_plugin_itself(sidecar) -> None:
     service, _ = sidecar
     plugin = await connected(sidecar)
     try:
-        await plugin.record_encumbrances(
+        await plugin._acts.record_encumbrances(
             account_id="ACC-1",
             business_date="2026-09-10",
             source=meridian.StreetRecordRef(statement_id="STMT-3", as_of_date="2026-09-10"),
@@ -296,7 +299,7 @@ def test_findings_and_reads_carry_no_person_and_justified_acts_may() -> None:
         "resolve_break",
         "close_breaks_as_cleared",
     ):
-        assert "acting_for" in inspect.signature(getattr(meridian.Plugin, sent_for)).parameters
+        assert "acting_for" in inspect.signature(getattr(Operations, sent_for)).parameters
     for read in (
         "list_positions",
         "list_breaks",
@@ -304,7 +307,7 @@ def test_findings_and_reads_carry_no_person_and_justified_acts_may() -> None:
         "list_account_attributes",
         "resolve_instrument",
     ):
-        assert "acting_for" not in inspect.signature(getattr(meridian.Plugin, read)).parameters
+        assert "acting_for" not in inspect.signature(getattr(Operations, read)).parameters
 
 
 @pytest.mark.parametrize(
@@ -326,7 +329,7 @@ async def test_the_books_refusal_is_raised_by_its_code(sidecar, reason: int) -> 
     plugin = await connected(sidecar)
     try:
         with pytest.raises(CommandRefused) as caught:
-            await plugin.record_opening_balance(account_id="ACC-1", reason="r")
+            await plugin._acts.record_opening_balance(account_id="ACC-1", reason="r")
     finally:
         await plugin.leave()
     assert caught.value.reason == reason
@@ -355,7 +358,7 @@ async def test_an_incomplete_entry_names_each_field_it_left_out(sidecar) -> None
     plugin = await connected(sidecar)
     try:
         with pytest.raises(CommandRefused) as caught:
-            await plugin.record_opening_balance(account_id="ACC-1", reason="r")
+            await plugin._acts.record_opening_balance(account_id="ACC-1", reason="r")
     finally:
         await plugin.leave()
     assert caught.value.reason_name == "REFUSAL_REASON_INCOMPLETE"
@@ -376,7 +379,7 @@ async def test_a_refusal_naming_nothing_missing_has_no_fields(sidecar) -> None:
     plugin = await connected(sidecar)
     try:
         with pytest.raises(CommandRefused) as caught:
-            await plugin.record_opening_balance(account_id="ACC-1", reason="r")
+            await plugin._acts.record_opening_balance(account_id="ACC-1", reason="r")
     finally:
         await plugin.leave()
     assert caught.value.fields == ()
@@ -388,7 +391,7 @@ async def test_an_abort_with_no_code_is_still_a_handler_error(sidecar) -> None:
     plugin = await connected(sidecar)
     try:
         with pytest.raises(CallFailed) as caught:
-            await plugin.handle_break(account_id="ACC-1", break_id="BRK-9", reason="r")
+            await plugin._acts.handle_break(account_id="ACC-1", break_id="BRK-9", reason="r")
     finally:
         await plugin.leave()
     assert not isinstance(caught.value, CommandRefused)
@@ -416,7 +419,7 @@ async def test_an_unusable_instrument_record_is_named_and_unavailability_retryab
     plugin = await connected(sidecar)
     try:
         with pytest.raises(CommandRefused) as caught:
-            await plugin.record_opening_balance(account_id="ACC-1", reason="r")
+            await plugin._acts.record_opening_balance(account_id="ACC-1", reason="r")
         assert caught.value.fields == missing
         assert not caught.value.retryable
 
@@ -430,7 +433,7 @@ async def test_an_unusable_instrument_record_is_named_and_unavailability_retryab
             ),
         )
         with pytest.raises(CommandRefused) as again:
-            await plugin.record_opening_balance(account_id="ACC-1", reason="r")
+            await plugin._acts.record_opening_balance(account_id="ACC-1", reason="r")
     finally:
         await plugin.leave()
     assert again.value.reason_name == "REFUSAL_REASON_REFERENCE_UNAVAILABLE"
@@ -449,7 +452,7 @@ async def test_an_accept_takes_one_matched_order_and_two_are_refused_naming_the_
     plugin = await connected(sidecar)
     try:
         with pytest.raises(ValueError, match="matched_order takes one of order_id, new_order"):
-            await plugin.accept_execution(
+            await plugin._acts.accept_execution(
                 execution_ids=["EXE-1"],
                 order_id="ORD-1",
                 new_order=operations_pb2.NewOrderFromExecutions(sleeve="core"),
@@ -474,11 +477,13 @@ def test_every_row_of_the_book_is_heard_with_a_handler_of_its_own() -> None:
         assert names[row].record_journal == "last_change"
     assert names["PositionChanged"].account == ("position", "account_id")
     assert names["BreakChanged"].within == "break_record"
-    receive = inspect.signature(meridian.Plugin.receive).parameters
+    # From 0.35 each is a reading role's event: an `on_<row>` method.
+    from meridian.roles import reporting
+
     for handler in (
-        "position_changed",
-        "break_changed",
-        "account_figures_recorded",
-        "account_attribute_changed",
+        "on_position_changed",
+        "on_break_changed",
+        "on_account_figures_recorded",
+        "on_account_attribute_changed",
     ):
-        assert handler in receive
+        assert handler in reporting.Role.EVENTS.values()

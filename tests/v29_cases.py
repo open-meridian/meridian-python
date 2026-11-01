@@ -58,7 +58,7 @@ async def hears_a_factor_recorded(recorder: Recorder) -> None:
     async def kept(change: object) -> None:
         heard.append(change.message.factor.factor_month)
 
-    await recorder.receive(factors_recorded=kept, subjects=[POOL])
+    await recorder._hear({"FactorsRecorded": kept})
     assert heard == ["202610"]
 
 

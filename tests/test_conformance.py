@@ -242,7 +242,7 @@ async def test_a_filing_and_a_read_made_with_the_sdk_are_the_pinned_bytes(sideca
     ben = caller_header("read", read={"ACC-GROWTH"}, subject="local|ben")
 
     service, address = sidecar
-    plugin = await meridian.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False, roles=[])
     try:
         await plugin.file_ticket(
             title=filed["title"],
@@ -290,9 +290,9 @@ async def test_activity_and_its_reads_made_with_the_sdk_are_the_pinned_bytes(sid
 
     service, address = sidecar
     service.operations.links[recorded["external_account_id"]] = recorded["account_id"]
-    plugin = await meridian.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False, roles=[])
     try:
-        await plugin.record_activity(
+        await plugin._acts.record_activity(
             external_account_id=recorded["external_account_id"],
             source=recorded["source"],
             activity=meridian.CustodialActivity(
@@ -308,14 +308,14 @@ async def test_activity_and_its_reads_made_with_the_sdk_are_the_pinned_bytes(sid
                 raw_record=meridian.RawRecordRef(**given["raw_record"]),
             ),
         )
-        await plugin.list_activities(
+        await plugin._acts.list_activities(
             account_id=listed["account_id"],
             trade_date_from=listed["trade_date_from"],
             trade_date_to=listed["trade_date_to"],
             page_size=listed["page_size"],
             cursor=listed["cursor"],
         )
-        await plugin.list_sync_statuses(
+        await plugin._acts.list_sync_statuses(
             account_id=statuses["account_id"],
             page_size=statuses["page_size"],
             cursor=statuses["cursor"],
@@ -375,9 +375,9 @@ async def test_a_re_resolution_made_with_the_sdk_is_the_pinned_bytes(sidecar) ->
             activity=ops.CustodialActivity(external_activity_id=asked["external_activity_id"]),
         )
     )
-    plugin = await meridian.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False, roles=[])
     try:
-        await plugin.re_resolve_activity(
+        await plugin._acts.re_resolve_activity(
             external_account_id=asked["external_account_id"],
             source=asked["source"],
             external_activity_id=asked["external_activity_id"],
@@ -481,7 +481,7 @@ async def test_a_move_made_with_the_sdk_is_the_pinned_bytes(
         )
     ]
     plugin = await meridian.connect(
-        address, heartbeat=False, declaration=meridian.Declaration(storage=storage)
+        address, heartbeat=False, declaration=meridian.Declaration(storage=storage), roles=[]
     )
     try:
         async for _ in plugin.settings():
@@ -561,7 +561,7 @@ async def test_the_v16_declaration_and_heartbeat_cases_are_what_the_sdk_sends(
     index.write_text(json.dumps({"units": units}))
 
     service, address = sidecar
-    plugin = await meridian.connect(address, heartbeat=False, declaration=declaration)
+    plugin = await meridian.connect(address, heartbeat=False, declaration=declaration, roles=[])
     heard = []
     try:
         for stored in accepted:
@@ -651,10 +651,10 @@ async def test_the_lakes_commands_and_reads_made_with_the_sdk_are_the_pinned_byt
         "coinbase-1:daily": sidecar_pb2.DatasetDeclaration(key="daily", vendor="Coinbase"),
         "alpaca-1:daily": sidecar_pb2.DatasetDeclaration(key="daily", vendor="Alpaca"),
     }
-    plugin = await meridian.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False, roles=[])
     try:
         price = prices["prices"][0]
-        await plugin.record_prices(
+        await plugin._acts.record_prices(
             prices=[
                 meridian.Price(
                     meta=meta(price["meta"]),
@@ -665,7 +665,7 @@ async def test_the_lakes_commands_and_reads_made_with_the_sdk_are_the_pinned_byt
             ]
         )
         bar = bars["bars"][0]
-        await plugin.record_bars(
+        await plugin._acts.record_bars(
             bars=[
                 meridian.Bar(
                     meta=meta(bar["meta"]),
@@ -679,23 +679,23 @@ async def test_the_lakes_commands_and_reads_made_with_the_sdk_are_the_pinned_byt
                 )
             ]
         )
-        await plugin.decline_want(
+        await plugin._acts.decline_want(
             want_id=declined["want_id"],
             subjects=[meridian.SubjectRef(**s) for s in declined["subjects"]],
             reason=declined["reason"],
         )
-        await plugin.list_prices(
+        await plugin._acts.list_prices(
             subjects=[meridian.SubjectRef(**s) for s in listed["subjects"]],
             kinds=listed["kinds"],
             business_date=date.fromisoformat(listed["business_date"]),
         )
-        await plugin.list_bars(
+        await plugin._acts.list_bars(
             subjects=[meridian.SubjectRef(**s) for s in ranged["subjects"]],
             interval_ns=ranged["interval_ns"],
             valid_from_ns=ranged["valid_from_ns"],
             valid_until_ns=ranged["valid_until_ns"],
         )
-        await plugin.resolve_venue(
+        await plugin._acts.resolve_venue(
             identifiers=[meridian.Identifier(**i) for i in venue["identifiers"]],
             as_of_ns=venue["as_of_ns"],
         )
@@ -772,10 +772,10 @@ async def test_the_lakes_trades_and_quotes_made_with_the_sdk_are_the_pinned_byte
         "coinbase-1:trades": sidecar_pb2.DatasetDeclaration(key="trades", vendor="Coinbase"),
         "coinbase-1:live": sidecar_pb2.DatasetDeclaration(key="live", vendor="Coinbase"),
     }
-    plugin = await meridian.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False, roles=[])
     try:
         trade = trades["trades"][0]
-        await plugin.record_trades(
+        await plugin._acts.record_trades(
             trades=[
                 meridian.Trade(
                     meta=meta(trade["meta"]),
@@ -795,7 +795,7 @@ async def test_the_lakes_trades_and_quotes_made_with_the_sdk_are_the_pinned_byte
             ]
         )
         quote = quotes["quotes"][0]
-        await plugin.record_quotes(
+        await plugin._acts.record_quotes(
             quotes=[
                 meridian.Quote(
                     meta=meta(quote["meta"]),
@@ -806,12 +806,12 @@ async def test_the_lakes_trades_and_quotes_made_with_the_sdk_are_the_pinned_byte
                 )
             ]
         )
-        await plugin.list_trades(
+        await plugin._acts.list_trades(
             subjects=[meridian.SubjectRef(**s) for s in ranged["subjects"]],
             valid_from_ns=ranged["valid_from_ns"],
             valid_until_ns=ranged["valid_until_ns"],
         )
-        await plugin.list_quotes(
+        await plugin._acts.list_quotes(
             subjects=[meridian.SubjectRef(**s) for s in latest["subjects"]]
         )
     finally:
@@ -864,7 +864,7 @@ async def test_an_act_called_as_the_service_account_is_the_pinned_bytes(
 
     service, address = sidecar
     service.roles = (asked["role"],)
-    plugin = await meridian.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False, roles=[])
     try:
         async with meridian.runs_as(asked["role"]) as act:
             service.service_account_answer = sidecar_pb2.CallAsServiceAccountReply.FromString(
@@ -920,10 +920,10 @@ async def test_an_order_proposed_and_a_date_asked_for_with_the_sdk_are_the_pinne
 
     service, address = sidecar
     service.roles = ("portfolio",)
-    plugin = await meridian.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False, roles=[])
     try:
         limit = proposed["limit_price"]
-        await plugin.propose_order(
+        await plugin._acts.propose_order(
             account_id=proposed["account_id"],
             instrument_id=proposed["instrument_id"],
             sleeve=proposed["sleeve"],
@@ -940,12 +940,12 @@ async def test_an_order_proposed_and_a_date_asked_for_with_the_sdk_are_the_pinne
             received_precision=proposed["received_precision"],
             idempotency_key=proposed["idempotency_key"],
         )
-        await plugin.read_calendar(
+        await plugin._acts.read_calendar(
             calendar_id=read["calendar_id"],
             from_date=date.fromisoformat(read["from_date"]),
             to_date=date.fromisoformat(read["to_date"]),
         )
-        await plugin.compute_date(
+        await plugin._acts.compute_date(
             settlement=meridian.SettlementDateInputs(**asked["settlement"])
         )
     finally:

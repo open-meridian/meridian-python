@@ -5,7 +5,7 @@ Each case says, in the contract's words, what the deployment presents and
 what the plugin reads or hears. Here each is run through the plugin's own
 reads (report.py), against a `Recorder`: the plugin's typed operations,
 recorded rather than sent, answered as `answer` says for the case. A row the
-plugin hears is handed to its own handler, through `receive`.
+plugin hears is handed to its own `on_<row>` method, bound to the recorder.
 
 As you change what the plugin reports, keep every case passing.
 """
@@ -13,9 +13,8 @@ As you change what the plugin reports, keep every case passing.
 from __future__ import annotations
 
 from datetime import date
-from typing import Any, cast
+from typing import Any
 
-import meridian
 from meridian.plugin.v1 import operations_pb2 as ops
 from meridian.suites import Producer, Recorder, run
 
@@ -25,7 +24,7 @@ DAY = date(2026, 10, 8)
 
 
 def report(recorder: Recorder) -> Report:
-    return Report(cast(meridian.Plugin, recorder))
+    return recorder.bind(Report())
 
 
 async def datasets(recorder: Recorder) -> None:
@@ -50,7 +49,7 @@ async def a_price_heard(recorder: Recorder) -> None:
             price=ops.Price(meta=ops.ObservationMeta(source=ops.Source(dataset="data-1:daily")))
         ),
     )
-    await recorder.receive(prices_recorded=plugin.on_price, subjects=["LCL-1"])
+    await recorder.hear(plugin)
     assert plugin.prices_heard == 1
 
 
@@ -62,7 +61,7 @@ async def a_bar_heard(recorder: Recorder) -> None:
             bar=ops.Bar(meta=ops.ObservationMeta(source=ops.Source(dataset="data-1:daily")))
         ),
     )
-    await recorder.receive(bars_recorded=plugin.on_bar, subjects=["LCL-1"])
+    await recorder.hear(plugin)
     assert plugin.bars_heard == 1
 
 
@@ -92,7 +91,7 @@ async def a_job_run_and_read(recorder: Recorder) -> None:
     recorder.answer("RunJob", lambda _: ops.RunJobResult(answered_inline=False, job_id="JOB-1"))
     recorder.answer("JobFinished", lambda _: ops.JobFinishedEvent(job_id="JOB-1", sequence=1))
     recorder.answer("ReadJobAnswer", lambda _: ops.ReadJobAnswerResult(job_id="JOB-1"))
-    await recorder.receive(job_finished=plugin.jobs.heard)
+    await recorder.hear(plugin)
     answer = await plugin.market_value(["ACC-1"])
     assert answer.job_id == "JOB-1"
 
@@ -123,7 +122,7 @@ async def a_rate_heard(recorder: Recorder) -> None:
             rate=ops.Rate(meta=ops.ObservationMeta(source=ops.Source(dataset="rates-1:par")))
         ),
     )
-    await recorder.receive(rates_recorded=plugin.on_rate, subjects=["INS-PAR"])
+    await recorder.hear(plugin)
     assert plugin.rates_heard == 1
 
 
@@ -137,7 +136,7 @@ async def a_liveness_heard(recorder: Recorder) -> None:
             liveness=ops.DatasetLiveness(dataset="data-1:live", alive_at_ns=7)
         ),
     )
-    await recorder.receive(liveness_recorded=plugin.liveness.heard)
+    await recorder.hear(plugin)
     assert plugin.liveness.at("data-1:live") == 7
 
 
@@ -157,7 +156,7 @@ def hearing(row: str, message: Any, arm: str, kind: str, counted: str) -> Produc
     async def produce(recorder: Recorder) -> None:
         plugin = report(recorder)
         recorder.answer(row, lambda _: message)
-        await recorder.receive(**{arm: getattr(plugin, f"on_{kind}")}, subjects=[AAPL])
+        await recorder.hear(plugin)
         assert getattr(plugin, counted) == 1
 
     return produce

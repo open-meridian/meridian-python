@@ -44,9 +44,11 @@ from ..operations import (
     UnitValue,
 )
 from ..plugin.v1 import operations_pb2 as ops
+from ._generated.signal import Role
 from .data.quality import Baseline, OutlierThresholds, assessment
 
 __all__ = [
+    "Role",
     "Baseline",
     "OutlierThresholds",
     "date_steps",
@@ -101,14 +103,14 @@ def derived(
 
 
 async def read_derived(
-    plugin: Any,
+    role: Any,
     subject_id: str,
     series: Sequence[str],
     from_date: date | str = "",
     to_date: date | str = "",
 ) -> list[ops.DerivedSeries]:
     """A subject's derived series by name over a range of business dates."""
-    answer = await plugin.list_derived_series(
+    answer = await role.list_derived_series(
         subjects=[SubjectRef(entity_id=subject_id)], series=list(series),
         from_date=from_date, to_date=to_date,
     )  # fmt: skip
@@ -187,11 +189,11 @@ def saved(
 
 
 async def read_scenarios(
-    plugin: Any, row_keys: Sequence[str], version: int = 0
+    role: Any, row_keys: Sequence[str], version: int = 0
 ) -> list[ops.SavedScenario]:
     """Saved scenarios by their row keys; `version` with one row key reads
     that version rather than the latest."""
-    answer = await plugin.list_scenarios(row_keys=list(row_keys), version=version)
+    answer = await role.list_scenarios(row_keys=list(row_keys), version=version)
     return list(answer.scenarios)
 
 
@@ -199,7 +201,7 @@ async def read_scenarios(
 
 
 async def escalate(
-    plugin: Any, baseline: Baseline, rows: Iterable[Any], *, value_of: Any = None
+    role: Any, baseline: Baseline, rows: Iterable[Any], *, value_of: Any = None
 ) -> int:
     """Judge each recorded price row (heard or read) against its subject's
     baseline and record an assessment of each found suspicious or invalid,
@@ -223,5 +225,5 @@ async def escalate(
         if reasons:
             found.append(assessment(row, state, reasons))
     for start in range(0, len(found), 500):
-        await plugin.record_quality_assessments(assessments=found[start : start + 500])
+        await role.record_quality_assessments(assessments=found[start : start + 500])
     return len(found)

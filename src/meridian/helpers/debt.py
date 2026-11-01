@@ -584,7 +584,7 @@ def characteristics(
 
 
 async def read_factors(
-    plugin: Any,
+    role: Any,
     subject_ids: Sequence[str],
     from_date: date | str = "",
     to_date: date | str = "",
@@ -600,7 +600,7 @@ async def read_factors(
     rows: list[ops.Factor] = []
     cursor = ""
     while True:
-        page = await plugin.list_factors(
+        page = await role.list_factors(
             subjects=[SubjectRef(entity_id=s) for s in subject_ids], from_date=from_date,
             to_date=to_date, sources=sources, as_of_ns=as_of_ns, cursor=cursor,
         )  # fmt: skip

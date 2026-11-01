@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from decimal import Decimal
+from typing import Any
 
 import grpc
 import pytest
@@ -44,7 +45,7 @@ async def operations_plugin(sidecar: tuple[FakeSidecar, str]):
     service, address = sidecar
     service.roles = ("operations",)
     service.instance_id = "operations-1"
-    plugin = await meridian.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False, roles=[])
     try:
         yield service, plugin
     finally:
@@ -252,7 +253,7 @@ async def test_it_calls_only_inside_its_block_and_beside_a_registered_plugin(
 ) -> None:
     service, address = sidecar
     service.roles = ("operations",)
-    plugin = await meridian.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False, roles=[])
     entered = meridian.runs_as("operations")
     async with entered as act:
         pass
@@ -277,7 +278,9 @@ class Clearing:
     reason: str = ""
 
 
-def sweep_pages(sent: list[dict[str, object]]) -> meridian.Pages:
+def sweep_pages(sent: list[dict[str, object]], book: Any) -> meridian.Pages:
+    """The pages, acting through `book`: the operations role's object
+    (SDK 0.35, ruling 1014: a page is given the role object it acts as)."""
     pages = meridian.Pages("Operations")
 
     @pages.route(
@@ -303,7 +306,7 @@ def sweep_pages(sent: list[dict[str, object]]) -> meridian.Pages:
     )
     async def close(request: meridian.Request) -> meridian.Response:
         # As for a person: the request's assertion handed back as acting_for.
-        await request.plugin.close_breaks_as_cleared(
+        await book().close_breaks_as_cleared(
             account_id=request.params.account_id,
             break_ids=request.params.break_ids,
             reason=request.params.reason,
@@ -327,8 +330,8 @@ async def test_a_route_reached_for_a_service_account_acts_as_for_a_person(
     service, address = sidecar
     service.roles = ("operations",)
     seen: list[dict[str, object]] = []
-    pages = sweep_pages(seen)
-    plugin = await meridian.connect(address, heartbeat=False)
+    pages = sweep_pages(seen, lambda: plugin._acts)
+    plugin = await meridian.connect(address, heartbeat=False, roles=[])
     try:
         header = caller_header(
             "write",
@@ -381,7 +384,9 @@ def test_a_plugins_own_test_calls_an_act_as_a_service_account() -> None:
             self.sent.append(given)
 
     book = Book()
-    client = PageClient(sweep_pages(seen), plugin=book, read={"ACC-1"}, write={"ACC-1"})
+    client = PageClient(
+        sweep_pages(seen, lambda: book), plugin=book, read={"ACC-1"}, write={"ACC-1"}
+    )
     answer = client.call_tool(
         "close_cleared_breaks",
         {"account_id": "ACC-1", "break_ids": ["BRK-2"], "reason": WHY},

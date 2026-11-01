@@ -10,8 +10,8 @@ keeping its broker's client, its conversion and its trade conditions).
         def attributes(self, stated):             # a trade's conditions, converted
             return conditions.trade_attributes(stated.codes, stated.tape)
 
-    lake = Lake(plugin, source, listings.Listings(storage / "products.json"))
-    await plugin.receive(observations_wanted=lake.on_want, want_withdrawn=lake.on_withdrawn)
+    lake = Lake(source, listings.Listings(storage / "products.json"))
+    meridian.run(declaration=DECLARATION, roles=[lake])     # a data role class (0.35)
 
 Three datasets, apart (the lake plan's Q21 and Q40), each the plugin
 declares in its catalogue:
@@ -113,6 +113,7 @@ from ...operations import (
 from ...plugin.v1 import operations_pb2 as ops
 from ...plugin.v1.operations_pb2 import Identifier
 from ...receive import Heard
+from .._generated.data import Role
 from ._wants import backfill_restart
 
 __all__ = [
@@ -328,10 +329,11 @@ def _kind_name(value: int) -> str:
     return str(ops.PriceKind.Name(value)).removeprefix("PRICE_KIND_").lower()
 
 
-class Feed:
-    """The plugin's half of the lake, on whatever operations it is given: the
-    sidecar's (`meridian.Plugin`) or the suite's `Recorder`. A plugin
-    subclasses it, naming its source and overriding what is its broker's."""
+class Feed(Role):
+    """The plugin's half of the lake: the data role's class (SDK 0.35),
+    registered with `meridian.run(roles=[...])` or bound to the suites'
+    `Recorder`. A plugin subclasses it, naming its source and overriding
+    what is its broker's; its own `run()` calls `tick()` on its schedule."""
 
     #: The broker's code as a `symbol`'s source (`alpaca`).
     source_name: str = ""
@@ -349,14 +351,12 @@ class Feed:
 
     def __init__(
         self,
-        plugin: Any,
         source: Source | None,
         products: Listings | None = None,
         clock_ns: Callable[[], int] = time.time_ns,
     ) -> None:
         if not self.source_name:
             raise TypeError("a listings feed names its source (source_name)")
-        self.plugin = plugin
         self.source = source
         self.products = products or Listings(None)
 
@@ -468,7 +468,7 @@ class Feed:
         if not self.reads_instruments:
             return None
         try:
-            found = await self.plugin.resolve_instrument(
+            found = await self.resolve_instrument(
                 instrument_id=entity_id, as_of_ns=self.clock_ns()
             )
         except NotGranted:
@@ -506,7 +506,7 @@ class Feed:
         own = Identifier(scheme="symbol", value=symbol, source=self.source_name)
         given = Identifier(scheme=other.scheme, value=other.value, source=other.source)
         now = self.clock_ns()
-        found = await self.plugin.resolve_identifier(
+        found = await self.resolve_identifier(
             identifiers=[own, given], as_of_ns=now, stated_currency=self.currency
         )
         if found.found and found.instrument_id == entity_id:
@@ -516,11 +516,11 @@ class Feed:
             # Matched another record: two records for one listing, which a
             # person merges (W3.13).
             reason = ops.MISS_REASON_AMBIGUOUS
-        await self.plugin.report_missing_instrument(
+        await self.report_missing_instrument(
             source=self.source_name, identifiers=[own, given], as_of_ns=now, reason=reason
         )
 
-    async def seed(self, symbols: Iterable[str]) -> None:
+    async def seed_symbols(self, symbols: Iterable[str]) -> None:
         """Resolve listings by this source's own symbol (W3.1), so the lake's
         wants for them can be answered: the deployment's record of each,
         found or minted, kept in the product map. What does not resolve is
@@ -530,13 +530,13 @@ class Feed:
             if symbol in self.products.symbols.values():
                 continue
             own = Identifier(scheme="symbol", value=symbol, source=self.source_name)
-            found = await self.plugin.resolve_identifier(
+            found = await self.resolve_identifier(
                 identifiers=[own], as_of_ns=now, stated_currency=self.currency
             )
             if found.instrument_id:
                 self.products.put(found.instrument_id, symbol)
                 continue
-            await self.plugin.report_missing_instrument(
+            await self.report_missing_instrument(
                 source=self.source_name,
                 identifiers=[own],
                 as_of_ns=now,
@@ -553,11 +553,11 @@ class Feed:
         if held is not None and (held[0] or now - held[1] < VENUE_MISS_NS):
             return held[0], [] if held[0] else [self._venue_reported(code)]
         identifier = Identifier(scheme="symbol", value=code, source=self.source_name)
-        found = await self.plugin.resolve_venue(identifiers=[identifier], as_of_ns=now)
+        found = await self.resolve_venue(identifiers=[identifier], as_of_ns=now)
         if found.found and found.venue.venue_id:
             self._venues[code] = (found.venue.venue_id, now)
             return found.venue.venue_id, []
-        await self.plugin.report_missing_venue(
+        await self.report_missing_venue(
             source=self.source_name,
             identifiers=[identifier],
             as_of_ns=now,
@@ -657,15 +657,16 @@ class Feed:
     ) -> None:
         counts = self.counts[key]
         rows = [self._as_sent_before(data_type, row) for row in rows]
+        done: Any
         for batch in _chunks(rows):
             if data_type == BAR:
-                done = await self.plugin.record_bars(bars=list(batch), want_id=want_id)
+                done = await self.record_bars(bars=list(batch), want_id=want_id)
             elif data_type == TRADE:
-                done = await self.plugin.record_trades(trades=list(batch), want_id=want_id)
+                done = await self.record_trades(trades=list(batch), want_id=want_id)
             elif data_type == QUOTE:
-                done = await self.plugin.record_quotes(quotes=list(batch), want_id=want_id)
+                done = await self.record_quotes(quotes=list(batch), want_id=want_id)
             else:
-                done = await self.plugin.record_prices(prices=list(batch), want_id=want_id)
+                done = await self.record_prices(prices=list(batch), want_id=want_id)
             counts.recorded += done.recorded
             if want_id:
                 self.by_want.setdefault(want_id, [0, 0])[0] += done.recorded + done.restated
@@ -714,7 +715,7 @@ class Feed:
                 return
         counts = self.counts[key]
         for batch in _chunks(list(subjects)):
-            await self.plugin.decline_want(
+            await self.decline_want(
                 want_id=want_id,
                 subjects=[SubjectRef(entity_id=s) for s in batch],
                 reason=reason,
@@ -887,7 +888,7 @@ class Feed:
 
     # ── Wants (W10.7) ────────────────────────────────────────────────────
 
-    async def on_want(self, heard: Heard[ops.ObservationsWantedEvent]) -> None:
+    async def on_observations_wanted(self, heard: Heard[ops.ObservationsWantedEvent]) -> None:
         """Record what a want asks, against it, or decline it per subject."""
         want = heard.message
         key = self._key_of(want.dataset)
@@ -946,7 +947,7 @@ class Feed:
         if want.standing:
             await self.stand(want, subjects, live_kinds)
 
-    async def on_withdrawn(self, heard: Heard[ops.WantWithdrawnEvent]) -> None:
+    async def on_want_withdrawn(self, heard: Heard[ops.WantWithdrawnEvent]) -> None:
         """A standing want nobody read within the cadence: no longer kept
         current, and its listings no longer streamed for it."""
         self.standing.pop(heard.message.want_id, None)
@@ -1002,7 +1003,7 @@ class Feed:
             return 0
         self.backfilled.update(fresh)
         try:
-            sent = await backfill_restart(self.plugin, fresh, self._history)
+            sent = await backfill_restart(self, fresh, self._history)
         except MeridianError as failed:
             self.last_error = f"the restart's gap was not backfilled: {failed}"[:300]
             log.warning("%s", self.last_error)
@@ -1100,7 +1101,7 @@ class Feed:
             return False
         self.liveness_ns = self.alive_ns
         try:
-            await self.plugin.record_liveness(
+            await self.record_liveness(
                 liveness=[
                     ops.DatasetLiveness(
                         dataset=self.dataset(LIVE), venue_id="", alive_at_ns=self.alive_ns

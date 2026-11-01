@@ -153,7 +153,7 @@ async def test_registration_sends_what_each_act_declares(
 ) -> None:
     service, address = sidecar
     interface = meridian.Interface(port=8000, title="Operations", pages=opening())
-    plugin = await meridian.connect(address, heartbeat=False, interface=interface)
+    plugin = await meridian.connect(address, heartbeat=False, interface=interface, roles=[])
     try:
         sent = {each.name: each for each in service.registered[-1].tools}
         assert sent["confirm_opening_balance"].checked_by == "check_opening_draft"
@@ -189,7 +189,7 @@ async def test_a_page_opened_from_a_prepared_change_reads_it_for_the_person(
         seen.append(await request.prepared())
         return "ok"
 
-    plugin = await meridian.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False, roles=[])
     try:
 
         async def ask(prepared_call_id: str) -> object:
@@ -246,7 +246,7 @@ async def test_a_persons_own_settings_are_saved_for_them_and_never_delivered_as_
         )
     ]
     declared = [meridian.Setting("currency", default="USD"), WATCHLIST, CHART]
-    plugin = await meridian.connect(address, heartbeat=False, settings=declared)
+    plugin = await meridian.connect(address, heartbeat=False, settings=declared, roles=[])
     try:
         sent = {each.name: each.per_person for each in service.registered[-1].settings}
         assert sent == {"currency": False, "watchlist": True, "chart_days": True}
@@ -301,10 +301,12 @@ async def test_a_link_to_an_account_not_granted_is_refused_with_its_code(
     service.operations.refuse_metadata = (
         ("meridian-refusal-bin", refusal.SerializeToString()),
     )
-    plugin = await meridian.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False, roles=[])
     try:
         with pytest.raises(CommandRefused) as refused:
-            await plugin.link_external_account(external_account_id="SNAP-1", account_id="ACC-9")
+            await plugin._acts.link_external_account(
+                external_account_id="SNAP-1", account_id="ACC-9"
+            )
         assert refused.value.reason == sidecar_pb2.REFUSAL_REASON_ACCOUNT_NOT_LINKABLE
     finally:
         await plugin.leave()
@@ -379,7 +381,7 @@ async def test_a_plugin_connects_with_a_class_and_reads_instances_of_it(
             missing_required=["environment"],
         )
     ]
-    plugin = await meridian.connect(address, heartbeat=False, settings=Config)
+    plugin = await meridian.connect(address, heartbeat=False, settings=Config, roles=[])
     try:
         assert [s.name for s in service.registered[-1].settings][0] == "environment"
         first = await plugin.first_settings(Config)

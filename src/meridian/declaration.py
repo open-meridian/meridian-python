@@ -894,10 +894,15 @@ class Declaration:
     _read: dict[str, tuple[_Section, ...]] = field(
         default_factory=dict, init=False, repr=False, compare=False
     )
+    # The class decorated `@meridian.settings` that declared its settings,
+    # where one did: `meridian.run(on_settings=...)` delivers instances of it.
+    _typed: type[Any] | None = field(default=None, init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         from ._settings import declared_by
 
+        if isinstance(self.settings, type):
+            object.__setattr__(self, "_typed", self.settings)
         object.__setattr__(self, "settings", declared_by(self.settings))
         if self.interface is not None:
             from .client import Interface as _Interface

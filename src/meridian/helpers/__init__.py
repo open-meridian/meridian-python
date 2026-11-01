@@ -28,11 +28,18 @@ on a pool's fill read (the factor taken, provisional, an open claim);
 states them and `servicing`'s expected coupons, maturities, paydowns and
 accretions.
 
+From 0.35.0 (spec/each-role-is-one-generated-class, ruling 1023) a helper
+defines no act of its own: one that reads or acts takes the role object
+holding the act (`chains.read_chain(role, ...)`, `debt.read_factors(role,
+...)`), never the connection, so the act is allowed or refused by that
+role. `sessions` holds `Backoff`, the wait between a long-running work's
+tries, with which `meridian.run` restarts a role's `run()`.
+
 These four were `meridian.roles.chains`, `.packages`, `.lifecycle` and
 `.debt` until 0.34.0; `meridian plugin migrate` rewrites a plugin's
 imports of them.
 """
 
-from . import chains, debt, lifecycle, packages
+from . import chains, debt, lifecycle, packages, sessions
 
-__all__ = ["chains", "debt", "lifecycle", "packages"]
+__all__ = ["chains", "debt", "lifecycle", "packages", "sessions"]

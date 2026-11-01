@@ -26,7 +26,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import Any, Protocol, TypeVar
 
 from meridian.plugin.v1 import operations_pb2 as ops
 from meridian.v1 import sidecar_pb2
@@ -55,9 +55,6 @@ from .bounds import (
     REPORT_LATENCY_REQUEST_SNAPSHOTS_COUNT,
     Count,
 )
-
-if TYPE_CHECKING:
-    from .receive import Heard
 
 _Answer = TypeVar("_Answer")
 
@@ -3185,8 +3182,25 @@ def _assertion(header: str | None) -> sidecar_pb2.CallerAssertion | None:
     return sidecar_pb2.CallerAssertion.FromString(base64.urlsafe_b64decode(padded))
 
 
+class _Acting(Protocol):
+    """What makes an act: the call (spec/each-role-is-one-generated-class).
+    A role's generated base binds its acts from `Operations` by name and
+    supplies these through its connection; the suites' Recorder records
+    them."""
+
+    async def _operate(
+        self, method: Callable[[Any], Awaitable[_Answer]], params: Any
+    ) -> _Answer: ...
+
+    def _operations(self) -> Any: ...
+
+
 class Operations:
-    """Mixed into Plugin, which supplies the call."""
+    """Every act, one per bus row a role publishes: the acts' one
+    implementation. From SDK 0.35 a plugin makes an act on the role object
+    holding it (`meridian.roles.<role>.Role`, generated beside this file),
+    never on the connection; each role's base binds its acts from here by
+    name, and the suites' Recorder records every one."""
 
     async def _operate(
         self, method: Callable[[Any], Awaitable[_Answer]], params: Any
@@ -3196,17 +3210,8 @@ class Operations:
     def _operations(self) -> Any:  # pragma: no cover - Plugin's
         raise NotImplementedError
 
-    async def _receive(
-        self,
-        handlers: dict[str, Callable[[Any], Awaitable[None]] | None],
-        *,
-        seed: bool,
-        subjects: Sequence[str] = (),
-    ) -> None:  # pragma: no cover - Plugin's
-        raise NotImplementedError
-
     async def report_external_accounts(
-        self,
+        self: _Acting,
         *,
         accounts: Sequence[ExternalAccount] = (),
     ) -> ops.Published:
@@ -3217,7 +3222,7 @@ class Operations:
         return await self._operate(self._operations().ReportExternalAccounts, params)
 
     async def report_sync_status(
-        self,
+        self: _Acting,
         *,
         source: str = "",
         last_synced_at_ns: int = 0,
@@ -3246,7 +3251,7 @@ class Operations:
         return await self._operate(self._operations().ReportSyncStatus, params)
 
     async def record_holdings_statement(
-        self,
+        self: _Acting,
         *,
         source: str = "",
         external_statement_id: str = "",
@@ -3287,7 +3292,7 @@ class Operations:
         return await self._operate(self._operations().RecordHoldingsStatement, params)
 
     async def record_holding(
-        self,
+        self: _Acting,
         *,
         statement_id: str = "",
         instrument_id: str = "",
@@ -3342,7 +3347,7 @@ class Operations:
         return await self._operate(self._operations().RecordHolding, params)
 
     async def list_custodial_positions(
-        self,
+        self: _Acting,
         *,
         account_id: str = "",
         include_unresolved: bool = False,
@@ -3361,7 +3366,7 @@ class Operations:
         return await self._operate(self._operations().ListCustodialPositions, params)
 
     async def list_statements(
-        self,
+        self: _Acting,
         *,
         account_id: str = "",
         as_of_date: date | str = "",
@@ -3380,7 +3385,7 @@ class Operations:
         return await self._operate(self._operations().ListStatements, params)
 
     async def record_activity(
-        self,
+        self: _Acting,
         *,
         external_account_id: str = "",
         source: str = "",
@@ -3397,7 +3402,7 @@ class Operations:
         return await self._operate(self._operations().RecordActivity, params)
 
     async def list_activities(
-        self,
+        self: _Acting,
         *,
         account_id: str = "",
         trade_date_from: date | str = "",
@@ -3418,7 +3423,7 @@ class Operations:
         return await self._operate(self._operations().ListActivities, params)
 
     async def re_resolve_activity(
-        self,
+        self: _Acting,
         *,
         external_account_id: str = "",
         source: str = "",
@@ -3441,7 +3446,7 @@ class Operations:
         return await self._operate(self._operations().ReResolveActivity, params)
 
     async def list_sync_statuses(
-        self,
+        self: _Acting,
         *,
         account_id: str = "",
         since: ops.Watermark | None = None,
@@ -3458,7 +3463,7 @@ class Operations:
         return await self._operate(self._operations().ListSyncStatuses, params)
 
     async def resolve_identifier(
-        self,
+        self: _Acting,
         *,
         identifiers: Sequence[ops.Identifier] = (),
         as_of_ns: int = 0,
@@ -3485,7 +3490,7 @@ class Operations:
         return await self._operate(self._operations().ResolveIdentifier, params)
 
     async def report_missing_instrument(
-        self,
+        self: _Acting,
         *,
         source: str = "",
         asset_class: ops.AssetClass | str | None = None,
@@ -3508,7 +3513,7 @@ class Operations:
         return await self._operate(self._operations().ReportMissingInstrument, params)
 
     async def resolve_instrument(
-        self,
+        self: _Acting,
         *,
         instrument_id: str = "",
         as_of_ns: int = 0,
@@ -3521,7 +3526,7 @@ class Operations:
         return await self._operate(self._operations().ResolveInstrument, params)
 
     async def link_external_account(
-        self,
+        self: _Acting,
         *,
         external_account_id: str = "",
         account_id: str = "",
@@ -3546,7 +3551,7 @@ class Operations:
         return await self._operate(self._operations().LinkExternalAccount, params)
 
     async def read_accounts_for_linking(
-        self,
+        self: _Acting,
         *,
         acting_for: str | None = None,
     ) -> ops.ReadAccountsForLinkingResult:
@@ -3557,7 +3562,7 @@ class Operations:
         return await self._operate(self._operations().ReadAccountsForLinking, params)
 
     async def record_opening_balance(
-        self,
+        self: _Acting,
         *,
         account_id: str = "",
         as_of_date: date | str = "",
@@ -3582,7 +3587,7 @@ class Operations:
         return await self._operate(self._operations().RecordOpeningBalance, params)
 
     async def record_break(
-        self,
+        self: _Acting,
         *,
         account_id: str = "",
         break_id: str = "",
@@ -3616,7 +3621,7 @@ class Operations:
         return await self._operate(self._operations().RecordBreak, params)
 
     async def record_account_figures(
-        self,
+        self: _Acting,
         *,
         account_id: str = "",
         business_date: date | str = "",
@@ -3637,7 +3642,7 @@ class Operations:
         return await self._operate(self._operations().RecordAccountFigures, params)
 
     async def record_encumbrances(
-        self,
+        self: _Acting,
         *,
         account_id: str = "",
         business_date: date | str = "",
@@ -3658,7 +3663,7 @@ class Operations:
         return await self._operate(self._operations().RecordEncumbrances, params)
 
     async def handle_break(
-        self,
+        self: _Acting,
         *,
         account_id: str = "",
         break_id: str = "",
@@ -3681,7 +3686,7 @@ class Operations:
         return await self._operate(self._operations().HandleBreak, params)
 
     async def resolve_break(
-        self,
+        self: _Acting,
         *,
         account_id: str = "",
         break_ids: Sequence[str] = (),
@@ -3705,7 +3710,7 @@ class Operations:
         return await self._operate(self._operations().ResolveBreak, params)
 
     async def close_breaks_as_cleared(
-        self,
+        self: _Acting,
         *,
         account_id: str = "",
         break_ids: Sequence[str] = (),
@@ -3726,7 +3731,7 @@ class Operations:
         return await self._operate(self._operations().CloseBreaksAsCleared, params)
 
     async def list_positions(
-        self,
+        self: _Acting,
         *,
         account_id: str = "",
         since: ops.Watermark | None = None,
@@ -3747,7 +3752,7 @@ class Operations:
         return await self._operate(self._operations().ListPositions, params)
 
     async def list_breaks(
-        self,
+        self: _Acting,
         *,
         account_id: str = "",
         states: Sequence[ops.BreakState | str] = (),
@@ -3766,7 +3771,7 @@ class Operations:
         return await self._operate(self._operations().ListBreaks, params)
 
     async def list_account_figures(
-        self,
+        self: _Acting,
         *,
         account_id: str = "",
         agreement: ops.MarginAgreementRef | None = None,
@@ -3791,7 +3796,7 @@ class Operations:
         return await self._operate(self._operations().ListAccountFigures, params)
 
     async def list_account_attributes(
-        self,
+        self: _Acting,
         *,
         account_id: str = "",
         since: ops.Watermark | None = None,
@@ -3808,7 +3813,7 @@ class Operations:
         return await self._operate(self._operations().ListAccountAttributes, params)
 
     async def propose_order(
-        self,
+        self: _Acting,
         *,
         account_id: str = "",
         instrument_id: str = "",
@@ -3905,7 +3910,7 @@ class Operations:
         return await self._operate(self._operations().ProposeOrder, params)
 
     async def record_order(
-        self,
+        self: _Acting,
         *,
         account_id: str = "",
         instrument_id: str = "",
@@ -3938,7 +3943,7 @@ class Operations:
         return await self._operate(self._operations().RecordOrder, params)
 
     async def request_order_change(
-        self,
+        self: _Acting,
         *,
         order_id: str = "",
         change: OrderChange | None = None,
@@ -3957,7 +3962,7 @@ class Operations:
         return await self._operate(self._operations().RequestOrderChange, params)
 
     async def record_check(
-        self,
+        self: _Acting,
         *,
         order_id: str = "",
         order_version: int = 0,
@@ -3982,7 +3987,7 @@ class Operations:
         return await self._operate(self._operations().RecordCheck, params)
 
     async def decide_approval(
-        self,
+        self: _Acting,
         *,
         order_id: str = "",
         decision: ops.ApprovalDecision | str | None = None,
@@ -4001,7 +4006,7 @@ class Operations:
         return await self._operate(self._operations().DecideApproval, params)
 
     async def release_order(
-        self,
+        self: _Acting,
         *,
         order_id: str = "",
         idempotency_key: str = "",
@@ -4016,7 +4021,7 @@ class Operations:
         return await self._operate(self._operations().ReleaseOrder, params)
 
     async def set_working_condition(
-        self,
+        self: _Acting,
         *,
         order_id: str = "",
         condition: ops.OrderCondition | str | None = None,
@@ -4041,7 +4046,7 @@ class Operations:
         return await self._operate(self._operations().SetWorkingCondition, params)
 
     async def create_placement(
-        self,
+        self: _Acting,
         *,
         order_id: str = "",
         connectivity_instance_id: str = "",
@@ -4088,7 +4093,7 @@ class Operations:
         return await self._operate(self._operations().CreatePlacement, params)
 
     async def request_placement_change(
-        self,
+        self: _Acting,
         *,
         placement_id: str = "",
         change: PlacementChange | None = None,
@@ -4109,7 +4114,7 @@ class Operations:
         return await self._operate(self._operations().RequestPlacementChange, params)
 
     async def report_placement(
-        self,
+        self: _Acting,
         *,
         placement_id: str = "",
         event: ops.PlacementEvent | str | None = None,
@@ -4146,7 +4151,7 @@ class Operations:
         return await self._operate(self._operations().ReportPlacement, params)
 
     async def report_execution(
-        self,
+        self: _Acting,
         *,
         placement_id: str = "",
         order_id: str = "",
@@ -4269,7 +4274,7 @@ class Operations:
         return await self._operate(self._operations().ReportExecution, params)
 
     async def report_charge(
-        self,
+        self: _Acting,
         *,
         placement_id: str = "",
         fee: Fee | None = None,
@@ -4290,7 +4295,7 @@ class Operations:
         return await self._operate(self._operations().ReportCharge, params)
 
     async def acknowledge_flag(
-        self,
+        self: _Acting,
         *,
         order_id: str = "",
         condition: ops.OrderCondition | str | None = None,
@@ -4309,7 +4314,7 @@ class Operations:
         return await self._operate(self._operations().AcknowledgeFlag, params)
 
     async def list_trading_instructions(
-        self,
+        self: _Acting,
         *,
         since: ops.Watermark | None = None,
         page_size: int = 0,
@@ -4324,7 +4329,7 @@ class Operations:
         return await self._operate(self._operations().ListTradingInstructions, params)
 
     async def list_orders(
-        self,
+        self: _Acting,
         *,
         account_id: str = "",
         since: ops.Watermark | None = None,
@@ -4343,7 +4348,7 @@ class Operations:
         return await self._operate(self._operations().ListOrders, params)
 
     async def read_order_history(
-        self,
+        self: _Acting,
         *,
         account_id: str = "",
         order_id: str = "",
@@ -4360,7 +4365,7 @@ class Operations:
         return await self._operate(self._operations().ReadOrderHistory, params)
 
     async def record_locate(
-        self,
+        self: _Acting,
         *,
         venue_account_code: str = "",
         instrument_id: str = "",
@@ -4385,7 +4390,7 @@ class Operations:
         return await self._operate(self._operations().RecordLocate, params)
 
     async def list_locates(
-        self,
+        self: _Acting,
         *,
         account_id: str = "",
         since: ops.Watermark | None = None,
@@ -4402,7 +4407,7 @@ class Operations:
         return await self._operate(self._operations().ListLocates, params)
 
     async def record_locate_use(
-        self,
+        self: _Acting,
         *,
         locate_record_id: str = "",
         use: LocateUse | None = None,
@@ -4419,7 +4424,7 @@ class Operations:
         return await self._operate(self._operations().RecordLocateUse, params)
 
     async def report_venue_catalogue(
-        self,
+        self: _Acting,
         *,
         catalogue: VenueCatalogue | None = None,
     ) -> ops.Published:
@@ -4430,7 +4435,7 @@ class Operations:
         return await self._operate(self._operations().ReportVenueCatalogue, params)
 
     async def read_venue_catalogue(
-        self,
+        self: _Acting,
         *,
         connectivity_instance_id: str = "",
         venue_account_code: str = "",
@@ -4445,7 +4450,7 @@ class Operations:
         return await self._operate(self._operations().ReadVenueCatalogue, params)
 
     async def map_venue_account(
-        self,
+        self: _Acting,
         *,
         connectivity_instance_id: str = "",
         venue_account_code: str = "",
@@ -4462,7 +4467,7 @@ class Operations:
         return await self._operate(self._operations().MapVenueAccount, params)
 
     async def accept_execution(
-        self,
+        self: _Acting,
         *,
         execution_ids: Sequence[str] = (),
         order_id: str | None = None,
@@ -4480,7 +4485,7 @@ class Operations:
         return await self._operate(self._operations().AcceptExecution, params)
 
     async def dont_know_execution(
-        self,
+        self: _Acting,
         *,
         execution_ids: Sequence[str] = (),
         reason: ops.DkReason | str | None = None,
@@ -4497,7 +4502,7 @@ class Operations:
         return await self._operate(self._operations().DontKnowExecution, params)
 
     async def report_value_date_roll(
-        self,
+        self: _Acting,
         *,
         venue_account_code: str = "",
         pair: Sequence[str] = (),
@@ -4526,7 +4531,7 @@ class Operations:
         return await self._operate(self._operations().ReportValueDateRoll, params)
 
     async def set_allocation_instruction(
-        self,
+        self: _Acting,
         *,
         order_id: str = "",
         allocation_instruction: AllocationInstruction | None = None,
@@ -4543,7 +4548,7 @@ class Operations:
         return await self._operate(self._operations().SetAllocationInstruction, params)
 
     async def book_order(
-        self,
+        self: _Acting,
         *,
         order_id: str = "",
         execution_ids: Sequence[str] = (),
@@ -4562,7 +4567,7 @@ class Operations:
         return await self._operate(self._operations().BookOrder, params)
 
     async def hand_off_booking(
-        self,
+        self: _Acting,
         *,
         booking_id: str = "",
         close: bool = False,
@@ -4577,7 +4582,7 @@ class Operations:
         return await self._operate(self._operations().HandOffBooking, params)
 
     async def correct_booking(
-        self,
+        self: _Acting,
         *,
         booking_id: str = "",
         kind: ops.BookingCorrectionKind | str | None = None,
@@ -4598,7 +4603,7 @@ class Operations:
         return await self._operate(self._operations().CorrectBooking, params)
 
     async def list_bookings(
-        self,
+        self: _Acting,
         *,
         account_id: str = "",
         since: ops.Watermark | None = None,
@@ -4617,7 +4622,7 @@ class Operations:
         return await self._operate(self._operations().ListBookings, params)
 
     async def report_give_up(
-        self,
+        self: _Acting,
         *,
         execution_id: str = "",
         allocation_id: str = "",
@@ -4640,7 +4645,7 @@ class Operations:
         return await self._operate(self._operations().ReportGiveUp, params)
 
     async def record_sleeve_cross(
-        self,
+        self: _Acting,
         *,
         sleeve_cross: SleeveCross | None = None,
         acting_for: str | None = None,
@@ -4653,7 +4658,7 @@ class Operations:
         return await self._operate(self._operations().RecordSleeveCross, params)
 
     async def raise_alert(
-        self,
+        self: _Acting,
         *,
         account_id: str = "",
         kind: ops.AlertKind | str | None = None,
@@ -4672,7 +4677,7 @@ class Operations:
         return await self._operate(self._operations().RaiseAlert, params)
 
     async def acknowledge_alert(
-        self,
+        self: _Acting,
         *,
         alert_id: str = "",
         reason: str = "",
@@ -4687,7 +4692,7 @@ class Operations:
         return await self._operate(self._operations().AcknowledgeAlert, params)
 
     async def list_alerts(
-        self,
+        self: _Acting,
         *,
         account_id: str = "",
         state: ops.AlertState | str | None = None,
@@ -4708,7 +4713,7 @@ class Operations:
         return await self._operate(self._operations().ListAlerts, params)
 
     async def read_local_record_orders(
-        self,
+        self: _Acting,
     ) -> ops.ReadLocalRecordOrdersResult:
         """W11.37: W11.37: the setting read (preview)."""
         params = ops.ReadLocalRecordOrdersParams(
@@ -4716,7 +4721,7 @@ class Operations:
         return await self._operate(self._operations().ReadLocalRecordOrders, params)
 
     async def resolve_venue(
-        self,
+        self: _Acting,
         *,
         identifiers: Sequence[ops.Identifier] = (),
         as_of_ns: int = 0,
@@ -4731,7 +4736,7 @@ class Operations:
         return await self._operate(self._operations().ResolveVenue, params)
 
     async def report_missing_venue(
-        self,
+        self: _Acting,
         *,
         source: str = "",
         identifiers: Sequence[ops.Identifier] = (),
@@ -4750,7 +4755,7 @@ class Operations:
         return await self._operate(self._operations().ReportMissingVenue, params)
 
     async def read_calendar(
-        self,
+        self: _Acting,
         *,
         calendar_id: str = "",
         from_date: date | str = "",
@@ -4767,7 +4772,7 @@ class Operations:
         return await self._operate(self._operations().ReadCalendar, params)
 
     async def compute_date(
-        self,
+        self: _Acting,
         *,
         settlement: ops.SettlementDateInputs | None = None,
         spot: ops.SpotDateInputs | None = None,
@@ -4784,7 +4789,7 @@ class Operations:
         return await self._operate(self._operations().ComputeDate, params)
 
     async def list_replacements(
-        self,
+        self: _Acting,
         *,
         after_sequence: int = 0,
     ) -> ops.ListReplacementsResult:
@@ -4795,7 +4800,7 @@ class Operations:
         return await self._operate(self._operations().ListReplacements, params)
 
     async def offer_template_fields(
-        self,
+        self: _Acting,
         *,
         instrument_id: str = "",
         template_id: str = "",
@@ -4814,7 +4819,7 @@ class Operations:
         return await self._operate(self._operations().OfferTemplateFields, params)
 
     async def list_templates(
-        self,
+        self: _Acting,
         *,
         asset_class: ops.AssetClass | str | None = None,
     ) -> ops.ListTemplatesResult:
@@ -4825,7 +4830,7 @@ class Operations:
         return await self._operate(self._operations().ListTemplates, params)
 
     async def read_template(
-        self,
+        self: _Acting,
         *,
         template_id: str = "",
         template_version: str = "",
@@ -4838,7 +4843,7 @@ class Operations:
         return await self._operate(self._operations().ReadTemplate, params)
 
     async def record_prices(
-        self,
+        self: _Acting,
         *,
         prices: Sequence[Price] = (),
         want_id: str = "",
@@ -4854,7 +4859,7 @@ class Operations:
         return await self._operate(self._operations().RecordPrices, params)
 
     async def record_bars(
-        self,
+        self: _Acting,
         *,
         bars: Sequence[Bar] = (),
         want_id: str = "",
@@ -4870,7 +4875,7 @@ class Operations:
         return await self._operate(self._operations().RecordBars, params)
 
     async def record_trades(
-        self,
+        self: _Acting,
         *,
         trades: Sequence[Trade] = (),
         want_id: str = "",
@@ -4886,7 +4891,7 @@ class Operations:
         return await self._operate(self._operations().RecordTrades, params)
 
     async def record_quotes(
-        self,
+        self: _Acting,
         *,
         quotes: Sequence[Quote] = (),
         want_id: str = "",
@@ -4902,7 +4907,7 @@ class Operations:
         return await self._operate(self._operations().RecordQuotes, params)
 
     async def record_outcomes(
-        self,
+        self: _Acting,
         *,
         outcomes: Sequence[Outcome] = (),
         acting_for: str | None = None,
@@ -4916,7 +4921,7 @@ class Operations:
         return await self._operate(self._operations().RecordOutcomes, params)
 
     async def list_prices(
-        self,
+        self: _Acting,
         *,
         subjects: Sequence[SubjectRef] = (),
         kinds: Sequence[ops.PriceKind | str] = (),
@@ -4945,7 +4950,7 @@ class Operations:
         return await self._operate(self._operations().ListPrices, params)
 
     async def list_bars(
-        self,
+        self: _Acting,
         *,
         subjects: Sequence[SubjectRef] = (),
         interval_ns: int = 0,
@@ -4974,7 +4979,7 @@ class Operations:
         return await self._operate(self._operations().ListBars, params)
 
     async def list_trades(
-        self,
+        self: _Acting,
         *,
         subjects: Sequence[SubjectRef] = (),
         sources: ops.SourceChoice | None = None,
@@ -5011,7 +5016,7 @@ class Operations:
         return await self._operate(self._operations().ListTrades, params)
 
     async def list_quotes(
-        self,
+        self: _Acting,
         *,
         subjects: Sequence[SubjectRef] = (),
         sources: ops.SourceChoice | None = None,
@@ -5046,7 +5051,7 @@ class Operations:
         return await self._operate(self._operations().ListQuotes, params)
 
     async def list_outcomes(
-        self,
+        self: _Acting,
         *,
         subjects: Sequence[SubjectRef] = (),
         after_watermark: ops.Watermark | None = None,
@@ -5061,7 +5066,7 @@ class Operations:
         return await self._operate(self._operations().ListOutcomes, params)
 
     async def decline_want(
-        self,
+        self: _Acting,
         *,
         want_id: str = "",
         subjects: Sequence[SubjectRef] = (),
@@ -5078,7 +5083,7 @@ class Operations:
         return await self._operate(self._operations().DeclineWant, params)
 
     async def list_datasets(
-        self,
+        self: _Acting,
     ) -> ops.ListDatasetsResult:
         """W10.9: The datasets a reader may read, with their catalogue entries; and, to the (preview)."""
         params = ops.ListDatasetsParams(
@@ -5086,7 +5091,7 @@ class Operations:
         return await self._operate(self._operations().ListDatasets, params)
 
     async def run_job(
-        self,
+        self: _Acting,
         *,
         job: Job | None = None,
     ) -> ops.RunJobResult:
@@ -5097,7 +5102,7 @@ class Operations:
         return await self._operate(self._operations().RunJob, params)
 
     async def list_measure_definitions(
-        self,
+        self: _Acting,
     ) -> ops.ListMeasureDefinitionsResult:
         """W12.1: ListMeasureDefinitions (preview)."""
         params = ops.ListMeasureDefinitionsParams(
@@ -5105,7 +5110,7 @@ class Operations:
         return await self._operate(self._operations().ListMeasureDefinitions, params)
 
     async def list_price_batches(
-        self,
+        self: _Acting,
         *,
         after_sequence: int = 0,
     ) -> ops.ListPriceBatchesResult:
@@ -5116,7 +5121,7 @@ class Operations:
         return await self._operate(self._operations().ListPriceBatches, params)
 
     async def answer_price_batch(
-        self,
+        self: _Acting,
         *,
         batch_id: str = "",
         values: Sequence[PricedUnit] = (),
@@ -5133,7 +5138,7 @@ class Operations:
         return await self._operate(self._operations().AnswerPriceBatch, params)
 
     async def list_finished_jobs(
-        self,
+        self: _Acting,
         *,
         after_sequence: int = 0,
     ) -> ops.ListFinishedJobsResult:
@@ -5144,7 +5149,7 @@ class Operations:
         return await self._operate(self._operations().ListFinishedJobs, params)
 
     async def read_job_answer(
-        self,
+        self: _Acting,
         *,
         job_id: str = "",
         page_size: int = 0,
@@ -5159,7 +5164,7 @@ class Operations:
         return await self._operate(self._operations().ReadJobAnswer, params)
 
     async def report_event_group(
-        self,
+        self: _Acting,
         *,
         venue_id: str = "",
         venue_event_ref: str = "",
@@ -5190,7 +5195,7 @@ class Operations:
         return await self._operate(self._operations().ReportEventGroup, params)
 
     async def list_event_groups(
-        self,
+        self: _Acting,
         *,
         instrument_ids: Sequence[str] = (),
         event_group_ids: Sequence[str] = (),
@@ -5211,7 +5216,7 @@ class Operations:
         return await self._operate(self._operations().ListEventGroups, params)
 
     async def read_agent_orders_demo_only(
-        self,
+        self: _Acting,
     ) -> ops.ReadAgentOrdersDemoOnlyResult:
         """W11.39: W11.39: the guard read (preview)."""
         params = ops.ReadAgentOrdersDemoOnlyParams(
@@ -5219,7 +5224,7 @@ class Operations:
         return await self._operate(self._operations().ReadAgentOrdersDemoOnly, params)
 
     async def query_lake(
-        self,
+        self: _Acting,
         *,
         kind: str = "",
         subjects: Sequence[SubjectRef] = (),
@@ -5248,7 +5253,7 @@ class Operations:
         return await self._operate(self._operations().QueryLake, params)
 
     async def report_latency(
-        self,
+        self: _Acting,
         *,
         snapshots: Sequence[LatencySnapshot] = (),
         acting_for: str | None = None,
@@ -5262,7 +5267,7 @@ class Operations:
         return await self._operate(self._operations().ReportLatency, params)
 
     async def record_rates(
-        self,
+        self: _Acting,
         *,
         rates: Sequence[Rate] = (),
         want_id: str = "",
@@ -5278,7 +5283,7 @@ class Operations:
         return await self._operate(self._operations().RecordRates, params)
 
     async def list_rates(
-        self,
+        self: _Acting,
         *,
         subjects: Sequence[SubjectRef] = (),
         kinds: Sequence[ops.RateKind | str] = (),
@@ -5311,7 +5316,7 @@ class Operations:
         return await self._operate(self._operations().ListRates, params)
 
     async def record_liveness(
-        self,
+        self: _Acting,
         *,
         liveness: Sequence[ops.DatasetLiveness] = (),
         acting_for: str | None = None,
@@ -5325,7 +5330,7 @@ class Operations:
         return await self._operate(self._operations().RecordLiveness, params)
 
     async def list_execution_costs(
-        self,
+        self: _Acting,
         *,
         account_id: str = "",
         execution_ids: Sequence[str] = (),
@@ -5350,7 +5355,7 @@ class Operations:
         return await self._operate(self._operations().ListExecutionCosts, params)
 
     async def report_placement_quote(
-        self,
+        self: _Acting,
         *,
         placement_id: str = "",
         quote_id: str = "",
@@ -5385,7 +5390,7 @@ class Operations:
         return await self._operate(self._operations().ReportPlacementQuote, params)
 
     async def pick_placement_quote(
-        self,
+        self: _Acting,
         *,
         placement_id: str = "",
         quote_id: str = "",
@@ -5404,7 +5409,7 @@ class Operations:
         return await self._operate(self._operations().PickPlacementQuote, params)
 
     async def request_series_records(
-        self,
+        self: _Acting,
         *,
         series: Sequence[SeriesWant] = (),
         note: str = "",
@@ -5419,7 +5424,7 @@ class Operations:
         return await self._operate(self._operations().RequestSeriesRecords, params)
 
     async def record_series(
-        self,
+        self: _Acting,
         *,
         series: Sequence[ListedSeries] = (),
         want_id: str = "",
@@ -5435,7 +5440,7 @@ class Operations:
         return await self._operate(self._operations().RecordSeries, params)
 
     async def list_series(
-        self,
+        self: _Acting,
         *,
         subjects: Sequence[SubjectRef] = (),
         instrument_type: ops.InstrumentType | str | None = None,
@@ -5464,7 +5469,7 @@ class Operations:
         return await self._operate(self._operations().ListSeries, params)
 
     async def record_statistics(
-        self,
+        self: _Acting,
         *,
         statistics: Sequence[Statistic] = (),
         want_id: str = "",
@@ -5480,7 +5485,7 @@ class Operations:
         return await self._operate(self._operations().RecordStatistics, params)
 
     async def list_statistics(
-        self,
+        self: _Acting,
         *,
         subjects: Sequence[SubjectRef] = (),
         kinds: Sequence[ops.StatisticKind | str] = (),
@@ -5517,7 +5522,7 @@ class Operations:
         return await self._operate(self._operations().ListStatistics, params)
 
     async def record_lifecycle_event(
-        self,
+        self: _Acting,
         *,
         event: LifecycleEvent | None = None,
         idempotency_key: str = "",
@@ -5532,7 +5537,7 @@ class Operations:
         return await self._operate(self._operations().RecordLifecycleEvent, params)
 
     async def propose_lifecycle_events(
-        self,
+        self: _Acting,
         *,
         events: Sequence[LifecycleEvent] = (),
         acting_for: str | None = None,
@@ -5545,7 +5550,7 @@ class Operations:
         return await self._operate(self._operations().ProposeLifecycleEvents, params)
 
     async def release_lifecycle_event(
-        self,
+        self: _Acting,
         *,
         event_id: str = "",
         note: str = "",
@@ -5560,7 +5565,7 @@ class Operations:
         return await self._operate(self._operations().ReleaseLifecycleEvent, params)
 
     async def list_lifecycle_events(
-        self,
+        self: _Acting,
         *,
         account_id: str = "",
         instrument_id: str = "",
@@ -5585,7 +5590,7 @@ class Operations:
         return await self._operate(self._operations().ListLifecycleEvents, params)
 
     async def record_derived_series(
-        self,
+        self: _Acting,
         *,
         values: Sequence[DerivedSeries] = (),
         acting_for: str | None = None,
@@ -5599,7 +5604,7 @@ class Operations:
         return await self._operate(self._operations().RecordDerivedSeries, params)
 
     async def list_derived_series(
-        self,
+        self: _Acting,
         *,
         subjects: Sequence[SubjectRef] = (),
         series: Sequence[str] = (),
@@ -5616,7 +5621,7 @@ class Operations:
         return await self._operate(self._operations().ListDerivedSeries, params)
 
     async def record_scenarios(
-        self,
+        self: _Acting,
         *,
         scenarios: Sequence[SavedScenario] = (),
         acting_for: str | None = None,
@@ -5629,7 +5634,7 @@ class Operations:
         return await self._operate(self._operations().RecordScenarios, params)
 
     async def list_scenarios(
-        self,
+        self: _Acting,
         *,
         row_keys: Sequence[str] = (),
         version: int = 0,
@@ -5642,7 +5647,7 @@ class Operations:
         return await self._operate(self._operations().ListScenarios, params)
 
     async def resolve_company(
-        self,
+        self: _Acting,
         *,
         company_id: str = "",
         identifiers: Sequence[ops.Identifier] = (),
@@ -5657,7 +5662,7 @@ class Operations:
         return await self._operate(self._operations().ResolveCompany, params)
 
     async def record_filings(
-        self,
+        self: _Acting,
         *,
         filings: Sequence[Filing] = (),
         want_id: str = "",
@@ -5673,7 +5678,7 @@ class Operations:
         return await self._operate(self._operations().RecordFilings, params)
 
     async def list_filings(
-        self,
+        self: _Acting,
         *,
         subjects: Sequence[SubjectRef] = (),
         from_date: date | str = "",
@@ -5702,7 +5707,7 @@ class Operations:
         return await self._operate(self._operations().ListFilings, params)
 
     async def record_reported_facts(
-        self,
+        self: _Acting,
         *,
         facts: Sequence[ReportedFact] = (),
         want_id: str = "",
@@ -5718,7 +5723,7 @@ class Operations:
         return await self._operate(self._operations().RecordReportedFacts, params)
 
     async def list_reported_facts(
-        self,
+        self: _Acting,
         *,
         subjects: Sequence[SubjectRef] = (),
         from_date: date | str = "",
@@ -5745,7 +5750,7 @@ class Operations:
         return await self._operate(self._operations().ListReportedFacts, params)
 
     async def record_holdings_reports(
-        self,
+        self: _Acting,
         *,
         reports: Sequence[HoldingsReport] = (),
         want_id: str = "",
@@ -5761,7 +5766,7 @@ class Operations:
         return await self._operate(self._operations().RecordHoldingsReports, params)
 
     async def record_holdings(
-        self,
+        self: _Acting,
         *,
         holdings: Sequence[Holding] = (),
         want_id: str = "",
@@ -5777,7 +5782,7 @@ class Operations:
         return await self._operate(self._operations().RecordHoldings, params)
 
     async def list_holdings(
-        self,
+        self: _Acting,
         *,
         subjects: Sequence[SubjectRef] = (),
         from_date: date | str = "",
@@ -5804,7 +5809,7 @@ class Operations:
         return await self._operate(self._operations().ListHoldings, params)
 
     async def record_corporate_actions(
-        self,
+        self: _Acting,
         *,
         actions: Sequence[CorporateActionAnnounced] = (),
         want_id: str = "",
@@ -5820,7 +5825,7 @@ class Operations:
         return await self._operate(self._operations().RecordCorporateActions, params)
 
     async def list_corporate_actions(
-        self,
+        self: _Acting,
         *,
         subjects: Sequence[SubjectRef] = (),
         from_date: date | str = "",
@@ -5849,7 +5854,7 @@ class Operations:
         return await self._operate(self._operations().ListCorporateActions, params)
 
     async def record_rating_actions(
-        self,
+        self: _Acting,
         *,
         actions: Sequence[RatingAction] = (),
         want_id: str = "",
@@ -5865,7 +5870,7 @@ class Operations:
         return await self._operate(self._operations().RecordRatingActions, params)
 
     async def list_rating_actions(
-        self,
+        self: _Acting,
         *,
         subjects: Sequence[SubjectRef] = (),
         from_date: date | str = "",
@@ -5892,7 +5897,7 @@ class Operations:
         return await self._operate(self._operations().ListRatingActions, params)
 
     async def record_quality_assessments(
-        self,
+        self: _Acting,
         *,
         assessments: Sequence[QualityAssessment] = (),
         acting_for: str | None = None,
@@ -5906,7 +5911,7 @@ class Operations:
         return await self._operate(self._operations().RecordQualityAssessments, params)
 
     async def read_stale_reference_actions_permitted(
-        self,
+        self: _Acting,
     ) -> ops.ReadStaleReferenceActionsPermittedResult:
         """W6.38: W6.38: the setting read, by an ems plugin before it places on a stale (preview)."""
         params = ops.ReadStaleReferenceActionsPermittedParams(
@@ -5914,7 +5919,7 @@ class Operations:
         return await self._operate(self._operations().ReadStaleReferenceActionsPermitted, params)
 
     async def record_factors(
-        self,
+        self: _Acting,
         *,
         factors: Sequence[Factor] = (),
         want_id: str = "",
@@ -5930,7 +5935,7 @@ class Operations:
         return await self._operate(self._operations().RecordFactors, params)
 
     async def list_factors(
-        self,
+        self: _Acting,
         *,
         subjects: Sequence[SubjectRef] = (),
         from_date: date | str = "",
@@ -5955,7 +5960,7 @@ class Operations:
         return await self._operate(self._operations().ListFactors, params)
 
     async def list_expirations(
-        self,
+        self: _Acting,
         *,
         underlying_id: str = "",
         instrument_type: ops.InstrumentType | str | None = None,
@@ -5970,107 +5975,6 @@ class Operations:
             expiration_to=_date(expiration_to, "expiration_to"),
         )
         return await self._operate(self._operations().ListExpirations, params)
-
-    async def receive(
-        self,
-        *,
-        statement_recorded: Callable[[Heard[ops.StatementRecordedEvent]], Awaitable[None]] | None = None,
-        custodial_position_updated: Callable[[Heard[ops.CustodialPositionUpdatedEvent]], Awaitable[None]] | None = None,
-        position_changed: Callable[[Heard[ops.PositionChangedEvent]], Awaitable[None]] | None = None,
-        break_changed: Callable[[Heard[ops.BreakChangedEvent]], Awaitable[None]] | None = None,
-        account_figures_recorded: Callable[[Heard[ops.AccountFiguresRecordedEvent]], Awaitable[None]] | None = None,
-        account_attribute_changed: Callable[[Heard[ops.AccountAttributeChangedEvent]], Awaitable[None]] | None = None,
-        activity_recorded: Callable[[Heard[ops.ActivityRecordedEvent]], Awaitable[None]] | None = None,
-        sync_status_recorded: Callable[[Heard[ops.SyncStatusRecordedEvent]], Awaitable[None]] | None = None,
-        activity_re_resolved: Callable[[Heard[ops.ActivityReResolvedEvent]], Awaitable[None]] | None = None,
-        order_updated: Callable[[Heard[ops.OrderUpdatedEvent]], Awaitable[None]] | None = None,
-        placement_updated: Callable[[Heard[ops.PlacementUpdatedEvent]], Awaitable[None]] | None = None,
-        execution_recorded: Callable[[Heard[ops.ExecutionRecordedEvent]], Awaitable[None]] | None = None,
-        unplaced_fact_recorded: Callable[[Heard[ops.UnplacedFactRecordedEvent]], Awaitable[None]] | None = None,
-        trading_instruction_changed: Callable[[Heard[ops.TradingInstructionChangedEvent]], Awaitable[None]] | None = None,
-        locate_updated: Callable[[Heard[ops.LocateUpdatedEvent]], Awaitable[None]] | None = None,
-        replace_merged_instrument: Callable[[Heard[ops.InstrumentReplacedEvent]], Awaitable[None]] | None = None,
-        booking_updated: Callable[[Heard[ops.BookingUpdatedEvent]], Awaitable[None]] | None = None,
-        alert_changed: Callable[[Heard[ops.AlertChangedEvent]], Awaitable[None]] | None = None,
-        price_batch: Callable[[Heard[ops.PriceBatchRequest]], Awaitable[None]] | None = None,
-        job_finished: Callable[[Heard[ops.JobFinishedEvent]], Awaitable[None]] | None = None,
-        event_group_changed: Callable[[Heard[ops.EventGroup]], Awaitable[None]] | None = None,
-        lifecycle_event_recorded: Callable[[Heard[ops.LifecycleEventRecordedEvent]], Awaitable[None]] | None = None,
-        prices_recorded: Callable[[Heard[ops.PricesRecordedEvent]], Awaitable[None]] | None = None,
-        bars_recorded: Callable[[Heard[ops.BarsRecordedEvent]], Awaitable[None]] | None = None,
-        observations_wanted: Callable[[Heard[ops.ObservationsWantedEvent]], Awaitable[None]] | None = None,
-        want_withdrawn: Callable[[Heard[ops.WantWithdrawnEvent]], Awaitable[None]] | None = None,
-        trades_recorded: Callable[[Heard[ops.TradesRecordedEvent]], Awaitable[None]] | None = None,
-        quotes_recorded: Callable[[Heard[ops.QuotesRecordedEvent]], Awaitable[None]] | None = None,
-        report_venue_catalogue: Callable[[Heard[ops.VenueCatalogueEvent]], Awaitable[None]] | None = None,
-        outcomes_recorded: Callable[[Heard[ops.OutcomesRecordedEvent]], Awaitable[None]] | None = None,
-        rates_recorded: Callable[[Heard[ops.RatesRecordedEvent]], Awaitable[None]] | None = None,
-        liveness_recorded: Callable[[Heard[ops.LivenessRecordedEvent]], Awaitable[None]] | None = None,
-        statistics_recorded: Callable[[Heard[ops.StatisticsRecordedEvent]], Awaitable[None]] | None = None,
-        filings_recorded: Callable[[Heard[ops.FilingsRecordedEvent]], Awaitable[None]] | None = None,
-        corporate_actions_recorded: Callable[[Heard[ops.CorporateActionsRecordedEvent]], Awaitable[None]] | None = None,
-        series_recorded: Callable[[Heard[ops.SeriesRecordedEvent]], Awaitable[None]] | None = None,
-        factors_recorded: Callable[[Heard[ops.FactorsRecordedEvent]], Awaitable[None]] | None = None,
-        seed: bool = True,
-        subjects: Sequence[str] = (),
-    ) -> None:
-        """W4.3: hear the rows given a handler, each change once and in order,
-        within the plugin's read scope, until cancelled. Seeded first from the
-        store when `seed`; on a gap, a loss or a broken stream, caught up from
-        it by each row's query, the handler told by `Heard.caught_up`. A row
-        no role of the plugin hears raises NotGranted.
-
-        A row delivered latest value first (contract v18) is handed on newest
-        per key, an older value than one handed on never after it; a row
-        about subjects is heard for the `subjects` named, by their entity
-        IDs, none for none, and read again by its query, latest first, when
-        seeded, after a loss or after the stream broke. A row delivered in
-        full (contract v19) is handed on every row, and after a loss read
-        again by its query after the watermark last seen."""
-        handlers: dict[str, Callable[[Any], Awaitable[None]] | None] = {
-            "StatementRecorded": statement_recorded,
-            "CustodialPositionUpdated": custodial_position_updated,
-            "PositionChanged": position_changed,
-            "BreakChanged": break_changed,
-            "AccountFiguresRecorded": account_figures_recorded,
-            "AccountAttributeChanged": account_attribute_changed,
-            "ActivityRecorded": activity_recorded,
-            "SyncStatusRecorded": sync_status_recorded,
-            "ActivityReResolved": activity_re_resolved,
-            "OrderUpdated": order_updated,
-            "PlacementUpdated": placement_updated,
-            "ExecutionRecorded": execution_recorded,
-            "UnplacedFactRecorded": unplaced_fact_recorded,
-            "TradingInstructionChanged": trading_instruction_changed,
-            "LocateUpdated": locate_updated,
-            "ReplaceMergedInstrument": replace_merged_instrument,
-            "BookingUpdated": booking_updated,
-            "AlertChanged": alert_changed,
-            "PriceBatch": price_batch,
-            "JobFinished": job_finished,
-            "EventGroupChanged": event_group_changed,
-            "LifecycleEventRecorded": lifecycle_event_recorded,
-            "PricesRecorded": prices_recorded,
-            "BarsRecorded": bars_recorded,
-            "ObservationsWanted": observations_wanted,
-            "WantWithdrawn": want_withdrawn,
-            "TradesRecorded": trades_recorded,
-            "QuotesRecorded": quotes_recorded,
-            "ReportVenueCatalogue": report_venue_catalogue,
-            "OutcomesRecorded": outcomes_recorded,
-            "RatesRecorded": rates_recorded,
-            "LivenessRecorded": liveness_recorded,
-            "StatisticsRecorded": statistics_recorded,
-            "FilingsRecorded": filings_recorded,
-            "CorporateActionsRecorded": corporate_actions_recorded,
-            "SeriesRecorded": series_recorded,
-            "FactorsRecorded": factors_recorded,
-        }
-        await self._receive(
-            {row: handler for row, handler in handlers.items() if handler is not None},
-            seed=seed,
-            **({"subjects": subjects} if subjects else {}),
-        )
 
 
 @dataclass(frozen=True)

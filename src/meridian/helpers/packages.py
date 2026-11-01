@@ -55,7 +55,7 @@ def legs(*given: tuple[str, str, Decimal | int, str]) -> list[Leg]:
 
 
 async def propose(
-    plugin: Any,
+    role: Any,
     account_id: str,
     package: Sequence[Leg],
     quantity: Decimal | int,
@@ -67,7 +67,7 @@ async def propose(
     """Propose a package: its legs, the number of package units and the net
     limit per unit (positive a debit paid, negative a credit received);
     a limit order with no top-level instrument."""
-    return await plugin.propose_order(
+    return await role.propose_order(
         account_id=account_id,
         legs=list(package),
         quantity=quantity,
@@ -91,7 +91,7 @@ class LegFill:
 
 
 async def report_fill(
-    plugin: Any,
+    role: Any,
     *,
     placement_id: str,
     venue_account_code: str,
@@ -120,7 +120,7 @@ async def report_fill(
         **more,
     }
     answers = [
-        await plugin.report_execution(
+        await role.report_execution(
             venue_execution_id=venue_execution_id,
             quantity=quantity,
             price=net_price,
@@ -131,7 +131,7 @@ async def report_fill(
     ]
     for leg in leg_fills:
         answers.append(
-            await plugin.report_execution(
+            await role.report_execution(
                 venue_execution_id=leg.venue_execution_id,
                 instrument_id=leg.instrument_id,
                 side=leg.side,

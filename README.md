@@ -2,7 +2,7 @@
 
 The Python SDK for building [Open Meridian](https://open-meridian.com) plugins:
 the tools a trader has an AI agent build, and the bots and analytics a
-developer writes. Python 3.11 or newer. This is release 0.34.0; its reference
+developer writes. Python 3.11 or newer. This is release 0.35.0; its reference
 is at [open-meridian.dev](https://open-meridian.dev/api/python-sdk/).
 
 ## Start here
@@ -56,12 +56,19 @@ The package carries the wire bindings it speaks to the sidecar with, as
 `meridian.v1`, at the schema revision `SCHEMA_REV` in the Makefile names.
 `make vendor-schema` moves them; `make check-vendored` fails when they lag.
 
+Each role a plugin holds is one class, extending that role's base (from
+0.35.0, below), and `meridian.run` runs them on one connection:
+
 ```python
 import meridian
+from meridian.roles import custody
 
-async with await meridian.connect() as plugin:
-    print(plugin.identity.instance_id, plugin.identity.roles, plugin.grants.publish)
-    await plugin.report(healthy=True, detail="started")
+class Book(custody.Role):
+    async def on_start(self) -> None:
+        print(self.plugin.identity.instance_id, self.plugin.identity.roles)
+        await self.report_sync_status(source="custodian", connection_healthy=True)
+
+meridian.run(declaration=meridian.Declaration(), roles=[Book()])
 ```
 
 The SDK sends a heartbeat for the plugin every few seconds. The health a
@@ -69,12 +76,16 @@ plugin reports, with its detail, stands on every heartbeat after, as its
 figures do: `report(healthy=False, detail="...")` keeps it not healthy
 until it reports `healthy=True`.
 
-The steps a plugin's roles may take are typed methods on the same `plugin`,
-generated from the contract: `report_external_accounts`, `report_sync_status`,
-`record_holdings_statement`, `record_holding`, `list_custodial_positions`,
-`list_statements`, `resolve_identifier`, `report_missing_instrument`,
-`read_accounts_for_linking` and `link_external_account`; and `receive`, for
-what its roles hear.
+The steps a role may take -- its acts -- are typed methods on its class,
+generated from the contract: a custody class's `report_external_accounts`,
+`report_sync_status`, `record_holdings_statement`, `record_holding`,
+`resolve_identifier`, `report_missing_instrument`,
+`read_accounts_for_linking` and `link_external_account`, say; and what the
+role hears is its class's `on_<row>` methods. The connection, `self.plugin`
+in a class and `request.plugin` in a page, holds only what is the whole
+plugin's: its identity, settings, health, figures, storage and the rest.
+Below, `role.<act>(...)` names an act made on the class of a role holding it
+(`self.<act>(...)` inside it).
 
 A deployment's instrument records are its own (contract v10): a
 `resolve_identifier` that matches nothing is answered with a record the
@@ -105,7 +116,7 @@ configures a plugin and sees no account's data.
 caller = meridian.Caller.from_header(header)
 shown = sorted(caller.read)  # every account the page may show them
 if caller.may_write("ACC-1"):
-    await plugin.record_holdings_statement(..., acting_for=caller.header)
+    await self.record_holdings_statement(..., acting_for=caller.header)
 ```
 
 `caller.read` and `caller.write` are the sets themselves. The sidecar checks
@@ -323,12 +334,12 @@ and never its holdings, and refuses a link for an account the plugin did not
 report; only a deployment admin may name a new account.
 
 ```python
-accounts = await plugin.read_accounts_for_linking(acting_for=header)
-await plugin.link_external_account(
+accounts = await self.read_accounts_for_linking(acting_for=header)
+await self.link_external_account(
     external_account_id="acct-1", account_id="ACC-1", acting_for=header
 )
 # Or a new account, created and linked in one step; or neither, to unlink.
-await plugin.link_external_account(
+await self.link_external_account(
     external_account_id="acct-2",
     new_account_name="Fidelity Roth",
     # Optional, free text, and ignored when linking to an existing account:
@@ -384,7 +395,7 @@ refusal, never by its words. It is a `CallFailed` whose `kind` is
 
 ```python
 try:
-    await plugin.record_holding(..., external_account_id="acct-3")
+    await self.record_holding(..., external_account_id="acct-3")
 except meridian.NotLinked:
     ...  # offer it for linking; stop this statement
 ```
@@ -430,7 +441,7 @@ A quantity is a Python `Decimal` (or an `int`), and an amount of currency is a
 from decimal import Decimal
 import meridian
 
-await plugin.record_holding(
+await self.record_holding(
     statement_id=opened.statement_id,
     instrument_id=instrument_id,
     side=meridian.HoldingSide.HOLDING_SIDE_LONG,
@@ -501,7 +512,7 @@ being the account's as a whole, and each carrying the collateral held under
 it:
 
 ```python
-await plugin.record_holdings_statement(
+await self.record_holdings_statement(
     source="snaptrade",
     external_statement_id=f"{account}/{read_at_ns}",
     external_account_id=account,
@@ -529,22 +540,22 @@ sent.
 ### Hearing what other plugins do
 
 A plugin whose roles hear rows -- an `operations` plugin hears the street's
-statements and positions -- gives a handler per row to `receive`, which runs
-until cancelled:
+statements and positions -- implements each row's `on_<row>` method on the
+role's class; `meridian.run` hears them on one stream until the plugin
+stops:
 
 ```python
-async def statement_recorded(heard: meridian.Heard) -> None:
-    statement = heard.message  # the whole statement, as the store announced it
-    ...
+class Book(operations.Role):
+    async def on_statement_recorded(self, heard: meridian.Heard) -> None:
+        statement = heard.message  # the whole statement, as the store announced it
+        ...
 
-async def custodial_position_updated(heard: meridian.Heard) -> None:
-    position = heard.message.position  # removed=True when it was removed
-    ...
+    async def on_custodial_position_updated(self, heard: meridian.Heard) -> None:
+        position = heard.message.position  # removed=True when it was removed
+        ...
 
-await plugin.receive(
-    statement_recorded=statement_recorded,
-    custodial_position_updated=custodial_position_updated,
-)
+    async def on_activity_recorded(self, heard: meridian.Heard) -> None:
+        ...  # the operations suite requires it: abstract on the base
 ```
 
 It reads the store first, every row's records across the plugin's read
@@ -554,8 +565,8 @@ the sidecar marked, a stream that broke, an account entering the read scope
 -- it reads the changes since from the store and hands them on before
 anything heard after, `heard.caught_up` saying so. A handler never sees the
 store's numbers. `heard.own` says the plugin's own act caused the change, and
-`heard.cause` who did, where the store recorded it. `seed=False` reads the
-store without handing on what it holds. The reads are typed methods too,
+`heard.cause` who did, where the store recorded it. A class whose `seed` is
+False is not handed what the store held on start. The reads are typed methods too,
 `list_custodial_positions` and `list_statements`, within the read scope: an
 account outside it is refused, and an empty scope reads nothing.
 
@@ -569,7 +580,7 @@ difference as a break, which a person resolves with a justified entry or
 closes. `portfolio`, `reporting`, `compliance` and `oms` read and hear it.
 
 ```python
-reply = await plugin.record_opening_balance(
+reply = await self.record_opening_balance(
     account_id=account,
     as_of_date="2026-09-08",
     sources=[meridian.OpeningSource(kind="custodian", name="Interactive Brokers",
@@ -613,7 +624,7 @@ recorded and the same command safe to send again:
 
 ```python
 try:
-    await plugin.record_opening_balance(..., acting_for=caller.header)
+    await self.record_opening_balance(..., acting_for=caller.header)
 except meridian.CommandRefused as refused:
     if refused.reason_name == "REFUSAL_REASON_OPENING_BALANCE_RECORDED":
         ...  # already recorded: read it back and say so
@@ -651,7 +662,7 @@ DECLARATION = Declaration(
 )
 
 async with await meridian.connect(settings=SETTINGS, declaration=DECLARATION) as plugin:
-    await plugin.record_holding(
+    await self.record_holding(
         ...,
         raw_record=plugin.raw_record("ACCT-1/20261003T120000Z/positions"),
         provenance=[edge.derived("settle_date_quantity", "quantity less unsettled trades")],
@@ -882,7 +893,7 @@ book until a person confirms.
 import meridian
 from decimal import Decimal
 
-reply = await plugin.record_activity(
+reply = await self.record_activity(
     external_account_id="SNAP-ACC-1",
     source="snaptrade",
     activity=meridian.CustodialActivity(
@@ -911,18 +922,18 @@ A type that converts to no `ActivityKind` is sent as not known with
 Report past activity on first connection back to the `history_from` the sync
 status names (a backfill), then each sync's new activity.
 
-Operations reads it, `plugin.list_activities(account_id=, trade_date_from=,
+Operations reads it, `role.list_activities(account_id=, trade_date_from=,
 trade_date_to=, page_size=, cursor=)` (inclusive, by trade date, or
 `since=` a watermark in the order recorded), the reply carrying the source's
 `history_from`, so an opening balance older than the history says so. It hears
-it with `receive(activity_recorded=...)`, and links a break's cause to the
+it with `on_activity_recorded`, and links a break's cause to the
 activity that explains it: `meridian.BreakCause(category=
 "BREAK_CAUSE_CATEGORY_INCOME_REINVESTED", activity=meridian.ActivityRef(...))`.
 
 Each sync status a custody plugin reports is kept by the street:
-`plugin.list_sync_statuses()` reads the latest of each connection in the
+`role.list_sync_statuses()` reads the latest of each connection in the
 reader's scope (or every one `since=` a watermark), and
-`receive(sync_status_recorded=...)` hears each, so "needs sign-in" is told
+`on_sync_status_recorded` hears each, so "needs sign-in" is told
 apart from merely old. One for an unlinked external account is kept with its
 account empty and reaches no plugin.
 
@@ -934,7 +945,7 @@ the security master completes later -- never sent again, since a redelivery
 is answered as already recorded and changes nothing:
 
 ```python
-reply = await plugin.re_resolve_activity(
+reply = await self.re_resolve_activity(
     external_account_id="SNAP-ACC-401K",
     source="snaptrade",
     external_activity_id=activity_id,          # as first reported
@@ -952,7 +963,7 @@ it, its own record; one naming what the latest resolution names is answered
 `already_recorded`, and one of an activity never recorded is refused naming
 it. Operations reads them beside the activities, `list_activities(...)`'s
 `re_resolutions` (the activity's instrument is the latest's), and hears each
-with `receive(activity_re_resolved=...)`, caught up from that read after a
+with `on_activity_re_resolved`, caught up from that read after a
 gap. A custody plugin re-resolves an account's activities whenever what
 resolves them changes. Both rows are `preview` in v15.
 
@@ -1010,7 +1021,7 @@ every venue (`resolve_venue`, a MIC as `iso10383`, a miss reported with
 from datetime import date
 from meridian import Money, ObservationMeta, Price, Source, SourceTime, SubjectRef
 
-done = await plugin.record_prices(
+done = await self.record_prices(
     prices=[
         Price(
             meta=ObservationMeta(
@@ -1043,12 +1054,14 @@ none, as is a trade count.
 declines it per subject:
 
 ```python
-async def wanted(heard: meridian.Heard[meridian.plugin.v1.operations_pb2.ObservationsWantedEvent]) -> None:
-    want = heard.message           # dataset, data_type, subjects, kinds, business_date or a range
-    await plugin.record_prices(prices=fetched(want), want_id=want.want_id)
-    await plugin.decline_want(want_id=want.want_id, subjects=uncovered, reason="not_covered")
+class Lake(data.Role):
+    async def on_observations_wanted(self, heard: meridian.Heard) -> None:
+        want = heard.message       # dataset, data_type, subjects, kinds, business_date or a range
+        await self.record_prices(prices=fetched(want), want_id=want.want_id)
+        await self.decline_want(want_id=want.want_id, subjects=uncovered, reason="not_covered")
 
-await plugin.receive(observations_wanted=wanted, want_withdrawn=stop_keeping_current)
+    async def on_want_withdrawn(self, heard: meridian.Heard) -> None:
+        stop_keeping_current(heard.message.want_id)
 ```
 
 A standing want asks the subjects kept current until it is withdrawn.
@@ -1059,14 +1072,14 @@ named datasets or every dataset side by side -- the generated reads'
 parameters:
 
 ```python
-closes = await plugin.list_prices(subjects=held, kinds=["close"], business_date=date(2026, 10, 8))
-then = await plugin.list_prices(subjects=held, business_date=date(2026, 10, 8), as_of_ns=cut)
-both = await plugin.list_prices(subjects=held, sources=meridian.SourceChoice(side_by_side=True))
-bars = await plugin.list_bars(subjects=held, interval_ns=86_400 * 10**9,
+closes = await self.list_prices(subjects=held, kinds=["close"], business_date=date(2026, 10, 8))
+then = await self.list_prices(subjects=held, business_date=date(2026, 10, 8), as_of_ns=cut)
+both = await self.list_prices(subjects=held, sources=meridian.SourceChoice(side_by_side=True))
+bars = await self.list_bars(subjects=held, interval_ns=86_400 * 10**9,
                               valid_from_ns=start, valid_until_ns=end)
 closes.datasets      # each dataset the answer includes, once: vendor, aggregator, instance
 closes.unanswered    # each subject or dataset not served, and why
-listed = await plugin.list_datasets()   # what it may read, with each catalogue entry
+listed = await self.list_datasets()   # what it may read, with each catalogue entry
 ```
 
 and hears what is recorded after for the subjects it names, at most 500,
@@ -1075,7 +1088,12 @@ bar's interval start), read again by the same query, latest first, when it
 starts, after a loss and after a broken stream:
 
 ```python
-await plugin.receive(prices_recorded=on_price, bars_recorded=on_bar, subjects=held_ids)
+class Valuation(reporting.Role):
+    def subjects(self) -> list[str]:
+        return held_ids            # read when the stream opens; self.hear_again() on a change
+
+    async def on_prices_recorded(self, heard: meridian.Heard) -> None: ...
+    async def on_bars_recorded(self, heard: meridian.Heard) -> None: ...
 ```
 
 Each is handed on with its dataset as the catalogue declares it
@@ -1090,12 +1108,13 @@ exact past a float; a bar with no vwap; an FX rate; a stablecoin quote on the
 token's instrument; an asset that does not resolve and a venue not held,
 reported; a venue resolved; a want recorded against, a subject declined, a
 standing want withdrawn. A case naming a row the plugin hears gives it what
-`answer` delivers through its own `receive`, called on the recorder:
+`answer` delivers to the plugin's class bound to the recorder:
 
 ```python
 async def a_want_recorded_against(recorder):
+    lake = recorder.bind(Lake(State()))
     recorder.answer("ObservationsWanted", lambda _: synthetic_want())
-    await recorder.receive(observations_wanted=MyDataPlugin(recorder).on_want)
+    await recorder.hear(lake)
 ```
 
 Two plugins of one pair pass it unchanged; a candle read through a `float`, or
@@ -1117,7 +1136,7 @@ the venue it printed on, and its price a `Money` naming its cash instrument:
 from meridian import Eligibility, Quote, Trade, TradeAttributes
 
 every = Eligibility(high_low="eligible", open="eligible", close="eligible", volume="eligible")
-await plugin.record_trades(
+await self.record_trades(
     trades=[
         Trade(
             meta=ObservationMeta(row_key="BTC-USD:t:812345678", subjects=[SubjectRef(entity_id=btc)],
@@ -1131,7 +1150,7 @@ await plugin.record_trades(
         )
     ]
 )
-await plugin.record_quotes(quotes=[Quote(meta=meta, bid=Money(Decimal("62510.00"), "USD"),
+await self.record_quotes(quotes=[Quote(meta=meta, bid=Money(Decimal("62510.00"), "USD"),
                                          bid_quantity=Decimal("0.84"))])   # no offer: ask unset
 ```
 
@@ -1147,15 +1166,20 @@ trades recorded after a watermark, whatever their valid time; and quotes at the
 latest in force, per subject, dataset, venue and asset, or over a range:
 
 ```python
-day = await plugin.list_trades(subjects=held, valid_from_ns=start, valid_until_ns=end)
-late = await plugin.list_trades(subjects=held, after_watermark=day.watermark)
-quotes = await plugin.list_quotes(subjects=held)          # BTC in USD and in USDC: both
+day = await self.list_trades(subjects=held, valid_from_ns=start, valid_until_ns=end)
+late = await self.list_trades(subjects=held, after_watermark=day.watermark)
+quotes = await self.list_quotes(subjects=held)          # BTC in USD and in USDC: both
 ```
 
 and hears them for the subjects it names:
 
 ```python
-await plugin.receive(trades_recorded=on_trade, quotes_recorded=on_quote, subjects=held_ids)
+class Signal(signal.Role):
+    def subjects(self) -> list[str]:
+        return held_ids
+
+    async def on_trades_recorded(self, heard: meridian.Heard) -> None: ...
+    async def on_quotes_recorded(self, heard: meridian.Heard) -> None: ...
 ```
 
 Every trade is handed on, never dropped for a later one. After a loss, or a
@@ -1239,7 +1263,7 @@ reads only those the deployment admin granted its instance
 `CommandRefused` with `REFUSAL_REASON_ACCOUNT_NOT_LINKABLE`.
 
 **A data plugin's licences and its restart.** A data plugin reads its own
-declared datasets' licences (`plugin.list_datasets()`, its `licences`), so
+declared datasets' licences (`role.list_datasets()`, its `licences`), so
 its Datasets page says "Licensed" or "Not licensed yet". On start, before
 resuming its stream, it backfills a restart's gap:
 
@@ -1249,7 +1273,7 @@ from meridian.roles import data
 async def history(last):        # the last trade the lake holds of a subject
     return my_venue.trades_since(last.meta.subjects[0].entity_id, last.meta.valid_from_ns)
 
-await data.backfill_restart(plugin, streamed_subjects, history)
+await data.backfill_restart(self, streamed_subjects, history)
 ```
 
 The data suite gains `the-takers-side-stated` (a case about a field,
@@ -1378,26 +1402,26 @@ and alone decides what an order's state allows.
 
 ```python
 # portfolio, or the oms: propose. A unit quantity or a cash quantity, never both.
-await plugin.propose_order(
+await self.propose_order(
     account_id="ACC-1", instrument_id=aapl, side="buy", quantity=Decimal("10"),
     order_type="limit", limit_price=Money(Decimal("227.50"), "USD"),
     time_in_force="day", idempotency_key="propose:ACC-1:pm-ticket-4471",
 )
 
 # the oms: release it to be worked.
-await plugin.release_order(order_id=order_id, idempotency_key=f"release:{order_id}")
+await self.release_order(order_id=order_id, idempotency_key=f"release:{order_id}")
 
 # the ems: claim it, and place at a connectivity plugin linked to it, with the
 # venue account code its admin mapped for the account (below).
-await plugin.set_working_condition(order_id=order_id, condition="claimed", set=True)
-await plugin.create_placement(
+await self.set_working_condition(order_id=order_id, condition="claimed", set=True)
+await self.create_placement(
     order_id=order_id, connectivity_instance_id="snaptrade-1", venue_account_code="X12345",
     quantity=Decimal("10"), idempotency_key=f"place:{order_id}:1",
 )
 
 # a connectivity plugin: say what the venue said of the ems's placement, each
 # with its raw record.
-await plugin.report_placement(
+await self.report_placement(
     placement_id=placement_id, event="acknowledged", venue_order_id="V-881",
     raw_record=plugin.raw_record(key),
 )
@@ -1447,12 +1471,11 @@ placements (`report_execution`, `report_charge`), records a locate
 (`read_venue_catalogue`). What they hear is typed too:
 
 ```python
-await plugin.receive(
-    order_updated=on_order,                         # Heard[OrderUpdatedEvent]
-    placement_updated=on_placement,                 # a connectivity plugin hears only its own
-    execution_recorded=on_fill,
-    trading_instruction_changed=on_instruction,     # a pause or stop: no account scope
-)
+class Desk(ems.Role):
+    async def on_order_updated(self, heard): ...                  # Heard[OrderUpdatedEvent]
+    async def on_placement_updated(self, heard): ...              # a connectivity plugin hears only its own
+    async def on_execution_recorded(self, heard): ...
+    async def on_trading_instruction_changed(self, heard): ...    # a pause or stop: no account scope
 ```
 
 A placement is delivered only to the connectivity plugin it names, and
@@ -1497,13 +1520,13 @@ the date (`compute_date`), answered with the rule and calendar versions it
 was worked out on, the same answer for every plugin:
 
 ```python
-answer = await plugin.compute_date(
+answer = await self.compute_date(
     settlement=meridian.SettlementDateInputs(instrument_id=aapl, trade_date="2026-10-09")
 )
 if answer.outcome == ops.DATE_OUTCOME_COMPUTED:
     settles = answer.date                            # "2026-10-13": Columbus Day skipped
-await plugin.compute_date(spot=meridian.SpotDateInputs(pair=[eur, usd], trade_date="2027-03-24"))
-await plugin.compute_date(
+await self.compute_date(spot=meridian.SpotDateInputs(pair=[eur, usd], trade_date="2027-03-24"))
+await self.compute_date(
     tenor=meridian.TenorDateInputs(pair=[usd, jpy], tenor=meridian.Tenor(count=1, unit="month"),
                                    trade_date=date(2026, 10, 30))
 )
@@ -1549,7 +1572,7 @@ between two sleeves of one account:
 
 ```python
 usd = lambda amount: Money(Decimal(amount), "USD")
-await plugin.book_order(
+await self.book_order(
     order_id=order_id, execution_ids=[execution_id],
     allocations=[
         meridian.Allocation(account_id="ACC-FUND-A", quantity=Decimal("60"),
@@ -1560,8 +1583,8 @@ await plugin.book_order(
                             net_amount=usd("9100.00"), intended_settlement_date="2026-10-16"),
     ],
 )
-await plugin.hand_off_booking(booking_id=booking_id)
-await plugin.correct_booking(booking_id=booking_id, kind="cancel", reason="Wrong fund")
+await self.hand_off_booking(booking_id=booking_id)
+await self.correct_booking(booking_id=booking_id, kind="cancel", reason="Wrong fund")
 ```
 
 A block's allocations share one average price (`average_priced=True`); an
@@ -1570,8 +1593,8 @@ with its reason and `ErrorCause`, and raises an alert. `operations` and
 `portfolio` amend an order's allocation instruction
 (`set_allocation_instruction`); `connectivity` and `confirmation` report a
 prime's answer to a give-up (`report_give_up`). The readers hear and read
-bookings (`receive(booking_updated=...)`, `list_bookings`) and alerts
-(`receive(alert_changed=...)`, `list_alerts`), and `compliance` raises its
+bookings (`on_booking_updated`, `list_bookings`) and alerts
+(`on_alert_changed`, `list_alerts`), and `compliance` raises its
 own and acknowledges one for a person (`raise_alert`, `acknowledge_alert`). A
 booking's states are a table beside the order's, in `meridian/transitions.json`.
 Cash follows option (c): the account's base currency is a balance, every
@@ -1588,9 +1611,14 @@ instrument IDs follows each to the record it became:
 
 ```python
 ids = meridian.CurrentIdMap()
-await ids.catch_up(plugin)                                    # on start
-await plugin.receive(replace_merged_instrument=ids.heard, order_updated=on_order)
-if ids.same(held.instrument_id, order.instrument_id): ...      # never by the IDs' text
+
+class Desk(oms.Role):
+    async def on_start(self) -> None:
+        await ids.catch_up(self)                                  # on start
+    async def on_replace_merged_instrument(self, heard) -> None:
+        await ids.heard(heard)
+    async def on_order_updated(self, heard) -> None:
+        if ids.same(held.instrument_id, heard.message.order.instrument_id): ...  # never by the IDs' text
 ```
 
 The templates the store holds are read with `meridian.TemplateCatalogue`
@@ -1690,7 +1718,9 @@ async def answer(want, key, subjects, kinds):     # the plugin's own conversion
         wants.stand(want, subjects, kinds)
     return {subject: "not_covered" for subject in not_served}
 
-await plugin.receive(observations_wanted=lambda heard: wants.hear(heard, answer))
+class Lake(data.Role):                         # wants = data.Wants(lake, ("daily",))
+    async def on_observations_wanted(self, heard):
+        await wants.hear(heard, answer)
 ```
 
 - **The data role** (`meridian.roles.data`): `Wants` hears a want, answers it
@@ -1796,7 +1826,7 @@ await plugin.receive(observations_wanted=lambda heard: wants.hear(heard, answer)
   breakdown; `pnl` version 1 is Unrealized P&L, one `unrealized` component
   per bucket (realized P&L since the account opened is `pnl` version 2,
   served from 0.32.0, below). A job answered later is heard on
-  `job_finished` (`plugin.receive(job_finished=jobs.heard)`) and caught up by
+  `job_finished` (a class's `on_job_finished` calling `jobs.heard`) and caught up by
   sequence (`jobs.catch_up`).
 - **The reference computations** (`meridian.analytics.reference`): v26's
   models (`cash`, `quoted_price`, `binary_event`) and its eight measure
@@ -1823,7 +1853,7 @@ await plugin.receive(observations_wanted=lambda heard: wants.hear(heard, answer)
   catalogue; `meridian.connection_badge` draws Demo, Live or "Live
   (environment not confirmed)"; `Caller.agent_refused` says before sending
   what the book would refuse an agent.
-- **The agent tools**: `plugin.query_lake`, one bounded query of the lake,
+- **The agent tools**: `role.query_lake`, one bounded query of the lake,
   and `plugin.count_model_tokens`, a model's tokens on every heartbeat.
 - **The QuantLib oracle** (`tests/oracle`): QuantLib pinned in the
   `oracle` extra alone, never a dependency of the SDK or an image; committed
@@ -1974,7 +2004,7 @@ plugin migrate` rewrites what it can (`to_0_33_0`).
   `ReportLatency` every interval, and `reports-its-feed-delay`,
   `reports-a-sessions-round-trip` and `reports-its-pre-trade-checks-data-age`
   are required of every plugin holding the role. An `ems`'s
-  `ReferenceCheck.permitted(plugin)` reads the stale-reference actions the
+  `ReferenceCheck.permitted(self)` reads the stale-reference actions the
   deployment permits, at the plugin's own role (ruling 600), and `warn` is
   honoured only where permitted.
 - **Chains** (`meridian.helpers.chains`): a series keyed by its OSI symbol
@@ -2077,18 +2107,18 @@ plugin migrate` rewrites what it can (`to_0_33_0`).
   "Reading data: ask for what a page shows".
 
   ```python
-  series = await chains.read_chain(plugin, underlying, expiration, paths=["put_or_call", "strike_price"])
+  series = await chains.read_chain(self, underlying, expiration, paths=["put_or_call", "strike_price"])
   ```
 - **0.33.3, additive** (rulings 856, 859 and 860): an underlying's
-  expirations alone. `chains.read_expirations(plugin, underlying_id,
+  expirations alone. `chains.read_expirations(self, underlying_id,
   expiration_from, expiration_to)` answers them in date order, each with
   `series_count`, from the typed `list_expirations`, so a page chooses its
   expiration with one small read instead of listing every series. Every
   template's AGENTS.md "Reading data" section does so.
 
   ```python
-  expirations = await chains.read_expirations(plugin, underlying)
-  series = await chains.read_chain(plugin, underlying, expirations[0].expiration_date, paths=["strike_price"])
+  expirations = await chains.read_expirations(self, underlying)
+  series = await chains.read_chain(self, underlying, expirations[0].expiration_date, paths=["strike_price"])
   ```
 - **0.33.4, a fix** (ruling 923): two hot spots in a stream's path.
   `RawStore.keep_line` holds each day's file open (at most 128 at once)
@@ -2190,9 +2220,9 @@ rewrites the modules' imports and says what is left by hand.
 - **The factor** (W10.4). An agency's data plugin records each held pool's or
   class's factor as published, never a whole file: `debt.factor(pool_id,
   "0.84123456", "2026-10", dataset=..., wac=..., wam=..., wala=...)`, sent by
-  `plugin.record_factors` or `wants.record("factors", rows, key)`. Readers read
+  `role.record_factors` or `wants.record("factors", rows, key)`. Readers read
   a pool's history (`debt.read_factors`, every page; `debt.latest`) and hear
-  each month (`receive(factors_recorded=...)`, never conflated, caught up by
+  each month (`on_factors_recorded`, never conflated, caught up by
   `list_factors`). A fill states original face; the book takes the factor
   published for its settlement month (`debt.settlement_month`, 991), or the
   latest one provisionally, and revises it when the month's row arrives (992).
@@ -2240,13 +2270,113 @@ rewrites the modules' imports and says what is left by hand.
   ```python
   from meridian.helpers import debt, lifecycle
 
-  rows = await debt.read_factors(plugin, [pool_id], "2026-01-01", "2026-11-30")
+  rows = await debt.read_factors(self, [pool_id], "2026-01-01", "2026-11-30")
   prior, current = rows[-2], rows[-1]
   expected = lifecycle.expected_paydown(account_id, pool_id, original_face, prior,
                                         current, currency="USD")
   if expected is not None:
-      await lifecycle.propose(plugin, [expected])
+      await lifecycle.propose(self, [expected])
   ```
+
+### Each role is one class (0.35.0)
+
+From 0.35.0 (spec/each-role-is-one-generated-class; rulings 1004, 1005 and
+1009 to 1023) a plugin writes one class per role it holds. Each extends its
+role's base, `meridian.roles.<role>.Role` -- `compliance`, `confirmation`,
+`connectivity`, `custody`, `data`, `ems`, `oms`, `operations`,
+`portfolio`, `pricing`, `reference`, `reporting`, `servicing`,
+`settlement` and `signal`, every role a module -- which design's generator
+writes from the matrix and the suites into
+`meridian/roles/_generated/<role>.py`:
+
+- **its acts** are its methods, one per row its role publishes, typed as
+  before and converted in one place, `meridian.operations`:
+  `await self.record_prices(...)`. An act two roles hold is the same call
+  from either class; core checks every act against the plugin's declared
+  roles and grants, as before;
+- **its events** are `on_<row>` methods, one per event row its role hears,
+  named mechanically (`on_observations_wanted`, `on_activity_re_resolved`).
+  Those its role's suite requires -- a case expecting the event heard with
+  neither `about` nor `about_field` -- are abstract, so a class missing one is
+  refused when it is made, naming the role and the event; an optional one
+  is heard only where the class overrides it, and a row no class hears is
+  never asked of the sidecar;
+- **its lifecycle**: `on_start()` once the plugin has registered, before the
+  stream opens; `run()`, its long-running work, started after every class's
+  `on_start` and restarted after a backoff when it fails
+  (`meridian.helpers.sessions.Backoff`), the failure logged and said on the
+  plugin's health; `on_stop()` when the plugin stops;
+- **its hearing**: `seed` (False where its `on_start` reads the store
+  itself), `subjects()`, the lake's subjects it hears, read when the stream
+  opens, and `self.hear_again()` when they change, which opens the one
+  stream again and catches up as after a broken stream;
+- **the connection**, `self.plugin`: what is the whole plugin's, never a
+  role's -- identity, settings, health and figures, storage, raw records and
+  archive moves, tickets, a person's own settings, views, access, the
+  account scope, leaving.
+
+```python
+import meridian
+from meridian.roles import connectivity, data
+
+class Lake(data.Role):
+    def __init__(self, state):
+        self.state = state
+        self.wants = data.Wants(self, ("daily",))
+
+    async def on_start(self):
+        await self.wants.read_licences()
+
+    async def on_observations_wanted(self, heard):
+        await self.wants.hear(heard, self.state.answer)
+
+state = State()
+meridian.run(
+    declaration=DECLARATION,
+    roles=[Lake(state), connectivity.Trader(lambda: state.venue, now=..., market_zone=...)],
+    pages=pages,
+    port=PORT,
+    on_settings=state.configure,     # an instance of the declaration's @meridian.settings class
+    figures=state.figures,           # read on every heartbeat
+)
+```
+
+`meridian.run(declaration, roles, *, pages, port, on_settings, figures)` is
+the process entry point (`run_async` as a coroutine): it handles SIGTERM and
+SIGINT, connects, registers the classes on one connection -- one class per
+role, two for one role refused naming it, a class for a role the instance
+was not launched with not started and logged -- delivers the settings, runs
+each class's `on_start`, hears one stream for every class, each delivery
+handed to every class hearing its row in order, starts each `run`, serves
+the pages, reports the plugin healthy and, when stopped, cancels the runs and
+calls each `on_stop`. `meridian.connect(..., roles=[...])` is the context
+manager beneath it, for a script or a test driving its classes itself;
+`roles` is required. The connection makes no act, and `receive` is gone.
+
+The SDK's common logic is role classes, registered as they are or
+subclassed: `connectivity.Trader` (its venue given first, `poll_seconds`
+given to it; it reads the book on start and is not seeded), `pricing.Pricer`
+and the data feeds, `data.pairs.Feed`, `data.event_contracts.Feed` and
+`data.listings.Feed`, each running its own loops in `run()` but the listings
+feed, whose plugin ticks it. Where a feed's method had an act's name it is
+renamed: a pairs feed's `record_trades_of` and `record_quotes_of`, an
+event-contract feed's `record_outcomes_of` and `record_bars_of`, a listings
+feed's `seed_symbols`. A helper making an act is given the role object, never
+the connection (ruling 1023): `data.Wants(self, ...)`,
+`roles.Latency(self)`, `chains.read_chain(self, ...)`,
+`custody.account_pages(..., role=lambda: custody_class)`. A page acts through
+the role object the plugin gives it (ruling 1014), a closure or the state it
+shares.
+
+The suites drive a class through their recorder: `lake =
+recorder.bind(Lake(...))` makes its acts the recorder's, `recorder.answer(row,
+...)` says what a row delivers, and `await recorder.hear(lake)` hands the
+class each row it hears. `meridian.behaviours` holds this SDK's helpers and
+common logic to the behaviour cases every SDK runs (meridian-schema's
+`boundaries/behaviours.json`, vendored as `src/meridian/behaviours.json`),
+an adapter per subject; a plugin never runs them.
+
+  **Run 0.35.0 on a core of contract v29**: no contract changed.
 
 ## Moving a plugin to a new release
 
@@ -2325,6 +2455,7 @@ carries libcst.
 | 0.32.3 to 0.33.0: the SDK declares contract v28: `meridian.SubjectRef` only (ruling 599); `Latency.report` sends ReportLatency and the three latency cases are required (518); the ems's actions permitted read (600); listed options' and futures' chains, lifecycle and packages (`roles.chains`, `roles.lifecycle`, `roles.packages`); a signal's derived series, saved scenarios and quality escalated (`roles.signal`); the filings slice (`roles.data.filings`); quality states at the edge (`roles.data.quality`); `DataEligibility`; the suites' v28 cases, marked by `about` (602). Breaking | an `ops.SubjectRef(...)` handed to the SDK into `meridian.SubjectRef(...)`; a base pinned by digest at an older release moved to 0.33.0, its digest dropped (offline) | a heard message's subjects passed to a typed operation: convert them; map each role suite's v28 cases, or name those about what the plugin never presents; map the three latency cases a v27 plugin named not presented; pin the base's digest again |
 | 0.33.0 to 0.33.1: additive, on contract v28: an event-contract `Market` may answer `bars(contract, interval, first_ns, until_ns)` (`Candle`, `HOUR`, `DAY`), its plugin declaring a third dataset keyed `bars` (`meridian.v1.Bar`, on its session day) and running `Feed.keep_bars(declared)`; `EventContractsChecks` accept `bars` where the hook is supplied and refuse any other third dataset; the feed-delay producer stands on the quote where the last trade states no time or no prices are declared (ruling 626); a row stating an interval is no duplicate of the same values over another | only the pins move: no migrate step is needed beyond them | a venue keeping bars declares `bars`, names `BARS_DECLARED` in its `venue_cases` and drops `a-daily-bar` from `NOT_PRESENTED`; a plugin's own feed-delay producer standing on the quote can be removed |
 | 0.33.5 to 0.34.0: the SDK declares contract v29, fixed income: the contract's money rules, accrual and factors (`helpers.debt`), the seven fixed-income records reported and servicing's expectations (`helpers.lifecycle`), `analytics.DEBT_MEASURES` and their reference computations (`analytics.debt`), a quality assessment's data type, a derived value in money, the suites' factor cases and the widened `about` markers; `meridian.roles` holds only roles, its topic modules `chains`, `packages`, `lifecycle` and `debt` moved to `meridian.helpers` with no shim (ruling 1001). Breaking | every import and name of `meridian.roles.chains`, `.packages`, `.lifecycle` or `.debt` onto `meridian.helpers` (`import meridian.roles.chains`, `from meridian.roles import chains`, `from meridian.roles.chains import X`; `from meridian.roles import Latency, chains` split in two; `meridian.roles.debt.factor(...)`, a patch target's string); a base pinned by digest at an older release moved to 0.34.0, its digest dropped (offline) | map each role suite's v29 cases, or name those about what the plugin never presents; name a `QualityAssessment`'s `data_type`; an old path still named in a comment, a dynamic import or read through `from meridian.roles import *`; pin the base's digest again |
+| 0.34.0 to 0.35.0: each role is one class (spec/each-role-is-one-generated-class): `meridian.roles.<role>.Role` for every role, generated from the matrix and the suites, its acts methods and its events `on_<row>` methods, required ones abstract; seven role modules added (`compliance`, `confirmation`, `oms`, `portfolio`, `reference`, `servicing`, `settlement`); `meridian.run` and `run_async` the entry point, `on_start`, `run` (restarted with `helpers.sessions.Backoff`) and `on_stop`, `seed`, `subjects()` and `hear_again()` per class on one stream; `connect(roles=)` required; the connection keeps only what is plugin-wide, and makes no act; `receive` gone; `connectivity.Trader`, `pricing.Pricer` and the data feeds role classes; helpers given the role object; `Recorder.bind` and `Recorder.hear`; `meridian.behaviours`. No contract change. Breaking | a `receive` call whose handlers are one class's methods on one declared role's events made that class's `on_<row>` methods, the class given the role's base, `seed=False` its `seed = False`, the connection it took dropped; the SDK's own handlers dropped from a `receive`; a Trader's, a feed's and a Pricer's renamed methods and arguments, the connection given them dropped (a recorder's call `recorder.bind(...)`); `self.plugin.<act>` on `self` in a role class, a helper given `self.plugin` given `self`; an unchanged template entry point replaced | an entry point connecting by hand, moved to `meridian.run`; an act on the connection, made on the role object holding it; a `receive` no rewrite reached; a role class lacking a required event; a suite test hearing through `recorder.receive` or giving a class a stand-in connection; 924's helpers adopted by hand |
 
 `tests/migrations/` holds the plugins the migrations are recorded for, as
 written and as their migration leaves them, and `make check-migrations` holds

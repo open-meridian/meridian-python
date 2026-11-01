@@ -104,10 +104,11 @@ the act is the dashboard's, tested in meridian-core.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
+from typing import Any
 
 import grpc
 import pytest
@@ -1780,4 +1781,52 @@ def anyio_backend() -> str:
     return "asyncio"
 
 
-__all__ = ["FakeLake", "FakeOperations", "FakeSidecar", "Stream", "asyncio", "sidecar"]
+__all__ = [
+    "FakeLake",
+    "FakeOperations",
+    "FakeSidecar",
+    "Stream",
+    "asyncio",
+    "receive",
+    "row_of",
+    "sidecar",
+]
+
+
+async def receive(
+    plugin: Any,
+    *,
+    seed: bool = True,
+    subjects: Sequence[str] = (),
+    **handlers: Callable[[Any], Awaitable[None]] | None,
+) -> None:
+    """The stream as the SDK opens it for a plugin's role classes (SDK 0.35),
+    given a handler per row by its keyword (`observations_wanted=...`), as
+    `Plugin.receive` took them before: the tests of hearing itself."""
+    from meridian.operations import CONFLATED, DELIVERED, SEQUENCED, UNCONFLATED
+    from meridian.receive import follow
+
+    rows = {
+        _snake(row.name): row.name for row in (*DELIVERED, *SEQUENCED, *CONFLATED, *UNCONFLATED)
+    }
+    unknown = sorted(set(handlers) - set(rows))
+    if unknown:
+        raise TypeError(f"no row is named {unknown}")
+    await follow(
+        plugin,
+        {rows[name]: handler for name, handler in handlers.items() if handler is not None},
+        seed=seed,
+        subjects=subjects,
+    )
+
+
+def _snake(name: str) -> str:
+    import re
+
+    return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
+
+
+def row_of(keyword: str) -> str:
+    """A row's name from the keyword `Plugin.receive` named it by before 0.35
+    (`activity_re_resolved` is ActivityReResolved)."""
+    return "".join(word[:1].upper() + word[1:] for word in keyword.split("_"))

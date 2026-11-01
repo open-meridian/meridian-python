@@ -67,7 +67,7 @@ def archive(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 async def _connected(service: Any, address: str, **settings: str) -> meridian.Plugin:
     """A plugin declaring the three kinds, its settings delivered once."""
     service.settings = [_settings(**settings)]
-    plugin = await meridian.connect(address, heartbeat=False, declaration=DECLARATION)
+    plugin = await meridian.connect(address, heartbeat=False, declaration=DECLARATION, roles=[])
     async for _ in plugin.settings():
         break
     return plugin
@@ -159,7 +159,7 @@ async def test_the_sdk_declares_two_settings_per_kind_archived_by_default_with_a
     sidecar: Any, archive: Path, storage: Path
 ) -> None:
     service, address = sidecar
-    plugin = await meridian.connect(address, heartbeat=False, declaration=DECLARATION)
+    plugin = await meridian.connect(address, heartbeat=False, declaration=DECLARATION, roles=[])
     await plugin.leave()
     (sent,) = service.registered
     by_name = {s.name: s for s in sent.settings}
@@ -193,7 +193,7 @@ async def test_with_no_archive_past_the_window_is_kept_by_default(
     sidecar: Any, storage: Path
 ) -> None:
     service, address = sidecar
-    plugin = await meridian.connect(address, heartbeat=False, declaration=DECLARATION)
+    plugin = await meridian.connect(address, heartbeat=False, declaration=DECLARATION, roles=[])
     await plugin.leave()
     defaults = {s.name: s.default_value for s in service.registered[0].settings}
     assert defaults["activity_past_window"] == "kept"
@@ -212,7 +212,7 @@ async def test_a_plugin_naming_roles_has_its_window_settings_serve_its_edge_role
         ),
         storage=Storage(kinds=KINDS[:1]),
     )
-    plugin = await meridian.connect(address, heartbeat=False, declaration=declared)
+    plugin = await meridian.connect(address, heartbeat=False, declaration=declared, roles=[])
     await plugin.leave()
     roles = {s.name: list(s.roles) for s in service.registered[0].settings}
     assert roles["activity_window_days"] == ["custody"]
@@ -359,7 +359,7 @@ async def test_a_move_before_the_settings_arrived_is_refused_it_names_its_window
     sidecar: Any, storage: Path, archive: Path
 ) -> None:
     service, address = sidecar
-    plugin = await meridian.connect(address, heartbeat=False, declaration=DECLARATION)
+    plugin = await meridian.connect(address, heartbeat=False, declaration=DECLARATION, roles=[])
     try:
         with pytest.raises(RuntimeError, match="the settings have not arrived"):
             await plugin.archive_unit(
@@ -600,7 +600,7 @@ async def test_read_moves_answers_the_moves_newest_first_and_the_archives_spans(
 
 async def test_what_each_kind_holds_in_storage_goes_on_every_heartbeat(sidecar: Any) -> None:
     service, address = sidecar
-    plugin = await meridian.connect(address, heartbeat=False, declaration=DECLARATION)
+    plugin = await meridian.connect(address, heartbeat=False, declaration=DECLARATION, roles=[])
     try:
         plugin.stored = [
             meridian.StoredSpan(
@@ -794,7 +794,7 @@ async def test_connect_declares_the_restore_route_for_a_plugin_declaring_kinds(
     # restore route is in its tools already, so the registration is the same.
     service.uploaded = declared.to_wire()
     assert "restore_unit" in [t.name for t in service.uploaded.tools]
-    plugin = await meridian.connect(address, heartbeat=False, declaration=declared)
+    plugin = await meridian.connect(address, heartbeat=False, declaration=declared, roles=[])
     await plugin.leave()
     assert "restore_unit" in [t.name for t in service.registered[0].tools]
     assert service.registered[0].declaration == service.uploaded

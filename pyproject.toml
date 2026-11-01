@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "open-meridian"
-version = "0.34.0"
+version = "0.35.0"
 description = "Build Meridian plugins"
 license = { text = "Apache-2.0" }
 requires-python = ">=3.11"
@@ -70,6 +70,11 @@ where = ["src"]
 # And each migration's record, beside its code or alone where only the pins
 # move.
 meridian = ["py.typed", "v1/*.pyi", "plugin/v1/*.pyi", "migrations/*/migration.toml",
+            # 0.35.0's step: the roles' surfaces it rewrites to, and the
+            # templates' entry points it replaces while unchanged.
+            "migrations/to_0_35_0/roles.json", "migrations/to_0_35_0/entry/*.txt",
+            # The behaviour cases every SDK runs (SDK 0.35).
+            "behaviours.json",
             # The role suites, as meridian-schema publishes them (contract v11).
             "suites.json",
             # The data dictionary a refusal's paths resolve to (contract v12).
@@ -89,6 +94,7 @@ src = ["src", "tests", "template/src"]
 # and meridian-design's typed operations. Styling them would be editing them,
 # and the next generation would undo it.
 extend-exclude = ["src/meridian/v1", "src/meridian/plugin", "src/meridian/operations.py",
+                  "src/meridian/roles/_generated",
                   "src/meridian/bounds.py",
                   # Plugins as written, and as their migration writes them:
                   # restyling either would change what the migrations are

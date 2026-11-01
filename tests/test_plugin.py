@@ -43,7 +43,7 @@ async def test_registering_sends_no_identity(sidecar: tuple[FakeSidecar, str]) -
     letting a plugin choose its own privileges.
     """
     service, address = sidecar
-    plugin = await meridian.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False, roles=[])
     await plugin.leave()
 
     (sent,) = service.registered
@@ -134,7 +134,7 @@ async def test_the_sdk_declares_the_contract_it_was_built_for(
     naming both versions.
     """
     service, address = sidecar
-    plugin = await meridian.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False, roles=[])
     await plugin.leave()
 
     (sent,) = service.registered
@@ -148,7 +148,7 @@ async def test_identity_and_grants_come_back(sidecar: tuple[FakeSidecar, str]) -
     service.roles = ("oms", "ems")
     service.publish_grants = ("platform.street.query.list-custodial-positions",)
 
-    plugin = await meridian.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False, roles=[])
     try:
         assert plugin.identity.roles == ("oms", "ems")
         assert plugin.identity.instance_id == "custody-snaptrade-1"
@@ -167,7 +167,7 @@ async def test_a_refusal_stops_the_plugin_and_says_why(
     service.refusal_reason = "access control not loaded"
 
     with pytest.raises(Refused) as raised:
-        await meridian.connect(address, heartbeat=False)
+        await meridian.connect(address, heartbeat=False, roles=[])
     assert raised.value.reason == "access control not loaded"
     assert len(service.registered) == 1, "a refusal was retried"
 
@@ -185,6 +185,7 @@ async def test_a_page_and_settings_are_declared_at_registration(
             Setting("page_size", kind=int),
         ],
         reads_external_accounts=True,
+        roles=[],
     )
     await plugin.leave()
     (sent,) = service.registered
@@ -253,7 +254,7 @@ async def test_a_table_setting_arrives_as_its_rows_with_who_changed_each(
             values=[sidecar_pb2.SettingValue(name="plan_code_links", value=rows)]
         )
     ]
-    plugin = await meridian.connect(address, heartbeat=False, settings=[PLAN_CODES])
+    plugin = await meridian.connect(address, heartbeat=False, settings=[PLAN_CODES], roles=[])
     try:
         (seen,) = [settings async for settings in plugin.settings()]
     finally:
@@ -398,6 +399,7 @@ async def test_settings_arrive_typed_by_what_was_declared(
             Setting("page_size", kind=int),
             Setting("live", kind=bool),
         ],
+        roles=[],
     )
     try:
         seen = [settings async for settings in plugin.settings()]
@@ -431,6 +433,7 @@ async def test_an_unset_setting_holds_its_default_and_a_choice_outside_its_optio
             ),
             Setting("poll_seconds", kind=int, default=300, unit="seconds"),
         ],
+        roles=[],
     )
     try:
         seen = [settings async for settings in plugin.settings()]
@@ -467,6 +470,7 @@ async def test_a_setting_that_does_not_parse_is_unset_not_guessed(
             Setting("live", kind=bool),
             Setting("token", secret=True, choices=(Choice("a"), Choice("b"))),
         ],
+        roles=[],
     )
     try:
         (now,) = [settings async for settings in plugin.settings()]
@@ -511,7 +515,7 @@ async def test_an_environment_saved_before_its_choices_were_renamed_is_unset_and
             ]
         ),
     ]
-    plugin = await meridian.connect(address, heartbeat=False, settings=_Broker)
+    plugin = await meridian.connect(address, heartbeat=False, settings=_Broker, roles=[])
     try:
         plain = [settings async for settings in plugin._settings()]
         typed = [settings async for settings in plugin.settings(_Broker)]
@@ -574,7 +578,7 @@ async def test_the_account_scope_and_the_access_table_arrive(
             read_account_ids=["ACC-1", "ACC-2"], write_account_ids=["ACC-1"]
         )
     ]
-    plugin = await meridian.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False, roles=[])
     try:
         scopes = [scope async for scope in plugin.account_scope()]
         table = await plugin.access()
@@ -608,7 +612,7 @@ async def test_the_plugins_links_arrive_beside_its_scope_named_and_on_every_chan
             links=[brokerage, roth],
         ),
     ]
-    plugin = await meridian.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False, roles=[])
     try:
         first, changed = [scope async for scope in plugin.account_scope()]
     finally:
@@ -663,7 +667,7 @@ async def test_the_order_paths_links_and_venue_account_map_arrive_beside_the_sco
         ),
         sidecar_pb2.AccountScopeDelivery(read_account_ids=["ACC-1"]),
     ]
-    plugin = await meridian.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False, roles=[])
     try:
         connectivity, ems, neither = [scope async for scope in plugin.account_scope()]
     finally:
@@ -764,7 +768,7 @@ async def test_the_client_heartbeats_without_being_asked(
     service, address = sidecar
     monkeypatch.setattr(meridian.client, "HEARTBEAT_SECONDS", 0.01)
 
-    plugin = await meridian.connect(address)
+    plugin = await meridian.connect(address, roles=[])
     try:
         beats = await service.beats_from(0)
         assert all(beat.healthy for beat in beats)
@@ -780,7 +784,7 @@ async def test_a_reported_health_stands_until_reported_again(
     heartbeat after, as its figures do, until it reports healthy again."""
     service, address = sidecar
     monkeypatch.setattr(meridian.client, "HEARTBEAT_SECONDS", 0.01)
-    plugin = await meridian.connect(address)
+    plugin = await meridian.connect(address, roles=[])
     try:
         await plugin.report(healthy=False, detail="brokerage credentials rejected")
         beats = await service.beats_from(service.mark())
@@ -803,7 +807,7 @@ async def test_figures_refused_leave_the_health_as_it_was(
     its health stand on the beats after it."""
     service, address = sidecar
     monkeypatch.setattr(meridian.client, "HEARTBEAT_SECONDS", 0.01)
-    plugin = await meridian.connect(address)
+    plugin = await meridian.connect(address, roles=[])
     try:
         with pytest.raises(ValueError, match="at most 8"):
             await plugin.report(
@@ -823,13 +827,13 @@ async def test_leaving_says_why_and_closes_the_plugin(
     """Saying so is what distinguishes a planned stop from a failure."""
     service, address = sidecar
 
-    async with await meridian.connect(address, heartbeat=False) as plugin:
+    async with await meridian.connect(address, heartbeat=False, roles=[]) as plugin:
         pass
 
     (departure,) = service.left
     assert departure.reason == "stopping"
     with pytest.raises(NotRegistered):
-        await plugin.record_holdings_statement(source="snaptrade", expected_rows=1)
+        await plugin._acts.record_holdings_statement(source="snaptrade", expected_rows=1)
 
 
 async def test_an_exception_leaves_with_the_reason(
@@ -838,7 +842,7 @@ async def test_an_exception_leaves_with_the_reason(
     service, address = sidecar
 
     with pytest.raises(RuntimeError):
-        async with await meridian.connect(address, heartbeat=False):
+        async with await meridian.connect(address, heartbeat=False, roles=[]):
             raise RuntimeError("the brokerage went away")
 
     (departure,) = service.left
@@ -870,7 +874,7 @@ async def test_a_sidecar_that_starts_after_the_plugin_is_waited_for() -> None:
         return server
 
     starting = asyncio.create_task(start_late())
-    plugin = await meridian.connect(f"127.0.0.1:{port}", heartbeat=False, wait=10)
+    plugin = await meridian.connect(f"127.0.0.1:{port}", heartbeat=False, wait=10, roles=[])
     server = await starting
     try:
         assert plugin.identity.instance_id == "custody-snaptrade-1"
@@ -886,7 +890,7 @@ async def test_no_sidecar_at_all_is_said_so_once_the_wait_is_over() -> None:
         probe.bind(("127.0.0.1", 0))
         port = probe.getsockname()[1]
     with pytest.raises(meridian.NoSidecar) as raised:
-        await meridian.connect(f"127.0.0.1:{port}", heartbeat=False, wait=0.5)
+        await meridian.connect(f"127.0.0.1:{port}", heartbeat=False, wait=0.5, roles=[])
     assert f"127.0.0.1:{port}" in str(raised.value)
 
 

@@ -33,6 +33,7 @@ from meridian import (
     SubjectKind,
 )
 from meridian import _transitions as transitions
+from meridian.operations import Operations
 from meridian.plugin.v1 import operations_pb2 as ops
 from meridian.receive import Heard
 from meridian.suites import Recorder, check, suite
@@ -115,7 +116,7 @@ async def ems_plugin(sidecar: tuple[FakeSidecar, str]):
     service.roles = ("ems",)
     service.instance_id = "ems-desk-1"
     plugin = await meridian.connect(
-        address, heartbeat=False, declaration=Declaration(algorithms=[TWAP])
+        address, heartbeat=False, declaration=Declaration(algorithms=[TWAP]), roles=[]
     )
     try:
         yield service, plugin
@@ -158,7 +159,7 @@ async def test_the_sidecars_refusal_of_an_algorithm_names_it(
     image, say -- meets the sidecar's refusal, naming the field."""
     service, address = sidecar
     service.roles = ("ems",)
-    plugin = await meridian.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False, roles=[])
     try:
         plugin._algorithms = ("twap-v1",)  # what this process thinks it declared
         with pytest.raises(CallFailed) as caught:
@@ -176,7 +177,7 @@ async def test_the_sidecars_refusal_of_an_algorithm_names_it(
 async def portfolio_plugin(sidecar: tuple[FakeSidecar, str]):
     service, address = sidecar
     service.roles = ("portfolio",)
-    plugin = await meridian.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False, roles=[])
     try:
         yield service, plugin
     finally:
@@ -212,7 +213,7 @@ async def test_an_invalid_order_is_read_by_its_fields_and_its_words(
         fields=("quantity", "cash_quantity"),
     )
     with pytest.raises(CallFailed) as caught:
-        await plugin.propose_order(
+        await plugin._acts.propose_order(
             account_id="ACC-1",
             instrument_id="INS-AAPL",
             side="buy",
@@ -237,7 +238,7 @@ async def test_a_command_outside_the_write_scope_is_not_granted_with_its_words(
         "the order's account is outside this instance's write scope",
     )
     with pytest.raises(NotGranted) as caught:
-        await plugin.release_order(order_id="ORD-9")
+        await plugin._acts.release_order(order_id="ORD-9")
     assert caught.value.topic == "ReleaseOrder"
     assert caught.value.reason == "the order's account is outside this instance's write scope"
     assert caught.value.fields == ()
@@ -262,7 +263,7 @@ async def test_the_order_paths_refusals_are_raised_by_their_codes(
     service, plugin = portfolio_plugin
     refuse(service, grpc.StatusCode.ABORTED, "worded any way at all", reason)
     with pytest.raises(CommandRefused) as caught:
-        await plugin.create_placement(
+        await plugin._acts.create_placement(
             order_id="ORD-1", connectivity_instance_id="sim-1", quantity=Decimal("10")
         )
     assert caught.value.reason == reason
@@ -282,7 +283,7 @@ async def test_a_mapping_naming_an_account_not_granted_is_refused_by_its_code(
         sidecar_pb2.REFUSAL_REASON_ACCOUNT_NOT_LINKABLE,
     )
     with pytest.raises(CommandRefused) as caught:
-        await plugin.create_placement(order_id="ORD-1", quantity=Decimal("10"))
+        await plugin._acts.create_placement(order_id="ORD-1", quantity=Decimal("10"))
     assert caught.value.reason_name == "REFUSAL_REASON_ACCOUNT_NOT_LINKABLE"
 
 
@@ -293,24 +294,24 @@ async def test_a_calendar_read_and_a_date_asked_for_reach_the_sidecar_typed(
     portfolio_plugin: tuple[FakeSidecar, meridian.Plugin],
 ) -> None:
     service, plugin = portfolio_plugin
-    await plugin.read_calendar(
+    await plugin._acts.read_calendar(
         calendar_id="CAL-01JAE0000000000000000USSS",
         from_date=date(2026, 10, 1),
         to_date="2026-10-31",
     )
-    await plugin.compute_date(
+    await plugin._acts.compute_date(
         settlement=meridian.SettlementDateInputs(
             instrument_id="INS-AAPL", trade_date="2026-10-09"
         )
     )
-    await plugin.compute_date(
+    await plugin._acts.compute_date(
         tenor=meridian.TenorDateInputs(
             pair=["INS-EUR", "INS-USD"],
             tenor=meridian.Tenor(count=1, unit="month"),
             trade_date=date(2026, 10, 9),
         )
     )
-    await plugin.compute_date(
+    await plugin._acts.compute_date(
         roll=meridian.RollInputs(
             date=date(2026, 10, 10), convention="modified_following", calendars=["CAL-1"]
         )
@@ -334,14 +335,14 @@ async def test_a_date_is_asked_for_one_way_at_a_time(
 ) -> None:
     service, plugin = portfolio_plugin
     with pytest.raises(ValueError, match="inputs takes one of"):
-        await plugin.compute_date(
+        await plugin._acts.compute_date(
             settlement=meridian.SettlementDateInputs(instrument_id="INS-AAPL"),
             business_day=meridian.BusinessDayInputs(date="2026-10-09"),
         )
     with pytest.raises(TypeError, match="a date, not a moment"):
         from datetime import datetime
 
-        await plugin.read_calendar(calendar_id="CAL-1", from_date=datetime(2026, 10, 1))
+        await plugin._acts.read_calendar(calendar_id="CAL-1", from_date=datetime(2026, 10, 1))
     assert service.operations.sent == []
 
 
@@ -439,7 +440,7 @@ async def test_a_placement_heard_carries_its_change_requests_told_apart_by_kind(
     async def on_placement(heard: Heard[ops.PlacementUpdatedEvent]) -> None:
         asked.extend(heard.message.placement.change_requests)
 
-    await recorder.receive(placement_updated=on_placement)
+    await recorder._hear({"PlacementUpdated": on_placement})
     assert [(each.change_request_id, each.placement_change.kind) for each in asked] == [
         ("CRQ-1", ops.PLACEMENT_CHANGE_KIND_REPLACE),
         ("CRQ-2", ops.PLACEMENT_CHANGE_KIND_CANCEL),
@@ -465,7 +466,7 @@ def test_no_venue_originated_order_or_placement_is_offered() -> None:
     assert "UNPLACED_REASON_INSTRUMENT_INCOMPLETE" not in reasons
     assert "order" not in ops.UnplacedFact.DESCRIPTOR.fields_by_name
     assert not hasattr(ops, "RecordOrderRequest")
-    recorded = inspect.signature(meridian.Plugin.record_order).parameters
+    recorded = inspect.signature(Operations.record_order).parameters
     assert "venue_account_code" not in recorded and "raw_record" not in recorded
     names = {case.name for case in suite("connectivity").cases}
     assert not names & {"records-a-venue-originated-order", "places-a-direct-order"}

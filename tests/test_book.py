@@ -60,6 +60,7 @@ from typing import Any
 import pytest
 
 import meridian
+from conftest import receive
 from meridian import CommandRefused, Money, NotGranted
 from meridian.plugin.v1 import operations_pb2 as ops
 from meridian.v1 import sidecar_pb2
@@ -210,7 +211,7 @@ async def resolved(
     deployment mints, with nothing in force (W3.7, contract v10). Its source
     states the minimum a record needs from contract v24 -- an identifier, a
     description and a currency (W3.7) -- each an offer, never in force."""
-    reply = await custody.resolve_identifier(
+    reply = await custody._acts.resolve_identifier(
         identifiers=[meridian.Identifier(scheme=scheme, value=value, source="e2e-book")],
         as_of_ns=time.time_ns(),
         stated_description=description,
@@ -226,7 +227,7 @@ async def statement(
     rows: list[dict[str, Any]],
     figures: list[meridian.StatementFigures],
 ) -> str:
-    opened = await custody.record_holdings_statement(
+    opened = await custody._acts.record_holdings_statement(
         source="e2e-book",
         external_statement_id=f"e2e-book-{as_of}-{uuid.uuid4()}",
         as_of_date=as_of,
@@ -237,7 +238,7 @@ async def statement(
         figures=figures,
     )
     for row in rows:
-        await custody.record_holding(
+        await custody._acts.record_holding(
             statement_id=opened.statement_id, external_account_id=LINKED, **row
         )
     return opened.statement_id
@@ -261,14 +262,14 @@ async def until(what: str, check: Any, seconds: float = 20) -> Any:
 async def base_currency(plugin: meridian.Plugin, account_id: str) -> str:
     """The account's base currency, its ISO 4217 code, "" while none is set
     (W9.13, the deployment admin's)."""
-    read = await plugin.list_account_attributes(account_id=account_id)
+    read = await plugin._acts.list_account_attributes(account_id=account_id)
     held = next((each for each in read.attributes if each.account_id == account_id), None)
     return "" if held is None else held.base_currency_code
 
 
 async def lot_of(plugin: meridian.Plugin, account_id: str, instrument_id: str) -> str:
     """The one open lot the book holds of an instrument in an account."""
-    read = await plugin.list_positions(account_id=account_id, page_size=100)
+    read = await plugin._acts.list_positions(account_id=account_id, page_size=100)
     (held,) = [each for each in read.positions if each.instrument_id == instrument_id]
     (lot,) = [each for each in held.lots if meridian.as_decimal(each.open_quantity)]
     return str(lot.lot_id)
@@ -331,10 +332,10 @@ def by_instrument(positions: Any) -> dict[str, Any]:
 
 
 async def test_the_book_of_record_end_to_end() -> None:
-    custody = await meridian.connect(address("custody"), heartbeat=False)
-    operations = await meridian.connect(address("operations"), heartbeat=False)
-    reporting = await meridian.connect(address("reporting"), heartbeat=False)
-    unscoped = await meridian.connect(address("unscoped"), heartbeat=False)
+    custody = await meridian.connect(address("custody"), heartbeat=False, roles=[])
+    operations = await meridian.connect(address("operations"), heartbeat=False, roles=[])
+    reporting = await meridian.connect(address("reporting"), heartbeat=False, roles=[])
+    unscoped = await meridian.connect(address("unscoped"), heartbeat=False, roles=[])
     heard: dict[str, list[meridian.Heard[Any]]] = {"reporting": [], "operations": []}
     following: list[asyncio.Task[None]] = []
 
@@ -385,12 +386,14 @@ async def test_the_book_of_record_end_to_end() -> None:
         )
 
         async def completed(statement_id: str) -> Any:
-            page = await operations.list_statements(account_id=BROKERAGE, page_size=100)
+            page = await operations._acts.list_statements(account_id=BROKERAGE, page_size=100)
             done = [held for held in page.statements if held.statement_id == statement_id]
             return done[0] if done else None
 
         await until("the day 1 statement never completed", lambda: completed(day_one))
-        street = await operations.list_custodial_positions(account_id=BROKERAGE, page_size=100)
+        street = await operations._acts.list_custodial_positions(
+            account_id=BROKERAGE, page_size=100
+        )
         assert {held.instrument_id for held in street.positions} == {aapl, usd}
 
         # The account's first completed statement, composed and confirmed by
@@ -410,7 +413,7 @@ async def test_the_book_of_record_end_to_end() -> None:
         # cost, which v8 admitted. Refused, nothing recorded, each missing
         # field named by its path (contract v9).
         with pytest.raises(CommandRefused) as incomplete:
-            await operations.record_opening_balance(
+            await operations._acts.record_opening_balance(
                 account_id=BROKERAGE,
                 as_of_date="2026-09-08",
                 sources=[source],
@@ -450,7 +453,7 @@ async def test_the_book_of_record_end_to_end() -> None:
 
         # Complete, confirmed by the person through a client on a
         # delegation: admitted, and the person stays the actor (W4.9).
-        recorded = await operations.record_opening_balance(
+        recorded = await operations._acts.record_opening_balance(
             account_id=BROKERAGE,
             as_of_date="2026-09-08",
             sources=[source],
@@ -472,7 +475,7 @@ async def test_the_book_of_record_end_to_end() -> None:
         assert recorded.attributes.opening_balance.as_of_date == "2026-09-08"
 
         # A duplicate by its key, after a lost reply: the first's answer.
-        again = await operations.record_opening_balance(
+        again = await operations._acts.record_opening_balance(
             account_id=BROKERAGE,
             as_of_date="2026-09-08",
             sources=[source],
@@ -485,7 +488,7 @@ async def test_the_book_of_record_end_to_end() -> None:
 
         # A second opening balance: refused by its code.
         with pytest.raises(CommandRefused) as second:
-            await operations.record_opening_balance(
+            await operations._acts.record_opening_balance(
                 account_id=BROKERAGE,
                 as_of_date="2026-09-08",
                 sources=[source],
@@ -497,7 +500,7 @@ async def test_the_book_of_record_end_to_end() -> None:
 
         # Sent for nobody: refused, a justified act being a person's.
         with pytest.raises(CommandRefused) as nobody:
-            await operations.record_opening_balance(
+            await operations._acts.record_opening_balance(
                 account_id=FUTURES,
                 as_of_date="2026-09-08",
                 sources=[source],
@@ -516,7 +519,7 @@ async def test_the_book_of_record_end_to_end() -> None:
             "Snap Synthetic Holdings common stock",
         )
         with pytest.raises(CommandRefused) as unusable:
-            await operations.record_opening_balance(
+            await operations._acts.record_opening_balance(
                 account_id=FUTURES,
                 as_of_date="2026-09-08",
                 sources=[source],
@@ -541,7 +544,7 @@ async def test_the_book_of_record_end_to_end() -> None:
 
         # What reporting reads of it: the positions, lots, and the standing
         # opening balance.
-        read = await reporting.list_positions(account_id=BROKERAGE, page_size=100)
+        read = await reporting._acts.list_positions(account_id=BROKERAGE, page_size=100)
         held = by_instrument(read.positions)
         assert meridian.as_decimal(held[aapl].trade_date_quantity) == Decimal("12.5")
         assert meridian.as_decimal(held[aapl].settled_quantity) == Decimal("12.5")
@@ -553,14 +556,15 @@ async def test_the_book_of_record_end_to_end() -> None:
             [] if usd_is_base else [Decimal("1000.00")]
         )
         day_one_mark = read.as_of
-        attributes = await reporting.list_account_attributes(account_id=BROKERAGE)
+        attributes = await reporting._acts.list_account_attributes(account_id=BROKERAGE)
         (standing,) = attributes.attributes
         assert standing.opening_balance.entry_id == recorded.entry.entry_id
 
         # Following from here: reporting and operations each hear the book.
         following.append(
             asyncio.create_task(
-                reporting.receive(
+                receive(
+                    reporting,
                     position_changed=keeping("reporting"),
                     break_changed=keeping("reporting"),
                     seed=False,
@@ -569,7 +573,7 @@ async def test_the_book_of_record_end_to_end() -> None:
         )
         following.append(
             asyncio.create_task(
-                operations.receive(break_changed=keeping("operations"), seed=False)
+                receive(operations, break_changed=keeping("operations"), seed=False)
             )
         )
         await asyncio.sleep(1.5)
@@ -620,7 +624,7 @@ async def test_the_book_of_record_end_to_end() -> None:
 
         # The reconciliation finds AAPL short by 2.5: a break, as the plugin
         # itself (W9.4).
-        found = await operations.record_break(
+        found = await operations._acts.record_break(
             account_id=BROKERAGE,
             position=meridian.PositionKey(instrument_id=aapl, side="long"),
             category="trade_date_quantity",
@@ -655,7 +659,7 @@ async def test_the_book_of_record_end_to_end() -> None:
         )
 
         # The book did not move: a read at the new watermark agrees with day 1's.
-        unmoved = await reporting.list_positions(account_id=BROKERAGE, page_size=100)
+        unmoved = await reporting._acts.list_positions(account_id=BROKERAGE, page_size=100)
         assert meridian.as_decimal(
             by_instrument(unmoved.positions)[aapl].trade_date_quantity
         ) == (Decimal("12.5"))
@@ -671,7 +675,7 @@ async def test_the_book_of_record_end_to_end() -> None:
                 external_account_id=LINKED, segment="", counterparty=INSTITUTION
             )
         )
-        await operations.record_account_figures(
+        await operations._acts.record_account_figures(
             account_id=BROKERAGE,
             business_date="2026-09-09",
             source=compared,
@@ -693,7 +697,7 @@ async def test_the_book_of_record_end_to_end() -> None:
             ],
             idempotency_key=f"figures:{BROKERAGE}:{day_two}",
         )
-        series = await reporting.list_account_figures(
+        series = await reporting._acts.list_account_figures(
             account_id=BROKERAGE,
             agreement=agreement,
             from_date="2026-09-01",
@@ -703,7 +707,7 @@ async def test_the_book_of_record_end_to_end() -> None:
         assert meridian.as_money(futures.figures.variation_margin).amount == Decimal("-1250.00")
         # What cannot move, recorded from the statement as a finding: an
         # attribute, free derived from it, nothing moving (W9.15).
-        await operations.record_encumbrances(
+        await operations._acts.record_encumbrances(
             account_id=BROKERAGE,
             business_date="2026-09-09",
             source=compared,
@@ -721,7 +725,9 @@ async def test_the_book_of_record_end_to_end() -> None:
             idempotency_key=f"encumbrances:{BROKERAGE}:{day_two}",
         )
         encumbered = by_instrument(
-            (await reporting.list_positions(account_id=BROKERAGE, page_size=100)).positions
+            (
+                await reporting._acts.list_positions(account_id=BROKERAGE, page_size=100)
+            ).positions
         )[aapl]
         assert meridian.as_decimal(encumbered.trade_date_quantity) == Decimal("12.5")
         assert meridian.as_decimal(encumbered.free_quantity) == Decimal("8.5")
@@ -730,7 +736,7 @@ async def test_the_book_of_record_end_to_end() -> None:
         # A person confirms the cause and resolves the break with the
         # adjustment that matches the custodian: +2.5, its lot as reported
         # (W9.6, W9.7).
-        handled = await operations.handle_break(
+        handled = await operations._acts.handle_break(
             account_id=BROKERAGE,
             break_id=aapl_break.break_id,
             confirmed_cause=meridian.BreakCause(
@@ -744,7 +750,7 @@ async def test_the_book_of_record_end_to_end() -> None:
         # The cash paid: a balance where USD is the base currency; else a
         # line taken in units, so it names the lot it reduces (W9.7).
         usd_lot = "" if usd_is_base else await lot_of(operations, BROKERAGE, usd)
-        resolved_by = await operations.resolve_break(
+        resolved_by = await operations._acts.resolve_break(
             account_id=BROKERAGE,
             break_ids=[aapl_break.break_id],
             reason="Books the buy of 2.5 placed at the broker",
@@ -788,7 +794,7 @@ async def test_the_book_of_record_end_to_end() -> None:
             return None
 
         await until("reporting never heard AAPL move", heard_position)
-        agreed = await reporting.list_positions(account_id=BROKERAGE, page_size=100)
+        agreed = await reporting._acts.list_positions(account_id=BROKERAGE, page_size=100)
         agreed_held = by_instrument(agreed.positions)
         assert meridian.as_decimal(agreed_held[aapl].trade_date_quantity) == Decimal("15")
         assert meridian.as_decimal(agreed_held[usd].trade_date_quantity) == Decimal("432.50")
@@ -798,7 +804,7 @@ async def test_the_book_of_record_end_to_end() -> None:
         # cleared where it was gone: nothing moves.
         injected = []
         for category in ("cost_or_lots", "settled_quantity"):
-            reply = await operations.record_break(
+            reply = await operations._acts.record_break(
                 account_id=BROKERAGE,
                 position=meridian.PositionKey(instrument_id=usd, side="long"),
                 category=category,
@@ -806,38 +812,38 @@ async def test_the_book_of_record_end_to_end() -> None:
                 business_date="2026-09-09",
             )
             injected.append(reply.breaks[0].break_id)
-        await operations.resolve_break(
+        await operations._acts.resolve_break(
             account_id=BROKERAGE,
             break_ids=[injected[0]],
             reason="custodian error",
             explanation="the custodian reported a cost it later corrected",
             acting_for=person([BROKERAGE]),
         )
-        await operations.close_breaks_as_cleared(
+        await operations._acts.close_breaks_as_cleared(
             account_id=BROKERAGE,
             break_ids=[injected[1]],
             cleared_at=compared,
             reason="gone at the next statement",
             acting_for=person([BROKERAGE]),
         )
-        closed = await reporting.list_breaks(account_id=BROKERAGE, states=["closed"])
+        closed = await reporting._acts.list_breaks(account_id=BROKERAGE, states=["closed"])
         assert {held.break_id for held in closed.breaks} == set(injected)
-        still = await reporting.list_positions(account_id=BROKERAGE, page_size=100)
+        still = await reporting._acts.list_positions(account_id=BROKERAGE, page_size=100)
         assert still.positions == agreed.positions
 
         # ── Scope (W4.11) ────────────────────────────────────────────────
         with pytest.raises(NotGranted):
-            await reporting.list_positions(account_id=FUTURES)
-        everything = await reporting.list_positions(page_size=500)
+            await reporting._acts.list_positions(account_id=FUTURES)
+        everything = await reporting._acts.list_positions(page_size=500)
         assert {held.account_id for held in everything.positions} == {BROKERAGE}
-        nothing = await unscoped.list_positions(page_size=500)
+        nothing = await unscoped._acts.list_positions(page_size=500)
         assert list(nothing.positions) == []
 
         # ── A killed stream, caught up from the store ────────────────────
         for task in following:
             task.cancel()
         following.clear()
-        late = await operations.record_break(
+        late = await operations._acts.record_break(
             account_id=BROKERAGE,
             position=meridian.PositionKey(instrument_id=aapl, side="long"),
             category="book_only",
@@ -847,7 +853,7 @@ async def test_the_book_of_record_end_to_end() -> None:
         heard["reporting"].clear()
         following.append(
             asyncio.create_task(
-                reporting.receive(break_changed=keeping("reporting"), seed=True)
+                receive(reporting, break_changed=keeping("reporting"), seed=True)
             )
         )
 

@@ -111,14 +111,14 @@ def lake(
     source: Any, kind: type[Lake] = Lake, tmp: Path | None = None
 ) -> tuple[Lake, Recorder]:
     recorder = Recorder("brokerage-1")
-    made = kind(recorder, source, listings.Listings(tmp), clock_ns=lambda: EVENING)
+    made = recorder.bind(kind(source, listings.Listings(tmp), clock_ns=lambda: EVENING))
     made.products.put(SPY, "SPY")
     return made, recorder
 
 
 def test_a_feed_names_its_source() -> None:
     try:
-        listings.Feed(Recorder(), None)
+        listings.Feed(None)
     except TypeError as refused:
         assert "source_name" in str(refused)
     else:
@@ -207,13 +207,13 @@ async def test_a_range_of_trades_is_read_only_from_a_source_with_history() -> No
 
     streamed_only, recorder = lake(Broker())
     assert not streamed_only.reads_history
-    await streamed_only.on_want(want())
+    await streamed_only.on_observations_wanted(want())
     (declined,) = recorder.on("DeclineWant")
     assert declined.reason == ops.UNANSWERED_REASON_NOT_COVERED
     tick = Tick("SPY", EVENING - listings.NS, "", Decimal("571"), Decimal("5"), 1)
     historian, recorder = lake(Historian(history=[tick]))
     assert historian.reads_history
-    await historian.on_want(want())
+    await historian.on_observations_wanted(want())
     (recorded,) = recorder.on("RecordTrades")
     assert len(recorded.trades) == 1
 
@@ -258,7 +258,7 @@ async def test_a_pass_records_the_live_datasets_liveness_once_when_heard() -> No
     was heard since the last; a pass with nothing heard records none."""
     now = [EVENING]
     recorder = Recorder("brokerage-1")
-    feed = Lake(recorder, Broker(), listings.Listings(None), clock_ns=lambda: now[0])
+    feed = recorder.bind(Lake(Broker(), listings.Listings(None), clock_ns=lambda: now[0]))
     await feed.flush()
     assert recorder.on("RecordLiveness") == [], "nothing heard yet"
     await feed.heard([])

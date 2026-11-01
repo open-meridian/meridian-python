@@ -50,7 +50,7 @@ async def test_a_ticket_is_filed_for_the_person_and_a_repeat_folds(
     sidecar: tuple[FakeSidecar, str],
 ) -> None:
     service, address = sidecar
-    plugin = await meridian.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False, roles=[])
     try:
         made = await plugin.file_ticket(
             **filing(
@@ -90,7 +90,7 @@ async def test_the_kind_and_what_it_concerns_are_taken_by_name_or_enum(
     sidecar: tuple[FakeSidecar, str],
 ) -> None:
     service, address = sidecar
-    plugin = await meridian.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False, roles=[])
     try:
         await plugin.file_ticket(**filing(kind=TicketKind.Value("TICKET_KIND_REQUEST")))
         await plugin.file_ticket(
@@ -170,7 +170,7 @@ async def test_what_the_sidecar_would_refuse_by_its_bounds_is_refused_here_first
     sidecar: tuple[FakeSidecar, str], given: dict[str, object], named: str
 ) -> None:
     service, address = sidecar
-    plugin = await meridian.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False, roles=[])
     try:
         with pytest.raises(ValueError) as refused:
             await plugin.file_ticket(**filing(**given))
@@ -201,7 +201,7 @@ async def test_a_refused_filing_is_raised_in_this_packages_terms(
 ) -> None:
     service, address = sidecar
     service.ticket_refused = (status, "concerns.instance: custody-1 is another plugin")
-    plugin = await meridian.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False, roles=[])
     try:
         with pytest.raises(raised) as refused:
             await plugin.file_ticket(**filing())
@@ -217,7 +217,7 @@ async def test_what_it_filed_is_read_back_for_the_person(
     sidecar: tuple[FakeSidecar, str],
 ) -> None:
     service, address = sidecar
-    plugin = await meridian.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False, roles=[])
     try:
         for key in ("a", "b", "c"):
             await plugin.file_ticket(**filing(idempotency_key=key))
@@ -250,7 +250,7 @@ async def test_reading_what_it_filed_names_one_way_and_a_person(
     sidecar: tuple[FakeSidecar, str],
 ) -> None:
     service, address = sidecar
-    plugin = await meridian.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False, roles=[])
     try:
         with pytest.raises(
             ValueError, match="name one of ticket_ids, idempotency_keys or cursor"
@@ -267,7 +267,7 @@ async def test_reading_what_it_filed_names_one_way_and_a_person(
 
 async def test_nothing_is_filed_after_the_plugin_left(sidecar: tuple[FakeSidecar, str]) -> None:
     _, address = sidecar
-    plugin = await meridian.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False, roles=[])
     await plugin.leave()
     with pytest.raises(NotRegistered):
         await plugin.file_ticket(**filing())

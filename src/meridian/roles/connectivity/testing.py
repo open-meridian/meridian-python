@@ -238,7 +238,6 @@ class Rig:
 
     def make(self) -> Trader:
         trader = Trader(
-            self.recorder,
             lambda: self.venue,
             now=clock,
             sent=self.sent,
@@ -248,7 +247,8 @@ class Rig:
             market_zone=self.market_zone,
             latency=self.latency,
         )
-        # As a running plugin's, past its start.
+        # Bound to the recorder (0.35), as a running plugin's, past its start.
+        self.recorder.bind(trader)
         trader.started.set()
         return trader
 
@@ -290,7 +290,7 @@ class Rig:
             "PlacementUpdated",
             lambda _: [ops.PlacementUpdatedEvent(placement=each) for each in placements],
         )
-        await self.recorder.receive(placement_updated=self.trader.on_placement)
+        await self.recorder._hear({"PlacementUpdated": self.trader.on_placement_updated})
 
     async def instruct(self, value: ops.TradingInstructionValue, *, instance: str = "") -> None:
         """A trading instruction on this instance (or `instance`), heard."""
@@ -303,7 +303,9 @@ class Rig:
             "TradingInstructionChanged",
             lambda _: ops.TradingInstructionChangedEvent(instruction=instruction),
         )
-        await self.recorder.receive(trading_instruction_changed=self.trader.on_instruction)
+        await self.recorder._hear(
+            {"TradingInstructionChanged": self.trader.on_trading_instruction_changed}
+        )
 
     async def poll(self, times: int = 1) -> None:
         """The Trader's reads of the orders, each followed by `after_poll`."""

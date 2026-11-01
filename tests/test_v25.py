@@ -241,7 +241,7 @@ async def test_connect_registers_the_declarations_interface(sidecar: Any) -> Non
     interface = meridian.Interface(port=8000, title="Desk", pages=_pages())
     declared = Declaration(settings=SETTINGS, interface=interface, reads_external_accounts=True)
     service.uploaded = declared.to_wire()
-    plugin = await meridian.connect(address, heartbeat=False, declaration=declared)
+    plugin = await meridian.connect(address, heartbeat=False, declaration=declared, roles=[])
     await plugin.leave()
     sent = service.registered[0]
     assert sent.interface == interface._declared()
@@ -257,12 +257,14 @@ async def test_connect_refuses_an_interface_its_declaration_does_not_name(sideca
     )
     other = meridian.Interface(port=8001, title="Desk", pages=_pages())
     with pytest.raises(ValueError, match="interface and its declaration's interface differ"):
-        await meridian.connect(address, heartbeat=False, declaration=declared, interface=other)
+        await meridian.connect(
+            address, heartbeat=False, declaration=declared, interface=other, roles=[]
+        )
     assert service.registered == []
     # The same interface, made twice, is the same.
     same = meridian.Interface(port=8000, title="Desk", pages=_pages())
     plugin = await meridian.connect(
-        address, heartbeat=False, declaration=declared, interface=same
+        address, heartbeat=False, declaration=declared, interface=same, roles=[]
     )
     await plugin.leave()
 
@@ -279,6 +281,7 @@ async def test_connect_warns_of_what_it_names_and_the_declaration_does_not(
             declaration=Declaration(settings=SETTINGS),
             interface=interface,
             reads_external_accounts=True,
+            roles=[],
         )
     await plugin.leave()
     sent = service.registered[0]
@@ -305,7 +308,7 @@ async def test_a_registration_differing_from_its_upload_is_refused_naming_the_di
         return pages.answer("", {})
 
     with pytest.raises(meridian.Refused) as refused:
-        await meridian.connect(address, heartbeat=False, declaration=uploaded)
+        await meridian.connect(address, heartbeat=False, declaration=uploaded, roles=[])
     assert refused.value.reason.startswith(
         "declaration.interface.pages: 2 declared, 3 registered"
     )
@@ -335,7 +338,7 @@ async def test_the_window_settings_are_left_out_of_the_comparison(sidecar: Any) 
         storage=Storage(kinds=[RecordKind("activity", "Activity", window_days=30)]),
     )
     service.uploaded = declared.to_wire()
-    plugin = await meridian.connect(address, heartbeat=False, declaration=declared)
+    plugin = await meridian.connect(address, heartbeat=False, declaration=declared, roles=[])
     await plugin.leave()
     sent = service.registered[0]
     assert {held.name for held in sent.settings} == {
@@ -402,4 +405,4 @@ def test_each_template_declares_its_interface_and_documentation(template: Path) 
     assert declared["interface"]["loopback_port"] == 8000
     main_py = (template / "src" / "reference_plugin" / "__main__.py").read_text()
     assert "PAGE_PORT" not in main_py, "the port is the declaration's, never the environment's"
-    assert "connect(declaration=DECLARATION)" in main_py
+    assert "meridian.run(" in main_py and "declaration=DECLARATION" in main_py

@@ -424,7 +424,7 @@ class _Views:
         if shared.kind == "trades":
             # A tail from now: the trades heard after the subscription.
             return [], {}
-        method = getattr(self.plugin, table.caught_up_by)
+        method = getattr(self.plugin._acts, table.caught_up_by)
         accepted = inspect.signature(method).parameters
         if shared.kind == "record":
             asked: dict[str, Any] = {}

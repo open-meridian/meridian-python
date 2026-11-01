@@ -4,10 +4,8 @@ the international Polymarket's plugins kept this byte for byte between them;
 it is the SDK's now, each plugin keeping only its venue's client and its
 conversion.
 
-    feed = event_contracts.Feed(plugin, KalshiMarket(client, "live"),
-                                event_contracts.ContractMap(path))
-    await plugin.receive(observations_wanted=feed.on_want, want_withdrawn=feed.on_withdrawn)
-    await feed.keep_current()
+    feed = event_contracts.Feed(KalshiMarket(client, "live"), event_contracts.ContractMap(path))
+    meridian.run(declaration=DECLARATION, roles=[feed])     # a data role class (0.35)
 
 **What the plugin supplies.** A `Market`: its venue's answers read into the
 values below -- every number a `Decimal` from the venue's own text, never a
@@ -122,7 +120,7 @@ from datetime import UTC, date, datetime, timedelta
 from datetime import time as wall_time
 from decimal import Decimal
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 from zoneinfo import ZoneInfo
 
 from ...errors import NotGranted
@@ -141,6 +139,7 @@ from ...operations import (
     as_money,
 )
 from ...plugin.v1 import operations_pb2 as ops
+from .._generated.data import Role
 from . import figures as role_figures
 from ._groups import EventGroups, flag, stated
 from ._pages import connection_fields, connection_figure, served, want_rows
@@ -642,12 +641,14 @@ class ContractMap:
 
 
 @dataclass
-class Feed:
+class Feed(Role):
     """An event-contract venue's work: resolving, recording, answering wants,
-    keeping them current and recording outcomes (see the module). `plugin`
-    is a `meridian.Plugin`, or the suites' `Recorder`."""
+    keeping them current and recording outcomes (see the module). The data
+    role's class (SDK 0.35): registered with `meridian.run(roles=[...])`, or
+    bound to the suites' `Recorder`; its `run()` keeps standing wants
+    current, reports its events and, where its `Market` keeps bars, keeps
+    them."""
 
-    plugin: Any
     market: Market
     contracts: ContractMap
     clock_ns: Callable[[], int] = time.time_ns
@@ -670,7 +671,7 @@ class Feed:
 
     def __post_init__(self) -> None:
         keys = (LIVE, OUTCOMES, BARS) if self.keeps_bars else (LIVE, OUTCOMES)
-        self.wants = Wants(self.plugin, keys, clock_ns=self.clock_ns)
+        self.wants = Wants(self, keys, clock_ns=self.clock_ns)
 
     @property
     def keeps_bars(self) -> bool:
@@ -745,7 +746,7 @@ class Feed:
         contract = await self.contract(code)
         if contract is None:
             return ""
-        found = await self.plugin.resolve_identifier(
+        found = await self.resolve_identifier(
             identifiers=await self.stated_identifiers(contract),
             as_of_ns=self.clock_ns(),
             stated_asset_class="event_contract",
@@ -785,13 +786,13 @@ class Feed:
         venue = await self.venue_id()
         if not venue:
             return None
-        answer: ops.ReportEventGroupResult = await self.plugin.report_event_group(
+        answer: ops.ReportEventGroupResult = await self.report_event_group(
             venue_id=venue,
             venue_event_ref=event.ref,
             title=event.title[:MOST_DESCRIPTION],
             member_instrument_ids=members,
-            mutually_exclusive=flag(event.mutually_exclusive),
-            exhaustive=flag(event.exhaustive),
+            mutually_exclusive=cast(Any, flag(event.mutually_exclusive)),
+            exhaustive=cast(Any, flag(event.exhaustive)),
             series_id=event.series,
             valid_from_ns=event.valid_from_ns or self.clock_ns(),
             raw_record=self.plugin.raw_record(event.raw_key) if event.raw_key else None,
@@ -877,7 +878,7 @@ class Feed:
             return self.contracts.cash_id
         cash = self.market.cash
         now = self.clock_ns()
-        found = await self.plugin.resolve_identifier(
+        found = await self.resolve_identifier(
             identifiers=self.cash_identifiers(),
             as_of_ns=now,
             stated_asset_class="cash",
@@ -890,7 +891,7 @@ class Feed:
             return self.contracts.cash_id
         reason = ops.MissReason.Name(found.miss_reason or ops.MISS_REASON_NOT_FOUND)
         if self.contracts.missing.get(cash.code) != reason:
-            await self.plugin.report_missing_instrument(
+            await self.report_missing_instrument(
                 source=self.market.venue,
                 asset_class="cash",
                 identifiers=self.cash_identifiers(),
@@ -1008,7 +1009,7 @@ class Feed:
             return
         named = own + ([] if any(same(matched, o) for o in own) else [matched])
         now = self.clock_ns()
-        found = await self.plugin.resolve_identifier(
+        found = await self.resolve_identifier(
             identifiers=named,
             as_of_ns=now,
             stated_asset_class="event_contract",
@@ -1023,7 +1024,7 @@ class Feed:
         miss = ops.MISS_REASON_AMBIGUOUS if found.found else found.miss_reason
         reason = ops.MissReason.Name(miss or ops.MISS_REASON_AMBIGUOUS)
         if self.contracts.missing.get(contract.code) != reason:
-            await self.plugin.report_missing_instrument(
+            await self.report_missing_instrument(
                 source=self.market.venue,
                 asset_class="event_contract",
                 identifiers=named,
@@ -1041,7 +1042,7 @@ class Feed:
             self.unnamed[subject] = NOT_READ
             return ""
         try:
-            found = await self.plugin.resolve_instrument(
+            found = await self.resolve_instrument(
                 instrument_id=subject, as_of_ns=self.clock_ns()
             )
         except NotGranted:
@@ -1307,7 +1308,7 @@ class Feed:
         )
         return row, kept
 
-    async def record_outcomes(self, mapped: Iterable[Mapped | None]) -> int:
+    async def record_outcomes_of(self, mapped: Iterable[Mapped | None]) -> int:
         """Each contract's outcome where the venue's statement of it changed,
         in batches; how many versions were sent."""
         serving = [m for m in mapped if m is not None and m.contract.resolution is not None]
@@ -1333,7 +1334,7 @@ class Feed:
         """Record outcomes beside other work, a refusal said and not raised:
         the work it is beside still answers."""
         try:
-            await self.record_outcomes(mapped)
+            await self.record_outcomes_of(mapped)
         except Exception as failed:  # noqa: BLE001 - said; the next pass tries again
             log.warning("outcomes not recorded: %s", failed)
 
@@ -1357,11 +1358,11 @@ class Feed:
             due.append(Mapped(read, mapped.subject, mapped.cash_id))
         if due:
             self.contracts.save()
-        return await self.record_outcomes(due)
+        return await self.record_outcomes_of(due)
 
     # ── Wants ────────────────────────────────────────────────────────────
 
-    async def on_want(self, heard: Any) -> None:
+    async def on_observations_wanted(self, heard: Any) -> None:
         """Record what the lake wants, or decline it per subject."""
         await self.wants.hear(heard, self._answer)
 
@@ -1404,7 +1405,7 @@ class Feed:
             self.wants.stand(want, subjects, kinds)
         return await self.record_live(subjects, kinds, want.want_id, want.data_type)
 
-    async def on_withdrawn(self, heard: Any) -> None:
+    async def on_want_withdrawn(self, heard: Any) -> None:
         """A standing want withdrawn: its subjects are no longer kept current."""
         self.wants.withdraw(heard.message.want_id)
 
@@ -1415,6 +1416,15 @@ class Feed:
         current (a standing want of `bars` is kept by `keep_bars`)."""
         for data_type, kinds, subjects in _grouped(self.wants.standing_of(LIVE)):
             await self.record_live(subjects, kinds, data_type=data_type)
+
+    async def run(self) -> None:
+        """Each standing want kept current, the events reported and, where
+        its `Market` keeps bars, the bars kept, until cancelled (SDK 0.35:
+        what a plugin ran beside its `receive`)."""
+        loops = [self.keep_current(), self.keep_events()]
+        if self.keeps_bars:
+            loops.append(self.keep_bars(self.bars_declared))
+        await asyncio.gather(*loops)
 
     async def keep_current(
         self, sleep: Callable[[float], Awaitable[None]] = asyncio.sleep
@@ -1552,7 +1562,7 @@ class Feed:
             rows.append(row)
         return rows
 
-    async def record_bars(
+    async def record_bars_of(
         self,
         subjects: Iterable[str],
         first_ns: int,
@@ -1607,7 +1617,7 @@ class Feed:
             return {s: "source_silent" for s in subjects}
         if want.standing:
             self.wants.stand(want, subjects, ())
-        return await self.record_bars(subjects, first, until, want.want_id)
+        return await self.record_bars_of(subjects, first, until, want.want_id)
 
     async def keep_bars(
         self,

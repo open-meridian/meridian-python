@@ -11,8 +11,11 @@ A reader computing over a group -- a set's sum, an implied distribution --
 reads the version in force at its moment:
 
     groups = meridian.EventGroups()
-    await groups.catch_up(plugin)                     # on start, and after a loss
-    await plugin.receive(event_group_changed=groups.heard, ...)
+    await groups.catch_up(self)                       # in on_start: self, the role's class
+
+    async def on_event_group_changed(self, heard):    # on the role's class
+        await groups.heard(heard)
+
     group = groups.holding("INS-...", at_ns=moment)   # the version in force then
     if groups.exhaustive(group): ...
 
@@ -85,8 +88,8 @@ class EventGroups:
         return True
 
     async def heard(self, heard: Heard[ops.EventGroup]) -> None:
-        """A `receive` handler for the event-group-changed row:
-        `plugin.receive(event_group_changed=groups.heard, ...)`."""
+        """The event-group-changed row, heard: called from a role class's
+        `on_event_group_changed` (SDK 0.35)."""
         self.apply(heard.message)
 
     async def catch_up(self, operations: Any, *, instrument_ids: Sequence[str] = ()) -> int:

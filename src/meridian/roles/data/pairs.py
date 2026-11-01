@@ -5,10 +5,9 @@ Kraken's plugins kept this byte for byte between them; it is the SDK's now,
 each plugin keeping only its venue's client, its conversion and its stream's
 transport.
 
-    feed = pairs.Feed(plugin, CoinbaseMarket(client, "live"), pairs.ProductMap(path),
-                      stream=Stream)                         # the plugin's transport
-    await plugin.receive(observations_wanted=feed.on_want, want_withdrawn=feed.on_withdrawn)
-    await asyncio.gather(feed.keep_current(), feed.keep_streaming())
+    feed = pairs.Feed(CoinbaseMarket(client, "live"), pairs.ProductMap(path),
+                      stream_factory=Stream)                 # the plugin's transport
+    meridian.run(declaration=DECLARATION, roles=[feed])     # a data role class (0.35)
 
 **What the plugin supplies.** A `Market`: its venue's answers read into the
 values below -- every number a `Decimal` from the venue's own text, never a
@@ -107,6 +106,7 @@ from ...operations import (
     TradeAttributes,
 )
 from ...plugin.v1 import operations_pb2 as ops
+from .._generated.data import Role
 from . import figures as role_figures
 from ._pages import connection_fields, connection_figure, served, want_rows
 from ._reading import (
@@ -604,13 +604,14 @@ class ProductMap:
 StreamFactory = Callable[..., Streamer]
 
 
-@dataclass
-class Feed:
+@dataclass(eq=False)
+class Feed(Role):
     """A pairs venue's work: resolving, recording, answering wants and keeping
-    them current (see the module). `plugin` is a `meridian.Plugin`, or the
-    suites' `Recorder`."""
+    them current (see the module). The data role's class (SDK 0.35):
+    registered with `meridian.run(roles=[...])`, or bound to the suites'
+    `Recorder`; its `run()` keeps standing wants current and the stream
+    open."""
 
-    plugin: Any
     market: Market
     products: ProductMap
     clock_ns: Callable[[], int] = time.time_ns
@@ -640,7 +641,7 @@ class Feed:
     stream: Streamer = field(init=False)
 
     def __post_init__(self) -> None:
-        self.wants = Wants(self.plugin, (DAILY, LIVE, TRADES), clock_ns=self.clock_ns)
+        self.wants = Wants(self, (DAILY, LIVE, TRADES), clock_ns=self.clock_ns)
         made = self.stream_factory or cast(StreamFactory, _NoStream)
         self.stream = made(
             address=self.market.stream_address,
@@ -751,7 +752,7 @@ class Feed:
 
     async def _resolve(self, asset: Asset, now: int) -> None:
         cash = asset.kind == "currency"
-        found = await self.plugin.resolve_identifier(
+        found = await self.resolve_identifier(
             identifiers=self.identifiers(asset),
             as_of_ns=now,
             stated_asset_class="cash" if cash else "crypto_asset",
@@ -763,7 +764,7 @@ class Feed:
             return
         reason = ops.MissReason.Name(found.miss_reason or ops.MISS_REASON_NOT_FOUND)
         if self.products.missing.get(asset.code) != reason:
-            await self.plugin.report_missing_instrument(
+            await self.report_missing_instrument(
                 source=self.market.venue,
                 asset_class="cash" if cash else "crypto_asset",
                 identifiers=self.identifiers(asset),
@@ -827,7 +828,7 @@ class Feed:
         named = own + ([] if any(same(matched, o) for o in own) else [matched])
         cash = asset.kind == "currency"
         now = self.clock_ns()
-        found = await self.plugin.resolve_identifier(
+        found = await self.resolve_identifier(
             identifiers=named,
             as_of_ns=now,
             stated_asset_class="cash" if cash else "crypto_asset",
@@ -840,7 +841,7 @@ class Feed:
         miss = ops.MISS_REASON_AMBIGUOUS if found.found else found.miss_reason
         reason = ops.MissReason.Name(miss or ops.MISS_REASON_AMBIGUOUS)
         if self.products.missing.get(asset.code) != reason:
-            await self.plugin.report_missing_instrument(
+            await self.report_missing_instrument(
                 source=self.market.venue,
                 asset_class="cash" if cash else "crypto_asset",
                 identifiers=named,
@@ -856,7 +857,7 @@ class Feed:
         if not self.reads_instruments:
             return ""
         try:
-            found = await self.plugin.resolve_instrument(
+            found = await self.resolve_instrument(
                 instrument_id=subject, as_of_ns=self.clock_ns()
             )
         except NotGranted:
@@ -1181,7 +1182,7 @@ class Feed:
         await self._send(prices, [], want_id, LIVE)
         return declined
 
-    async def record_trades(
+    async def record_trades_of(
         self, subjects: Iterable[str], from_ns: int = 0, until_ns: int = 0, want_id: str = ""
     ) -> dict[str, str]:
         """Each subject's trades from `from_ns` to `until_ns` (now where it is
@@ -1218,7 +1219,9 @@ class Feed:
         await self._send_trades(rows, [], want_id)
         return declined
 
-    async def record_quotes(self, subjects: Iterable[str], want_id: str = "") -> dict[str, str]:
+    async def record_quotes_of(
+        self, subjects: Iterable[str], want_id: str = ""
+    ) -> dict[str, str]:
         """Each subject's best bid and offer with their sizes now, from every
         product it is the base of, read from the venue's level-1 book."""
         await self.ensure_mapped()
@@ -1376,6 +1379,11 @@ class Feed:
             return False
         return True
 
+    async def run(self) -> None:
+        """Each standing want kept current, and the stream kept open, until
+        cancelled (SDK 0.35: what a plugin ran beside its `receive`)."""
+        await asyncio.gather(self.keep_current(), self.keep_streaming())
+
     async def keep_streaming(
         self, sleep: Callable[[float], Awaitable[None]] = asyncio.sleep
     ) -> None:
@@ -1390,7 +1398,7 @@ class Feed:
 
     # ── Wants ────────────────────────────────────────────────────────────
 
-    async def on_want(self, heard: Any) -> None:
+    async def on_observations_wanted(self, heard: Any) -> None:
         """Record what the lake wants, or decline it per subject."""
         await self.wants.hear(heard, self._answer)
 
@@ -1425,11 +1433,11 @@ class Feed:
                 # Kept current from the stream: nothing to record yet.
                 served_now = self.products.for_subjects(subjects)
                 return {s: "not_covered" for s in subjects if not served_now[s]}
-            return await self.record_trades(
+            return await self.record_trades_of(
                 subjects, want.valid_from_ns, want.valid_until_ns, want.want_id
             )
         if key == LIVE and want.data_type == QUOTE:
-            return await self.record_quotes(subjects, want.want_id)
+            return await self.record_quotes_of(subjects, want.want_id)
         if key == LIVE:
             return await self.record_live(subjects, kinds, want.want_id)
         if want.business_date:
@@ -1447,7 +1455,7 @@ class Feed:
         first = today - timedelta(days=LATEST_DAYS - 1)
         return await self.record_days(subjects, first, today, want.data_type, want.want_id)
 
-    async def on_withdrawn(self, heard: Any) -> None:
+    async def on_want_withdrawn(self, heard: Any) -> None:
         """A standing want withdrawn: its subjects are no longer kept current,
         nor streamed unless another stands for them."""
         withdrawn = self.wants.withdraw(heard.message.want_id)

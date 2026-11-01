@@ -891,8 +891,10 @@ from meridian.roles.data import event_contracts  # noqa: E402
 async def test_a_range_members_bounds_are_reported_with_its_group_and_events_kept() -> None:
     v = contracts_venue
     lake = Lake(v.VENUE)
-    feed = event_contracts.Feed(
-        lake, v.market(v.NOW_NS), event_contracts.ContractMap(), clock_ns=lambda: v.NOW_NS
+    feed = lake.bind(
+        event_contracts.Feed(
+            v.market(v.NOW_NS), event_contracts.ContractMap(), clock_ns=lambda: v.NOW_NS
+        )
     )
     contract = await feed.contract(v.EVENT.members[0])
     assert contract is not None

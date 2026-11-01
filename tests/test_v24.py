@@ -21,7 +21,7 @@ from decimal import Decimal
 import pytest
 
 import meridian
-from conftest import Stream
+from conftest import Stream, receive
 from meridian import _transitions as transitions
 from meridian.operations import SEQUENCED
 from meridian.plugin.v1 import operations_pb2 as ops
@@ -100,8 +100,8 @@ async def test_replacements_are_read_on_start_and_after_a_loss_each_handed_on_on
         heard.append(row)
         await ids.heard(row)
 
-    plugin = await meridian.connect(address, heartbeat=False)
-    task = asyncio.create_task(plugin.receive(replace_merged_instrument=on_replaced))
+    plugin = await meridian.connect(address, heartbeat=False, roles=[])
+    task = asyncio.create_task(receive(plugin, replace_merged_instrument=on_replaced))
     try:
         # What the loss took is in the store by the time it is read.
         service.operations.replacements = [first, second, third, fourth]
@@ -147,9 +147,9 @@ async def test_a_start_without_seeding_hands_on_nothing_read_but_what_comes_afte
     async def on_replaced(row: meridian.Heard[ops.InstrumentReplacedEvent]) -> None:
         heard.append(row.message.sequence)
 
-    plugin = await meridian.connect(address, heartbeat=False)
+    plugin = await meridian.connect(address, heartbeat=False, roles=[])
     task = asyncio.create_task(
-        plugin.receive(replace_merged_instrument=on_replaced, seed=False)
+        receive(plugin, replace_merged_instrument=on_replaced, seed=False)
     )
     try:
         for _ in range(200):
