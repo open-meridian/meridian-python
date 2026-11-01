@@ -1,0 +1,26 @@
+{#- A listings source's Connection (meridian.roles.data.listings.ConnectionRead,
+    SDK 0.35): the data role's (meridian/roles/data/connection.html), the
+    source's nuance at its blocks only -- under "Key", the plan in force
+    where the source has one per timeliness; under "Stream", each
+    supervised session's state, the listings on it, its reconnects and
+    messages and its last error; under "Limits and use", the market
+    calendar's error where it did not answer. A plugin extends this, adding
+    its vendor's rows through `vendor_rows` (calling `super()`). -#}
+{% extends "meridian/roles/data/connection.html" %}
+{% block vendor_rows %}
+{% import "meridian/roles/_rows.html" as om %}
+{% if section == "Key" %}
+{% if data.plan %}{{ om.row("Plan", data.plan, "Live data is recorded into the dataset of this timeliness.") }}{% endif %}
+{% elif section == "Limits and use" %}
+{% if data.calendar_error %}{{ om.row("Market calendar", "Not read", data.calendar_error) }}{% endif %}
+{% elif section == "Stream" %}
+{% for each in data.streams %}
+{% if each.state == "off" %}
+{{ om.row(each.name|capitalize, "Off", "Nothing stands to stream.") }}
+{% else %}
+{{ om.row(each.name|capitalize, each.state|capitalize, each.streaming ~ (" listing" if each.streaming == 1 else " listings") ~ " on it; " ~ each.reconnects ~ (" reconnect, " if each.reconnects == 1 else " reconnects, ") ~ each.messages ~ (" message" if each.messages == 1 else " messages") ~ ((", the last at " ~ each.last_message_at) if each.last_message_at else "") ~ ".") }}
+{% endif %}
+{% if each.last_error %}{{ om.row("Last error", each.last_error) }}{% endif %}
+{% endfor %}
+{% endif %}
+{% endblock %}

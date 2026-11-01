@@ -84,7 +84,7 @@ CATALOGUE = [
         modes=["pull", "push"],
         cadence=86_400,
         history=3650,
-        licence_default=DatasetLicence(kept=True, personal_use=True),
+        licence_default=DatasetLicence(redistribution="not_allowed", kept=True, personal_use=True),
         day_time_zone="Etc/UTC",
         venue_id=COINBASE,
     ),
@@ -94,7 +94,7 @@ CATALOGUE = [
         data_types=["meridian.v1.Price"],
         modes=["stream"],
         cadence=1,
-        licence_default=DatasetLicence(kept=False, personal_use=True),
+        licence_default=DatasetLicence(redistribution="not_allowed", kept=False, personal_use=True),
         venue_id=COINBASE,
     ),
 ]
@@ -195,7 +195,7 @@ def test_a_catalogue_holds_each_key_once_and_only_a_data_plugin_declares_one() -
     with pytest.raises(ValueError, match="declared twice"):
         Declaration(catalogue=[CATALOGUE[0], CATALOGUE[0]])
     with pytest.raises(ValueError, match="no entry of the data dictionary"):
-        DatasetLicence(default_fields=["meridian.v1.Bar.nothing"])
+        DatasetLicence(redistribution="not_allowed", default_fields=["meridian.v1.Bar.nothing"])
     declared = Declaration(catalogue=CATALOGUE)
     assert declared.refused_for(["data"]) is None
     assert "only a data plugin" in (declared.refused_for(["custody"]) or "")

@@ -44,7 +44,7 @@ DAILY = meridian.DatasetDeclaration(
     modes=["pull"],
     cadence=86_400,
     history=1_826,
-    licence_default=meridian.DatasetLicence(kept=True),
+    licence_default=meridian.DatasetLicence(redistribution="not_allowed", kept=True),
     day_time_zone="Etc/UTC",
 )
 

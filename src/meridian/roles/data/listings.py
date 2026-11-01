@@ -80,6 +80,39 @@ row_key, and a venue_code where it names one).
 
 What it recorded, declined and could not convert is counted here for the
 Datasets page (`Feed.counts`).
+
+**From 0.35 (924's item 4) the feed holds what four plugins glued on:**
+
+- **The edge**: each live price, quote and trade recorded unasked or for a
+  standing want has its feed delay recorded on the plugin's `roles.Latency`
+  (`latency`, the `edge` hop) and is judged by the edge's quality checks
+  (`quality`, a `quality.EdgeChecks`), by the dataset in force
+  (`at_the_edge`); a row pulled for a read is recorded as it is. A plugin
+  sets `latency` and `quality`; it keeps no `at_the_edge` of its own.
+- **Timeliness** (ruling 382, one dataset per timeliness): given the plan's
+  `timeliness` (`real_time`, `delayed` or `end_of_day`, `data.timeliness`)
+  and `datasets_by_timeliness` -- each feed key's dataset key for each,
+  `{"live": {"real_time": "live", "delayed": "live_delayed"}, ...}` -- each
+  kind is recorded into the dataset of the timeliness in force (`dataset`).
+  A want of another timeliness's dataset is declined, not covered; so is a
+  live or trades want on an end-of-day plan, and a quote want on a plan not
+  real time (`refused`). Setting `timeliness` again lets go of the standing
+  wants whose dataset changed (the lake asks again of the new one) and
+  streams nothing on an end-of-day plan.
+- **Two clocks** (rulings 368 to 371): a stated trade or quote whose
+  `participant_ns` is set (`Stated`) is recorded with that time as its
+  `event` source time and the consolidated time (`at_ns`) as its
+  `consolidated` one; otherwise `at_ns` is its `event` time, as before.
+- **Venues by MIC** (W3.14): given `mic_of(code)`, a venue the source
+  prints is resolved by its code at this source and by its ISO 10383 MIC,
+  so the venue master matches it without learning the source's codes.
+- **A row sent again only when it changed**, by a digest of its values
+  (`data.SentRows`' digest), never its `repr`.
+- **Pages** (924's item 8): `connection_read`, `datasets_read` and
+  `figures_read`, with the templates `meridian/roles/data/listings/
+  connection.html` and `datasets.html`, draw the stream's sessions (a
+  `helpers.sessions.Supervisor`'s state), the plan in force and the
+  calendar's error; the plugin adds its own rows through `vendor_rows`.
 """
 
 from __future__ import annotations
@@ -91,13 +124,14 @@ import logging
 import re
 import time
 from collections import OrderedDict
-from collections.abc import Callable, Iterable, Sequence
-from dataclasses import dataclass, replace
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Protocol
 from zoneinfo import ZoneInfo
 
 from ...errors import MeridianError, NotGranted
+from ...figures import Figure
 from ...operations import (
     Bar,
     Eligibility,
@@ -114,6 +148,12 @@ from ...plugin.v1 import operations_pb2 as ops
 from ...plugin.v1.operations_pb2 import Identifier
 from ...receive import Heard
 from .._generated.data import Role
+from ._pages import _arrives, _terms
+from ._records import ConnectionRead as RoleConnectionRead
+from ._records import DatasetsRead as RoleDatasetsRead
+from ._records import Served, Want
+from ._rows import digest
+from ._settings import END_OF_DAY, REAL_TIME
 from ._wants import backfill_restart
 
 __all__ = [
@@ -128,17 +168,26 @@ __all__ = [
     "TRADE",
     "TRADES",
     "Attributes",
+    "ConnectionRead",
     "Counts",
+    "DatasetsRead",
     "Feed",
     "Forming",
     "Listings",
     "Source",
     "Standing",
+    "Stated",
+    "StreamSession",
+    "at_the_edge",
     "close_of",
+    "connection_read",
+    "datasets_read",
+    "figures_read",
     "new_york_date",
     "previous_close_of",
     "row_key",
     "spelled",
+    "stream_sessions",
 ]
 
 log = logging.getLogger("meridian.roles.data.listings")
@@ -234,6 +283,20 @@ class Source(Protocol):
     def quotes(self, symbols: Sequence[str]) -> list[Any]: ...
 
 
+class Stated(Protocol):
+    """What the source stated of a trade or a quote, as the plugin read it
+    (the module names each field). `participant_ns`, where the source states
+    the participant's own time beside the consolidated one, is the row's
+    `event` time and `at_ns` its `consolidated` time (0.35); None, or a
+    value without it, keeps `at_ns` as the `event` time."""
+
+    symbol: str
+    at_ns: int
+    raw_key: str
+    row_key: str
+    participant_ns: int | None
+
+
 @dataclass
 class Counts:
     """What one dataset did since the plugin started, for the Datasets page."""
@@ -325,6 +388,39 @@ def _eligibility(flags: Sequence[bool | None]) -> Eligibility:
     )
 
 
+def _clocks(stated: Any) -> list[SourceTime]:
+    """A stated trade's or quote's source times: the participant's as its
+    `event` time and the consolidated one beside it where both are stated
+    (0.35), else its one time as the `event` time."""
+    participant = getattr(stated, "participant_ns", None)
+    if participant:
+        return [
+            SourceTime(kind="event", at_ns=participant),
+            SourceTime(kind="consolidated", at_ns=stated.at_ns),
+        ]
+    return [SourceTime(kind="event", at_ns=stated.at_ns)]
+
+
+def at_the_edge(
+    latency: Any, quality: Any, key: str, dataset: str, rows: list[Any]
+) -> list[Any]:
+    """Rows recorded unasked or for a standing want, at the edge: each one's
+    age at the `edge` hop recorded on `latency`, and each judged by the
+    edge's checks `quality` under `key` -- a row naming a series (a chain's
+    option) under `key/series` -- where the plugin keeps them."""
+    if latency is not None:
+        for row in rows:
+            latency.aged(dataset, "AGE_HOP_EDGE", row)
+    if quality is None:
+        return rows
+    out: list[Any] = []
+    for row in rows:
+        meta = getattr(row, "meta", None)
+        series = meta.series_key[0].value if meta is not None and meta.series_key else ""
+        out.extend(quality.judged(f"{key}/{series}" if series else key, [row]))
+    return out
+
+
 def _kind_name(value: int) -> str:
     return str(ops.PriceKind.Name(value)).removeprefix("PRICE_KIND_").lower()
 
@@ -354,11 +450,33 @@ class Feed(Role):
         source: Source | None,
         products: Listings | None = None,
         clock_ns: Callable[[], int] = time.time_ns,
+        *,
+        timeliness: str = "",
+        datasets_by_timeliness: Mapping[str, Mapping[str, str]] | None = None,
+        mic_of: Callable[[str], str | None] | None = None,
     ) -> None:
         if not self.source_name:
             raise TypeError("a listings feed names its source (source_name)")
         self.source = source
         self.products = products or Listings(None)
+        #: Each feed key's dataset key by timeliness, and the timeliness in
+        #: force ("" where the source has one dataset per kind).
+        self.datasets_by_timeliness = {
+            key: dict(by) for key, by in (datasets_by_timeliness or {}).items()
+        }
+        self._timeliness = timeliness
+        self._untimed = {
+            dataset: key
+            for key, by in self.datasets_by_timeliness.items()
+            for dataset in by.values()
+        }
+        #: A venue code's ISO 10383 MIC, where the plugin knows it.
+        self.mic_of = mic_of
+        #: The plugin's `roles.Latency` and the edge's checks, where it keeps
+        #: them: each row recorded unasked or for a standing want aged and
+        #: judged at the edge (`at_the_edge`).
+        self.latency: Any = None
+        self.quality: Any = None
 
         self.clock_ns = clock_ns
         self.counts = {DAILY: Counts(), LIVE: Counts(), TRADES: Counts()}
@@ -383,7 +501,7 @@ class Feed(Role):
         self.recent: OrderedDict[str, Trade] = OrderedDict()
         #: Each row's last sending, by (data type, row key): its values
         #: without the raw record, and the raw record it carried.
-        self._sent: OrderedDict[tuple[str, str, str], tuple[str, Any]] = OrderedDict()
+        self._sent: OrderedDict[tuple[str, str, str], tuple[bytes, Any]] = OrderedDict()
         self.forming: dict[Forming, str] = {}
         self.pushed: dt.date | None = None
         self._venues: dict[str, tuple[str, int]] = {}
@@ -440,12 +558,63 @@ class Feed(Role):
 
     # ── Names ────────────────────────────────────────────────────────────
 
-    def dataset(self, key: str) -> str:
-        """A dataset's ID in the deployment: the instance, a colon, its key."""
+    def named(self, key: str) -> str:
+        """A declared dataset's ID in the deployment, by its own key: the
+        instance, a colon, the key."""
         return f"{self.plugin.identity.instance_id}:{key}"
 
+    def in_force(self, key: str) -> str:
+        """The dataset key the feed's `key` is recorded into now: the one of
+        the timeliness in force, where the source has one per timeliness."""
+        by = self.datasets_by_timeliness.get(key)
+        if not by or not self._timeliness:
+            return key
+        return by.get(self._timeliness, key)
+
+    def dataset(self, key: str) -> str:
+        """The dataset's ID the feed's `key` is recorded into now."""
+        return self.named(self.in_force(key))
+
     def _key_of(self, dataset: str) -> str:
-        return dataset.rpartition(":")[2]
+        key = dataset.rpartition(":")[2]
+        return self._untimed.get(key, key)
+
+    @property
+    def timeliness(self) -> str:
+        """The plan's timeliness in force: `real_time`, `delayed`,
+        `end_of_day`, or "" for a source with one dataset per kind."""
+        return self._timeliness
+
+    @timeliness.setter
+    def timeliness(self, value: str) -> None:
+        """The plan as the settings now stand: the standing wants whose
+        dataset changed let go, since they were asked of the other dataset
+        (the lake asks again of this one); nothing streamed at end of day."""
+        if value == self._timeliness:
+            return
+        before = {key: self.in_force(key) for key in self.datasets_by_timeliness}
+        self._timeliness = value
+        moved = {key for key, held in before.items() if self.in_force(key) != held}
+        for want_id, standing in list(self.standing.items()):
+            if standing.dataset in moved:
+                self.standing.pop(want_id, None)
+        self.streaming = value != END_OF_DAY
+        self.restream()
+
+    def refused(self, want: ops.ObservationsWantedEvent) -> str:
+        """Why the plan in force does not serve a want ("not_covered"), or
+        "": a want of another timeliness's dataset; live prices or trades on
+        an end-of-day plan; quotes on a plan not real time."""
+        key = self._key_of(want.dataset)
+        if key not in self.datasets_by_timeliness or not self._timeliness:
+            return ""
+        if want.dataset != self.dataset(key):
+            return "not_covered"
+        if self._timeliness == END_OF_DAY:
+            return "not_covered"
+        if key == LIVE and want.data_type == QUOTE and self._timeliness != REAL_TIME:
+            return "not_covered"
+        return ""
 
     def streamed_subjects(self, symbol: str) -> list[str]:
         """The records under a standing want that a streamed listing is: a
@@ -552,14 +721,17 @@ class Feed(Role):
         held = self._venues.get(code)
         if held is not None and (held[0] or now - held[1] < VENUE_MISS_NS):
             return held[0], [] if held[0] else [self._venue_reported(code)]
-        identifier = Identifier(scheme="symbol", value=code, source=self.source_name)
-        found = await self.resolve_venue(identifiers=[identifier], as_of_ns=now)
+        identifiers = [Identifier(scheme="symbol", value=code, source=self.source_name)]
+        mic = self.mic_of(code) if self.mic_of is not None else None
+        if mic:
+            identifiers.append(Identifier(scheme="iso10383", value=mic))
+        found = await self.resolve_venue(identifiers=identifiers, as_of_ns=now)
         if found.found and found.venue.venue_id:
             self._venues[code] = (found.venue.venue_id, now)
             return found.venue.venue_id, []
         await self.report_missing_venue(
             source=self.source_name,
-            identifiers=[identifier],
+            identifiers=identifiers,
             as_of_ns=now,
             reason=found.miss_reason or ops.MISS_REASON_NOT_FOUND,
         )
@@ -642,7 +814,7 @@ class Feed(Role):
         restatement."""
         assert row.meta is not None
         key = (data_type, row.meta.source.dataset, row.meta.row_key)
-        said = repr(replace(row, meta=replace(row.meta, raw=None)))
+        said = digest(replace(row, meta=replace(row.meta, raw=None)))
         held = self._sent.get(key)
         if held is not None and held[0] == said:
             row = replace(row, meta=replace(row.meta, raw=held[1]))
@@ -652,10 +824,23 @@ class Feed(Role):
             self._sent.popitem(last=False)
         return row
 
+    def at_the_edge(self, key: str, rows: list[Any], want_id: str) -> list[Any]:
+        """Rows of the feed's `key` recorded unasked or for a standing want:
+        their age at the edge recorded and judged by the edge's checks, by
+        the dataset in force; rows pulled for a read as they are. A row
+        naming a series (a chain's) is judged within its series."""
+        if want_id and want_id not in self.standing:
+            return rows
+        return at_the_edge(
+            self.latency, self.quality, self.in_force(key), self.named(self.in_force(key)), rows
+        )
+
     async def _record(
         self, key: str, data_type: str, rows: Sequence[Any], want_id: str
     ) -> None:
         counts = self.counts[key]
+        if key in (LIVE, TRADES) and data_type in (PRICE, QUOTE, TRADE):
+            rows = self.at_the_edge(key, list(rows), want_id)
         rows = [self._as_sent_before(data_type, row) for row in rows]
         done: Any
         for batch in _chunks(rows):
@@ -897,6 +1082,10 @@ class Feed(Role):
             log.warning("a want for a dataset this plugin does not declare: %s", want.dataset)
             return
         self.counts[key].wants += 1
+        reason = self.refused(want)
+        if reason:
+            await self._decline(key, want.want_id, subjects, reason, settled=False)
+            return
         kinds = [_kind_name(k) for k in want.kinds]
         if key == DAILY:
             ok_type = want.data_type in (PRICE, BAR)
@@ -1250,7 +1439,7 @@ class Feed(Role):
                 subjects=[SubjectRef(entity_id=subject)],
                 source=ops.Source(dataset=self.dataset(TRADES), venue_id=venue),
                 valid_from_ns=stated.at_ns,
-                source_times=[SourceTime(kind="event", at_ns=stated.at_ns)],
+                source_times=_clocks(stated),
                 raw=self.plugin.raw_record(stated.raw_key[:256]),
                 unconverted=[*reported, *said.unconverted, *stated.unconverted],
             ),
@@ -1282,7 +1471,7 @@ class Feed(Role):
                 subjects=[SubjectRef(entity_id=subject)],
                 source=ops.Source(dataset=self.dataset(LIVE), venue_id=venue),
                 valid_from_ns=stated.at_ns,
-                source_times=[SourceTime(kind="event", at_ns=stated.at_ns)],
+                source_times=_clocks(stated),
                 raw=self.plugin.raw_record(stated.raw_key[:256]),
                 unconverted=[*reported, *unread, *stated.unconverted],
             ),
@@ -1356,3 +1545,224 @@ class Feed(Role):
         subjects = sorted(self.products.symbols)
         for data_type in (PRICE, BAR):
             await self.daily(subjects, today, today, data_type=data_type)
+
+
+# ── The pages (924's item 8) ─────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class StreamSession:
+    """One supervised session as Connection's "Stream" lists it: its name,
+    its state, how many listings it streams, how often it opened and was
+    opened again, its messages, the last one's time and its last error."""
+
+    name: str
+    state: str = "off"
+    streaming: int = 0
+    opened: int = 0
+    reconnects: int = 0
+    messages: int = 0
+    last_message_at: str = ""
+    last_error: str = ""
+
+
+@dataclass(frozen=True)
+class ConnectionRead(RoleConnectionRead):
+    """The role's Connection for a listings source: the common fields, the
+    plan in force (its timeliness, in words), each stream's session, the
+    market calendar's error and the source's last failure."""
+
+    plan: str = ""
+    streams: list[StreamSession] = field(default_factory=list)
+    calendar_error: str = ""
+    source_error: str = ""
+
+
+@dataclass(frozen=True)
+class DatasetsRead(RoleDatasetsRead):
+    """The role's Datasets for a listings source, and per feed key what it
+    restated, left unchanged, could not convert and caught up after a gap,
+    and the listings it maps and streams."""
+
+    standing_wants: int = 0
+    listings_mapped: int = 0
+    listings_streamed: int = 0
+    past_stream_limit: int = 0
+    restated: int = 0
+    unchanged: int = 0
+    unconverted: int = 0
+    caught_up: int = 0
+
+
+def _iso(at_ns: int) -> str:
+    from ._reading import iso_time
+
+    return iso_time(at_ns)
+
+
+def stream_sessions(streams: Mapping[str, Any]) -> list[StreamSession]:
+    """Each named session's row, from its state (a `helpers.sessions.
+    SessionState`, or anything with its fields)."""
+    return [
+        StreamSession(
+            name=name,
+            state=state.state,
+            streaming=len(state.subscribed),
+            opened=state.opened,
+            reconnects=state.dropped,
+            messages=state.messages,
+            last_message_at=_iso(state.last_message_ns),
+            last_error=state.last_error,
+        )
+        for name, state in streams.items()
+    ]
+
+
+def connection_read(
+    feed: Feed | None,
+    *,
+    mode: str,
+    credentials: Sequence[Any] = (),
+    entitled_at_vendor: str = "",
+    limit: str = "",
+    calls: int = 0,
+    rate_limited: int = 0,
+    last_call_at: str = "",
+    streams: Mapping[str, Any] | None = None,
+    calendar: Any = None,
+    session_latency: Sequence[Any] = (),
+) -> ConnectionRead:
+    """Connection's record (`read_connection`), drawn by the template
+    `meridian/roles/data/listings/connection.html`. What the vendor allows
+    and what the plugin spent of it (`limit`, `calls`, `rate_limited`,
+    `last_call_at`) are the plugin's own client's to say; each stream's
+    session is its `helpers.sessions.Supervisor`'s state, by name; the
+    calendar its `helpers.calendars.MarketDays`."""
+    from ._settings import WORDS
+
+    sessions = stream_sessions(streams or {})
+    return ConnectionRead(
+        mode=mode,
+        credentials=list(credentials),
+        entitled_at_vendor=entitled_at_vendor,
+        limit=limit,
+        calls=calls,
+        rate_limited=rate_limited,
+        last_call_at=last_call_at,
+        last_error=feed.last_error if feed is not None else "",
+        sessions=sum(1 for s in sessions if s.state == "open") if sessions else None,
+        session_latency=list(session_latency),
+        plan=WORDS.get(feed.timeliness, "") if feed is not None else "",
+        streams=sessions,
+        calendar_error=getattr(calendar, "error", "") if calendar is not None else "",
+        source_error=feed.last_error if feed is not None else "",
+    )
+
+
+def datasets_read(
+    feed: Feed | None,
+    catalogue: Sequence[Any],
+    instance: str,
+    entitled_at_vendor: str,
+    *,
+    licensed: Collection[str] = (),
+) -> DatasetsRead:
+    """Datasets' record (`read_datasets`), drawn by the template
+    `meridian/roles/data/listings/datasets.html`: each declared dataset's
+    counts, those of the dataset in force for a kind with one per
+    timeliness; `licensed` the datasets' IDs a deployment admin licensed
+    (the data role's `list_datasets()`); `instance` names the datasets
+    before the plugin has started."""
+    named = feed.plugin.identity.instance_id if feed is not None else instance
+    rows = []
+    for declared in catalogue:
+        dataset = f"{named}:{declared.key}"
+        counts: Counts | None = None
+        if feed is not None:
+            key = feed._key_of(dataset)
+            if key in feed.counts and feed.in_force(key) == declared.key:
+                counts = feed.counts[key]
+        rows.append(
+            Served(
+                dataset=dataset,
+                data=", ".join(t.removeprefix("meridian.v1.") for t in declared.data_types),
+                arrives=", ".join(_arrives(m) for m in declared.modes),
+                day=f"{declared.day_time_zone}, ends {declared.day_end_minute // 60:02d}:"
+                f"{declared.day_end_minute % 60:02d}",
+                default_terms=_terms(declared.licence_default),
+                entitled_at_vendor=entitled_at_vendor,
+                recorded=counts.recorded if counts else 0,
+                declined=counts.declined if counts else 0,
+                last_recorded=_iso(counts.last_recorded_at_ns) if counts else "",
+                licensed=dataset in licensed,
+            )
+        )
+    if feed is None:
+        return DatasetsRead(served=rows)
+    wants = [
+        Want(
+            dataset=feed.dataset(standing.dataset),
+            asked=standing.data_type.removeprefix("meridian.v1."),
+            subjects=len(standing.subjects),
+            recorded=feed.by_want.get(want_id, [0, 0])[0],
+            declined=feed.by_want.get(want_id, [0, 0])[1],
+            state="Kept current",
+        )
+        for want_id, standing in feed.standing.items()
+    ]
+    every = list(feed.counts.values())
+    return DatasetsRead(
+        served=rows,
+        wants=wants,
+        reads_instruments=feed.reads_instruments,
+        standing_wants=len(feed.standing),
+        listings_mapped=len(feed.products.symbols),
+        listings_streamed=len(feed.streamed),
+        past_stream_limit=len(feed.past_limit),
+        restated=sum(c.restated for c in every),
+        unchanged=sum(c.unchanged for c in every),
+        unconverted=sum(c.unconverted for c in every),
+        caught_up=sum(c.caught_up for c in every),
+    )
+
+
+def figures_read(
+    feed: Feed | None,
+    catalogue: Sequence[Any],
+    *,
+    connection: Any = "Answering",
+    streams: Mapping[str, Any] | None = None,
+    rate_use: Any = None,
+) -> list[Figure]:
+    """The data role's figures on the Summary, in its order: Connection (the
+    plugin's word for it: "Answering", "No key", "Sample data" or a
+    `Figure`), Entitled at the vendor, Stream (the listings streamed, a
+    warning while a session is not open), Last recorded and, where the
+    plugin gives it, Rate use."""
+    from datetime import UTC
+    from datetime import datetime as moment
+
+    from . import figures as role_figures
+
+    if feed is None:
+        return role_figures(connection=connection, rate_use=rate_use)
+    stream: Any = "Does not stream" if streams is None else "Off"
+    states = [state for state in (streams or {}).values() if state.state != "off"]
+    if states:
+        count = len(feed.streamed)
+        said = f"{count} {'listing' if count == 1 else 'listings'}"
+        closed = [s.state for s in states if s.state != "open"]
+        stream = Figure(
+            "",
+            said,
+            state="warn" if closed else None,
+            why=f"A stream is {closed[0]}" if closed else None,
+        )
+    last = max((c.last_recorded_at_ns for c in feed.counts.values()), default=0)
+    return role_figures(
+        connection=connection,
+        entitled_at_vendor=f"{len(catalogue)} of {len(catalogue)} datasets",
+        stream=stream,
+        last_recorded=moment.fromtimestamp(last / 1e9, tz=UTC) if last else None,
+        rate_use=rate_use,
+    )

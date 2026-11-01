@@ -369,7 +369,7 @@ async def test_warn_is_honoured_only_where_the_deployment_permits_it() -> None:
 
 def test_a_licence_states_who_may_take_its_dataset() -> None:
     licence = meridian.DatasetLicence(
-        eligibility=meridian.DataEligibility(
+        redistribution="not_allowed", eligibility=meridian.DataEligibility(
             uses=["personal"], buyer_revenue_below=Decimal("1000000"),
             buyer_revenue_currency_code="USD",
         )
@@ -416,7 +416,7 @@ def test_a_dataset_declares_its_class_of_source_and_whose_aggregate() -> None:
         modes=["stream"],
         price_source_class="composite",
         licence_default=meridian.DatasetLicence(
-            kept=True, underlying_source="Pyth's aggregate of its publishers"
+            redistribution="not_allowed", kept=True, underlying_source="Pyth's aggregate of its publishers"
         ),
     )
     wire = pyth._wire()
@@ -434,7 +434,7 @@ def test_a_dataset_declares_its_class_of_source_and_whose_aggregate() -> None:
     assert named.price_source_class == "evaluated"
     plain = meridian.DatasetDeclaration(
         key="daily", vendor="v", data_types=["meridian.v1.Price"], modes=["pull"],
-        licence_default=meridian.DatasetLicence(kept=True),
+        licence_default=meridian.DatasetLicence(redistribution="not_allowed", kept=True),
     )  # fmt: skip
     assert plain._wire().price_source_class == sidecar_pb2.PRICE_SOURCE_CLASS_UNSPECIFIED
     assert "price_source_class" not in plain._to_json()

@@ -33,13 +33,19 @@ defines no act of its own: one that reads or acts takes the role object
 holding the act (`chains.read_chain(role, ...)`, `debt.read_factors(role,
 ...)`), never the connection, so the act is allowed or refused by that
 role. `sessions` holds `Backoff`, the wait between a long-running work's
-tries, with which `meridian.run` restarts a role's `run()`.
+tries, with which `meridian.run` restarts a role's `run()`, and (924's item
+2) `Supervisor`, a session with a source kept open over the plugin's own
+`Link`, its state (`SessionState`) and its catch-up after a reopen;
+`calendars` (924's item 5) a dataset's business day as its declaration
+states it (`DayClock`) and the deployment's market days read through a role
+object (`MarketDays`). Neither holds a transport or a vendor's pacing: those
+are each plugin's (rulings 1027 and 1028).
 
 These four were `meridian.roles.chains`, `.packages`, `.lifecycle` and
 `.debt` until 0.34.0; `meridian plugin migrate` rewrites a plugin's
 imports of them.
 """
 
-from . import chains, debt, lifecycle, packages, sessions
+from . import calendars, chains, debt, lifecycle, packages, sessions
 
-__all__ = ["chains", "debt", "lifecycle", "packages", "sessions"]
+__all__ = ["calendars", "chains", "debt", "lifecycle", "packages", "sessions"]
