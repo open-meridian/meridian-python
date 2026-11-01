@@ -1,0 +1,29 @@
+# open-meridian 0.33.4 to 0.33.5: additive, on contract v28 as amended
+# 2026-10-30 and 2026-10-31 (rulings 822, 885, 898, 922, 954, 955 and 969):
+# nothing a plugin calls changed shape, so only the pins move.
+from = "0.33.4"
+to = "0.33.5"
+summary = """
+Additive, on contract v28 as amended. plugin.subscribe(row, subjects=...,
+series_keys=... or all_series=True with an expiration window, fields=...)
+answers a LiveView: the SDK reads its snapshot once, keeps it current from the
+deliveries the sidecar matches and reads it again on a loss, so a page reads it
+with no bus call and the plugin keeps no copy of its own. Identical selectors
+are one subscription, shared; close() a view when done, and its subscription
+lingers 30 seconds after the last reader. pages.live serves a view's snapshot
+and its event stream to the kit's om-live. A data plugin may declare what
+stands behind its prices, DatasetDeclaration(price_source_class=traded,
+firm_quote, composite or evaluated), and whose source or aggregate the vendor
+serves, DatasetLicence(underlying_source=...); a Price may carry the source's
+confidence, in the price's own unit; a binary event contract's terms carry the
+venue's category; a data plugin records a figure its publisher computes as a
+derived series marked DerivedSeries(published_by=...). A core older than chart
+0.1.336 refuses a registration setting the class or the underlying source. The
+data suite gains records-a-derived-series, and the ems, oms, portfolio and
+signal suites hears-a-listed-series: a plugin that maps its suite's cases
+itself maps each or names it not presented, with why; the pairs,
+event-contract and rates helpers' not-presented sets already name
+records-a-derived-series. Nothing a plugin calls changed shape: `meridian
+plugin migrate` moves the pins and changes no code.
+"""
+breaking = false
