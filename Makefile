@@ -72,7 +72,7 @@ contract-diff:
 # 0.35, schema #17 -- with two cases more: an OSI symbol's strike read back
 # as a plain decimal), its gen/ and boundaries/ vendored here byte for byte.
 # Moved to schema main once that branch merges.
-SCHEMA_REV := 028ed424aa2f42036caf79b719ac0e1cae37ee58
+SCHEMA_REV := 6d89d4b1a854c15c2bb3ff936867166ef87e7e75
 SCHEMA_REPO := https://github.com/open-meridian/meridian-schema.git
 SCRATCH     := .schema-scratch
 
