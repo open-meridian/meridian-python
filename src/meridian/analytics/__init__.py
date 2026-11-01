@@ -49,7 +49,10 @@ v28's amendment, ruling 794); `Jobs` reads every page in turn and
 hands back the whole answer, so a plugin never sees a page.
 
 **The reference computations** v26's engine must equal exactly, hashes
-included, are `meridian.analytics.reference` (requirement 36).
+included, are `meridian.analytics.reference` (requirement 36); those v29's
+curve and bond measures are held to -- the templates' packages exactly,
+QuantLib's bond functions and fitted curve to core's oracle tolerances --
+are `meridian.analytics.debt`.
 """
 
 from __future__ import annotations

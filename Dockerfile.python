@@ -143,6 +143,11 @@ WORKDIR /w/tests
 # And each role's template under templates/, from its own directory, as the
 # plugin it becomes runs them; their suites among them.
 FROM base AS test
+# Core's oracle cases (contract v29), which the reference computations for
+# the curve and bond measures are held to: the core-oracle context, at
+# CORE_REV, read where tests/test_v29_reference.py looks for them.
+COPY --from=core-oracle . /core-oracle/
+ENV MERIDIAN_CORE_ORACLE=/core-oracle
 RUN python -m pytest -q --ignore=tests/test_conformance.py --ignore=tests/test_interop.py --ignore=tests/test_book.py \
  && PYTHONPATH=template/src python -m pytest -q -p no:cacheprovider template/tests \
  && for role in templates/*/; do \
