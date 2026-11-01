@@ -2,7 +2,7 @@
 
 The Python SDK for building [Open Meridian](https://open-meridian.com) plugins:
 the tools a trader has an AI agent build, and the bots and analytics a
-developer writes. Python 3.11 or newer. This is release 0.33.5; its reference
+developer writes. Python 3.11 or newer. This is release 0.34.0; its reference
 is at [open-meridian.dev](https://open-meridian.dev/api/python-sdk/).
 
 ## Start here
@@ -2149,6 +2149,91 @@ plugin migrate` rewrites what it can (`to_0_33_0`).
       return await plugin.subscribe("QuotesRecorded", subjects=pairs_shown)
   ```
 
+### Fixed income, held, valued and serviced (contract v29; 0.34.0)
+
+0.34.0 declares contract v29 (`meridian.SCHEMA_VERSION`): bonds, agency pools,
+TBAs, agency CMOs and CDs, each a template (`bond`, `mbs_pool`, `tba`,
+`cmo_tranche`, `certificate_of_deposit`), held in face, priced per 100 of face
+and serviced in the book. Breaking in what the contract and the suites ask
+(a quality assessment's data type, a single option order's position effect,
+the factor's cases); nothing a plugin calls changed shape, and `meridian plugin
+migrate` moves the pins (`to_0_34_0`) and says what is left by hand.
+
+- **The money rules** (`meridian.roles.debt`). A debt record's quantity is face
+  and its price is per 100 of face, `Execution.price` always the dollar price
+  (987), a yield or spread quote beside it as its source quoted it
+  (`debt.quoted_yield`, a `QuotedYield`). Cash is
+  `debt.percent_of_par(face, price)`, face times price times 0.01, exact. A
+  pool's or a tranche's lots stay in original face (`debt.current_face` reads
+  its current face from the latest factor), and its fill's cash
+  (`debt.fill_cash`) and a paydown's principal (`debt.paydown_cash`) round to
+  the cent half-even (993). A coupon is booked as two cash lines, the
+  purchased accrued returned and the income (988; `debt.coupon_split` where a
+  custodian states them apart). Accrual by FIX's day counts
+  (`debt.year_fraction`, `debt.accrued_per100`, `debt.coupon_dates`); BUS/252,
+  actual/actual AFB and ICMA ultimo are refused by name, as the engine names
+  them `NOT_EVALUATED_REASON_NOT_SUPPORTED` (997).
+- **The factor** (W10.4). An agency's data plugin records each held pool's or
+  class's factor as published, never a whole file: `debt.factor(pool_id,
+  "0.84123456", "2026-10", dataset=..., wac=..., wam=..., wala=...)`, sent by
+  `plugin.record_factors` or `wants.record("factors", rows, key)`. Readers read
+  a pool's history (`debt.read_factors`, every page; `debt.latest`) and hear
+  each month (`receive(factors_recorded=...)`, never conflated, caught up by
+  `list_factors`). A fill states original face; the book takes the factor
+  published for its settlement month (`debt.settlement_month`, 991), or the
+  latest one provisionally, and revises it when the month's row arrives (992).
+  Read what the book decided, never re-derive it: `debt.taken(execution)`,
+  `debt.awaited(execution_or_lot)` and `debt.open_claims(events)`.
+- **The book's seven records** (`meridian.roles.lifecycle`). A custodian's
+  `coupon_received`, `redemption`, `paydown`, `accretion`, `tba_allocation`,
+  `strip` and `reconstitution`, reported once (`lifecycle.report`); servicing's
+  `expected_coupon`, `expected_maturity` and `expected_paydown` (a paydown, or
+  an accretion for a Z or an IO class) from the terms and the published
+  factors, proposed (`lifecycle.propose`); a person marks a factor revision's
+  open claim settled (`lifecycle.settle_claim`). `lifecycle.read_events`
+  naming no account reads every account in scope (740).
+- **The lake's prices.** `PriceBasis` gains percent of par, yield and spread
+  (with `benchmark_instrument_id`) on `Price`, `Trade` and `Quote`; a capped
+  size is at least (`Trade.quantity_capped`, `Quote.bid_size_capped`;
+  `debt.capped("5MM+")`), and the fixed-income trade characteristics are
+  named by meaning (`debt.characteristics`).
+- **The engine.** `analytics.DEBT_MEASURES` -- accrued interest, bond yield,
+  price, risk, key-rate durations and spreads, the Treasury curve, historical
+  prepayment, WAL at the pool's own CPR (996) and the make-whole amount -- and
+  `expected_move`, each served at version 1. Their reference computations are
+  `meridian.analytics.debt`, held to core's oracle cases: the platform's
+  packages exactly, QuantLib's bond functions and fitted curve within the
+  tolerances core holds the engine to (`debt.TOLERANCES`).
+- **Track E.** A quality assessment names its data type (628;
+  `quality.assessment` does), a derived value in money is `money_value`
+  (638; `signal.derived(..., value=Money(...))`), a single option order states
+  its `position_effect` (744), `DatasetRef` counts its valid, suspicious and
+  invalid rows (619), and a quarantined dataset is answered
+  `UNANSWERED_REASON_QUARANTINED`, never fallen back from.
+- **The suites.** The data suite's `records-a-pools-factor` and every
+  reader's `reads-a-pools-factors` and `hears-a-factor-recorded`, about
+  `factors`. Every read and heard case now carries an `about`, as do the acts
+  a plugin may genuinely never make -- ordering a listed series, proposing a
+  package, releasing an unreported expiry, a pre-trade check's data age, a
+  feed delay where the source states no publication time -- so a plugin names
+  one its work never does in `not_presented`, with why, rather than mapping a
+  read it never makes. The templates do: the reporting board reads no orders,
+  bookings, alerts, calendar or settlement date, and the data and custody
+  templates read no calendar.
+
+  **Run 0.34.0 on a core of contract v29.**
+
+  ```python
+  from meridian.roles import debt, lifecycle
+
+  rows = await debt.read_factors(plugin, [pool_id], "2026-01-01", "2026-11-30")
+  prior, current = rows[-2], rows[-1]
+  expected = lifecycle.expected_paydown(account_id, pool_id, original_face, prior,
+                                        current, currency="USD")
+  if expected is not None:
+      await lifecycle.propose(plugin, [expected])
+  ```
+
 ## Moving a plugin to a new release
 
     meridian plugin migrate            # to the latest release
@@ -2225,6 +2310,7 @@ carries libcst.
 | 0.32.2 to 0.32.3: a listings feed records its live dataset's liveness (`heard` notes it, `flush` records it once a pass); an event contract's `Resolution.challenge_ends_at_ns` reaches the `Outcome`; `DatasetLicence` writes `not_affiliated_notice`; `rates.Feed.rate` refuses a rate with no convention (an index level takes its compounded rate's) and a subject missed is asked again the same day; the merged Connection draws one group at a time under a tab row. Set the licence fields 0.32.2 and 0.32.3 added only on core 0.1.311 or later | only the pins move; a rate built with no convention now raises, so give it one | |
 | 0.32.3 to 0.33.0: the SDK declares contract v28: `meridian.SubjectRef` only (ruling 599); `Latency.report` sends ReportLatency and the three latency cases are required (518); the ems's actions permitted read (600); listed options' and futures' chains, lifecycle and packages (`roles.chains`, `roles.lifecycle`, `roles.packages`); a signal's derived series, saved scenarios and quality escalated (`roles.signal`); the filings slice (`roles.data.filings`); quality states at the edge (`roles.data.quality`); `DataEligibility`; the suites' v28 cases, marked by `about` (602). Breaking | an `ops.SubjectRef(...)` handed to the SDK into `meridian.SubjectRef(...)`; a base pinned by digest at an older release moved to 0.33.0, its digest dropped (offline) | a heard message's subjects passed to a typed operation: convert them; map each role suite's v28 cases, or name those about what the plugin never presents; map the three latency cases a v27 plugin named not presented; pin the base's digest again |
 | 0.33.0 to 0.33.1: additive, on contract v28: an event-contract `Market` may answer `bars(contract, interval, first_ns, until_ns)` (`Candle`, `HOUR`, `DAY`), its plugin declaring a third dataset keyed `bars` (`meridian.v1.Bar`, on its session day) and running `Feed.keep_bars(declared)`; `EventContractsChecks` accept `bars` where the hook is supplied and refuse any other third dataset; the feed-delay producer stands on the quote where the last trade states no time or no prices are declared (ruling 626); a row stating an interval is no duplicate of the same values over another | only the pins move: no migrate step is needed beyond them | a venue keeping bars declares `bars`, names `BARS_DECLARED` in its `venue_cases` and drops `a-daily-bar` from `NOT_PRESENTED`; a plugin's own feed-delay producer standing on the quote can be removed |
+| 0.33.5 to 0.34.0: the SDK declares contract v29, fixed income: the contract's money rules, accrual and factors (`roles.debt`), the seven fixed-income records reported and servicing's expectations (`roles.lifecycle`), `analytics.DEBT_MEASURES` and their reference computations (`analytics.debt`), a quality assessment's data type, a derived value in money, the suites' factor cases and the widened `about` markers. Breaking | a base pinned by digest at an older release moved to 0.34.0, its digest dropped (offline) | map each role suite's v29 cases, or name those about what the plugin never presents; name a `QualityAssessment`'s `data_type`; pin the base's digest again |
 
 `tests/migrations/` holds the plugins the migrations are recorded for, as
 written and as their migration leaves them, and `make check-migrations` holds
