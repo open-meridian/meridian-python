@@ -280,22 +280,24 @@ guard. A plugin calling a model counts its tokens on its heartbeat
 
 From 0.34.0 (contract v29) fixed income is held, valued and serviced in the
 book: an agency's data plugin records each held pool's or class's factor
-(`plugin.record_factors`, each a `Factor`; `meridian.roles.debt.factor`),
+(`plugin.record_factors`, each a `Factor`; `meridian.helpers.debt.factor`),
 read and heard by the readers (`list_factors`, `factors_recorded=`); a
 price, trade or quote states its `PriceBasis` and, beside it, a yield as
 its source quotes it (`QuotedYield`) or a spread to a benchmark; a capped
 size is at least. A debt order is in face at a price per 100, a yield or a
 spread, and a fill's `price` is always the dollar price per 100 of face. The
 book's seven fixed-income records are reported and proposed through
-`meridian.roles.lifecycle`, and the contract's money rules and accrual are
-`meridian.roles.debt`; the engine's curve and bond measures are
+`meridian.helpers.lifecycle`, and the contract's money rules and accrual are
+`meridian.helpers.debt`; the engine's curve and bond measures are
 `analytics.DEBT_MEASURES`.
 """
 
 # Each role's common part (contract v20, spec/plugin-pages-follow-their-role).
-# The analytics component's API (contract v26).
+# The analytics component's API (contract v26). Logic shared across roles by
+# topic (ruling 1001).
 from . import (
     analytics,  # noqa: E402
+    helpers,  # noqa: E402
     roles,  # noqa: E402  (after what it imports)
 )
 from ._settings import (
@@ -782,6 +784,7 @@ __all__ = [
     "connection_badge",
     "dataset_thresholds",
     "environment",
+    "helpers",
     "is_demo",
     "reached_environment",
     "roles",

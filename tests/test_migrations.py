@@ -2,12 +2,14 @@
 recorded for.
 
 `tests/migrations/` holds each plugin as it was written and as its migration
-leaves it: desk, written against 0.5.0 and moved to this release, and
-meridian-snaptrade's shape at 0.6.1. Each is migrated here as `meridian
-plugin migrate` does it -- its pins moved, every step run in order -- and must
-come out as its expected tree, with the same things left by hand, and pass
-its own tests against this SDK. `make check-migrations` holds the same
-results to `meridian plugin check --run-tests`.
+leaves it: desk, written against 0.5.0 and moved to this release,
+meridian-snaptrade's shape at 0.6.1, and listed, written against 0.33.5 and
+importing the topic modules 0.34.0 moves to `meridian.helpers`. Each is
+migrated here as `meridian plugin migrate` does it -- its pins moved, every
+step run in order -- and must come out as its expected tree, with the same
+things left by hand, and pass its own tests against this SDK. `make
+check-migrations` holds the same results to `meridian plugin check
+--run-tests`.
 """
 
 from __future__ import annotations
@@ -185,6 +187,35 @@ def test_snaptrade_passes_its_own_tests_once_migrated(tmp_path: Path) -> None:
     own_tests_pass(tmp_path)
 
 
+# ── listed: 0.33.5 to 0.34.0, the topic modules onto meridian.helpers ──
+
+
+def test_listed_imports_the_topic_modules_from_meridian_helpers(tmp_path: Path) -> None:
+    result = migrated("listed-0.33.5", "0.33.5", "0.34.0", tmp_path)
+    assert tree(tmp_path) == tree(FIXTURES / "listed-0.34.0")
+    # A comment naming an old path is a person's to reword.
+    assert left_by_hand(result) == [("topic-module-named", "tests/test_listed.py", 32)]
+    rewrote = {path: rules for step in result.steps for path, rules in step.rewrote.items()}
+    assert rewrote == {
+        "src/listed/chain.py": {"topic-module-to-helpers": 1},
+        "src/listed/money.py": {"topic-module-to-helpers": 2},
+        "src/listed/servicing.py": {"topic-module-to-helpers": 1},
+        "src/listed/spread.py": {"topic-module-to-helpers": 3},
+        "tests/test_listed.py": {"topic-module-to-helpers": 5},
+    }
+
+
+def test_listed_passes_its_own_tests_once_migrated(tmp_path: Path) -> None:
+    migrated("listed-0.33.5", "0.33.5", "0.34.0", tmp_path)
+    own_tests_pass(tmp_path)
+
+
+def test_listed_as_migrated_is_left_as_it_is() -> None:
+    result = migrate(plugin_files(FIXTURES / "listed-0.34.0"), "0.33.5", "0.34.0")
+    assert result.files == {}
+    assert left_by_hand(result) == [("topic-module-named", "tests/test_listed.py", 32)]
+
+
 @pytest.mark.parametrize(
     ("fixture", "by_hand"),
     [
@@ -225,7 +256,11 @@ def test_the_recorded_plugins_are_as_the_later_steps_leave_them(
 
 @pytest.mark.parametrize(
     ("fixture", "source", "target"),
-    [("desk-0.5.0", "0.5.0", "0.7.0"), ("snaptrade-0.6.1", "0.6.1", "0.7.0")],
+    [
+        ("desk-0.5.0", "0.5.0", "0.7.0"),
+        ("snaptrade-0.6.1", "0.6.1", "0.7.0"),
+        ("listed-0.33.5", "0.33.5", "0.34.0"),
+    ],
 )
 def test_each_migrated_plugin_passes_plugin_check(
     tmp_path: Path, fixture: str, source: str, target: str
@@ -1643,3 +1678,180 @@ def test_v29s_base_pinned_by_digest_drops_its_digest() -> None:
         "ARG BASE=ghcr.io/open-meridian/plugin-python:0.34.0"
     )
     assert ("base-digest", "Dockerfile", 1) in left_by_hand(result)
+
+
+# ── 0.34.0: the topic modules leave meridian.roles (ruling 1001) ────────
+
+
+def _helpers(text: str, path: str = "src/p/x.py") -> migrations.Result:
+    return migrate({path: textwrap.dedent(text)}, "0.33.5", "0.34.0")
+
+
+def test_every_import_form_of_a_topic_module_moves_to_meridian_helpers() -> None:
+    result = _helpers(
+        """\
+        import meridian.roles.chains
+        import meridian.roles.debt as rules
+        from meridian.roles import lifecycle as events
+        from meridian.roles.packages import legs, propose as offer
+        """
+    )
+    assert result.files["src/p/x.py"] == textwrap.dedent(
+        """\
+        import meridian.helpers.chains
+        import meridian.helpers.debt as rules
+        from meridian.helpers import lifecycle as events
+        from meridian.helpers.packages import legs, propose as offer
+        """
+    )
+    assert left_by_hand(result) == []
+
+
+def test_an_import_beside_a_roles_module_is_split_the_helpers_first() -> None:
+    result = _helpers(
+        """\
+        # The desk's imports.
+        from meridian.roles import Latency, chains, data, debt as rules  # kept here
+        from meridian.roles import (
+            ems,
+            packages,
+            signal,
+        )
+        """
+    )
+    assert result.files["src/p/x.py"] == textwrap.dedent(
+        """\
+        # The desk's imports.
+        from meridian.helpers import chains, debt as rules
+        from meridian.roles import Latency, data  # kept here
+        from meridian.helpers import packages
+        from meridian.roles import (
+            ems,
+            signal,
+        )
+        """
+    )
+
+
+def test_a_split_import_on_a_line_of_several_statements_stays_on_it() -> None:
+    result = _helpers("import os; from meridian.roles import chains, ems\n")
+    assert result.files["src/p/x.py"] == (
+        "import os; from meridian.helpers import chains; from meridian.roles import ems\n"
+    )
+
+
+def test_a_name_reached_through_the_package_moves_with_it() -> None:
+    result = _helpers(
+        """\
+        import meridian as om
+        import meridian.roles
+
+        FACE = om.roles.debt.current_face(100, "0.5")
+        ITM = meridian.roles.lifecycle.in_the_money("call", 1, 2)
+        WANTS = meridian.roles.data.Wants
+        """
+    )
+    assert result.files["src/p/x.py"] == textwrap.dedent(
+        """\
+        import meridian as om
+        import meridian.roles
+
+        FACE = om.helpers.debt.current_face(100, "0.5")
+        ITM = meridian.helpers.lifecycle.in_the_money("call", 1, 2)
+        WANTS = meridian.roles.data.Wants
+        """
+    )
+
+
+def test_roles_bound_by_name_is_kept_while_a_role_is_still_read_through_it() -> None:
+    result = _helpers(
+        """\
+        from meridian import roles
+
+        SYMBOL = roles.chains.osi_symbol("A", "2026-01-16", "call", "1")
+        WANTS = roles.data.Wants
+        """
+    )
+    text = result.files["src/p/x.py"]
+    assert "from meridian import roles\n" in text
+    assert "import meridian\n" in text
+    assert 'SYMBOL = meridian.helpers.chains.osi_symbol("A", "2026-01-16", "call", "1")' in text
+    assert "WANTS = roles.data.Wants" in text
+
+
+def test_roles_bound_by_an_alias_is_dropped_once_nothing_reads_through_it() -> None:
+    result = _helpers(
+        """\
+        import meridian
+        import meridian.roles as r
+
+        RULES = r.debt
+        """
+    )
+    assert result.files["src/p/x.py"] == textwrap.dedent(
+        """\
+        import meridian
+
+        RULES = meridian.helpers.debt
+        """
+    )
+
+
+def test_a_patch_targets_path_moves_and_other_strings_are_left_by_hand() -> None:
+    result = _helpers(
+        """\
+        import pytest
+
+        def test_patched(monkeypatch: pytest.MonkeyPatch) -> None:
+            monkeypatch.setattr("meridian.roles.debt.to_cent", round)
+            note = "uses meridian.roles.packages for its legs"
+        """,
+        path="tests/test_patch.py",
+    )
+    text = result.files["tests/test_patch.py"]
+    assert 'monkeypatch.setattr("meridian.helpers.debt.to_cent", round)' in text
+    assert '"uses meridian.roles.packages for its legs"' in text
+    assert left_by_hand(result) == [("topic-module-named", "tests/test_patch.py", 5)]
+
+
+def test_a_moved_module_read_through_a_star_import_is_left_by_hand() -> None:
+    result = _helpers(
+        """\
+        from meridian.roles import *
+
+        SYMBOL = chains.osi_symbol("A", "2026-01-16", "call", "1")
+        """
+    )
+    assert result.files == {}
+    assert left_by_hand(result) == [("topic-module-named", "src/p/x.py", 1)]
+    # A star import reading no moved module leaves nothing to do.
+    assert left_by_hand(_helpers("from meridian.roles import *\nW = data.Wants\n")) == []
+
+
+def test_the_roles_and_other_packages_named_the_same_are_left_alone() -> None:
+    untouched = {
+        "src/a.py": (
+            "from meridian.roles import Latency, data, ems\nimport meridian.roles.data\n"
+        ),
+        "src/b.py": "from vendor.roles import chains\nimport vendor.roles.debt\n",
+        "src/c.py": (
+            "import meridian\n\nclass R:\n    chains = 1\n\nroles = R()\nN = roles.chains\n"
+        ),
+        "src/d.py": "import meridian.helpers.chains\nfrom meridian.helpers import debt\n",
+    }
+    result = migrate(untouched, "0.33.5", "0.34.0")
+    assert result.files == {}
+    assert left_by_hand(result) == []
+
+
+def test_the_old_paths_are_gone_and_the_new_ones_are_the_same_modules() -> None:
+    import importlib
+
+    from meridian import helpers, roles
+
+    for topic in ("chains", "packages", "lifecycle", "debt"):
+        moved = importlib.import_module(f"meridian.helpers.{topic}")
+        assert getattr(helpers, topic) is moved
+        assert not hasattr(roles, topic), topic
+        with pytest.raises(ModuleNotFoundError):
+            importlib.import_module(f"meridian.roles.{topic}")

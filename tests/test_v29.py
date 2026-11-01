@@ -18,8 +18,9 @@ import pytest
 
 import meridian
 from meridian import analytics
+from meridian.helpers import debt, lifecycle
 from meridian.plugin.v1 import operations_pb2 as ops
-from meridian.roles import debt, lifecycle, signal
+from meridian.roles import signal
 from meridian.roles.data import Wants
 from meridian.roles.data.quality import assessment
 from meridian.suites import Recorder

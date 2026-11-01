@@ -12,8 +12,9 @@ from decimal import Decimal
 import pytest
 
 import meridian
+from meridian.helpers import chains, lifecycle, packages
 from meridian.plugin.v1 import operations_pb2 as ops
-from meridian.roles import Latency, chains, ems, lifecycle, packages
+from meridian.roles import Latency, ems
 from meridian.roles.data import Wants
 from meridian.roles.data.quality import (
     Baseline,

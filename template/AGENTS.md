@@ -355,7 +355,7 @@ and slow when the plugin reads everything and filters it.
 One expiration of a chain, as a Chain page draws it:
 
 ```python
-from meridian.roles import chains
+from meridian.helpers import chains
 
 expirations = await chains.read_expirations(plugin, underlying_id)
 day = expirations[0].expiration_date  # or the one the person picked
