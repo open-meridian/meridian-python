@@ -145,7 +145,7 @@ checks`), and a feed's delay where the source states no publication time
 (`publication times`, 667). The cases the SDK answers itself are about
 `replacements`, `templates` and `event groups`, and still answered for a
 plugin mapping none. v29's own cases are the factor's: the data suite's
-`records-a-pools-factor` (`about: factors`, `meridian.roles.debt.factor`)
+`records-a-pools-factor` (`about: factors`, `meridian.helpers.debt.factor`)
 and each reader's `reads-a-pools-factors` and `hears-a-factor-recorded`
 (`debt.read_factors`; `factors_recorded=`).
 """

@@ -1,5 +1,5 @@
 """A plugin's side of every case contract v29 adds to the role suites, each
-through the SDK's v29 helpers (`meridian.roles.debt`): an agency's factor
+through the SDK's v29 helpers (`meridian.helpers.debt`): an agency's factor
 recorded under the pool's record (`debt.factor`, `RecordFactors`), and a
 reader's pool's factor history read (`debt.read_factors`, `ListFactors`)
 and each new month heard (`FactorsRecorded`).
@@ -13,8 +13,8 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 
+from meridian.helpers import debt
 from meridian.plugin.v1 import operations_pb2 as ops
-from meridian.roles import debt
 from meridian.suites import Recorder
 
 Producer = Callable[[Recorder], Awaitable[None]]

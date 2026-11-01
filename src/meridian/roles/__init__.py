@@ -1,6 +1,12 @@
 """Each role's common part, so a person who knows a role knows any plugin of
 it (spec/plugin-pages-follow-their-role, accepted 2026-10-10).
 
+This package holds only roles' modules, one per role (and what they share
+under a leading underscore): roles gate permissions and access, and a
+module here reads as one. Logic several roles share by topic -- chains,
+packages, lifecycle, debt -- is `meridian.helpers`, which grants nothing
+(ruling 1001).
+
 Every plugin of a role has the same first-use path, the same pages, sections,
 labels, verbs and order, the same "not set up yet" states naming the next
 step, and the same Summary figures. Each module here holds its role's part:
@@ -60,42 +66,25 @@ RFQ placement; and `ems`, the `ems`'s check of its reference price's age
 and its RFQ placement's quotes.
 
 From 0.33.0 (contract v28) `Latency.report` sends its snapshots (rulings
-515 and 516), and the roles share listed options' and futures' work
-(sdk-contract/listed-options-and-futures-contract): `chains`, a chain's
-series keyed by their OSI symbols, recorded and read under the underlying
-with their statistics, and a series asked for before an order;
-`lifecycle`, an exercise, assignment, expiry or day of variation reported
-as the broker states it, `servicing`'s exercise by exception proposed and
-`operations`' release of a proposal no report answered; and `packages`, a
-package order's legs in lowest terms and its fill reported once for the
-package and once per leg. `signal` holds a signal's derived series, saved
-scenarios (the common scenario format) and a row's quality escalated;
-`data` the filings slice (`data.filings`) and the edge's quality checks
+515 and 516). `signal` holds a signal's derived series, saved scenarios
+(the common scenario format) and a row's quality escalated; `data` the
+filings slice (`data.filings`) and the edge's quality checks
 (`data.quality`) on every row it records; and `ems`'s check reads the
-stale-reference actions the deployment permits.
+stale-reference actions the deployment permits. Listed options' and
+futures' chains, lifecycle and packages, shared by several roles, are in
+`meridian.helpers` (in this package until 0.34.0).
 
-From 0.34.0 (contract v29) the roles share fixed income's work
-(sdk-contract/fixed-income-contract): `debt`, the contract's money rules
-(percent of par, a pool's cash and current face at its factor, a
-paydown's principal, the cent half-even), a coupon's accrual by its day
-count, an agency's factor recorded and read, a yield as its source quotes
-it, a capped size and the trade characteristics, and the book's own words
-on a pool's fill read (the factor taken, provisional, an open claim);
-`lifecycle` the seven fixed-income records reported as the custodian
-states them and `servicing`'s expected coupons, maturities, paydowns and
-accretions.
+From 0.34.0 (contract v29) fixed income's work shared by several roles --
+the money rules, accrual and factors (`debt`) and the seven fixed-income
+records (`lifecycle`) -- is `meridian.helpers` too.
 """
 
 from . import (
-    chains,
     connectivity,
     custody,
     data,
-    debt,
     ems,
-    lifecycle,
     operations,
-    packages,
     pricing,
     reporting,
     signal,
@@ -121,17 +110,13 @@ __all__ = [
     "Percentiles",
     "SessionCeilings",
     "SessionLatency",
-    "chains",
     "confirmed_ns",
     "connectivity",
     "custody",
     "data",
-    "debt",
     "ems",
     "in_session",
-    "lifecycle",
     "operations",
-    "packages",
     "pricing",
     "reporting",
     "signal",

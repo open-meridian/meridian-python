@@ -1,16 +1,26 @@
 # open-meridian 0.33.5 to 0.34.0: contract v29
 # (sdk-contract/fixed-income-contract; DESIGN29, rulings 674 to 691, 741 to
-# 751, 900 and 984 to 997; Track E's queued items under their own tasks).
-# Breaking: the SDK declares contract v29, and the data and reading roles'
-# suites hold the factor's cases a plugin maps.
+# 751, 900, 984 to 997 and 1001; Track E's queued items under their own tasks).
+# Breaking: the SDK declares contract v29, the data and reading roles'
+# suites hold the factor's cases a plugin maps, and the topic modules leave
+# meridian.roles for meridian.helpers (ruling 1001), with no shim.
 from = "0.33.5"
 to = "0.34.0"
 summary = """
 The SDK declares contract v29 (meridian.SCHEMA_VERSION): fixed income held,
 valued and serviced in the book. Nothing a plugin calls changed shape; it
-gained fields and helpers.
+gained fields and helpers, and four modules moved.
 
-meridian.roles.debt holds the contract's money rules on a debt record -- face
+meridian.roles holds only roles (ruling 1001): the topic modules shared
+across roles -- chains, packages, lifecycle and debt -- are
+meridian.helpers.chains, .packages, .lifecycle and .debt, with nothing left
+at the old paths. This step rewrites every import of them (`import
+meridian.roles.chains`, `from meridian.roles import chains`, `from
+meridian.roles.chains import X`, and one naming them beside a role's
+module, split in two) and each name reaching one through the package or
+meridian.roles; an old path named anywhere else is left by hand.
+
+meridian.helpers.debt holds the contract's money rules on a debt record -- face
 times price per 100 times 0.01; a pool's or a tranche's cash and current face
 at its factor and a paydown's principal, each rounded to the cent half-even
 (993); a lot's relief; a coupon's purchased accrued and income (988) -- a
@@ -20,7 +30,7 @@ its source quotes it (QuotedYield), a capped size (5MM+ as at least) and the
 fixed-income trade characteristics; readers' factor history (read_factors,
 FactorsRecorded heard and caught up) and the book's own words on a pool's fill
 (the factor taken, the month it is provisional on, a factor revision's open
-claim). meridian.roles.lifecycle reports the seven fixed-income records as the
+claim). meridian.helpers.lifecycle reports the seven fixed-income records as the
 custodian states them and proposes servicing's coupons, maturities, paydowns
 and accretions from the terms and the published factors; read_events naming
 no account reads every account in scope (740). analytics.DEBT_MEASURES are
@@ -40,6 +50,18 @@ left by hand.
 """
 breaking = true
 rewrite = "rewrite.py"
+
+[[rewrites]]
+rule = "topic-module-to-helpers"
+what = """an import or a name of a topic module that left meridian.roles for \
+meridian.helpers (ruling 1001) -- meridian.roles.chains, .packages, .lifecycle or \
+.debt -- rewritten to meridian.helpers: `import meridian.roles.chains [as c]`, \
+`from meridian.roles import chains [as c]` and `from meridian.roles.chains import X` \
+in place; `from meridian.roles import Latency, chains, ems` split in two, \
+`from meridian.helpers import chains` first; `meridian.roles.debt.factor(...)` and, \
+with `roles` bound to meridian.roles, `roles.chains.osi_symbol(...)` (that binding \
+dropped once nothing else names it, `import meridian` added where none is); and a \
+string that is wholly such a dotted path, a patch target"""
 
 [[rewrites]]
 rule = "base-digest-dropped"
@@ -62,7 +84,7 @@ what = """a test running a role's suite that contract v29 adds cases to: the dat
 suite's records-a-pools-factor; operations', portfolio's, reporting's, servicing's and \
 signal's reads-a-pools-factors and hears-a-factor-recorded"""
 instead = """map each new case to the plugin's own producer through the SDK's v29 \
-helpers -- an agency's factor recorded (meridian.roles.debt.factor, record_factors or \
+helpers -- an agency's factor recorded (meridian.helpers.debt.factor, record_factors or \
 Wants.record("factors", ...)), a pool's factors read (debt.read_factors) and heard \
 (receive(factors_recorded=...)) -- or, for a case about what its source or work never \
 presents (`about`: factors), name it in not_presented with why. \
@@ -78,3 +100,13 @@ key, escalate apart"""
 instead = """name the kind of row it assesses by its message's full name, \
 `data_type="meridian.v1.Price"`, or build it with \
 meridian.roles.data.quality.assessment, which names it"""
+
+[[by_hand]]
+rule = "topic-module-named"
+what = """an old path of a topic module that left meridian.roles (ruling 1001) still \
+named where no rewrite reaches it -- a comment, a docstring, a dynamic import, a \
+string holding more than the path -- or a moved module read as a bare name after \
+`from meridian.roles import *`, which no longer brings it"""
+instead = """name meridian.helpers.chains, .packages, .lifecycle or .debt; for a star \
+import, import the module from meridian.helpers by name: `from meridian.helpers \
+import chains`"""

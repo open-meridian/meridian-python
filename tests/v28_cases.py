@@ -1,6 +1,6 @@
 """A plugin's side of every case contract v28 adds to the role suites, each
 through the SDK's v28 helpers: listed options' and futures' chains
-(`meridian.roles.chains`), their lifecycle (`.lifecycle`), package orders
+(`meridian.helpers.chains`), their lifecycle (`.lifecycle`), package orders
 (`.packages`), a signal's derived series, saved scenarios and escalation
 (`.signal`), the filings slice (`.data.filings`), the edge's quality checks
 (`.data.quality`), the latency reports sent (`roles.Latency.report`) and the
@@ -18,8 +18,9 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 
 import meridian
+from meridian.helpers import chains, lifecycle, packages
 from meridian.plugin.v1 import operations_pb2 as ops
-from meridian.roles import Latency, chains, ems, lifecycle, packages, signal
+from meridian.roles import Latency, ems, signal
 from meridian.roles.data import Wants, filings
 from meridian.roles.data.quality import Baseline, OutlierThresholds
 from meridian.roles.data.testing import feed_delay

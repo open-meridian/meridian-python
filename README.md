@@ -1977,7 +1977,7 @@ plugin migrate` rewrites what it can (`to_0_33_0`).
   `ReferenceCheck.permitted(plugin)` reads the stale-reference actions the
   deployment permits, at the plugin's own role (ruling 600), and `warn` is
   honoured only where permitted.
-- **Chains** (`meridian.roles.chains`): a series keyed by its OSI symbol
+- **Chains** (`meridian.helpers.chains`): a series keyed by its OSI symbol
   (`osi_symbol`, `osi_key`, scheme `occ_osi`) under its underlying, never
   resolved or minted; a data plugin records an underlying's series as the
   `listed_option` template's fields (`option_series`, `RecordSeries`), each
@@ -1987,7 +1987,7 @@ plugin migrate` rewrites what it can (`to_0_33_0`).
   asks for a series it wants to order (`want_series`).
 
   ```python
-  from meridian.roles import chains
+  from meridian.helpers import chains
 
   symbol = chains.osi_symbol("AAPL", "2026-11-20", "put", "230")   # "AAPL  261120P00230000"
   row = chains.option_series(aapl, symbol, template_id=listed_option, template_version="1",
@@ -1997,14 +1997,14 @@ plugin migrate` rewrites what it can (`to_0_33_0`).
                              deliverable=[(aapl, 100)])
   await wants.record("series", [row], "options")
   ```
-- **Lifecycle** (`meridian.roles.lifecycle`): an expiry, assignment,
+- **Lifecycle** (`meridian.helpers.lifecycle`): an expiry, assignment,
   exercise or day of variation reported as the broker states it, once on
   its own ID (`report`); `servicing`'s exercise by exception, a long option
   a cent or more in the money against the underlying's close
   (`exercise_by_exception`, `propose`); `operations`' release of a proposal
   no report answered by the morning after (`due_for_release`, `release`);
   an account's events read (`read_events`).
-- **Packages** (`meridian.roles.packages`): legs in lowest terms, 2 to 16
+- **Packages** (`meridian.helpers.packages`): legs in lowest terms, 2 to 16
   (`legs`), proposed at one net price (`propose`), and a venue's fill
   reported once for the package and once per leg, linked (`report_fill`).
 - **A signal's** (`meridian.roles.signal`): a derived value with its rule
@@ -2156,10 +2156,24 @@ TBAs, agency CMOs and CDs, each a template (`bond`, `mbs_pool`, `tba`,
 `cmo_tranche`, `certificate_of_deposit`), held in face, priced per 100 of face
 and serviced in the book. Breaking in what the contract and the suites ask
 (a quality assessment's data type, a single option order's position effect,
-the factor's cases); nothing a plugin calls changed shape, and `meridian plugin
-migrate` moves the pins (`to_0_34_0`) and says what is left by hand.
+the factor's cases) and in where four modules live; nothing a plugin calls
+changed shape, and `meridian plugin migrate` moves the pins (`to_0_34_0`),
+rewrites the modules' imports and says what is left by hand.
 
-- **The money rules** (`meridian.roles.debt`). A debt record's quantity is face
+- **`meridian.helpers`** (ruling 1001). `meridian.roles` holds only roles'
+  modules: roles gate permissions and access, and a module there reads as
+  one. Logic shared across roles by topic, which grants nothing, is
+  `meridian.helpers`: `chains`, `packages` and `lifecycle` (0.33.0's
+  `meridian.roles.chains`, `.packages`, `.lifecycle`) and `debt`, with no
+  shim at the old paths. `meridian plugin migrate` rewrites every import of
+  them -- `import meridian.roles.chains`, `from meridian.roles import
+  chains`, `from meridian.roles.chains import osi_symbol`, and `from
+  meridian.roles import Latency, chains, ems` split into `from
+  meridian.helpers import chains` and `from meridian.roles import Latency,
+  ems` -- and each name reaching one through the package
+  (`meridian.roles.debt.factor(...)`) or a patch target's string; an old path
+  named anywhere else, a comment or a dynamic import, is left by hand.
+- **The money rules** (`meridian.helpers.debt`). A debt record's quantity is face
   and its price is per 100 of face, `Execution.price` always the dollar price
   (987), a yield or spread quote beside it as its source quoted it
   (`debt.quoted_yield`, a `QuotedYield`). Cash is
@@ -2184,7 +2198,7 @@ migrate` moves the pins (`to_0_34_0`) and says what is left by hand.
   latest one provisionally, and revises it when the month's row arrives (992).
   Read what the book decided, never re-derive it: `debt.taken(execution)`,
   `debt.awaited(execution_or_lot)` and `debt.open_claims(events)`.
-- **The book's seven records** (`meridian.roles.lifecycle`). A custodian's
+- **The book's seven records** (`meridian.helpers.lifecycle`). A custodian's
   `coupon_received`, `redemption`, `paydown`, `accretion`, `tba_allocation`,
   `strip` and `reconstitution`, reported once (`lifecycle.report`); servicing's
   `expected_coupon`, `expected_maturity` and `expected_paydown` (a paydown, or
@@ -2224,7 +2238,7 @@ migrate` moves the pins (`to_0_34_0`) and says what is left by hand.
   **Run 0.34.0 on a core of contract v29.**
 
   ```python
-  from meridian.roles import debt, lifecycle
+  from meridian.helpers import debt, lifecycle
 
   rows = await debt.read_factors(plugin, [pool_id], "2026-01-01", "2026-11-30")
   prior, current = rows[-2], rows[-1]
@@ -2310,7 +2324,7 @@ carries libcst.
 | 0.32.2 to 0.32.3: a listings feed records its live dataset's liveness (`heard` notes it, `flush` records it once a pass); an event contract's `Resolution.challenge_ends_at_ns` reaches the `Outcome`; `DatasetLicence` writes `not_affiliated_notice`; `rates.Feed.rate` refuses a rate with no convention (an index level takes its compounded rate's) and a subject missed is asked again the same day; the merged Connection draws one group at a time under a tab row. Set the licence fields 0.32.2 and 0.32.3 added only on core 0.1.311 or later | only the pins move; a rate built with no convention now raises, so give it one | |
 | 0.32.3 to 0.33.0: the SDK declares contract v28: `meridian.SubjectRef` only (ruling 599); `Latency.report` sends ReportLatency and the three latency cases are required (518); the ems's actions permitted read (600); listed options' and futures' chains, lifecycle and packages (`roles.chains`, `roles.lifecycle`, `roles.packages`); a signal's derived series, saved scenarios and quality escalated (`roles.signal`); the filings slice (`roles.data.filings`); quality states at the edge (`roles.data.quality`); `DataEligibility`; the suites' v28 cases, marked by `about` (602). Breaking | an `ops.SubjectRef(...)` handed to the SDK into `meridian.SubjectRef(...)`; a base pinned by digest at an older release moved to 0.33.0, its digest dropped (offline) | a heard message's subjects passed to a typed operation: convert them; map each role suite's v28 cases, or name those about what the plugin never presents; map the three latency cases a v27 plugin named not presented; pin the base's digest again |
 | 0.33.0 to 0.33.1: additive, on contract v28: an event-contract `Market` may answer `bars(contract, interval, first_ns, until_ns)` (`Candle`, `HOUR`, `DAY`), its plugin declaring a third dataset keyed `bars` (`meridian.v1.Bar`, on its session day) and running `Feed.keep_bars(declared)`; `EventContractsChecks` accept `bars` where the hook is supplied and refuse any other third dataset; the feed-delay producer stands on the quote where the last trade states no time or no prices are declared (ruling 626); a row stating an interval is no duplicate of the same values over another | only the pins move: no migrate step is needed beyond them | a venue keeping bars declares `bars`, names `BARS_DECLARED` in its `venue_cases` and drops `a-daily-bar` from `NOT_PRESENTED`; a plugin's own feed-delay producer standing on the quote can be removed |
-| 0.33.5 to 0.34.0: the SDK declares contract v29, fixed income: the contract's money rules, accrual and factors (`roles.debt`), the seven fixed-income records reported and servicing's expectations (`roles.lifecycle`), `analytics.DEBT_MEASURES` and their reference computations (`analytics.debt`), a quality assessment's data type, a derived value in money, the suites' factor cases and the widened `about` markers. Breaking | a base pinned by digest at an older release moved to 0.34.0, its digest dropped (offline) | map each role suite's v29 cases, or name those about what the plugin never presents; name a `QualityAssessment`'s `data_type`; pin the base's digest again |
+| 0.33.5 to 0.34.0: the SDK declares contract v29, fixed income: the contract's money rules, accrual and factors (`helpers.debt`), the seven fixed-income records reported and servicing's expectations (`helpers.lifecycle`), `analytics.DEBT_MEASURES` and their reference computations (`analytics.debt`), a quality assessment's data type, a derived value in money, the suites' factor cases and the widened `about` markers; `meridian.roles` holds only roles, its topic modules `chains`, `packages`, `lifecycle` and `debt` moved to `meridian.helpers` with no shim (ruling 1001). Breaking | every import and name of `meridian.roles.chains`, `.packages`, `.lifecycle` or `.debt` onto `meridian.helpers` (`import meridian.roles.chains`, `from meridian.roles import chains`, `from meridian.roles.chains import X`; `from meridian.roles import Latency, chains` split in two; `meridian.roles.debt.factor(...)`, a patch target's string); a base pinned by digest at an older release moved to 0.34.0, its digest dropped (offline) | map each role suite's v29 cases, or name those about what the plugin never presents; name a `QualityAssessment`'s `data_type`; an old path still named in a comment, a dynamic import or read through `from meridian.roles import *`; pin the base's digest again |
 
 `tests/migrations/` holds the plugins the migrations are recorded for, as
 written and as their migration leaves them, and `make check-migrations` holds

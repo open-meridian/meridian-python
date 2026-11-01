@@ -53,8 +53,9 @@ from typing import Any
 
 import meridian
 from meridian import analytics
+from meridian.helpers import chains, debt, lifecycle
 from meridian.plugin.v1 import operations_pb2 as ops
-from meridian.roles import Liveness, chains, debt, lifecycle, reporting, signal
+from meridian.roles import Liveness, reporting, signal
 from meridian.roles.data import rates
 
 NS = 1_000_000_000
