@@ -67,11 +67,10 @@ contract-diff:
 # PyPI depends on nothing by URL (PyPI refuses that) and a plugin installs one
 # thing. `make vendor-schema` moves the copy to SCHEMA_REV; `check-vendored`
 # fails when the two disagree, as core's check-codegen does for its bindings.
-# meridian-schema's v28 at 7f9a91a (contract v28, DESIGN28 with its two
-# amendments: listed options and futures, the scenario format, filings,
-# quality states and the latency remainder; the v28 cases' `about`, ruling
-# 602), its gen/ and boundaries/ vendored here byte for byte.
-SCHEMA_REV := a46119174b278822d956131e877167ae92403a69
+# meridian-schema's v29 at a5ec1d9 (contract v29, DESIGN29 at dc787d7: fixed
+# income, the queued items and the suites' about markers, as amended at core
+# stage E), its gen/ and boundaries/ vendored here byte for byte.
+SCHEMA_REV := a5ec1d92556b2cef5f3216ee3275d8b974341a58
 SCHEMA_REPO := https://github.com/open-meridian/meridian-schema.git
 SCRATCH     := .schema-scratch
 
@@ -116,13 +115,19 @@ DESIGN ?= ../meridian-design
 # pinned here by commit as the schema is pinned in pyproject.toml. Core's own
 # interop gate overrides this with its working tree, so a change to both lands
 # without either waiting on the other's push.
-# Core's main after open-meridian/meridian-core#75 (data-access step 2,
-# contract 28 amended 2026-10-30): lake.proto's RenewWants and SeriesRecordedEvent.
-CORE_REV   := d82945f18a8ca422a3b37234cfbabe9b20a80463
+# Core's v29 protos (contract v29, fixed income; DESIGN29 at dc787d7), the
+# branch the core stages build on, before it lands: its head after stage E.
+CORE_REV   := 8a1aec7a324616050d6b375dbb708f80b26e9d5b
 CORE_PROTO ?= https://github.com/open-meridian/meridian-core.git\#$(CORE_REV):proto
 # And meridian-schema's, which core's import, at the revision vendored here.
 SCHEMA_PROTO ?= https://github.com/open-meridian/meridian-schema.git\#$(SCHEMA_REV):proto
-CONTEXTS   := --build-context core-proto=$(CORE_PROTO) --build-context schema-proto=$(SCHEMA_PROTO)
+# The analytics engine's oracle cases (contract v29; requirement 36): the
+# platform's packages' cases and QuantLib's answers core holds its debt
+# models to, which the SDK's reference computations are held to as well
+# (tests/test_v29_reference.py), read at the same revision, never copied.
+CORE_ORACLE ?= https://github.com/open-meridian/meridian-core.git\#$(CORE_REV):crates/analytics-engine/oracle_cases
+CONTEXTS   := --build-context core-proto=$(CORE_PROTO) --build-context schema-proto=$(SCHEMA_PROTO) \
+              --build-context core-oracle=$(CORE_ORACLE)
 
 build:
 	@$(DOCKER) build $(CONTEXTS) -f Dockerfile.python --target check . >/dev/null 2>&1 \

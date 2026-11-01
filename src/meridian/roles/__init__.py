@@ -73,6 +73,17 @@ scenarios (the common scenario format) and a row's quality escalated;
 `data` the filings slice (`data.filings`) and the edge's quality checks
 (`data.quality`) on every row it records; and `ems`'s check reads the
 stale-reference actions the deployment permits.
+
+From 0.34.0 (contract v29) the roles share fixed income's work
+(sdk-contract/fixed-income-contract): `debt`, the contract's money rules
+(percent of par, a pool's cash and current face at its factor, a
+paydown's principal, the cent half-even), a coupon's accrual by its day
+count, an agency's factor recorded and read, a yield as its source quotes
+it, a capped size and the trade characteristics, and the book's own words
+on a pool's fill read (the factor taken, provisional, an open claim);
+`lifecycle` the seven fixed-income records reported as the custodian
+states them and `servicing`'s expected coupons, maturities, paydowns and
+accretions.
 """
 
 from . import (
@@ -80,6 +91,7 @@ from . import (
     connectivity,
     custody,
     data,
+    debt,
     ems,
     lifecycle,
     operations,
@@ -114,6 +126,7 @@ __all__ = [
     "connectivity",
     "custody",
     "data",
+    "debt",
     "ems",
     "in_session",
     "lifecycle",

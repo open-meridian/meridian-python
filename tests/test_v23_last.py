@@ -163,7 +163,9 @@ async def test_resolve_gives_the_currency_with_its_provenance() -> None:
     case = suite("custody").case("resolve-gives-the-currency-with-its-provenance")
     (resolved,) = case.expect
     assert resolved.row == "ResolveIdentifier" and len(resolved.any_of) == 4
-    assert case.about == "" and case.about_field == ""
+    # From contract v29 every read carries its `about` (Track E, 638 widened
+    # by 661): a custodian resolving nothing marks it not presented.
+    assert case.about == "instruments" and case.about_field == ""
 
     given = supplied_currency(ROWS, "ACC-EU")
     assert given is not None

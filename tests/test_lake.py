@@ -51,6 +51,7 @@ from meridian.suites import run as run_suite
 from order_path_cases import PRODUCERS
 from rates_cases import PUBLISHED, RATES
 from v28_cases import DATA as V28_DATA
+from v29_cases import DATA as V29_DATA
 
 INSTANCE = "data-coinbase-1"
 DAILY = f"{INSTANCE}:daily"
@@ -1107,6 +1108,8 @@ def producers(**mutations: bool) -> dict[str, object]:
         **V28_DATA,
         # Contract 28, amended 2026-10-31 (ruling 955): a publisher's figure.
         "records-a-derived-series": publishers_figure,
+        # Contract v29: an agency's factor for a held pool (tests/v29_cases.py).
+        **V29_DATA,
     }
 
 
@@ -1172,7 +1175,7 @@ def event_group(*, exhaustive: bool | None):  # type: ignore[no-untyped-def]
     return produce
 
 
-def test_the_data_suite_is_carried_with_its_sixty_cases() -> None:
+def test_the_data_suite_is_carried_with_its_sixty_one_cases() -> None:
     held = suite("data")
     assert held.since == "v18"
     # Contract v24 adds the two every role's suite holds, which the SDK answers;
@@ -1180,19 +1183,24 @@ def test_the_data_suite_is_carried_with_its_sixty_cases() -> None:
     # the lake's bounded query; v27 the rates slice's seven (about rates), a
     # stream's liveness (about streams) and the feed delay, and the bounded
     # query about trades; v28 fifteen, each about what a source may never
-    # present (ruling 602), the feed delay required again (518); and the
-    # amendment of 2026-10-31 a publisher's figure (955, about derived series).
-    assert len(held.cases) == 60
+    # present (ruling 602), the feed delay required again (518); the
+    # amendment of 2026-10-31 a publisher's figure (955, about derived series);
+    # and v29 a pool's factor (about factors).
+    assert len(held.cases) == 61
     assert held.case("records-a-derived-series").about == "derived series"
+    assert held.case("records-a-pools-factor").about == "factors"
     assert held.case("queries-the-lake-within-bounds").about == "trades"
     assert {held.case(name).about for name in RATES_CASES} == {"rates"}
     assert held.case("records-a-datasets-liveness").about == "streams"
-    assert held.case("reports-its-feed-delay").about == ""  # required from v28 (518)
+    # Required from v28 (518); from v29 about publication times, not presented
+    # by a source stating none (667).
+    assert held.case("reports-its-feed-delay").about == "publication times"
     v28 = {case.name: case.about for case in held.cases[44:59]}
     assert len(v28) == 15 and set(v28.values()) == {
         "option chains", "filings", "holdings", "corporate actions", "ratings", "quotes"
     }  # fmt: skip
     assert held.cases[59].name == "records-a-derived-series"
+    assert held.cases[60].name == "records-a-pools-factor"
     assert held.case("reports-an-event-group").about == "outcomes"
     assert held.case("reports-a-flag-the-venue-does-not-state").about == "outcomes"
     assert "a-want-recorded-against" in names("data")
@@ -1332,7 +1340,7 @@ V19_DATA_CASES = {
 def test_a_data_plugin_converting_exactly_passes_every_case_of_its_suite() -> None:
     report = run("data", producers(), instance_id="toy-1")
     assert report.passed, report.failures
-    assert len(report.passed_cases) == 60
+    assert len(report.passed_cases) == 61
     assert report.not_presented == {}
     assert report.answered_by_sdk == [
         "hears-and-reads-a-replacement",
@@ -1370,7 +1378,7 @@ def test_a_case_about_a_kind_the_plugin_never_publishes_may_be_not_presented() -
     report = run("data", mapped, not_presented=never)
     assert report.passed, report.failures
     assert report.not_presented == never
-    assert len(report.passed_cases) == 60 - 13
+    assert len(report.passed_cases) == 61 - 13
 
 
 def test_a_case_about_a_field_the_source_never_states_may_be_not_presented() -> None:
@@ -1398,24 +1406,31 @@ def test_a_case_every_data_plugin_answers_is_never_not_presented_and_one_that_is
     None
 ):
     every = producers()
-    mapped = {
-        name: made
-        for name, made in every.items()
-        if name not in {"a-subject-declined", "reads-its-datasets-licences", "a-trade-recorded"}
+    skipped = {
+        "a-subject-declined",
+        "an-asset-that-does-not-resolve",
+        "reads-its-datasets-licences",
+        "a-trade-recorded",
     }
+    mapped = {name: made for name, made in every.items() if name not in skipped}
     report = run(
         "data",
         mapped,
         not_presented={
             "a-subject-declined": "this source declines nothing",
-            "reads-its-datasets-licences": "this source is never licensed",
+            "an-asset-that-does-not-resolve": "every asset this source names resolves",
+            # Contract v29 (Track E, 638 widened by 661): a read carries its
+            # `about`, so a plugin whose work never reads its licences says so.
+            "reads-its-datasets-licences": "this plugin never reads its datasets' licences",
             "a-trade-recorded": " ",
         },
     )
     assert "required" in report.failures["a-subject-declined"]
-    assert "required" in report.failures["reads-its-datasets-licences"]
+    assert "required" in report.failures["an-asset-that-does-not-resolve"]
     assert "says why" in report.failures["a-trade-recorded"]
-    assert report.not_presented == {}
+    assert report.not_presented == {
+        "reads-its-datasets-licences": "this plugin never reads its datasets' licences"
+    }
 
 
 def test_a_data_plugin_declining_a_subject_another_source_resolved_fails_the_suite() -> None:
@@ -1533,6 +1548,9 @@ def test_a_reading_role_hears_and_reads_as_its_suite_asks() -> None:
                     "reads-a-rating-history",
                     "hears-a-filing-recorded",
                     "hears-a-dividend-declared",
+                    # A pool's factors read and heard (contract v29).
+                    "reads-a-pools-factors",
+                    "hears-a-factor-recorded",
                 )
             },
         },

@@ -50,11 +50,12 @@ RECENT = 200
 
 #: The rows `Wants.record` sends, by the operation's plural; from 0.32.0
 #: (contract v27) rates too; from 0.33.0 (contract v28) a chain's series and
-#: statistics, and the filings slice's rows.
+#: statistics, and the filings slice's rows; from 0.34.0 (contract v29) an
+#: agency's factors.
 KINDS = (
     "prices", "bars", "trades", "quotes", "outcomes", "rates", "series", "statistics",
     "filings", "reported_facts", "holdings_reports", "holdings", "corporate_actions",
-    "rating_actions",
+    "rating_actions", "factors",
 )  # fmt: skip
 #: Where a record operation's rows are not named by its kind.
 _ROWS_NAMED = {

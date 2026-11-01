@@ -19,7 +19,10 @@ no quotes, no event contract's outcomes and no rates, and it is pulled,
 never streamed. Declare a dataset of trades, quotes, outcomes or rates, or
 stream one, and those cases are required again, and fail until each is
 mapped. From contract v27 the lake's bounded query is about trades too: a
-plugin recording none marks it not presented.
+plugin recording none marks it not presented. And a case about a kind of
+work it never does (contract v22's calendars and settlement dates; from
+contract v29 every read carries its `about`) is not presented, with why,
+rather than mapped to a read the plugin never makes.
 """
 
 from __future__ import annotations
@@ -146,23 +149,6 @@ async def licences(recorder: Recorder) -> None:
     await converter(recorder).read_licences()
 
 
-# The settlement calendars' reads every role holds (contract v22): a plugin
-# needing a calendar's days or a settlement date asks core, the deployment's
-# one answer, and never works one out itself.
-async def reads_a_calendar(recorder: Recorder) -> None:
-    await recorder.read_calendar(
-        calendar_id="CAL-01JAE0000000000000000USSS",
-        from_date="2026-10-01",
-        to_date="2026-10-31",
-    )
-
-
-async def asks_for_a_settlement_date(recorder: Recorder) -> None:
-    await recorder.compute_date(
-        settlement=ops.SettlementDateInputs(instrument_id="LCL-1", trade_date="2026-10-09")
-    )
-
-
 # Its feed delay (required from contract v28, ruling 518): each row it
 # records unasked has its age at the edge -- when it was read, less the
 # vendor's published time -- recorded by the SDK's Latency on its Wants, and
@@ -189,8 +175,6 @@ PRODUCERS: dict[str, Producer] = {
     "a-subject-declined": wanted(None),
     "a-standing-want-withdrawn": withdrawn,
     "reads-its-datasets-licences": licences,
-    "reads-a-calendar": reads_a_calendar,
-    "asks-for-a-settlement-date": asks_for_a_settlement_date,
     "reports-its-feed-delay": its_feed_delay,
 }
 
@@ -212,6 +196,8 @@ KINDS = {
     "ratings": "meridian.v1.RatingAction",
     # Contract 28, amended 2026-10-31 (ruling 955): a publisher's figure.
     "derived series": "meridian.v1.DerivedSeries",
+    # Contract v29: an agency's factor for a pool or a REMIC class.
+    "factors": "meridian.v1.Factor",
 }
 DECLARED = {kind for dataset in DECLARATION.catalogue for kind in dataset.data_types}
 STREAMED = any(
@@ -229,6 +215,14 @@ if not STREAMED:
     NOT_PRESENTED["records-a-datasets-liveness"] = (
         "its datasets are pulled when wanted, never streamed"
     )
+# What its work never does (contract v22's `about`, honestly marked from
+# contract v29, Track E): it records what its vendor states, and reads no
+# settlement calendar and asks no settlement date. A plugin that does maps
+# each case to its own read.
+NOT_PRESENTED["reads-a-calendar"] = "it records what its vendor states; it reads no calendar"
+NOT_PRESENTED["asks-for-a-settlement-date"] = (
+    "it records what its vendor states; it asks no settlement date"
+)
 
 
 def test_every_case_of_the_data_suite_passes() -> None:

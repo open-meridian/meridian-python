@@ -266,6 +266,9 @@ def test_trades_are_heard_in_full_and_quotes_latest_value_first() -> None:
         # The filings slice's filings and declared dividends (contract v28).
         ("FilingsRecorded", "list_filings"),
         ("CorporateActionsRecorded", "list_corporate_actions"),
+        # An agency's factors (contract v29): each month a fact servicing
+        # proposes a paydown from, never conflated.
+        ("FactorsRecorded", "list_factors"),
     ]
     assert {"TradesRecorded", "QuotesRecorded"} <= HEARD
 

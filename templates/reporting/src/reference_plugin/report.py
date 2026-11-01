@@ -36,6 +36,10 @@ declared dividends and an issuer's rating history (`filings`, `facts`,
 `holders`, `dividends`, `ratings`) -- and hears a statistic, a lifecycle
 event, a filing and a dividend recorded.
 
+From contract v29 it reads a pool's factor history (`factors`, the SDK's
+`debt.read_factors`), whose latest row gives a pool's current face, and
+hears each month's factor recorded.
+
 `meridian.suites.run("reporting", producers)` holds this to the role's
 suite (tests/test_suite.py), against a recorder standing in for the sidecar.
 """
@@ -50,7 +54,7 @@ from typing import Any
 import meridian
 from meridian import analytics
 from meridian.plugin.v1 import operations_pb2 as ops
-from meridian.roles import Liveness, chains, lifecycle, reporting, signal
+from meridian.roles import Liveness, chains, debt, lifecycle, reporting, signal
 from meridian.roles.data import rates
 
 NS = 1_000_000_000
@@ -105,6 +109,7 @@ class Report:
     lifecycle_heard: int = 0
     filings_heard: int = 0
     dividends_heard: int = 0
+    factors_heard: int = 0
 
     async def datasets(self) -> list[str]:
         """The datasets this plugin may read, by name."""
@@ -327,6 +332,13 @@ class Report:
             subjects=[meridian.SubjectRef(entity_id=issuer)]
         )
         return list(answer.actions)
+
+    async def factors(self, pool: str, start: date, end: date) -> list[ops.Factor]:
+        """A pool's or a class's factors paid in a range, every page."""
+        return await debt.read_factors(self.plugin, [pool], start, end)
+
+    async def on_factor(self, heard: meridian.Heard[ops.FactorsRecordedEvent]) -> None:
+        self.factors_heard += 1
 
     async def on_statistic(self, heard: meridian.Heard[ops.StatisticsRecordedEvent]) -> None:
         self.statistics_heard += 1

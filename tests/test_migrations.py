@@ -100,7 +100,7 @@ def test_every_release_since_the_first_recorded_has_its_step() -> None:
         ("0.6.0", "0.6.1"),
         ("0.6.1", "0.7.0"),
     ]
-    assert (steps[-1].source, steps[-1].target) == ("0.33.4", "0.33.5")
+    assert (steps[-1].source, steps[-1].target) == ("0.33.5", "0.34.0")
     # A release that moves the version records its step, if only the pins.
     assert steps[-1].target == SDK
 
@@ -1607,5 +1607,39 @@ def test_v28s_base_pinned_by_digest_drops_its_digest() -> None:
     result = migrate({"Dockerfile": dockerfile}, "0.32.3", "0.33.0")
     assert result.files["Dockerfile"].splitlines()[0] == (
         "ARG BASE=ghcr.io/open-meridian/plugin-python:0.33.0"
+    )
+    assert ("base-digest", "Dockerfile", 1) in left_by_hand(result)
+
+
+# ── 0.33.5 to 0.34.0: contract v29 ───────────────────────────────────────
+
+
+def test_v29s_suite_cases_and_a_quality_assessment_naming_no_data_type_are_left() -> None:
+    files = {
+        "tests/test_suite.py": 'report = run("data", PRODUCERS, not_presented=NP)\n',
+        "tests/test_board.py": 'report = run("reporting", PRODUCERS)\n',
+        "tests/test_custody.py": 'report = run("custody", PRODUCERS)\n',
+        "src/judge.py": (
+            "from meridian import QualityAssessment\n"
+            "kept = QualityAssessment(dataset=d, row_key=k, version=1)\n"
+            'named = QualityAssessment(dataset=d, data_type="meridian.v1.Price")\n'
+        ),
+    }
+    result = migrate(files, "0.33.5", "0.34.0")
+    assert result.files == {}
+    assert sorted(left_by_hand(result)) == [
+        ("quality-assessment-data-type", "src/judge.py", 2),
+        ("suite-cases-v29", "tests/test_board.py", 1),
+        ("suite-cases-v29", "tests/test_suite.py", 1),
+    ]
+
+
+def test_v29s_base_pinned_by_digest_drops_its_digest() -> None:
+    dockerfile = (
+        f"ARG BASE=ghcr.io/open-meridian/plugin-python:0.33.5@{_DIGEST}\nFROM ${{BASE}}\n"
+    )
+    result = migrate({"Dockerfile": dockerfile}, "0.33.5", "0.34.0")
+    assert result.files["Dockerfile"].splitlines()[0] == (
+        "ARG BASE=ghcr.io/open-meridian/plugin-python:0.34.0"
     )
     assert ("base-digest", "Dockerfile", 1) in left_by_hand(result)

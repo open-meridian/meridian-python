@@ -664,6 +664,16 @@ class PluginOperationsStub(object):
                 request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadStaleReferenceActionsPermittedParams.SerializeToString,
                 response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadStaleReferenceActionsPermittedResult.FromString,
                 _registered_method=True)
+        self.RecordFactors = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/RecordFactors',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordFactorsParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordFactorsResult.FromString,
+                _registered_method=True)
+        self.ListFactors = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ListFactors',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListFactorsParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListFactorsResult.FromString,
+                _registered_method=True)
         self.ListExpirations = channel.unary_unary(
                 '/meridian.plugin.v1.PluginOperations/ListExpirations',
                 request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListExpirationsParams.SerializeToString,
@@ -1571,6 +1581,20 @@ class PluginOperationsServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def RecordFactors(self, request, context):
+        """W10.4: platform.lake.command.record-factors (command; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListFactors(self, request, context):
+        """W10.6: platform.lake.query.list-factors (query; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def ListExpirations(self, request, context):
         """W10.6: platform.lake.query.list-expirations (query; preview).
         """
@@ -2232,6 +2256,16 @@ def add_PluginOperationsServicer_to_server(servicer, server):
                     servicer.ReadStaleReferenceActionsPermitted,
                     request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadStaleReferenceActionsPermittedParams.FromString,
                     response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadStaleReferenceActionsPermittedResult.SerializeToString,
+            ),
+            'RecordFactors': grpc.unary_unary_rpc_method_handler(
+                    servicer.RecordFactors,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordFactorsParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordFactorsResult.SerializeToString,
+            ),
+            'ListFactors': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListFactors,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListFactorsParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListFactorsResult.SerializeToString,
             ),
             'ListExpirations': grpc.unary_unary_rpc_method_handler(
                     servicer.ListExpirations,
@@ -5656,6 +5690,60 @@ class PluginOperations(object):
             '/meridian.plugin.v1.PluginOperations/ReadStaleReferenceActionsPermitted',
             meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadStaleReferenceActionsPermittedParams.SerializeToString,
             meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadStaleReferenceActionsPermittedResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RecordFactors(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/RecordFactors',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordFactorsParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordFactorsResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListFactors(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ListFactors',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListFactorsParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListFactorsResult.FromString,
             options,
             channel_credentials,
             insecure,

@@ -123,10 +123,14 @@ if TYPE_CHECKING:
 #: costs, FX netting, realized P&L, the rates slice, latency, liveness and
 #: trading sessions, and from v28 listed options and futures (series, the
 #: chain read, statistics, lifecycle events, packages), derived series and
-#: saved scenarios, the filings slice, quality states and latency reported
-#: -- and a newer sidecar still admits it. Raised with
+#: saved scenarios, the filings slice, quality states and latency reported,
+#: and from v29 fixed income (the debt templates, a debt order and fill in
+#: face and percent of par, the book's coupons, redemptions, paydowns,
+#: accretions, TBA allocations, strips and reconstitutions, the factor as a
+#: dated fact, a yield beside a price, the curve and bond measures) and the
+#: queued items -- and a newer sidecar still admits it. Raised with
 #: every contract revision that adds something a plugin can depend on.
-SCHEMA_VERSION = "v28"
+SCHEMA_VERSION = "v29"
 
 #: Where a sidecar listens. Loopback, always: a sidecar reachable from another
 #: host is a way around the boundary it exists to enforce.

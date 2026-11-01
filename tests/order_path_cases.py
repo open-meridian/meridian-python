@@ -36,6 +36,7 @@ from meridian.suites import ANSWERED_BY_SDK, Recorder
 from meridian.testing import caller_header
 from meridian.v1 import sidecar_pb2
 from v28_cases import PRODUCERS as V28_PRODUCERS
+from v29_cases import PRODUCERS as V29_PRODUCERS
 
 Producer = Callable[[Recorder], Awaitable[None]]
 
@@ -1564,4 +1565,6 @@ PRODUCERS: dict[str, Producer] = {
     # scenarios, the filings slice's reads, a quality escalated, and the
     # three latency cases reported (ruling 518); tests/v28_cases.py.
     **V28_PRODUCERS,
+    # Contract v29: a pool's factors read and heard (tests/v29_cases.py).
+    **V29_PRODUCERS,
 }

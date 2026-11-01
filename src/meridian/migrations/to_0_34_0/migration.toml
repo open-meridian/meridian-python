@@ -1,0 +1,80 @@
+# open-meridian 0.33.5 to 0.34.0: contract v29
+# (sdk-contract/fixed-income-contract; DESIGN29, rulings 674 to 691, 741 to
+# 751, 900 and 984 to 997; Track E's queued items under their own tasks).
+# Breaking: the SDK declares contract v29, and the data and reading roles'
+# suites hold the factor's cases a plugin maps.
+from = "0.33.5"
+to = "0.34.0"
+summary = """
+The SDK declares contract v29 (meridian.SCHEMA_VERSION): fixed income held,
+valued and serviced in the book. Nothing a plugin calls changed shape; it
+gained fields and helpers.
+
+meridian.roles.debt holds the contract's money rules on a debt record -- face
+times price per 100 times 0.01; a pool's or a tranche's cash and current face
+at its factor and a paydown's principal, each rounded to the cent half-even
+(993); a lot's relief; a coupon's purchased accrued and income (988) -- a
+coupon's accrual by FIX 1950's day counts, an agency's factor (a Factor row
+under the pool's INS- record, wac, wam and wala where stated, 995), a yield as
+its source quotes it (QuotedYield), a capped size (5MM+ as at least) and the
+fixed-income trade characteristics; readers' factor history (read_factors,
+FactorsRecorded heard and caught up) and the book's own words on a pool's fill
+(the factor taken, the month it is provisional on, a factor revision's open
+claim). meridian.roles.lifecycle reports the seven fixed-income records as the
+custodian states them and proposes servicing's coupons, maturities, paydowns
+and accretions from the terms and the published factors; read_events naming
+no account reads every account in scope (740). analytics.DEBT_MEASURES are
+the curve and bond measures, and meridian.analytics.debt their reference
+computations. A quality assessment names its data type (628), a derived value
+in money is money_value (638), and a single option order states its
+position_effect (744). Execution.price is always the dollar price per 100 of
+face; a yield or spread quote travels in QuotedYield beside it (987).
+
+The suites: the data suite's records-a-pools-factor and every reader's
+reads-a-pools-factors and hears-a-factor-recorded (about factors); every read
+and heard case, and the acts a plugin may genuinely never make, carry an
+`about` (Track E: 638 widened by 661, 667, 942), so a plugin names one its work
+never does in not_presented, with why, rather than mapping a read it never
+makes. A plugin's suite test maps each new case or names it not presented:
+left by hand.
+"""
+breaking = true
+rewrite = "rewrite.py"
+
+[[rewrites]]
+rule = "base-digest-dropped"
+what = """the Dockerfile's base, pinned by digest at an older release of \
+plugin-python, moved to 0.34.0 with its digest dropped: the migration runs with no \
+network, so it cannot read 0.34.0's digest, and an old digest under a new tag would \
+build the old release while saying the new one"""
+
+[[by_hand]]
+rule = "base-digest"
+what = """the Dockerfile's base was pinned by digest, and the digest was dropped \
+when its tag moved"""
+instead = """pin it again: `ghcr.io/open-meridian/plugin-python:0.34.0@sha256:<digest>`, \
+the digest `docker buildx imagetools inspect ghcr.io/open-meridian/plugin-python:0.34.0` \
+names"""
+
+[[by_hand]]
+rule = "suite-cases-v29"
+what = """a test running a role's suite that contract v29 adds cases to: the data \
+suite's records-a-pools-factor; operations', portfolio's, reporting's, servicing's and \
+signal's reads-a-pools-factors and hears-a-factor-recorded"""
+instead = """map each new case to the plugin's own producer through the SDK's v29 \
+helpers -- an agency's factor recorded (meridian.roles.debt.factor, record_factors or \
+Wants.record("factors", ...)), a pool's factors read (debt.read_factors) and heard \
+(receive(factors_recorded=...)) -- or, for a case about what its source or work never \
+presents (`about`: factors), name it in not_presented with why. \
+meridian.roles.data.testing's PAIRS_NOT_PRESENTED, EVENT_CONTRACTS_NOT_PRESENTED and \
+RATES_NOT_PRESENTED already name records-a-pools-factor. A read or an act the plugin \
+mapped only to pass (941) may now be named not presented, with why, by its `about`"""
+
+[[by_hand]]
+rule = "quality-assessment-data-type"
+what = """a QualityAssessment built naming no data_type: RecordQualityAssessments \
+requires it from contract v29 (628), so a day's close and its bar, which share a row \
+key, escalate apart"""
+instead = """name the kind of row it assesses by its message's full name, \
+`data_type="meridian.v1.Price"`, or build it with \
+meridian.roles.data.quality.assessment, which names it"""
