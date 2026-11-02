@@ -2,7 +2,7 @@
 
 The Python SDK for building [Open Meridian](https://open-meridian.com) plugins:
 the tools a trader has an AI agent build, and the bots and analytics a
-developer writes. Python 3.11 or newer. This is release 0.35.2; its reference
+developer writes. Python 3.11 or newer. This is release 0.35.3; its reference
 is at [open-meridian.dev](https://open-meridian.dev/api/python-sdk/).
 
 ## Start here
@@ -2290,7 +2290,7 @@ rewrites the modules' imports and says what is left by hand.
       await lifecycle.propose(self, [expected])
   ```
 
-### Each role is one class (0.35.0 to 0.35.2)
+### Each role is one class (0.35.0 to 0.35.3)
 
 From 0.35.0 (spec/each-role-is-one-generated-class; rulings 1004, 1005 and
 1009 to 1023) a plugin writes one class per role it holds. Each extends its
@@ -2403,10 +2403,17 @@ example:
   waits, a refused key waited out longer, subscribed to exactly what is
   wanted, its state for Connection (`SessionState`), its reconnects and
   signs of life on `roles.Latency`, and after a reopen its catch-up,
-  `caught_up(last_heard_ns_by_subject)`. It holds no transport (ruling
-  1027): the data template's `stream.py` shows a WebSocket stream from an
-  established library under it, and `pairs.supervised` keeps a pairs
-  market's own socket with it.
+  `caught_up(last_heard_ns_by_subject)`. Every message received is handed
+  to `heard`, one stating nothing (a heartbeat) as `[]`: each is the feed's
+  sign of life (ruling 418). A failure carrying `retry_after` (a 429's
+  `Retry-After`, in seconds) is waited out at least that long; with
+  `reopen_on_want=True`, what is wanted changing opens a new session for it
+  (a source whose subscriptions are its address, as server-sent events
+  are); `SessionState.label` is the state as a page shows it. It holds no
+  transport (ruling 1027): the data template's `stream.py` shows a
+  WebSocket stream from an established library under it, and
+  `pairs.supervised` keeps a pairs market's own socket with it, reopened
+  for new names.
 - `meridian.helpers.calendars`: `DayClock.of(declaration)`, a dataset's
   business day by its declared zone and end minute (`business_date_of`,
   `close_of`, `opened_at`); `MarketDays(role, calendar_id)`, the
@@ -2487,7 +2494,26 @@ plugin. No transports package is shipped (ruling 1027).
   (`settings=Config.declared()`) can name the class again: `meridian plugin
   migrate` names each one, left by hand.
 
-  **Run 0.35.0 to 0.35.2 on a core of contract v29**: no contract changed.
+- **0.35.3, a fix**: what the plugin step found. A supervised session
+  hands `heard` every message received, `[]` for a heartbeat, so a
+  listings or chains feed on `Supervisor` is alive between data again
+  (ruling 418); its waits are never shorter than a failure's `retry_after`,
+  and `Supervisor(reopen_on_want=True)` opens a new session for what is
+  wanted (`pairs.supervised` does, where it counted a drop for each
+  change). A row delivered latest value first is keyed by its own kind: a
+  rate or a statistic no longer fails the hearing loop, and a chain's rows
+  are told apart by their series key. A table setting's rows are a list,
+  typed or not. `RawStore.tend` reads from the settings only what it is not
+  given, keeps what is past a window given alone, and refuses a window
+  below 0 or a `past` other than `archived`, `kept` or `deleted`.
+  `Recorder.hear(role, *rows)` hears the rows given alone; `PageClient`
+  refuses a plain stand-in's acts as it does a recorder's; a pricing
+  plugin declares its models, `Declaration(pricing_models=[
+  PricingModelDeclaration(model_id, model_version)])`. The 0.33.0, 0.35.0
+  and 0.35.2 steps rewrite and name more; `meridian plugin migrate --to
+  0.35.3` names what the plugin step found in plugins already on 0.35.
+
+  **Run 0.35.0 to 0.35.3 on a core of contract v29**: no contract changed.
 
 ## Moving a plugin to a new release
 
@@ -2575,6 +2601,7 @@ carries libcst.
 | 0.34.0 to 0.35.0: each role is one class (spec/each-role-is-one-generated-class): `meridian.roles.<role>.Role` for every role, generated from the matrix and the suites, its acts methods and its events `on_<row>` methods, required ones abstract; seven role modules added (`compliance`, `confirmation`, `oms`, `portfolio`, `reference`, `servicing`, `settlement`); `meridian.run` and `run_async` the entry point, `on_start`, `run` (restarted with `helpers.sessions.Backoff`) and `on_stop`, `seed`, `subjects()` and `hear_again()` per class on one stream; `connect(roles=)` required; the connection keeps only what is plugin-wide, and makes no act; `receive` gone; `connectivity.Trader`, `pricing.Pricer` and the data feeds role classes; helpers given the role object; `Recorder.bind` and `Recorder.hear`; `meridian.behaviours`; 924's helpers -- `helpers.sessions.Supervisor`, `helpers.calendars` (`DayClock`, `MarketDays`), `data.SentRows`, `Conflator`, `Timetable`, `timeliness`, `api_key`, the listings feed's timeliness, two clocks, MIC venues, edge and pages, `data.option_chains`, `pairs.Feed(conflate_first=, day_clock=)` and `pairs.supervised` -- each held to behaviour cases. No contract change. Breaking | a `receive` call whose handlers are one class's methods on one declared role's events made that class's `on_<row>` methods, the class given the role's base, `seed=False` its `seed = False`, the connection it took dropped; the SDK's own handlers dropped from a `receive`; a Trader's, a feed's and a Pricer's renamed methods and arguments, the connection given them dropped (a recorder's call `recorder.bind(...)`); `self.plugin.<act>` on `self` in a role class, a helper given `self.plugin` given `self`; an unchanged template entry point replaced; a listings feed's own `at_the_edge` and the `_record` override calling it deleted (the feed does both), and the `_changed` copies made `data.SentRows`, a name only they imported dropped | an entry point connecting by hand, moved to `meridian.run`; an act on the connection, made on the role object holding it; a `receive` no rewrite reached; a role class lacking a required event; a suite test hearing through `recorder.receive` or giving a class a stand-in connection; 924's helpers adopted by hand (`helper-adopted`): a stream supervisor of its own onto `helpers.sessions.Supervisor` over its `Link`, a chains machine onto `data.option_chains.Feed`, a calendar reader and a day by hand onto `helpers.calendars`, listings pages onto the SDK's, a polling loop onto `data.Timetable`, a plan switch onto the listings feed's `timeliness`, the `again` and `licences` loops onto a role's `run()`, an FX lake onto `pairs.Feed(conflate_first=True)`, and a raw store onto `meridian.edge.RawStore` |
 | 0.35.0 to 0.35.1: a fix (ruling 1023): the pairs and event-contract feeds resolve their venue through the feed, not the connection; the suites' `Recorder.plugin` a stand-in for the connection that makes no act, a `PageClient` given a recorder handing its pages the same; `meridian.run` applies the first settings before `on_start` and keeps the settings watch; a reopened stream reads the latest only of rows seeded; an event-contract feed asks for its venue once a contract is served; the 0.34.0 and 0.35.0 steps rewrite more (a feed's own handlers dropped from `receive`, a recorder's `receive` outside the tests heard, a later base pin kept) and name less by hand | only the pins move: no migrate step is needed beyond them | a plugin's test acting through `recorder.plugin` or a page's `request.plugin`, or asserting a class's `plugin` is the recorder, now fails as the plugin would when run: the act made on the role object, the assertion on `recorder.plugin` |
 | 0.35.1 to 0.35.2: a fix: a typed delivery of the settings (`meridian.run`'s `on_settings`, `plugin.settings(Config)`, `first_settings`) holds every setting delivered in `config.values`, the storage kinds' `<kind>_window_days` and `<kind>_past_window` the SDK declares among them, which it dropped; `RawStore.tend(plugin, settings=config, today=...)` reads the kind's window from the settings as delivered, typed or not, `today` the UTC date where not given; no field may be named `missing`, `refused` or `values` | only the pins move | a `Declaration(settings=Config.declared())`, the 0.35.1 way to reach the window settings (`typed-settings-declared`): declare `settings=Config`, so `on_settings` receives a `Config` (a handler reading `delivered.values` reads them unchanged; one reading `.missing_required` reads `.missing`), and give it to `RawStore.tend(..., settings=config)` in place of the windows copied by hand |
+| 0.35.2 to 0.35.3: a fix: `helpers.sessions.Supervisor` hands `heard` every message received (`[]` for a heartbeat, ruling 418), waits at least a failure's `retry_after`, and opens a new session for what is wanted with `reopen_on_want=True` (`pairs.supervised` does); `SessionState.label`; a row delivered latest value first keyed by its own kind (a rate or a statistic no longer fails the hearing loop) and by its series key; a table setting's rows a list, typed or not; `RawStore.tend` reads from the settings only what it is not given, keeps what is past a window given alone, refuses a window below 0 or an unknown `past`; a typed delivery's SDK settings read only; `Recorder.hear(role, *rows)`; `PageClient` refuses a plain stand-in's acts; `Declaration(pricing_models=[PricingModelDeclaration(...)])`; the 0.33.0, 0.35.0 and 0.35.2 steps rewrite and name more | only the pins move | a `named` override calling `dataset` (`named-calls-dataset`); a method `timeliness(...)` hiding a listings feed's property (`timeliness-overridden`); a role class's field `subjects` (`subjects-shadowed`); a 0.34 handler name reached through another name (`old-handler-name`); a `receive(...)` left (`receive-gone`); a test reading `<x>.plugin.on(...)` (`stand-in-read`); a role class made outside the entry point, a test or a `bind(...)` (`unregistered-role-object`); a base pinned by tag alone where the plugin pins by digest (`base-digest`); and, by behaviour, a `heard` given to a `Supervisor` now handed `[]`, and a table's rows read as a tuple, now a list |
 
 `tests/migrations/` holds the plugins the migrations are recorded for, as
 written and as their migration leaves them, and `make check-migrations` holds

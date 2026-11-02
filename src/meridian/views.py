@@ -150,8 +150,24 @@ def _latest_key(record: Any) -> str:
             _series_text(meta),
             str(kind),
             _asset(record),
+            _rate_terms(record),
         ]
     )
+
+
+def _rate_terms(record: Any) -> str:
+    """A rate's tenor, maturity and convention, which tell two rates of one
+    kind apart -- a curve's points (W10.5, contract v27) -- else nothing
+    (SDK 0.35.3: a view kept one point of a curve)."""
+    if record.DESCRIPTOR.name != "Rate":
+        return ""
+    held = (
+        record.tenor.count,
+        record.tenor.unit,
+        record.maturity_date,
+        record.convention.SerializeToString(deterministic=True).hex(),
+    )
+    return "|".join(str(each) for each in held)
 
 
 def _record_key(record: Any) -> str:

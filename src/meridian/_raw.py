@@ -57,6 +57,9 @@ from .v1 import sidecar_pb2
 log = logging.getLogger(__name__)
 
 _UNSAFE = re.compile(r"[^A-Za-z0-9._-]")
+#: What is done with a unit past its kind's window: the `<kind>_past_window`
+#: setting's three choices, the SDK's for every kind.
+_PAST_WINDOW = ("archived", "kept", "deleted")
 _NANOS_PER_SECOND = 1_000_000_000
 _SECONDS_PER_DAY = 86_400
 #: The day's line files held open for appending at once; one more opened
@@ -308,12 +311,25 @@ class RawStore:
         the class decorated `@meridian.settings`, `meridian.Settings`, or
         their values -- gives the window and `past` not given, read from the
         kind's own settings, `<kind>_window_days` and `<kind>_past_window`,
-        which the SDK declares; `today` is the UTC date where not given."""
+        which the SDK declares; `today` is the UTC date where not given.
+
+        From 0.35.3 only what is not given is read from `settings`, and a
+        setting the settings do not hold is refused, naming it: the SDK
+        fills both in every delivery for a kind its declaration names, so
+        one missing is a kind not declared, never a default to guess -- what
+        is done past the window is the plugin admin's to choose. Given a
+        window alone, with no settings, nothing moves past it (`kept`, the
+        default where no archive is granted, and never a deletion the admin
+        did not choose). A window below 0, or a `past` other than
+        `archived`, `kept` or `deleted`, is refused, naming it."""
+        if past is None and settings is None and window_days is not None:
+            past = "kept"
         if window_days is None or past is None:
             window_days, past = self._window(settings, window_days, past)
+        window_days, past = self._checked(window_days, past)
         if today is None:
             today = datetime.now(UTC).date()
-        cutoff = today - timedelta(days=max(window_days, 0))
+        cutoff = today - timedelta(days=window_days)
         self._forget(before=today.isoformat())
         for unit in self.units():
             if unit.day >= cutoff or unit.day >= today or past == "kept":
@@ -367,7 +383,10 @@ class RawStore:
                 "(a @meridian.settings instance, meridian.Settings) or their values"
             )
         named = (f"{self.kind}_window_days", f"{self.kind}_past_window")
-        absent = [name for name in named if name not in values]
+        wanted = [
+            n for n, given in zip(named, (window_days, past), strict=True) if given is None
+        ]
+        absent = [name for name in wanted if name not in values]
         if absent:
             raise ValueError(
                 f"the settings hold no {' or '.join(absent)}: the SDK declares them for "
@@ -375,7 +394,25 @@ class RawStore:
                 "is not among them"
             )
         if window_days is None:
-            window_days = int(values[named[0]])
+            window_days = values[named[0]]
         if past is None:
-            past = str(values[named[1]])
+            past = values[named[1]]
         return window_days, past
+
+    def _checked(self, window_days: Any, past: Any) -> tuple[int, str]:
+        """The window a whole number of days, 0 or more, and `past` one of
+        the three choices the SDK declares: else refused, naming it."""
+        named = f"{self.kind}_window_days"
+        if isinstance(window_days, bool) or not isinstance(window_days, int | str):
+            raise ValueError(f"{named} is a whole number of days: {window_days!r}")
+        try:
+            days = int(window_days)
+        except ValueError:
+            raise ValueError(f"{named} is a whole number of days: {window_days!r}") from None
+        if days < 0:
+            raise ValueError(f"{named} is 0 or more days: {days}")
+        if past not in _PAST_WINDOW:
+            raise ValueError(
+                f"{self.kind}_past_window is one of {', '.join(_PAST_WINDOW)}: {past!r}"
+            )
+        return days, str(past)

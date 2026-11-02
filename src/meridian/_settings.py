@@ -603,7 +603,7 @@ class Typed:
     missing: tuple[str, ...]
     refused: tuple[RefusedSetting, ...]
     # The settings delivered that are no field of the class: the ones the SDK
-    # declares beside it (0.35.2).
+    # declares beside it (0.35.2), held read only (0.35.3).
     _more: Mapping[str, Any]
 
     @property
@@ -612,8 +612,8 @@ class Typed:
         fields, as typed on the instance, then the settings the SDK declares
         beside them -- each storage kind's `<kind>_window_days` and
         `<kind>_past_window` -- typed by their declarations, defaults filled,
-        a table's rows a tuple. What `meridian.Settings.values` holds, so a
-        delivery reads alike typed or not."""
+        a table's rows a list of dicts. What `meridian.Settings.values`
+        holds, so a delivery reads alike typed or not."""
         declared = type(self).__meridian_settings__
         held = {each.name: getattr(self, each.name) for each in declared}
         for name, value in self._more.items():
@@ -655,7 +655,9 @@ class Typed:
             else:
                 value = _EMPTY[each.kind]
             if each.kind is list:
-                value = tuple(dict(row) for row in value)
+                # A table's rows are a list, typed or not (0.35.3): the kind
+                # it is declared as, and what `meridian.Settings.values` holds.
+                value = [dict(row) for row in value]
             least, most = cls.__meridian_bounds__.get(each.name, (None, None))
             if isinstance(value, int) and not isinstance(value, bool):
                 value = _held(cls.__name__, each.name, value, least, most)
@@ -663,12 +665,15 @@ class Typed:
         # The settings delivered beside the class's own -- the ones the SDK
         # declares (0.35.2) -- kept, never dropped.
         more = {
-            name: tuple(dict(row) for row in value) if isinstance(value, list) else value
+            name: [dict(row) for row in value] if isinstance(value, list | tuple) else value
             for name, value in values.items()
             if name not in given
         }
         return cast(Any, cls)(
-            **given, missing=tuple(missing), refused=tuple(refused), _more=more
+            **given,
+            missing=tuple(missing),
+            refused=tuple(refused),
+            _more=_Values(more, frozenset()),
         )
 
 
@@ -744,7 +749,9 @@ def settings(cls: type[_C]) -> type[_C]:
         (
             "_more",
             Mapping[str, Any],
-            dataclasses.field(default_factory=dict, repr=False, hash=False),
+            dataclasses.field(
+                default_factory=lambda: _Values({}, frozenset()), repr=False, hash=False
+            ),
         )
     )
     made_class = dataclasses.make_dataclass(

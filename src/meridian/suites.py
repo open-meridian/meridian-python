@@ -286,6 +286,15 @@ class _Recording:
 _ACTS = frozenset(name for name in vars(Operations) if not name.startswith("_"))
 
 
+def _no_act(name: str) -> AttributeError:
+    """An act asked of the connection, refused as the connection refuses it."""
+    return AttributeError(
+        f"'Plugin' object has no attribute {name!r}: {name} is an act, made on the "
+        "role object holding it (self.<act> in its class, or the role object a "
+        "helper or a page is given), never on the connection (SDK 0.35, ruling 1023)"
+    )
+
+
 class _Connection:
     """What `Recorder.plugin` answers: a stand-in for the connection,
     `meridian.Plugin`, holding only what it holds -- each item read from the
@@ -297,17 +306,44 @@ class _Connection:
 
     def __getattr__(self, name: str) -> Any:
         if name in _ACTS:
-            raise AttributeError(
-                f"'Plugin' object has no attribute {name!r}: {name} is an act, made on the "
-                "role object holding it (self.<act> in its class, or the role object a "
-                "helper or a page is given), never on the connection (SDK 0.35, ruling 1023)"
-            )
+            raise _no_act(name)
         if not _plugin_wide(name):
             raise AttributeError(f"'Plugin' object has no attribute {name!r}")
         return getattr(self._recorder, name)
 
     def __setattr__(self, name: str, value: Any) -> None:
         setattr(self._recorder, name, value)
+
+
+class _Unacting:
+    """A plain stand-in for the connection, as a page reaches it through
+    `PageClient` (SDK 0.35.3): everything it answers, but no act, refused as
+    the connection refuses one -- so a page acting through `request.plugin`
+    fails in a test given its own stand-in, as it fails given a `Recorder`
+    and when the plugin runs."""
+
+    def __init__(self, held: Any) -> None:
+        object.__setattr__(self, "_held", held)
+
+    def __getattr__(self, name: str) -> Any:
+        if name in _ACTS:
+            raise _no_act(name)
+        return getattr(self._held, name)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        setattr(self._held, name, value)
+
+
+def unacting(plugin: Any) -> Any:
+    """What a page is handed as `request.plugin` in a test: a `Recorder`'s
+    connection, a plain stand-in without its acts, None as None."""
+    if plugin is None or isinstance(plugin, _Connection | _Unacting):
+        return plugin
+    if isinstance(plugin, Recorder):
+        return plugin.plugin
+    from .client import Plugin
+
+    return plugin if isinstance(plugin, Plugin) else _Unacting(plugin)
 
 
 def _plugin_wide(name: str) -> bool:
@@ -400,12 +436,24 @@ class Recorder(Operations):
         role._bind(self.plugin)
         return role
 
-    async def hear(self, role: RoleBase) -> None:
+    async def hear(self, role: RoleBase, *rows: str) -> None:
         """Each row `role` hears -- its role's required events and each
         optional one it overrides -- handed what `answer` gives for it, in
         order, to its `on_<row>` method, and kept as heard; then returns,
-        where a sidecar's stream stays open. `bind` it first."""
-        await self._hear({row: getattr(role, role.EVENTS[row]) for row in role.heard_rows()})
+        where a sidecar's stream stays open. `bind` it first.
+
+        Given `rows` (0.35.3), those rows alone, so a test hears one row
+        without every other row answered being delivered again, as
+        `Recorder.receive(<row>=handler)` did before 0.35. A row the class
+        does not hear is refused, naming it."""
+        heard = role.heard_rows()
+        unheard = [row for row in rows if row not in heard]
+        if unheard:
+            raise ValueError(
+                f"{type(role).__name__} hears no {', '.join(unheard)}: it hears "
+                f"{', '.join(heard) or 'nothing'}"
+            )
+        await self._hear({row: getattr(role, role.EVENTS[row]) for row in (rows or heard)})
 
     async def _hear(self, handlers: Mapping[str, Callable[[Any], Awaitable[None]]]) -> None:
         from .receive import Heard

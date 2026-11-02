@@ -1,0 +1,87 @@
+# open-meridian 0.35.2 to 0.35.3: a fix, with no contract change. Nothing a
+# plugin calls changed shape, so the pins move; what the plugin step found
+# in plugins already on 0.35 is named, to do by hand.
+from = "0.35.2"
+to = "0.35.3"
+summary = """
+A fix. A supervised session hands its heard every message received, one that
+states nothing (a heartbeat, a status) as an empty list, so a listings or
+chains feed on helpers.sessions.Supervisor is alive between data again
+(ruling 418); its waits are never shorter than a source's Retry-After (a
+failure's retry_after), and Supervisor(reopen_on_want=True) opens a new
+session when what is wanted changes, as pairs.supervised now does. A row
+delivered latest value first is keyed by its own kind of row: a rate or a
+statistic no longer fails the hearing loop, and a chain's rows are told apart
+by their series key. A table setting's rows are a list, delivered typed or
+untyped. RawStore.tend reads from the settings only what it is not given,
+keeps what is past a window given alone, and refuses a window below 0 or a
+past it cannot act on. Recorder.hear(role, *rows) hears the rows given alone;
+SessionState.label is a state's words on a page; PageClient refuses a plain
+stand-in's acts as it does a Recorder's; Declaration(pricing_models=...)
+declares a pricing plugin's models. Nothing a plugin calls changed shape:
+`meridian plugin migrate` moves the pins, and names what the plugin step
+found in plugins already on 0.35, left by hand.
+"""
+breaking = false
+rewrite = "rewrite.py"
+
+[[by_hand]]
+rule = "named-calls-dataset"
+what = """a `named` override calling `dataset`: from 0.35 a feed's `dataset` calls \
+`named`, so each calls the other without end (the plugin step's massive)"""
+instead = """call `super().named(key)` in it, never `dataset`"""
+
+[[by_hand]]
+rule = "timeliness-overridden"
+what = """a method `timeliness(...)` on a class: from 0.35 a listings feed's \
+`timeliness` is a property (the plan in force), which the method hides, and a strict \
+type check refuses (the plugin step's massive)"""
+instead = """rename the plugin's method (`plan_of(asset_class)`), and read the feed's \
+`timeliness` as the property it is"""
+
+[[by_hand]]
+rule = "subjects-shadowed"
+what = """a role class holding a field or attribute named `subjects`, which hides the \
+role's `subjects()` -- what `meridian.run` reads the stream's subjects from"""
+instead = """rename the field (`watched`), and answer the subjects from `subjects()` \
+where the class hears rows about them"""
+
+[[by_hand]]
+rule = "old-handler-name"
+what = """a call of a 0.34 name of the SDK's handlers or feed methods that the plugin \
+defines no method of -- `on_want`, `on_withdrawn`, `on_placement`, `on_instruction`, \
+`on_execution`, a feed's `seed(...)` -- reached through a name 0.35.0's step could not \
+follow (`held.on_want(...)`), which fails when it runs"""
+instead = """call it by 0.35's name, given in the finding: `on_observations_wanted`, \
+`on_want_withdrawn`, `on_placement_updated`, `on_trading_instruction_changed`, \
+`on_execution_recorded`, `seed_symbols`"""
+
+[[by_hand]]
+rule = "receive-gone"
+what = """a `receive(<row>=...)` call left, which 0.35 removed (a test's \
+`lake.receive(...)`)"""
+instead = """bind the class to the recorder and hear it: `recorder.bind(Lake(...))`, \
+`recorder.answer(row, ...)`, `await recorder.hear(lake, row)` for one row"""
+
+[[by_hand]]
+rule = "stand-in-read"
+what = """a test reading `<x>.plugin.on(...)`: a recorder's `plugin` is the \
+connection's stand-in, which holds no `on`"""
+instead = """read the recorder itself: `recorder.on(row)`"""
+
+[[by_hand]]
+rule = "unregistered-role-object"
+what = """a role class made outside the entry point, a test or a `bind(...)` -- a \
+page's fallback `work or Work(...)` -- registered with nothing, so each act it makes \
+fails (the plugin step's pyth), unless it is the object the entry point registers"""
+instead = """hand the page the object `meridian.run` registers (a closure or the state \
+they share), or bind it to a stand-in in a preview: `recorder.bind(Work(...))`"""
+
+[[by_hand]]
+rule = "base-digest"
+what = """the Dockerfile's base pinned by tag alone, in a plugin pinning images by \
+digest elsewhere (its Makefile's core images): a pin moved without its digest (the \
+plugin step's tiingo)"""
+instead = """pin it by digest: `ghcr.io/open-meridian/plugin-python:0.35.3@sha256:<digest>`, \
+the digest `docker buildx imagetools inspect ghcr.io/open-meridian/plugin-python:0.35.3` \
+names"""

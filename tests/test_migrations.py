@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -102,7 +103,7 @@ def test_every_release_since_the_first_recorded_has_its_step() -> None:
         ("0.6.0", "0.6.1"),
         ("0.6.1", "0.7.0"),
     ]
-    assert (steps[-1].source, steps[-1].target) == ("0.35.1", "0.35.2")
+    assert (steps[-1].source, steps[-1].target) == ("0.35.2", "0.35.3")
     # A release that moves the version records its step, if only the pins.
     assert steps[-1].target == SDK
 
@@ -319,7 +320,7 @@ V35 = {
     # SentRows; 924's helpers it adopts by hand named.
     "equities": (
         {
-            "src/equities/chains.py": {"copied-bodies-to-sdk": 1},
+            "src/equities/chains.py": {"copied-bodies-to-sdk": 1, "self-plugin-act-to-self": 1},
             "src/equities/lake.py": {"listings-edge-glue-dropped": 1},
         },
         [
@@ -329,7 +330,6 @@ V35 = {
             ("connect-to-run", "src/equities/__main__.py", 50),
             ("helper-adopted", "src/equities/chains.py", 16),
             ("helper-adopted", "src/equities/chains.py", 30),
-            ("act-on-the-connection", "src/equities/chains.py", 35),
             ("helper-adopted", "src/equities/lake.py", 24),
         ],
     ),
@@ -2112,6 +2112,9 @@ def test_a_step_never_moves_back_a_base_pinned_at_a_later_release(source: str) -
         "from meridian.declaration import Declaration\nD = Declaration(\n"
         "    settings=Config.declared(),\n)\n",
         "import meridian\nD = meridian.Declaration(\n    settings=Config.declared(),\n)\n",
+        # Through an alias (SDK 0.35.3, the plugin step's tiingo).
+        "import meridian\nSETTINGS = Config.declared()\n"
+        "D = meridian.Declaration(settings=SETTINGS)\n",
     ],
 )
 def test_a_declaration_of_a_typed_class_untyped_is_left_by_hand(declaring: str) -> None:
@@ -2310,3 +2313,494 @@ def test_the_old_paths_are_gone_and_the_new_ones_are_the_same_modules() -> None:
         assert not hasattr(roles, topic), topic
         with pytest.raises(ModuleNotFoundError):
             importlib.import_module(f"meridian.roles.{topic}")
+
+
+# ── SDK 0.35.3: what the plugin step found 0.35.0's step missing ─────────
+
+
+def _step(files: dict[str, str]) -> tuple[dict[str, str], list[tuple[str, str, int]]]:
+    result = migrate(files, "0.34.0", "0.35.0")
+    return result.files, left_by_hand(result)
+
+
+DATA = '[tool.meridian]\nroles = ["data"]\n'
+
+
+def test_renames_reach_super_and_an_object_named_another_way() -> None:
+    """The plugin step's crypto brokers: `super().on_want(...)`,
+    `state.lake.seed(...)` and `rig.trader.on_execution(...)` were missed."""
+    files = {
+        "pyproject.toml": '[tool.meridian]\nroles = ["data", "connectivity"]\n',
+        "src/p/lake.py": textwrap.dedent(
+            """\
+            from meridian.roles.connectivity import Trader
+            from meridian.roles.data import listings
+
+            class Lake(listings.Feed):
+                async def on_want(self, heard):
+                    await super().on_want(heard)
+
+            class Rig:
+                def __init__(self, plugin):
+                    self.lake = Lake(plugin, None)
+                    self.trader = Trader(plugin, None)
+
+            async def go(state, rig, heard):
+                await state.lake.seed(["SPY"])
+                await rig.trader.on_execution(heard)
+            """
+        ),
+    }
+    written, _ = _step(files)
+    lake = written["src/p/lake.py"]
+    assert "await super().on_observations_wanted(heard)" in lake
+    assert "await state.lake.seed_symbols([" in lake
+    assert "await rig.trader.on_execution_recorded(heard)" in lake
+
+
+def test_a_helper_given_the_dropped_plugin_is_given_self_and_other_reads_named() -> None:
+    """fx-rates: `data.Wants(plugin, ...)`, `Latency(plugin)` and
+    `rates.Feed(plugin, ...)` were left naming the removed parameter -- the
+    last dropped, as the plugin's own `Feed` was planned; `self.me =
+    plugin.identity` is named."""
+    files = {
+        "pyproject.toml": DATA,
+        "src/p/__main__.py": textwrap.dedent(
+            """\
+            import meridian
+            from .work import Feed
+
+            async def run():
+                async with await meridian.connect() as plugin:
+                    feed = Feed(plugin)
+                    await plugin.receive(observations_wanted=feed.wanted)
+            """
+        ),
+        "src/p/work.py": textwrap.dedent(
+            """\
+            from meridian.roles import Latency, data
+            from meridian.roles.data import rates
+
+            class Feed:
+                def __init__(self, plugin):
+                    self.plugin = plugin
+                    self.wants = data.Wants(plugin, "fx")
+                    self.latency = Latency(plugin)
+                    self.rates = rates.Feed(plugin, "fx")
+                    self.me = plugin.identity
+
+                async def wanted(self, heard): ...
+            """
+        ),
+    }
+    written, by_hand = _step(files)
+    work = written["src/p/work.py"]
+    assert "def __init__(self):" in work and "self.plugin = plugin" not in work
+    assert "data.Wants(self, " in work and "Latency(self)" in work
+    assert 'rates.Feed(self, "fx")' in work
+    assert ("plugin-param-removed", "src/p/work.py", 10) in by_hand
+
+
+def test_a_plugins_own_trader_no_longer_takes_the_connection() -> None:
+    files = {
+        "pyproject.toml": '[tool.meridian]\nroles = ["connectivity"]\n',
+        "src/p/desk.py": textwrap.dedent(
+            """\
+            from meridian.roles.connectivity import Trader
+
+            class Desk(Trader):
+                def __init__(self, plugin, venue):
+                    super().__init__(plugin, venue)
+                    self.plugin = plugin
+
+            def made(plugin, venue):
+                return Desk(plugin, venue)
+            """
+        ),
+    }
+    written, _ = _step(files)
+    desk = written["src/p/desk.py"]
+    assert "def __init__(self, venue):" in desk and "super().__init__(venue)" in desk
+    assert "self.plugin = plugin" not in desk and "return Desk(venue)" in desk
+
+
+def test_a_stand_in_is_bound_to_and_one_not_plainly_the_connection_is_named() -> None:
+    """newer-data: a preview's `Lake(stand_in, ...)` lost its binding, and
+    `Work(plugin if live else stand_in)` its argument, silently."""
+    files = {
+        "pyproject.toml": DATA,
+        "src/p/__main__.py": textwrap.dedent(
+            """\
+            import meridian
+            from .work import Work
+
+            async def run():
+                async with await meridian.connect() as plugin:
+                    work = Work(plugin)
+                    await plugin.receive(observations_wanted=work.wanted)
+            """
+        ),
+        "src/p/work.py": textwrap.dedent(
+            """\
+            class Work:
+                def __init__(self, plugin):
+                    self.plugin = plugin
+
+                async def wanted(self, heard): ...
+            """
+        ),
+        "src/p/preview.py": textwrap.dedent(
+            """\
+            from .work import Work
+
+            def shown(stand_in, live, plugin):
+                lake = Work(stand_in)
+                other = Work(plugin if live else stand_in)
+                return lake, other
+            """
+        ),
+    }
+    written, by_hand = _step(files)
+    preview = written["src/p/preview.py"]
+    assert "lake = stand_in.bind(Work())" in preview
+    assert ("suite-producer-to-role", "src/p/preview.py", 5) in by_hand
+
+
+def test_an_import_dropped_while_all_names_it_is_kept_and_new_ones_placed() -> None:
+    """massive: PRICE and TRADE imports dropped while `__all__` named them;
+    `from meridian.roles.data import SentRows` placed after the local
+    imports."""
+    files = {
+        "pyproject.toml": DATA,
+        "src/p/lake.py": textwrap.dedent(
+            """\
+            from meridian.roles.data import listings
+            from meridian.roles.data.listings import PRICE, at_the_edge
+
+            from .convert import convert
+
+            __all__ = ["PRICE", "Lake"]
+
+            class Lake(listings.Feed):
+                def at_the_edge(self, rows):
+                    return at_the_edge(self, rows)
+            """
+        ),
+    }
+    written, _ = _step(files)
+    lake = written["src/p/lake.py"]
+    assert "import PRICE\n" in lake and "at_the_edge" not in lake
+    files["src/p/chains.py"] = (FIXTURES / "equities-0.34.0/src/equities/chains.py").read_text()
+    files["src/p/chains.py"] = files["src/p/chains.py"].replace(
+        "from meridian", "from .convert import convert\nfrom meridian", 1
+    )
+    chains = _step(files)[0]["src/p/chains.py"]
+    assert chains.index("import SentRows") < chains.index("from .convert import")
+
+
+def test_a_temporary_record_override_and_a_dataclass_memory_are_the_sdks() -> None:
+    """alpaca's 0.33 `_record` that aged and judged its rows by hand; unusual
+    whales' memory a dataclass field."""
+    chains = (FIXTURES / "equities-0.34.0/src/equities/chains.py").read_text()
+    copied = re.search(r"\n    def _changed\(.*?(?=\n    (?:async )?def |\Z)", chains, re.S)
+    assert copied is not None
+    files = {
+        "pyproject.toml": DATA,
+        "src/p/lake.py": textwrap.dedent(
+            """\
+            from meridian.roles.data import listings
+
+            class Lake(listings.Feed):
+                async def _record(self, key, data_type, rows, want_id):
+                    \"\"\"TEMPORARY until the SDK's listings feed does it.\"\"\"
+                    if self.latency is not None:
+                        for row in rows:
+                            self.latency.aged(self.dataset(key), "AGE_HOP_EDGE", row)
+                    rows = self.quality.judged(key, rows)
+                    await super()._record(key, data_type, rows, want_id)
+            """
+        ),
+        "src/p/work.py": "from collections import OrderedDict\n"
+        "from dataclasses import dataclass, field\n\nREMEMBERED = 10\n\n\n@dataclass\n"
+        "class Work:\n"
+        "    sent: OrderedDict[tuple[str, str, str], str] = field(\n"
+        "        default_factory=OrderedDict\n"
+        "    )\n" + copied.group(0) + "\n",
+    }
+    written, _ = _step(files)
+    assert "_record" not in written["src/p/lake.py"]
+    work = written["src/p/work.py"]
+    assert "sent: SentRows = field(default_factory=lambda: SentRows(REMEMBERED))" in work
+
+
+def test_a_role_objects_act_on_its_connection_and_tests_shapes() -> None:
+    """massive: `self.lake.plugin.read_calendar(...)`; a test's
+    `lake.receive(...)`, `type(work)(recorder, ...)`, a `getattr` act and a
+    rewritten `# fmt: skip` statement named."""
+    files = {
+        "pyproject.toml": DATA,
+        "src/p/chains.py": textwrap.dedent(
+            """\
+            from meridian.roles.data import listings
+
+            class Lake(listings.Feed):
+                pass
+
+            class Chains:
+                def __init__(self, lake):
+                    self.lake = lake
+
+                async def day(self):
+                    await self.lake.plugin.read_calendar(calendar_id="CAL-1")
+                    await getattr(self.lake.plugin, f"record_{self.kind}")([])
+
+            def made(plugin):
+                lake = Lake(plugin, None)
+                return Chains(lake)
+            """
+        ),
+        "tests/test_p.py": textwrap.dedent(
+            """\
+            from p.chains import Lake
+
+            async def test_it(lake, work, recorder):
+                await lake.receive(observations_wanted=work.on_observations_wanted)
+                again = type(work)(recorder, 1)
+                held = Lake(recorder,
+                            None)  # fmt: skip
+            """
+        ),
+    }
+    written, by_hand = _step(files)
+    assert 'await self.lake.read_calendar(calendar_id="CAL-1")' in written["src/p/chains.py"]
+    assert ("act-on-the-connection", "src/p/chains.py", 12) in by_hand
+    assert ("suite-producer-to-role", "tests/test_p.py", 4) in by_hand
+    assert ("suite-producer-to-role", "tests/test_p.py", 5) in by_hand
+    assert ("fmt-skip-rewritten", "tests/test_p.py", 6) in by_hand
+
+
+def test_a_class_making_another_roles_acts_is_named_not_made_a_role_class() -> None:
+    """The samples' options `Chains`: hearing portfolio's rows, listing
+    signal's quotes, it was made a portfolio class and lost them."""
+    files = {
+        "pyproject.toml": '[tool.meridian]\nroles = ["portfolio", "signal"]\n',
+        "src/p/chains.py": textwrap.dedent(
+            """\
+            class Chains:
+                def __init__(self, plugin):
+                    self.plugin = plugin
+
+                async def position(self, heard):
+                    await self.plugin.list_quotes(subjects=[])
+
+                async def hear(self):
+                    await self.plugin.receive(position_changed=self.position)
+            """
+        ),
+    }
+    written, by_hand = _step(files)
+    assert written == {}
+    assert ("role-class-two-roles", "src/p/chains.py", 1) in by_hand
+    assert ("receive-not-rewritten", "src/p/chains.py", 9) in by_hand
+
+
+def test_a_class_with_its_own_run_is_named_and_an_emptied_hear_removed() -> None:
+    """The samples' operations `Follower`: its `run(account_id)` would be
+    the role's; and once a class is made one, a method only calling
+    `receive` is removed and its calls named."""
+    clash = textwrap.dedent(
+        """\
+        class Follower:
+            async def activity(self, heard): ...
+
+            async def run(self, account_id):
+                return account_id
+
+            async def hear(self, through):
+                await through.receive(activity_recorded=self.activity)
+        """
+    )
+    files = {"pyproject.toml": '[tool.meridian]\nroles = ["operations"]\n', "src/p/f.py": clash}
+    written, by_hand = _step(files)
+    assert written == {} and ("role-method-clash", "src/p/f.py", 1) in by_hand
+    files["src/p/f.py"] = clash.replace("def run(", "def run_account(")
+    files["src/p/__main__.py"] = textwrap.dedent(
+        """\
+        import meridian
+        from .f import Follower
+
+        async def go(plugin: meridian.Plugin):
+            follower = Follower()
+            await follower.hear(plugin)
+        """
+    )
+    written, by_hand = _step(files)
+    assert "class Follower(operations.Role):" in written["src/p/f.py"]
+    assert "def hear" not in written["src/p/f.py"]
+    assert ("emptied-method-called", "src/p/__main__.py", 6) in by_hand
+
+
+def test_an_init_only_keeping_the_connection_goes_and_again_is_judged_by_its_body() -> None:
+    files = {
+        "pyproject.toml": DATA,
+        "src/p/__main__.py": textwrap.dedent(
+            """\
+            import meridian
+            from .work import Work
+
+            def again(text):
+                return text * 2
+
+            async def run():
+                async with await meridian.connect() as plugin:
+                    work = Work(plugin)
+                    await plugin.receive(observations_wanted=work.wanted)
+            """
+        ),
+        "src/p/work.py": textwrap.dedent(
+            """\
+            class Work:
+                def __init__(self, plugin):
+                    self.plugin = plugin
+
+                async def wanted(self, heard): ...
+            """
+        ),
+    }
+    written, by_hand = _step(files)
+    assert "__init__" not in written["src/p/work.py"]
+    assert [r for r, _, _ in by_hand if r == "helper-adopted"] == []
+
+
+def test_an_annotation_of_the_wires_subject_ref_becomes_the_sdks() -> None:
+    """The samples' operations closes.py: `list[ops.SubjectRef]` was left
+    over a list the step made the SDK's, which strict mypy refused."""
+    text = textwrap.dedent(
+        """\
+        import meridian
+        from meridian.plugin.v1 import operations_pb2 as ops
+
+        def subjects(ids: list[str]) -> list[ops.SubjectRef]:
+            made: list[ops.SubjectRef] = [ops.SubjectRef(entity_id=each) for each in ids]
+            return made
+
+        def kept(meta: ops.ObservationMeta) -> ops.ObservationMeta:
+            return meta
+        """
+    )
+    result = migrate({"src/closes.py": text}, "0.32.3", "0.33.0")
+    written = result.files["src/closes.py"]
+    assert "-> list[meridian.SubjectRef]:" in written
+    assert "made: list[meridian.SubjectRef] = [meridian.SubjectRef(" in written
+    assert "def kept(meta: ops.ObservationMeta) -> ops.ObservationMeta:" in written
+
+
+# ── 0.35.2 to 0.35.3: what the plugin step found, left by hand ───────────
+
+
+def _left_0353(files: dict[str, str]) -> list[tuple[str, str, int]]:
+    result = migrate(files, "0.35.2", "0.35.3")
+    assert result.files == {}
+    return left_by_hand(result)
+
+
+def test_0353_names_a_feeds_overrides_that_0_35_breaks() -> None:
+    """massive: `named` calling `dataset` (endless from 0.35), its own
+    `timeliness(asset_class)` hiding the feed's property; fx-rates: a field
+    `subjects` hiding the role's `subjects()`."""
+    files = {
+        "src/p/lake.py": textwrap.dedent(
+            """\
+            from meridian.roles import data
+            from meridian.roles.data import listings
+
+            class Lake(listings.Feed):
+                def named(self, key):
+                    return super().dataset(key)
+
+                def timeliness(self, asset_class):
+                    return "delayed"
+
+                @property
+                def plan(self):
+                    return 1
+
+            class Work(data.Role):
+                subjects: tuple[str, ...] = ()
+
+            class Again(Work):
+                def __init__(self):
+                    self.subjects = ["SPY"]
+            """
+        )
+    }
+    assert _left_0353(files) == [
+        ("named-calls-dataset", "src/p/lake.py", 5),
+        ("timeliness-overridden", "src/p/lake.py", 8),
+        ("subjects-shadowed", "src/p/lake.py", 16),
+        ("subjects-shadowed", "src/p/lake.py", 20),
+    ]
+
+
+def test_0353_names_old_handler_names_a_receive_and_a_stand_ins_read() -> None:
+    """crypto-brokers: `held.on_want(...)` and `rig.trader.on_execution(...)`
+    through names 0.35.0's step could not follow; a test's `lake.receive`;
+    and `work.plugin.on(...)` reading the connection's stand-in."""
+    files = {
+        "src/p/work.py": textwrap.dedent(
+            """\
+            import meridian
+
+            class Lake:
+                async def seed(self, symbols): ...
+            """
+        ),
+        "tests/test_p.py": textwrap.dedent(
+            """\
+            import meridian
+
+            async def test_it(held, rig, lake, work, heard):
+                await held.on_want(heard)
+                await rig.trader.on_execution(heard)
+                await lake.seed(["SPY"])
+                await lake.receive(observations_wanted=work.on_observations_wanted)
+                assert work.plugin.on("RecordPrices") == []
+            """
+        ),
+    }
+    assert _left_0353(files) == [
+        ("old-handler-name", "tests/test_p.py", 4),
+        ("old-handler-name", "tests/test_p.py", 5),
+        ("receive-gone", "tests/test_p.py", 7),
+        ("stand-in-read", "tests/test_p.py", 8),
+    ]
+
+
+def test_0353_names_a_role_object_registered_with_nothing() -> None:
+    """pyth: the pages' fallback built a `Work` no `meridian.run` or
+    `bind` registered; the entry point's, a test's and a bound one are not
+    named."""
+    work = "from meridian.roles import data\n\nclass Work(data.Role):\n    pass\n"
+    files = {
+        "src/p/work.py": work,
+        "src/p/page.py": "from .work import Work\n\ndef pages(work=None):\n"
+        "    work = work or Work()\n    return work\n",
+        "src/p/preview.py": "from .work import Work\n\ndef shown(recorder):\n"
+        "    return recorder.bind(Work())\n",
+        "src/p/__main__.py": "import meridian\nfrom .work import Work\n\n"
+        "meridian.run(roles=[Work()])\n",
+        "tests/test_p.py": "from p.work import Work\n\ndef test_it():\n    Work()\n",
+    }
+    assert _left_0353(files) == [("unregistered-role-object", "src/p/page.py", 4)]
+
+
+def test_0353_names_a_base_by_tag_where_the_plugin_pins_by_digest() -> None:
+    base = "ARG BASE=ghcr.io/open-meridian/plugin-python:0.35.3\nFROM ${BASE}\n"
+    pinned = f"RUNTIME_IMAGE ?= ghcr.io/open-meridian/meridian-runtime:abc@{_DIGEST}\n"
+    assert _left_0353({"Dockerfile": base, "Makefile": pinned}) == [
+        ("base-digest", "Dockerfile", 1)
+    ]
+    # The template's way, nothing by digest: not named.
+    assert _left_0353({"Dockerfile": base}) == []
+    by_digest = base.replace("0.35.3", f"0.35.3@{_DIGEST}")
+    assert _left_0353({"Dockerfile": by_digest, "Makefile": pinned}) == []

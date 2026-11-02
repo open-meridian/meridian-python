@@ -86,14 +86,25 @@ event-contract feed's `record_outcomes(...)` and `record_bars(...)` as \
 `Trader.run(poll_seconds, hear=...)`'s `poll_seconds` moved to the Trader's \
 constructor and `hear` dropped; and the connection given first to a Trader, a Pricer, \
 a feed or a plugin's class subclassing one dropped, a recorder's call becoming \
-`recorder.bind(...)`"""
+`recorder.bind(...)`. From SDK 0.35.3 a name is renamed reached through `super()` or \
+another name for the same object (`state.lake.seed`, `rig.trader.on_execution`, where \
+the plugin binds that last name to one kind of the SDK's logic), and a plugin's own \
+subclass of the SDK's logic no longer takes the connection: its `__init__`'s `plugin` \
+parameter dropped with `self.plugin = plugin` and `super().__init__(plugin, ...)`'s \
+first argument, a helper it gave `plugin` given `self`"""
 
 [[rewrites]]
 rule = "self-plugin-act-to-self"
 what = """inside a class that is, or now is, a role class, `self.plugin.<act>(...)` and \
 `self._plugin.<act>(...)` where the act is the role's become `self.<act>(...)`; and a \
 helper given `self.plugin` or `self._plugin` (`data.Wants(self.plugin, ...)`, \
-`roles.Latency(self.plugin)`, `chains.read_chain(self.plugin, ...)`) is given `self`"""
+`roles.Latency(self.plugin)`, `chains.read_chain(self.plugin, ...)`) is given `self`. \
+From SDK 0.35.3, anywhere, `<object>.plugin.<act>(...)` where the object is one of a \
+role class the plugin makes (`self.lake.plugin.read_calendar(...)`) becomes \
+`<object>.<act>(...)`; and in an `__init__` this step takes the connection from, a \
+helper given its `plugin` parameter (`data.Wants(plugin, ...)`, `rates.Feed(plugin, \
+...)`, `roles.Latency(plugin)`) is given `self`; an SDK class named as the plugin's \
+class is (`rates.Feed`, a plugin's `Feed`) keeps its arguments"""
 
 [[rewrites]]
 rule = "template-entry-to-run"
@@ -105,7 +116,8 @@ pricing template's -- replaced with 0.35.0's, which registers the plugin's class
 [[rewrites]]
 rule = "listings-edge-glue-dropped"
 what = """`at_the_edge` methods, and a `_record` override whose body only calls \
-`at_the_edge` and then `super()._record`, deleted from classes subclassing \
+`at_the_edge` (or, from SDK 0.35.3, 0.33's temporary override: ages the rows on the \
+feed's latency and judges them by its checks itself) and then `super()._record`, deleted from classes subclassing \
 `data.listings.Feed`, since the SDK's feed now does both: each row recorded unasked or \
 for a standing want aged on the feed's `latency` and judged by its `quality` (924's \
 item 4); a name only they imported no longer imported"""
@@ -116,8 +128,10 @@ what = """a definition whose body is, its layout, comments and docstring aside, 
 data-plugin fit review found copied between plugins and whose SDK target exists (ruling \
 1028): the `_changed` method four plugins kept -- a sent row's memory over an \
 OrderedDict -- deleted, its attribute made the SDK's `data.SentRows(<its bound>)` and \
-each call `self.<attribute>.changed(...)` (924's item 6); a name only it imported no \
-longer imported. A rate limiter and its 429 loop stay the plugin's (1028); `again` and \
+each call `self.<attribute>.changed(...)` (924's item 6), a dataclass's field of it \
+`<attribute>: SentRows = field(default_factory=lambda: SentRows(<its bound>))` (SDK \
+0.35.3); a name only it imported no longer imported, unless `__all__` names it (SDK \
+0.35.3). A rate limiter and its 429 loop stay the plugin's (1028); `again` and \
 `licences` have no import to become and are named by `helper-adopted`"""
 
 [[by_hand]]
@@ -141,7 +155,9 @@ role's class; in a page, the role object the plugin gives its pages (a closure o
 state they share, ruling 1014); in a function, the role object passed in its place. \
 The finding names each declared role whose acts include it; in an e2e tree's file, a \
 stand-in run as a plugin of its own, each role the file names itself -- a role class's \
-base, a `roles=` it passes -- whose acts include it (SDK 0.35.1)"""
+base, a `roles=` it passes -- whose acts include it (SDK 0.35.1). From SDK 0.35.3, an \
+act named as it runs, `getattr(<connection>, "record_..." or f"record_{kind}")`, is \
+named as well"""
 
 [[by_hand]]
 rule = "receive-not-rewritten"
@@ -164,8 +180,12 @@ feed)"""
 [[by_hand]]
 rule = "suite-producer-to-role"
 what = """a suite test hearing through `recorder.receive(...)`, which the recorder no \
-longer has; or a test giving a class this step made a role class a stand-in for the \
-connection, which the class no longer takes"""
+longer has -- from SDK 0.35.3 a recorder however named (`lake.receive(...)`); or a test, \
+a preview or a page's fallback giving a class this step made a role class a stand-in \
+for the connection, which the class no longer takes -- from SDK 0.35.3 outside the \
+tests too, one whose first argument is not plainly the connection or a recorder \
+(`Work(plugin if live else stand_in)`), and a class made anew by `type(x)(recorder, \
+...)`"""
 instead = """bind the plugin's class to the recorder and hand it what it hears: \
 `lake = recorder.bind(Lake(...))`, `recorder.answer(row, ...)`, \
 `await recorder.hear(lake)`; a stand-in answering the class's acts becomes a \
@@ -190,3 +210,51 @@ pages (`listings.connection_read`, `datasets_read`, `figures_read` and their tem
 role class's `run()`, restarted by `meridian.run`; `data.pairs.Feed(conflate_first=True, \
 day_clock=...)`; and `meridian.edge.RawStore`. Keep only the vendor's own words: its transport, its pacing and its conversion stay the \
 plugin's (rulings 1027 and 1028)"""
+
+[[by_hand]]
+rule = "plugin-param-removed"
+what = """in an `__init__` this step took the connection from (its `plugin` parameter \
+dropped), a read of that parameter left that no helper was given -- \
+`self.me = plugin.identity` (SDK 0.35.3)"""
+instead = """read the connection where the class is registered: `self.plugin` (and \
+`self.plugin.identity`) is bound once `meridian.run` or `recorder.bind` registers the \
+class, so read it in `on_start` or later, never in `__init__`"""
+
+[[by_hand]]
+rule = "fmt-skip-rewritten"
+what = """a statement kept from the formatter (`# fmt: skip`) that a rewrite changed: \
+its layout is the one written around the old code (SDK 0.35.3)"""
+instead = """lay it out again by hand -- a call this step wrapped in `recorder.bind(...)`, \
+or one that lost its first argument, keeps the old alignment -- or drop the \
+`# fmt: skip` and let the formatter"""
+
+[[by_hand]]
+rule = "role-class-two-roles"
+what = """a class whose handlers `receive` was handed, not made a role's class because \
+it makes acts of another role on its connection (`self.plugin.list_quotes(...)` in a \
+class hearing portfolio's rows): made one role's class, it would lose them (SDK \
+0.35.3); its `receive` is left, named by `receive-not-rewritten`"""
+instead = """split it: one class per role, each making its own role's acts, sharing what \
+they hold (the samples' Desk shared by a Signal and a Portfolio class), each \
+registered with `meridian.run(roles=[...])`; or keep it a helper both role classes \
+are given"""
+
+[[by_hand]]
+rule = "role-method-clash"
+what = """a class whose handlers `receive` was handed, not made a role's class because \
+it defines a role class's own method otherwise -- `run(self, account_id)`, an \
+`on_start` taking arguments, a `subjects` or `plugin` of its own -- which \
+`meridian.run` would call as the role's (SDK 0.35.3); its `receive` is left, named by \
+`receive-not-rewritten`"""
+instead = """rename the plugin's method (`run_account`), then make the class the \
+role's class by hand, or give the role class it is held by its `on_<row>` methods \
+handing each row to it"""
+
+[[by_hand]]
+rule = "emptied-method-called"
+what = """a call of a method this step removed because the `receive` it held was all \
+it did (`follower.hear(plugin)`): the class hears by itself once registered (SDK \
+0.35.3)"""
+instead = """drop the call, and the task or loop it ran in; the class's `on_<row>` \
+methods are heard once it is registered with `meridian.run(roles=[...])`, or bound and \
+heard in a test (`recorder.hear(follower)`)"""
