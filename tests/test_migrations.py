@@ -103,7 +103,7 @@ def test_every_release_since_the_first_recorded_has_its_step() -> None:
         ("0.6.0", "0.6.1"),
         ("0.6.1", "0.7.0"),
     ]
-    assert (steps[-1].source, steps[-1].target) == ("0.35.1", "0.35.2")
+    assert (steps[-1].source, steps[-1].target) == ("0.35.2", "0.35.3")
     # A release that moves the version records its step, if only the pins.
     assert steps[-1].target == SDK
 
@@ -2693,3 +2693,114 @@ def test_an_annotation_of_the_wires_subject_ref_becomes_the_sdks() -> None:
     assert "-> list[meridian.SubjectRef]:" in written
     assert "made: list[meridian.SubjectRef] = [meridian.SubjectRef(" in written
     assert "def kept(meta: ops.ObservationMeta) -> ops.ObservationMeta:" in written
+
+
+# ── 0.35.2 to 0.35.3: what the plugin step found, left by hand ───────────
+
+
+def _left_0353(files: dict[str, str]) -> list[tuple[str, str, int]]:
+    result = migrate(files, "0.35.2", "0.35.3")
+    assert result.files == {}
+    return left_by_hand(result)
+
+
+def test_0353_names_a_feeds_overrides_that_0_35_breaks() -> None:
+    """massive: `named` calling `dataset` (endless from 0.35), its own
+    `timeliness(asset_class)` hiding the feed's property; fx-rates: a field
+    `subjects` hiding the role's `subjects()`."""
+    files = {
+        "src/p/lake.py": textwrap.dedent(
+            """\
+            from meridian.roles import data
+            from meridian.roles.data import listings
+
+            class Lake(listings.Feed):
+                def named(self, key):
+                    return super().dataset(key)
+
+                def timeliness(self, asset_class):
+                    return "delayed"
+
+                @property
+                def plan(self):
+                    return 1
+
+            class Work(data.Role):
+                subjects: tuple[str, ...] = ()
+
+            class Again(Work):
+                def __init__(self):
+                    self.subjects = ["SPY"]
+            """
+        )
+    }
+    assert _left_0353(files) == [
+        ("named-calls-dataset", "src/p/lake.py", 5),
+        ("timeliness-overridden", "src/p/lake.py", 8),
+        ("subjects-shadowed", "src/p/lake.py", 16),
+        ("subjects-shadowed", "src/p/lake.py", 20),
+    ]
+
+
+def test_0353_names_old_handler_names_a_receive_and_a_stand_ins_read() -> None:
+    """crypto-brokers: `held.on_want(...)` and `rig.trader.on_execution(...)`
+    through names 0.35.0's step could not follow; a test's `lake.receive`;
+    and `work.plugin.on(...)` reading the connection's stand-in."""
+    files = {
+        "src/p/work.py": textwrap.dedent(
+            """\
+            import meridian
+
+            class Lake:
+                async def seed(self, symbols): ...
+            """
+        ),
+        "tests/test_p.py": textwrap.dedent(
+            """\
+            import meridian
+
+            async def test_it(held, rig, lake, work, heard):
+                await held.on_want(heard)
+                await rig.trader.on_execution(heard)
+                await lake.seed(["SPY"])
+                await lake.receive(observations_wanted=work.on_observations_wanted)
+                assert work.plugin.on("RecordPrices") == []
+            """
+        ),
+    }
+    assert _left_0353(files) == [
+        ("old-handler-name", "tests/test_p.py", 4),
+        ("old-handler-name", "tests/test_p.py", 5),
+        ("receive-gone", "tests/test_p.py", 7),
+        ("stand-in-read", "tests/test_p.py", 8),
+    ]
+
+
+def test_0353_names_a_role_object_registered_with_nothing() -> None:
+    """pyth: the pages' fallback built a `Work` no `meridian.run` or
+    `bind` registered; the entry point's, a test's and a bound one are not
+    named."""
+    work = "from meridian.roles import data\n\nclass Work(data.Role):\n    pass\n"
+    files = {
+        "src/p/work.py": work,
+        "src/p/page.py": "from .work import Work\n\ndef pages(work=None):\n"
+        "    work = work or Work()\n    return work\n",
+        "src/p/preview.py": "from .work import Work\n\ndef shown(recorder):\n"
+        "    return recorder.bind(Work())\n",
+        "src/p/__main__.py": "import meridian\nfrom .work import Work\n\n"
+        "meridian.run(roles=[Work()])\n",
+        "tests/test_p.py": "from p.work import Work\n\ndef test_it():\n    Work()\n",
+    }
+    assert _left_0353(files) == [("unregistered-role-object", "src/p/page.py", 4)]
+
+
+def test_0353_names_a_base_by_tag_where_the_plugin_pins_by_digest() -> None:
+    base = "ARG BASE=ghcr.io/open-meridian/plugin-python:0.35.3\nFROM ${BASE}\n"
+    pinned = f"RUNTIME_IMAGE ?= ghcr.io/open-meridian/meridian-runtime:abc@{_DIGEST}\n"
+    assert _left_0353({"Dockerfile": base, "Makefile": pinned}) == [
+        ("base-digest", "Dockerfile", 1)
+    ]
+    # The template's way, nothing by digest: not named.
+    assert _left_0353({"Dockerfile": base}) == []
+    by_digest = base.replace("0.35.3", f"0.35.3@{_DIGEST}")
+    assert _left_0353({"Dockerfile": by_digest, "Makefile": pinned}) == []
