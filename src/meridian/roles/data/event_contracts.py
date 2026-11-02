@@ -860,7 +860,7 @@ class Feed(Role):
         """The venue master's ID for the venue, asked once per reading by its
         identifiers; a venue not held is reported once and left empty."""
         return await self.venue.resolve(
-            self.plugin, self.market.venue_identifiers, self.market.venue, self.clock_ns()
+            self, self.market.venue_identifiers, self.market.venue, self.clock_ns()
         )
 
     def cash_identifiers(self) -> list[ops.Identifier]:
@@ -1098,8 +1098,8 @@ class Feed(Role):
 
     async def reread(self) -> ContractMap:
         """Read each contract serving a subject again from the venue, and ask
-        for the venue again; a subject not named is read again when next
-        asked."""
+        for the venue again where one is served; a subject not named is read
+        again when next asked."""
         for code in sorted(set(self.contracts.subjects.values())):
             read = await self._asked(self.market.contract, code)
             if read is not None:
@@ -1109,8 +1109,10 @@ class Feed(Role):
         self.unnamed.clear()
         self.contracts.save()
         self.venue.asked = False
-        await self.venue_id()
-        await self._outcomes_of(self.contracts.mapped())
+        served = self.contracts.mapped()
+        if served:  # the venue is asked for only once a contract is served (SDK 0.35.1)
+            await self.venue_id()
+        await self._outcomes_of(served)
         return self.contracts
 
     # ── Rows ─────────────────────────────────────────────────────────────
@@ -1654,10 +1656,13 @@ class Feed(Role):
             await sleep(BARS_EVERY_SECONDS)
 
     async def _bars_pass(self) -> int:
+        served = self.contracts.mapped()
+        if not served:
+            return 0  # nothing served: the venue is not asked for (SDK 0.35.1)
         now = self.clock_ns()
         await self.venue_id()
         sent = 0
-        for mapped in self.contracts.mapped():
+        for mapped in served:
             contract = mapped.contract
             rows: list[Bar] = []
             kept: dict[str, int] = {}

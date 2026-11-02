@@ -11,9 +11,13 @@ methods of a class in another:
   plugin defines, on the events of one role it declares. The class gains
   that role's base, its handler methods are renamed `on_<row>` (every
   reference with them), `seed=False` becomes its `seed = False`, a `plugin`
-  it was given leaves it, and the call is removed;
-- `sdk-handlers-dropped`: a Trader's and a Pricer's handlers dropped from a
-  `receive` call, those classes being registered by themselves;
+  it was given leaves it, and the call is removed; and a recorder's
+  `receive` outside the tests (a preview), handing it one role class's
+  handlers or the SDK's logic's, becomes `await recorder.hear(<obj>)`
+  (SDK 0.35.1);
+- `sdk-handlers-dropped`: a Trader's, a Pricer's and a data feed's handlers
+  dropped from a `receive` call, those classes being registered by
+  themselves (the feeds' from SDK 0.35.1);
 - `common-logic-renamed`: the SDK's renamed methods and arguments, and the
   connection given first to a Trader, a Pricer or a feed dropped (a
   recorder's call becoming `recorder.bind(...)`);
@@ -92,6 +96,10 @@ TRADER_HANDLERS = {
     "on_execution": "on_execution_recorded",
 }
 FEED_HANDLERS = {"on_want": "on_observations_wanted", "on_withdrawn": "on_want_withdrawn"}
+#: The data feeds, whose handlers `receive` was handed as a Trader's were
+#: (SDK 0.35.1): `data.option_chains.Feed` is 0.35.0's, so no 0.34.0 plugin
+#: hands `receive` its handlers.
+FEEDS = (PAIRS, CONTRACTS, LISTINGS)
 #: The feeds' methods renamed where a role's act has the name (0.35.0).
 FEED_METHODS = {
     PAIRS: {"record_trades": "record_trades_of", "record_quotes": "record_quotes_of"},
@@ -303,6 +311,11 @@ class _Receive:
     # The keywords dropped (the SDK's own handlers) and whether the call goes.
     dropped: set[str] = field(default_factory=set)
     removed: bool = False
+    # Whether any handler is a class's this step makes a role class.
+    mapped: bool = False
+    # A recorder's call outside the tests: the object it hears, as written
+    # (SDK 0.35.1); the call becomes `<recorder>.hear(<object>)`.
+    hear: str = ""
 
 
 @dataclass
@@ -465,11 +478,19 @@ def given(files: dict[str, str]) -> None:
     for each in plugin.classes.values():
         for method in each.methods:
             owners.setdefault(method, []).append(each.name)
+    heard: list[tuple[_Reader, int, int, cst.Call]] = []
     for reader in readers:
         if is_test(reader.path):
             continue
         for line, column, call in reader.receives:
-            _plan_receive(plugin, reader.path, line, column, call, owners)
+            if isinstance(call.func, cst.Attribute) and _recorder(call.func.value) is not None:
+                heard.append((reader, line, column, call))
+            else:
+                _plan_receive(plugin, reader.path, line, column, call, owners)
+    # A recorder's receive outside the tests, once every class's role is
+    # planned (SDK 0.35.1).
+    for reader, line, column, call in heard:
+        _plan_hear(plugin, reader, line, column, call, owners)
     # A class renamed's methods are renamed wherever they are named, when no
     # other class of the plugin has a method of the same name.
     for name, plan in plugin.plans.items():
@@ -508,9 +529,7 @@ def _plan_receive(
         owner = dotted(value.value) or ""
         method = value.attr.value
         logic = plugin.objects.get(owner, "")
-        if (logic == TRADER and method in TRADER_HANDLERS) or (
-            logic == PRICER and method == "heard"
-        ):
+        if _sdk_handler(logic, method):
             receive.dropped.add(keyword)
             continue
         mine[keyword] = method
@@ -537,7 +556,68 @@ def _plan_receive(
                 plan.renames[method] = wanted
         plan.seed_false |= seed_false
     receive.removed = len(receive.dropped) + len(mine) == len(handlers)
+    receive.mapped = bool(mine)
     plugin.receives.append(receive)
+
+
+def _plan_hear(
+    plugin: _Plugin,
+    reader: _Reader,
+    line: int,
+    column: int,
+    call: cst.Call,
+    owners: dict[str, list[str]],
+) -> None:
+    """A recorder's `receive` outside the tests -- a preview, a script --
+    handing it one object's handlers: that object's role class hears what
+    the recorder answers through `recorder.hear(<object>)` (SDK 0.35.1).
+    The object is the SDK's common logic, each handler its own, or one class
+    of the plugin's that is, or this step makes, a role's class."""
+    held: set[str] = set()
+    methods: list[str] = []
+    for arg in call.args:
+        if arg.keyword is None or arg.keyword.value not in ROW_OF:
+            return
+        if not isinstance(arg.value, cst.Attribute):
+            return
+        held.add(cst.Module([]).code_for_node(arg.value.value))
+        methods.append(arg.value.attr.value)
+    if len(held) != 1 or not methods:
+        return
+    (code,) = held
+    obj = call.args[0].value.value  # type: ignore[attr-defined]
+    logic = plugin.objects.get(dotted(obj) or "", "") or _logic_made(obj, reader.names)
+    if logic:
+        if not all(_sdk_handler(logic, method) for method in methods):
+            return
+    else:
+        classes = set.intersection(*(set(owners.get(m, ())) for m in methods))
+        if len(classes) != 1 or not _role_of(next(iter(classes)), plugin.classes):
+            return
+    plugin.receives.append(_Receive(reader.path, line, column, hear=code))
+
+
+def _logic_made(node: cst.BaseExpression, names: dict[str, str]) -> str:
+    """The SDK's common logic an object is made as in place --
+    `pricing.Pricer(...)`, or `recorder.bind(pricing.Pricer(...))` -- or ""."""
+    if not isinstance(node, cst.Call):
+        return ""
+    if isinstance(node.func, cst.Attribute) and node.func.attr.value == "bind" and node.args:
+        return _logic_made(node.args[0].value, names)
+    return _logic_of(_resolved(node.func, names), _plugin.classes)
+
+
+def _sdk_handler(logic: str, method: str) -> bool:
+    """Whether `method` of an object of the SDK's common logic is that
+    logic's own handler, which its role class hears by itself: a Trader's, a
+    Pricer's, and a data feed's (SDK 0.35.1), by 0.34.0's name or 0.35.0's."""
+    if logic == TRADER:
+        return method in TRADER_HANDLERS or method in TRADER_HANDLERS.values()
+    if logic == PRICER:
+        return method in ("heard", "on_price_batch")
+    if logic in FEEDS:
+        return method in FEED_HANDLERS or method in FEED_HANDLERS.values()
+    return False
 
 
 # ── Rewriting a file ────────────────────────────────────────────────────
@@ -719,6 +799,18 @@ class _Rewriter(cst.CSTTransformer):
     def leave_Call(self, original_node: cst.Call, updated_node: cst.Call) -> cst.BaseExpression:
         at = self.get_metadata(PositionProvider, original_node).start
         receive = self.receives.get((at.line, at.column))
+        if (
+            receive is not None
+            and receive.hear
+            and isinstance(updated_node.func, cst.Attribute)
+        ):
+            # The handlers' object, as this step rewrote it.
+            heard = cast(cst.Attribute, updated_node.args[0].value).value
+            self.rules.append("receive-to-role-methods")
+            return cst.Call(
+                func=updated_node.func.with_changes(attr=cst.Name("hear")),
+                args=[cst.Arg(heard)],
+            )
         if receive is not None and receive.dropped and not receive.removed:
             args = [
                 arg
@@ -809,7 +901,9 @@ class _Rewriter(cst.CSTTransformer):
                         name = dotted(small.targets[0].target)
                         if name is not None:
                             self.cancelled.add(name)
-                    self.rules.append("receive-to-role-methods")
+                    self.rules.append(
+                        "receive-to-role-methods" if receive.mapped else "sdk-handlers-dropped"
+                    )
                     return cst.RemovalSentinel.REMOVE
             if (
                 isinstance(small, cst.Expr)
@@ -1103,6 +1197,10 @@ class _Left(cst.CSTVisitor):
         self.found: list[tuple[str, int, str]] = []
         self.classes: list[str] = []
         self.connected: set[str] = set()
+        #: The roles a file outside the plugin -- an e2e stand-in -- names
+        #: itself (SDK 0.35.1); the plugin's own files are judged by
+        #: [tool.meridian].
+        self.own_roles: list[str] | None = None
 
     def _line(self, node: cst.CSTNode) -> int:
         return self.get_metadata(PositionProvider, node).start.line
@@ -1199,8 +1297,18 @@ class _Left(cst.CSTVisitor):
         on_connection = owner in self.connected or last in ("plugin", "_plugin")
         if not on_connection:
             return
-        holders = sorted(role for role in _plugin.declared if name in ACTS[role])
-        said = ", ".join(holders) if holders else "no role it declares"
+        if self.own_roles is None:
+            holders = sorted(role for role in _plugin.declared if name in ACTS[role])
+            said = ", ".join(holders) if holders else "no role it declares"
+        else:
+            # A stand-in beside the plugin, not the plugin: judged by the
+            # roles it names itself, or, naming none, by every role.
+            named = self.own_roles or sorted(ACTS)
+            holders = sorted(role for role in named if name in ACTS[role])
+            said = (
+                f"{', '.join(holders) if holders else 'no role it names'}; "
+                "an e2e stand-in, judged by the roles it names itself"
+            )
         self.found.append(("act-on-the-connection", self._line(node), f"{name}: {said}"))
 
 
@@ -1210,6 +1318,21 @@ def _is_connect(node: cst.BaseExpression, names: dict[str, str]) -> bool:
     if not isinstance(node, cst.Call):
         return False
     return _resolved(node.func, names) == "meridian.connect"
+
+
+def _stand_in(path: str) -> bool:
+    """A file of an e2e tree: a stand-in beside the plugin, run as a plugin
+    of its own on core's harness, never the plugin (SDK 0.35.1)."""
+    return path.startswith("e2e/") or "/e2e/" in path
+
+
+def _roles_named(text: str) -> list[str]:
+    """The roles a file names itself: a role class's base (`reporting.Role`)
+    and a role named in a `roles=` it passes (a page's, a declaration's)."""
+    named = set(re.findall(r"\b(\w+)\.Role\b", text))
+    for held in re.findall(r"\broles\s*=\s*(\[[^\]]*\]|\([^)]*\)|[\"'][^\"']*[\"'])", text):
+        named |= set(re.findall(r"[\"'](\w+)[\"']", held))
+    return sorted(role for role in named if role in SURFACES)
 
 
 def left(path: str, text: str) -> list[Finding]:
@@ -1222,6 +1345,8 @@ def left(path: str, text: str) -> list[Finding]:
     names = _Names()
     module.visit(names)
     visitor = _Left(path, names.full)
+    if _stand_in(path):
+        visitor.own_roles = _roles_named(text)
     MetadataWrapper(module).visit(visitor)
     found = []
     for rule, line, said in visitor.found:

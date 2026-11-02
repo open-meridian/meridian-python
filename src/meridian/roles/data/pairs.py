@@ -854,7 +854,7 @@ class Feed(Role):
         """The venue master's ID for the venue, asked once per mapping; a
         venue not held is reported once and left empty."""
         return await self.venue.resolve(
-            self.plugin, self.market.venue_identifiers, self.market.venue, self.clock_ns()
+            self, self.market.venue_identifiers, self.market.venue, self.clock_ns()
         )
 
     def identifiers(self, asset: Asset) -> list[ops.Identifier]:

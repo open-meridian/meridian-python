@@ -17,7 +17,10 @@ registered on it), and then:
 
 1. delivers the settings to `on_settings`, now and on every change, each an
    instance of the declaration's `@meridian.settings` class where it has
-   one;
+   one -- the first delivery applied before any class starts (SDK 0.35.1;
+   spec/each-role-is-one-generated-class, its lifecycle), and the watch
+   kept as a `run()` is, opened again after a backoff when its stream
+   breaks or ends;
 2. calls each class's `on_start()`, in the order given;
 3. opens the one stream for the union of the rows the classes hear --
    each role's required events and the optional ones a class overrides --
@@ -203,7 +206,15 @@ class _Running:
         started: list[RoleBase] = []
         try:
             if self.on_settings is not None:
-                tasks.append(asyncio.create_task(self._settings(self.on_settings)))
+                apply, first = self.on_settings, asyncio.Event()
+                tasks.append(
+                    asyncio.create_task(
+                        self._keep("settings", lambda: self._settings(apply, first))
+                    )
+                )
+                # The first settings applied before any class starts.
+                if not await _either(first, stopped):
+                    return
             for role in roles:
                 await role.on_start()
                 started.append(role)
@@ -239,13 +250,19 @@ class _Running:
                 except Exception:
                     log.exception("%s's on_stop failed", _named(role))
 
-    async def _settings(self, apply: Callable[[Any], Awaitable[None] | None]) -> None:
+    async def _settings(
+        self, apply: Callable[[Any], Awaitable[None] | None], first: asyncio.Event
+    ) -> None:
+        """Every delivery of the settings applied, `first` set once one is;
+        a stream that ends is raised, so the watch is opened again."""
         typed = getattr(self.declaration, "_typed", None)
         stream = self.plugin.settings(typed)
         async for now in stream:
             done = apply(now)
             if done is not None:
                 await done
+            first.set()
+        raise ConnectionError("the settings stream ended")
 
     async def _figures(self, figures: Callable[[], Sequence[Figure]]) -> None:
         while True:
@@ -298,6 +315,17 @@ class _Running:
                 )
             else:
                 await self.plugin.report(healthy=True, detail="started")
+
+
+async def _either(wanted: asyncio.Event, stopped: asyncio.Event) -> bool:
+    """Whether `wanted` was set before `stopped`."""
+    waiting = {asyncio.ensure_future(wanted.wait()), asyncio.ensure_future(stopped.wait())}
+    try:
+        await asyncio.wait(waiting, return_when=asyncio.FIRST_COMPLETED)
+    finally:
+        for each in waiting:
+            each.cancel()
+    return wanted.is_set()
 
 
 def _named(role: RoleBase) -> str:

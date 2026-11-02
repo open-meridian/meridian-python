@@ -827,10 +827,9 @@ async def test_a_venue_with_no_mic_names_its_ticker_by_its_venue_id() -> None:
     ticker = await feed._ticker(await feed.contract("BASE-1"))  # type: ignore[arg-type]
     assert ticker is not None and ticker.scheme == "ticker"
     assert ticker.source.startswith("VEN-")
-    unheld = Recorder("fakev-2").bind(
-        event_contracts.Feed(market, event_contracts.ContractMap())
-    )
-    unheld.plugin.answer(
+    unheld_recorder = Recorder("fakev-2")
+    unheld = unheld_recorder.bind(event_contracts.Feed(market, event_contracts.ContractMap()))
+    unheld_recorder.answer(
         "ResolveVenue",
         lambda _: ops.ResolveVenueResult(found=False, miss_reason=ops.MISS_REASON_NOT_FOUND),
     )

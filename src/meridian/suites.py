@@ -282,6 +282,43 @@ class _Recording:
         return row
 
 
+#: Every act, by method: none is the connection's (SDK 0.35).
+_ACTS = frozenset(name for name in vars(Operations) if not name.startswith("_"))
+
+
+class _Connection:
+    """What `Recorder.plugin` answers: a stand-in for the connection,
+    `meridian.Plugin`, holding only what it holds -- each item read from the
+    recorder where the recorder keeps it -- and no act. An act asked of it is
+    refused as the connection refuses it, naming where an act is made."""
+
+    def __init__(self, recorder: Recorder) -> None:
+        object.__setattr__(self, "_recorder", recorder)
+
+    def __getattr__(self, name: str) -> Any:
+        if name in _ACTS:
+            raise AttributeError(
+                f"'Plugin' object has no attribute {name!r}: {name} is an act, made on the "
+                "role object holding it (self.<act> in its class, or the role object a "
+                "helper or a page is given), never on the connection (SDK 0.35, ruling 1023)"
+            )
+        if not _plugin_wide(name):
+            raise AttributeError(f"'Plugin' object has no attribute {name!r}")
+        return getattr(self._recorder, name)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        setattr(self._recorder, name, value)
+
+
+def _plugin_wide(name: str) -> bool:
+    """Whether the connection, `meridian.Plugin`, holds `name`."""
+    import dataclasses
+
+    from .client import Plugin
+
+    return hasattr(Plugin, name) or name in {each.name for each in dataclasses.fields(Plugin)}
+
+
 class Recorder(Operations):
     """A plugin's typed operations, recorded rather than sent.
 
@@ -308,13 +345,18 @@ class Recorder(Operations):
         self.sent: list[Sent] = []
         self.seen: dict[tuple[str, str], int] = {}
         self._answers: dict[str, Callable[[Message], Message | Sequence[Message]]] = {}
+        self._connection = _Connection(self)
 
     @property
-    def plugin(self) -> Recorder:
-        """The connection the recorder stands in for, itself: so the
-        recorder serves where a role object is asked for (a helper given
-        one), as a role class bound to it does (SDK 0.35)."""
-        return self
+    def plugin(self) -> Any:
+        """The connection the recorder stands in for, as a role class bound
+        to it reaches it (`self.plugin`): what the connection holds, the
+        recorder's where it keeps it (`identity`, `raw_record`,
+        `note_not_carried`), and no act -- the connection under
+        `meridian.run` makes none (SDK 0.35), so a class or a helper making
+        an act through it fails here as it fails there (SDK 0.35.1). The
+        recorder itself still serves where a role object is asked for."""
+        return self._connection
 
     @property
     def identity(self) -> Any:
@@ -353,8 +395,9 @@ class Recorder(Operations):
     def bind(self, role: _Role) -> _Role:
         """Register a plugin's role class on this recorder, as `meridian.run`
         registers it on the connection (SDK 0.35): its acts are recorded
-        here, and `self.plugin` is this recorder. Returns the class."""
-        role._bind(self)
+        here, and `self.plugin` is the recorder's stand-in for the
+        connection, `recorder.plugin`, which makes no act. Returns the class."""
+        role._bind(self.plugin)
         return role
 
     async def hear(self, role: RoleBase) -> None:

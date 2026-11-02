@@ -68,7 +68,20 @@ rule = "base-digest-dropped"
 what = """the Dockerfile's base, pinned by digest at an older release of \
 plugin-python, moved to 0.34.0 with its digest dropped: the migration runs with no \
 network, so it cannot read 0.34.0's digest, and an old digest under a new tag would \
-build the old release while saying the new one"""
+build the old release while saying the new one; a base at 0.34.0 or a later \
+release -- `meridian plugin migrate` pins the release it migrates to -- left as it is"""
+
+[[by_hand]]
+rule = "core-images"
+what = """the Makefile pins core's runtime or harness image for the plugin's e2e \
+(`RUNTIME_IMAGE ?=`, `HARNESS_IMAGE ?=`) to a core below contract v29, or names no \
+contract for it: the migration runs with no network and cannot read a core's digest \
+(SDK 0.35.1)"""
+instead = """pin both to one core of contract v29 by digest -- \
+`ghcr.io/open-meridian/meridian-runtime:<core>@sha256:<digest>` and \
+`meridian-harness:<core>@sha256:<digest>`, the digests `docker buildx imagetools \
+inspect` names -- and say the core and its contract in the comment above them \
+(`# Core <sha>, contract v29, ...`)"""
 
 [[by_hand]]
 rule = "base-digest"
@@ -82,7 +95,9 @@ names"""
 rule = "suite-cases-v29"
 what = """a test running a role's suite that contract v29 adds cases to: the data \
 suite's records-a-pools-factor; operations', portfolio's, reporting's, servicing's and \
-signal's reads-a-pools-factors and hears-a-factor-recorded"""
+signal's reads-a-pools-factors and hears-a-factor-recorded; not the data suite's where \
+the plugin names meridian.roles.data.testing's PAIRS_NOT_PRESENTED, \
+EVENT_CONTRACTS_NOT_PRESENTED or RATES_NOT_PRESENTED, which name its case (SDK 0.35.1)"""
 instead = """map each new case to the plugin's own producer through the SDK's v29 \
 helpers -- an agency's factor recorded (meridian.helpers.debt.factor, record_factors or \
 Wants.record("factors", ...)), a pool's factors read (debt.read_factors) and heard \

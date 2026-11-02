@@ -5,10 +5,13 @@ loopback. This package is a client for that surface and nothing more: it never
 learns the bus address, never holds a broker credential, and never discovers
 another plugin.
 
-    async with await connect() as plugin:
-        print(plugin.identity.roles)
-        await plugin.report_sync_status(source="snaptrade", connection_healthy=True,
-                                        external_account_id="acct-1")
+    class Book(custody.Role):
+        async def on_start(self) -> None:
+            print(self.plugin.identity.roles)  # the connection: what is plugin-wide
+            await self.report_sync_status(source="snaptrade", connection_healthy=True,
+                                          external_account_id="acct-1")  # an act: the role's
+
+    run(declaration=Declaration(), roles=[Book()])
 
 A plugin's pages are declared where their views are, each with the levels it
 serves, and refused to a session at any other (`Pages`, in `meridian.pages`).
@@ -55,13 +58,13 @@ of core or the platform (`TicketSubject`), and reads what became of those it
 filed (`plugin.filed_tickets(...)`).
 
 From contract v14 a custody plugin reports each activity on an account as
-the custodian states it (`plugin.record_activity(...)`, a `CustodialActivity`
+the custodian states it (`role.record_activity(...)`, a `CustodialActivity`
 of an `ActivityKind`), answered as already recorded when sent again; and
-operations reads it (`plugin.list_activities(...)`, with the source's
+operations reads it (`role.list_activities(...)`, with the source's
 `history_from`), hears it (`activity_recorded=`), links a break's cause to it
 (`BreakCause(activity=ActivityRef(...))`, `BREAK_CAUSE_CATEGORY_INCOME_REINVESTED`),
 and reads and hears each sync status the street keeps
-(`plugin.list_sync_statuses(...)`, `sync_status_recorded=`).
+(`role.list_sync_statuses(...)`, `sync_status_recorded=`).
 
 From contract v15 a person's access to a plugin is granted per role: a page,
 route, tool and setting names the roles it serves (`roles=`; none on a plugin
@@ -69,7 +72,7 @@ holding one role or none), and the session carries the person's level and
 accounts on each role within its button (`caller.roles`,
 `caller.level_for(role)`, `caller.read_for(role)`, `caller.write_for(role)`).
 A custody plugin re-resolves an activity it recorded once its instrument
-resolves (`plugin.re_resolve_activity(...)`), the activity kept as first
+resolves (`role.re_resolve_activity(...)`), the activity kept as first
 recorded and the re-resolution beside it, which operations reads
 (`re_resolutions`) and hears (`activity_re_resolved=`).
 
@@ -91,13 +94,13 @@ declares its catalogue in its declaration
 vendor, data types, modes, cadence, the terms its vendor imposes
 (`DatasetLicence`), the day its business dates are in -- `day_time_zone`,
 `day_end_minute` -- and the venue it is, `venue_id`), and records prices and
-bars in batches of 1 to 500 (`plugin.record_prices`, `plugin.record_bars`,
+bars in batches of 1 to 500 (`role.record_prices`, `role.record_bars`,
 each a `Price` or `Bar` under an `ObservationMeta` naming its dataset, its
 subjects, its business date and its raw record), every subject resolved
 first (`resolve_identifier`, `report_missing_instrument`) and every venue
 (`resolve_venue`, `report_missing_venue`). It hears what the lake wants of it
 (`receive(observations_wanted=..., want_withdrawn=...)`), recording against
-a want (`want_id=`) or declining it per subject (`plugin.decline_want`). A
+a want (`want_id=`) or declining it per subject (`role.decline_want`). A
 reading role reads prices and bars by business date, as of a recorded time,
 or side by side (`list_prices`, `list_bars`, with `business_date=`,
 `as_of_ns=` and `sources=SourceChoice(...)`), learns the datasets it may read
@@ -111,7 +114,7 @@ instrument alone (`Money(amount, instrument_id=...)`). A date is a
 naming the field before anything is sent.
 
 From contract v19 the lake hears trades and quotes. A data plugin records them in
-batches of 1 to 500 (`plugin.record_trades`, `plugin.record_quotes`, each a
+batches of 1 to 500 (`role.record_trades`, `role.record_quotes`, each a
 `Trade` -- its price a `Money`, its quantity, its `TradeAttributes` with an
 `Eligibility` for the consolidated bar and its venue's, and the `Aggressor`
 where the source says it -- or a `Quote`, each side unset where it is
@@ -276,11 +279,11 @@ the environment its session reached on its venue catalogue
 (`meridian.reached_environment`), the second key of the agents' demo-only
 guard. A plugin calling a model counts its tokens on its heartbeat
 (`plugin.count_model_tokens`), and asks the lake one bounded query
-(`plugin.query_lake`).
+(`role.query_lake`).
 
 From 0.34.0 (contract v29) fixed income is held, valued and serviced in the
 book: an agency's data plugin records each held pool's or class's factor
-(`plugin.record_factors`, each a `Factor`; `meridian.helpers.debt.factor`),
+(`role.record_factors`, each a `Factor`; `meridian.helpers.debt.factor`),
 read and heard by the readers (`list_factors`, `factors_recorded=`); a
 price, trade or quote states its `PriceBasis` and, beside it, a yield as
 its source quotes it (`QuotedYield`) or a spread to a benchmark; a capped

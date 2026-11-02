@@ -43,7 +43,7 @@ from libcst.codemod import CodemodContext
 from libcst.codemod.visitors import AddImportsVisitor
 from libcst.metadata import MetadataWrapper, PositionProvider
 
-from .. import Finding, Rewritten
+from .. import Finding, Rewritten, core_pins, version
 from .._cst import dotted, imports_of, is_test, line_of
 
 TARGET = "0.34.0"
@@ -54,6 +54,22 @@ _BASE = re.compile(
 #: Every role whose suite contract v29 adds cases to: the factor's.
 _ROLES = ("data", "operations", "portfolio", "reporting", "servicing", "signal")
 _RUN = re.compile(rf"""\brun(?:_async)?\(\s*["'](?P<role>{"|".join(_ROLES)})["']""")
+#: The SDK's data-suite not-presented sets, each naming the data case v29
+#: adds (`records-a-pools-factor`), as a plugin names them.
+_NAMES_THE_FACTOR = re.compile(r"\b(?:PAIRS|EVENT_CONTRACTS|RATES)_NOT_PRESENTED\b")
+#: Whether the plugin names one of them anywhere (`given`, SDK 0.35.1): its
+#: data suite then names the case already.
+_factor_named = False
+
+
+def given(files: dict[str, str]) -> None:
+    """The plugin read whole, before any file: whether it names one of the
+    SDK's not-presented sets naming the data suite's factor case."""
+    global _factor_named
+    _factor_named = any(
+        path.endswith(".py") and _NAMES_THE_FACTOR.search(text) is not None
+        for path, text in files.items()
+    )
 
 
 #: The topic modules that left `meridian.roles` for `meridian.helpers` (1001).
@@ -353,7 +369,7 @@ def _dockerfile(path: str, text: str) -> Rewritten:
     out: list[str] = []
     for n, line in enumerate(text.splitlines(keepends=True), 1):
         found = _BASE.search(line)
-        if found and found.group("tag") != TARGET:
+        if found and version(found.group("tag")) < version(TARGET):  # never a later pin
             line = line[: found.start()] + found.group("head") + TARGET + line[found.end() :]
             rules.append("base-digest-dropped")
             findings.append(Finding("base-digest", path, n, line.strip()))
@@ -392,11 +408,19 @@ class _Assessments(cst.CSTVisitor):
 
 
 def left(path: str, text: str) -> list[Finding]:
+    if path == "Makefile":
+        # Core's images an e2e runs on, pinned below contract v29 (SDK 0.35.1).
+        return [
+            Finding("core-images", path, line, line_of(text, line))
+            for line in core_pins(path, text, 29)
+        ]
     if not path.endswith(".py"):
         return []
     found: list[Finding] = []
     if is_test(path):
         for match in _RUN.finditer(text):
+            if match.group("role") == "data" and _factor_named:
+                continue  # the SDK's set it names names the case (SDK 0.35.1)
             line = _at(text, match.start())
             found.append(Finding("suite-cases-v29", path, line, line_of(text, line)))
     lines = {_at(text, match.start()) for match in _NAMED.finditer(text)}

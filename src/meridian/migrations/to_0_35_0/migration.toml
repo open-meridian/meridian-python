@@ -59,12 +59,17 @@ first argument dropped where it is called, a recorder's call becoming \
 `recorder.bind(...)`), and the call is removed -- an awaited statement, or a \
 `create_task` assigned to a name and that name's `cancel()`; the object is \
 registered with `meridian.run(roles=[...])` where the entry point is replaced, and \
-named by `connect-to-run` where it is not"""
+named by `connect-to-run` where it is not; and, outside the tests (a preview, a \
+script), a recorder's `receive` handing it the handlers of one object -- a class that \
+is or becomes a role's class, or the SDK's common logic, each handler its own -- made \
+`await <recorder>.hear(<object>)`, which hands the class each row it hears that the \
+recorder answers (SDK 0.35.1)"""
 
 [[rewrites]]
 rule = "sdk-handlers-dropped"
 what = """entries of a `receive` call whose handlers are the SDK's own common logic -- \
-a Trader's `on_placement`, `on_instruction` and `on_execution`, a Pricer's `heard` -- \
+a Trader's `on_placement`, `on_instruction` and `on_execution`, a Pricer's `heard`, a \
+pairs, event-contract or listings feed's `on_want` and `on_withdrawn` (SDK 0.35.1) -- \
 removed, the call with them where none is left, since that logic is a role class \
 registered by itself"""
 
@@ -134,7 +139,9 @@ connection -- which the connection no longer makes"""
 instead = """make it on the role object holding the act: `self.<act>(...)` inside the \
 role's class; in a page, the role object the plugin gives its pages (a closure or the \
 state they share, ruling 1014); in a function, the role object passed in its place. \
-The finding names each declared role whose acts include it"""
+The finding names each declared role whose acts include it; in an e2e tree's file, a \
+stand-in run as a plugin of its own, each role the file names itself -- a role class's \
+base, a `roles=` it passes -- whose acts include it (SDK 0.35.1)"""
 
 [[by_hand]]
 rule = "receive-not-rewritten"

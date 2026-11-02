@@ -102,7 +102,7 @@ def test_every_release_since_the_first_recorded_has_its_step() -> None:
         ("0.6.0", "0.6.1"),
         ("0.6.1", "0.7.0"),
     ]
-    assert (steps[-1].source, steps[-1].target) == ("0.34.0", "0.35.0")
+    assert (steps[-1].source, steps[-1].target) == ("0.35.0", "0.35.1")
     # A release that moves the version records its step, if only the pins.
     assert steps[-1].target == SDK
 
@@ -434,6 +434,105 @@ def test_each_role_shapes_by_hand_work_leaves_nothing_by_hand(
     result = migrate(plugin_files(tmp_path), "0.34.0", "0.35.0")
     assert result.files == {}
     assert left_by_hand(result) == []
+
+
+def test_a_data_feeds_own_handlers_leave_its_receive_call() -> None:
+    """SDK 0.35.1 (the plugin pilot's kalshi): a feed's `on_want` and
+    `on_withdrawn` handed to `receive` are dropped as a Trader's are -- the
+    feed is a data role class, hearing them by itself -- and the call with
+    them; 0.35.0 left the call naming them by hand."""
+    files = {
+        "pyproject.toml": '[tool.meridian]\nroles = ["data"]\n',
+        "src/p/__main__.py": textwrap.dedent(
+            """\
+            import meridian
+            from meridian.roles.data.event_contracts import ContractMap, Feed
+
+            async def hear(plugin, feed):
+                await plugin.receive(
+                    observations_wanted=feed.on_want, want_withdrawn=feed.on_withdrawn
+                )
+
+            async def run(market):
+                async with await meridian.connect() as plugin:
+                    feed = Feed(plugin, market, ContractMap())
+                    await hear(plugin, feed)
+            """
+        ),
+    }
+    result = migrate(files, "0.34.0", "0.35.0")
+    written = result.files["src/p/__main__.py"]
+    assert ".receive(" not in written and "feed = Feed(market, ContractMap())" in written
+    rules = {r for step in result.steps for rules in step.rewrote.values() for r in rules}
+    assert {"sdk-handlers-dropped", "common-logic-renamed"} <= rules
+    assert [rule for rule, _, _ in left_by_hand(result)] == ["connect-to-run"]
+
+
+def test_a_recorders_receive_outside_the_tests_hears_the_class() -> None:
+    """SDK 0.35.1 (the plugin pilot's kalshi preview): a recorder's `receive`
+    in the plugin's own code, handing it a feed's handlers, becomes the
+    recorder hearing the feed, which 0.35.0 left by hand."""
+    files = {
+        "pyproject.toml": '[tool.meridian]\nroles = ["data"]\n',
+        "src/p/preview.py": textwrap.dedent(
+            """\
+            from meridian.roles.data.event_contracts import ContractMap, Feed
+            from meridian.suites import Recorder
+
+            async def worked(market):
+                lake = Recorder("p")
+                feed = Feed(lake, market, ContractMap())
+                await lake.receive(observations_wanted=feed.on_want)
+                return feed
+            """
+        ),
+    }
+    result = migrate(files, "0.34.0", "0.35.0")
+    written = result.files["src/p/preview.py"]
+    assert "feed = lake.bind(Feed(market, ContractMap()))" in written
+    assert "await lake.hear(feed)" in written and ".receive(" not in written
+    assert left_by_hand(result) == []
+
+
+def test_an_e2e_stand_ins_act_on_the_connection_is_judged_by_its_own_roles() -> None:
+    """SDK 0.35.1 (the plugin pilot's kalshi): an e2e reader beside a data
+    plugin is a plugin of its own, reading as `reporting`; its acts were
+    judged by the data plugin's [tool.meridian] roles ("no role it
+    declares"). The plugin's own files still are."""
+    files = {
+        "pyproject.toml": '[tool.meridian]\nroles = ["data"]\n',
+        "e2e/reader.py": textwrap.dedent(
+            """\
+            import meridian
+            from meridian import Page
+
+            PAGES = [Page("/", "Rows", levels=["read"], roles=["reporting"])]
+
+            class Reader:
+                async def read(self):
+                    await self.plugin.list_prices(subjects=[])
+                    await self.plugin.list_quotes(subjects=[])
+            """
+        ),
+        "src/p/work.py": textwrap.dedent(
+            """\
+            import meridian
+
+            class Work:
+                async def read(self, plugin: meridian.Plugin):
+                    await plugin.list_prices(subjects=[])
+            """
+        ),
+    }
+    result = migrate(files, "0.34.0", "0.35.0")
+    said = {
+        (path, line): text
+        for _, f in result.by_hand
+        for path, line, text in [(f.file, f.line, f.found)]
+    }
+    assert "[list_prices: reporting; an e2e stand-in" in said[("e2e/reader.py", 8)]
+    assert "[list_quotes: no role it names; an e2e stand-in" in said[("e2e/reader.py", 9)]
+    assert said[("src/p/work.py", 5)].endswith("[list_prices: no role it declares]")
 
 
 def test_a_class_given_two_roles_events_or_a_lambda_is_left_by_hand() -> None:
@@ -1918,6 +2017,30 @@ def test_v28s_base_pinned_by_digest_drops_its_digest() -> None:
 # ── 0.33.5 to 0.34.0: contract v29 ───────────────────────────────────────
 
 
+_RUNTIME = "ghcr.io/open-meridian/meridian-runtime:8def82a@sha256:" + "cd" * 32
+_HARNESS = "ghcr.io/open-meridian/meridian-harness:8def82a@sha256:" + "ef" * 32
+
+
+@pytest.mark.parametrize(
+    ("comment", "left"),
+    [
+        ("# Core 8def82a, contract v28, as published with chart 0.1.313.", [3, 4]),
+        ("# Core's images for the e2e.", [3, 4]),
+        ("# Core 1ae36f0, contract v29, as published with chart 0.1.339.", []),
+    ],
+)
+def test_core_images_pinned_below_v29_are_named(comment: str, left: list[int]) -> None:
+    """SDK 0.35.1 (the plugin pilot): the step to contract v29 moved no
+    e2e's core pins and named none; it names each one pinned to a core below
+    v29, or naming no contract, for a person to pin by digest."""
+    makefile = (
+        f"E2E := 1\n{comment}\nRUNTIME_IMAGE ?= {_RUNTIME}\nHARNESS_IMAGE ?= {_HARNESS}\n"
+    )
+    result = migrate({"Makefile": makefile}, "0.33.5", "0.34.0")
+    assert result.files == {}
+    assert left_by_hand(result) == [("core-images", "Makefile", line) for line in left]
+
+
 def test_v29s_suite_cases_and_a_quality_assessment_naming_no_data_type_are_left() -> None:
     files = {
         "tests/test_suite.py": 'report = run("data", PRODUCERS, not_presented=NP)\n',
@@ -1938,6 +2061,26 @@ def test_v29s_suite_cases_and_a_quality_assessment_naming_no_data_type_are_left(
     ]
 
 
+@pytest.mark.parametrize("named", ["PAIRS", "EVENT_CONTRACTS", "RATES"])
+def test_a_data_suite_naming_the_sdks_not_presented_set_is_not_left(named: str) -> None:
+    """SDK 0.35.1 (the plugin pilot's kalshi): a plugin spreading the SDK's
+    not-presented set into its own, in another file, names v29's factor case
+    already; another role's suite run is still left."""
+    files = {
+        "tests/venue_cases.py": (
+            f"from meridian.roles.data.testing import {named}_NOT_PRESENTED\n"
+            f"NOT_PRESENTED = {{**{named}_NOT_PRESENTED}}\n"
+        ),
+        "tests/test_data_role.py": (
+            "import venue_cases as v\n"
+            'report = run(\n    "data", PRODUCERS, not_presented=v.NOT_PRESENTED\n)\n'
+        ),
+        "tests/test_board.py": 'report = run("reporting", PRODUCERS)\n',
+    }
+    result = migrate(files, "0.33.5", "0.34.0")
+    assert left_by_hand(result) == [("suite-cases-v29", "tests/test_board.py", 1)]
+
+
 def test_v29s_base_pinned_by_digest_drops_its_digest() -> None:
     dockerfile = (
         f"ARG BASE=ghcr.io/open-meridian/plugin-python:0.33.5@{_DIGEST}\nFROM ${{BASE}}\n"
@@ -1947,6 +2090,20 @@ def test_v29s_base_pinned_by_digest_drops_its_digest() -> None:
         "ARG BASE=ghcr.io/open-meridian/plugin-python:0.34.0"
     )
     assert ("base-digest", "Dockerfile", 1) in left_by_hand(result)
+
+
+@pytest.mark.parametrize("source", ["0.30.0", "0.31.1", "0.32.3", "0.33.4"])
+def test_a_step_never_moves_back_a_base_pinned_at_a_later_release(source: str) -> None:
+    """SDK 0.35.1 (the plugin pilot's migrate from 0.33.4): `meridian plugin
+    migrate` pins the base to the release it migrates to, by digest, before
+    the steps run; a step moving the base to its own, earlier release
+    overwrote that pin, and the run ended on 0.34.0 with no digest."""
+    dockerfile = (
+        f"ARG BASE=ghcr.io/open-meridian/plugin-python:0.35.0@{_DIGEST}\nFROM ${{BASE}}\n"
+    )
+    result = migrate({"Dockerfile": dockerfile}, source, "0.35.0")
+    assert "Dockerfile" not in result.files
+    assert [r for r, path, _ in left_by_hand(result) if path == "Dockerfile"] == []
 
 
 # ── 0.34.0: the topic modules leave meridian.roles (ruling 1001) ────────

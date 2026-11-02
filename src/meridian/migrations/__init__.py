@@ -35,6 +35,7 @@ libcst, the SDK's `migrate` extra, which a plugin's own runtime never needs.
 from __future__ import annotations
 
 import importlib
+import re
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -95,6 +96,40 @@ UNREADABLE = Rule(
     "make it parse, and migrate again from the same version, or apply this step's rewrites "
     "to it by hand",
 )
+
+
+#: A plugin's own pin of core's images for its e2e (`RUNTIME_IMAGE ?=`,
+#: `HARNESS_IMAGE ?=` in its Makefile), and the contract a comment above
+#: names for it.
+_CORE_IMAGE = re.compile(
+    r"^(?:RUNTIME|HARNESS)_IMAGE\s*\??=\s*ghcr\.io/open-meridian/meridian-(?:runtime|harness):"
+)
+_CONTRACT = re.compile(r"\bcontract v(\d+)\b")
+
+
+def core_pins(path: str, text: str, contract: int) -> list[int]:
+    """The lines of a plugin's Makefile pinning core's runtime or harness
+    images below `contract` (SDK 0.35.1): a step to a release declaring a
+    new contract runs offline and cannot read a core's digest, so it names
+    each for a person to move, by digest, to a core of that contract. A pin
+    whose comment, in the lines just above it, names that contract or a
+    later one is moved already; one naming none is named."""
+    if path != "Makefile":
+        return []
+    lines = text.splitlines()
+    found = []
+    for n, line in enumerate(lines):
+        if not _CORE_IMAGE.match(line):
+            continue
+        said = [
+            int(match.group(1))
+            for above in lines[max(0, n - 4) : n]
+            if above.lstrip().startswith("#")
+            for match in _CONTRACT.finditer(above)
+        ]
+        if not said or max(said) < contract:
+            found.append(n + 1)
+    return found
 
 
 @dataclass(frozen=True)
