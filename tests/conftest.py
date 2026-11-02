@@ -265,6 +265,23 @@ class FakeOperations(operations_pb2_grpc.PluginOperationsServicer):
             sequence=page[-1].sequence if page else request.after_sequence,
         )
 
+    # The batches routed to this pricing instance (W12.3), in sequence, and
+    # those answered (SDK 0.35: a batch answered once).
+    price_batches: list[operations_pb2.PriceBatchRequest] = field(default_factory=list)
+    answered_batches: list[operations_pb2.AnswerPriceBatchParams] = field(default_factory=list)
+
+    async def ListPriceBatches(self, request, context):  # noqa: N802
+        self.reads.append(request)
+        after = [b for b in self.price_batches if b.sequence > request.after_sequence]
+        return operations_pb2.ListPriceBatchesResult(
+            batches=after,
+            sequence=after[-1].sequence if after else request.after_sequence,
+        )
+
+    async def AnswerPriceBatch(self, request, context):  # noqa: N802
+        self.answered_batches.append(request)
+        return operations_pb2.AnswerPriceBatchResult()
+
     async def ListCustodialPositions(self, request, context):  # noqa: N802
         self.reads.append(request)
         return self.store.positions(request)  # type: ignore[union-attr]

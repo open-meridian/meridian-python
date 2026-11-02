@@ -281,6 +281,9 @@ V35 = {
         },
         [
             ("suite-producer-to-role", "tests/test_page.py", 36),
+            # SDK 0.35's second part (ruling 1018): its licence states no
+            # redistribution, which the vendor's terms say.
+            ("helper-adopted", "src/lake/declaration.py", 47),
             ("suite-producer-to-role", "tests/test_suite.py", 102),
             ("suite-producer-to-role", "tests/test_suite.py", 135),
             ("suite-producer-to-role", "tests/test_suite.py", 144),
@@ -310,6 +313,26 @@ V35 = {
             ("connect-to-run", "src/broker/__main__.py", 24),
             ("act-on-the-connection", "src/broker/book.py", 15),
             ("act-on-the-connection", "src/broker/page.py", 12),
+        ],
+    ),
+    # SDK 0.35's second part: a listings and chains plugin in Massive's shape,
+    # its edge glue dropped and its copied `_changed` made the SDK's
+    # SentRows; 924's helpers it adopts by hand named.
+    "equities": (
+        {
+            "src/equities/chains.py": {"copied-bodies-to-sdk": 1},
+            "src/equities/lake.py": {"listings-edge-glue-dropped": 1},
+        },
+        [
+            ("helper-adopted", "src/equities/__main__.py", 19),
+            ("helper-adopted", "src/equities/__main__.py", 28),
+            ("helper-adopted", "src/equities/__main__.py", 34),
+            ("connect-to-run", "src/equities/__main__.py", 50),
+            ("helper-adopted", "src/equities/chains.py", 16),
+            ("helper-adopted", "src/equities/chains.py", 30),
+            ("act-on-the-connection", "src/equities/chains.py", 35),
+            ("helper-adopted", "src/equities/declaration.py", 11),
+            ("helper-adopted", "src/equities/lake.py", 24),
         ],
     ),
     "reader": (
@@ -348,9 +371,14 @@ def test_each_role_shape_as_migrated_is_left_as_it_is(name: str) -> None:
 
 
 #: The by-hand work each fixture's findings name, done as a person would:
-#: a suite test hearing through `recorder.receive` bound and heard instead.
+#: a suite test hearing through `recorder.receive` bound and heard instead;
+#: a licence's redistribution stated, as its vendor's terms say.
 BY_HAND = {
     "lake": [
+        (
+            "licence_default=meridian.DatasetLicence(kept=True),",
+            'licence_default=meridian.DatasetLicence(kept=True, redistribution="not_allowed"),',
+        ),
         (
             "    converter = Converter(vendor or Vendor())  # type: ignore[arg-type]",
             '    converter = Recorder("reference-1").bind(Converter(vendor or Vendor()))',
@@ -385,7 +413,7 @@ def test_each_role_shape_passes_its_own_tests_once_its_findings_are_done(
     the reader's tests -- each passes its own tests against this SDK."""
     migrated(f"{name}-0.34.0", "0.34.0", "0.35.0", tmp_path)
     for old, new in BY_HAND.get(name, []):
-        for path in (tmp_path / "tests").glob("*.py"):
+        for path in [*(tmp_path / "tests").glob("*.py"), *(tmp_path / "src").glob("*/*.py")]:
             path.write_text(path.read_text().replace(old, new))
     own_tests_pass(tmp_path)
 
@@ -474,7 +502,9 @@ def test_the_steps_role_surfaces_are_0_35s() -> None:
         # `run_async(` too, and its new rule fails a declared role with no
         # `<role>.Role` class registered (ruling 1015). Then add
         # ("lake-0.34.0", "0.34.0", "0.35.0"), ("quote-0.34.0", "0.34.0", "0.35.0"),
-        # ("broker-0.34.0", "0.34.0", "0.35.0") and ("reader-0.34.0", "0.34.0", "0.35.0").
+        # ("broker-0.34.0", "0.34.0", "0.35.0"), ("reader-0.34.0", "0.34.0", "0.35.0")
+        # and ("equities-0.34.0", "0.34.0", "0.35.0"), the last once its findings
+        # are done (its licence states no redistribution, which the check fails).
     ],
 )
 def test_each_migrated_plugin_passes_plugin_check(

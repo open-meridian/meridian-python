@@ -21,15 +21,23 @@ methods of a class in another:
   `self`, and a helper given `self.plugin` given `self`;
 - `template-entry-to-run`: an entry point a role's 0.34.0 template wrote and
   the plugin left unchanged, replaced by 0.35.0's;
-- `listings-edge-glue-dropped` and `copied-bodies-to-sdk`: 924's items 3, 4,
-  6 and 9, rewritten once the SDK carries what replaces them (924's helpers,
-  SDK 0.35's second part): until then neither finds anything to rewrite.
+- `listings-edge-glue-dropped`: a listings feed's own `at_the_edge`, and a
+  `_record` override only calling it, deleted: the SDK's feed does both
+  (924's item 4);
+- `copied-bodies-to-sdk`: a copy the fit review found whose SDK target
+  exists (ruling 1028) -- `_changed`, a sent row's memory -- replaced by the
+  SDK's `data.SentRows`, its attribute made one and its calls moved onto
+  it (924's item 6). A rate limiter stays the plugin's; `again` and
+  `licences` have no import to become and are named by `helper-adopted`.
 
 What is left by hand is found in each file as it ends: an entry point
 connecting by hand, an act on the connection, a `receive` no rewrite
 reached, a role class lacking a required event, a suite test hearing
 through `recorder.receive`, and a helper 924 placed that the plugin adopts
-by hand. The roles' surfaces are 0.35.0's, as `roles.json` beside this
+by hand (`ADOPTED`: a stream supervisor, a calendar reader, a day's close
+by hand, a chains machine, listings pages, a timetable, a plan switch, the
+`again` and `licences` loops, an FX lake, a raw store, a licence not
+stating its redistribution). The roles' surfaces are 0.35.0's, as `roles.json` beside this
 records them, so the step reads the same whatever SDK runs it later.
 """
 
@@ -110,12 +118,18 @@ _TEMPLATE_PACKAGE = "reference_plugin"
 _MAIN = re.compile(r"^src/(?P<package>[A-Za-z_][A-Za-z0-9_]*)/__main__\.py$")
 
 
-#: 924's copies the fit review found, which the SDK's helpers replace once
-#: they carry them (SDK 0.35's second part): a definition's body, its
-#: vendor's names normalised (`_normalised`), by its digest, and the SDK's
-#: module and name replacing it. Empty until those helpers land, so
-#: `copied-bodies-to-sdk` rewrites nothing before then.
+#: 924's copies the fit review found whose SDK target exists (ruling 1028):
+#: a definition's body, its layout, comments and docstring dropped
+#: (`_normalised`), by its digest, and the SDK's module and name replacing
+#: it. Module-level definitions are replaced by the import; a method by an
+#: attribute of the SDK's class (`CHANGED`).
 COPIED: dict[str, tuple[str, str]] = {}
+#: The `_changed` method four plugins copied byte for byte (Massive's,
+#: Databento's and Tradier's chains, Unusual Whales' work), a sent row's
+#: memory over an OrderedDict: `data.SentRows`, with its `changed`.
+CHANGED: dict[str, tuple[str, str]] = {
+    "3257e935c5205c6b": ("meridian.roles.data", "SentRows"),
+}
 
 
 def _normalised(code: str) -> str:
@@ -124,6 +138,66 @@ def _normalised(code: str) -> str:
     code = re.sub(r"#[^\n]*", "", code)
     code = re.sub(r'"""(?:.|\n)*?"""', "", code)
     return re.sub(r"\s+", " ", code).strip()
+
+
+def _changed_copy(statement: Any) -> tuple[str, str, tuple[str, str]] | None:
+    """A `_changed` method copied from the fit review's plugins: the
+    attribute it kept its sendings in, the constant bounding it and the
+    SDK's name replacing it; None for any other statement."""
+    if not isinstance(statement, cst.FunctionDef):
+        return None
+    import hashlib
+
+    code = cst.Module(body=[statement]).code
+    found = CHANGED.get(hashlib.sha256(_normalised(code).encode()).hexdigest()[:16])
+    if found is None:
+        return None
+    held = re.search(r"self\.(\w+)\.get\(", code)
+    bound = re.search(r"len\(self\.\w+\) > (\w+)", code)
+    if held is None or bound is None:
+        return None
+    return held.group(1), bound.group(1), found
+
+
+class _OntoSentRows(cst.CSTTransformer):
+    """Within one class: `self.<attr> ... = OrderedDict()` made the SDK's
+    `SentRows(<bound>)`, and `self.<method>(` calls `self.<attr>.changed(`."""
+
+    def __init__(self, attr: str, bound: str, method: str) -> None:
+        super().__init__()
+        self.attr, self.bound, self.method = attr, bound, method
+
+    def _made(self) -> cst.Call:
+        return cst.Call(func=cst.Name("SentRows"), args=[cst.Arg(cst.Name(self.bound))])
+
+    def leave_AnnAssign(
+        self, original_node: cst.AnnAssign, updated_node: cst.AnnAssign
+    ) -> cst.BaseSmallStatement:
+        if (
+            dotted(updated_node.target) == f"self.{self.attr}"
+            and updated_node.value is not None
+        ):
+            return cst.Assign(
+                targets=[cst.AssignTarget(updated_node.target)], value=self._made()
+            )
+        return updated_node
+
+    def leave_Assign(self, original_node: cst.Assign, updated_node: cst.Assign) -> cst.Assign:
+        if len(updated_node.targets) == 1 and dotted(updated_node.targets[0].target) == (
+            f"self.{self.attr}"
+        ):
+            return updated_node.with_changes(value=self._made())
+        return updated_node
+
+    def leave_Attribute(
+        self, original_node: cst.Attribute, updated_node: cst.Attribute
+    ) -> cst.BaseExpression:
+        if dotted(updated_node) == f"self.{self.method}":
+            return cst.Attribute(
+                value=cst.Attribute(value=cst.Name("self"), attr=cst.Name(self.attr)),
+                attr=cst.Name("changed"),
+            )
+        return updated_node
 
 
 def _feed_keeps_the_edge() -> bool:
@@ -495,6 +569,8 @@ class _Rewriter(cst.CSTTransformer):
         self.imports_plain: set[str] = set()
         self.findings: list[tuple[str, int]] = []
         self.cancelled: set[str] = set()
+        #: The SDK's names a copied body was replaced by: (module, name).
+        self.copied: set[tuple[str, str]] = set()
         self.receives = {
             (each.line, each.column): each for each in _plugin.receives if each.path == path
         }
@@ -518,6 +594,23 @@ class _Rewriter(cst.CSTTransformer):
         self, original_node: cst.ClassDef, updated_node: cst.ClassDef
     ) -> cst.ClassDef:
         name = self.classes.pop()
+        for statement in updated_node.body.body:
+            copied = _changed_copy(statement)
+            if copied is None:
+                continue
+            attr, bound, target = copied
+            assert isinstance(statement, cst.FunctionDef)
+            copied_name = statement.name.value
+            kept_body = [s for s in updated_node.body.body if s is not statement]
+            updated_node = updated_node.with_changes(
+                body=updated_node.body.with_changes(body=kept_body)
+            )
+            updated_node = cast(
+                cst.ClassDef, updated_node.visit(_OntoSentRows(attr, bound, copied_name))
+            )
+            self.copied.add(target)
+            self.rules.append("copied-bodies-to-sdk")
+            break
         if _logic_of(name, _plugin.classes) == LISTINGS and _feed_keeps_the_edge():
             body: list[Any] = [s for s in updated_node.body.body if not _edge_glue(s)]
             if len(body) != len(updated_node.body.body):
@@ -877,21 +970,127 @@ def rewrite(path: str, text: str) -> Rewritten:
             rewriter.rules.append("copied-bodies-to-sdk")
     if replaced:
         written = written.with_changes(body=body)
-        for source, name in replaced:
-            written = add_import(written, source, name)
+    for source, name in [*replaced, *sorted(rewriter.copied)]:
+        written = add_import(written, source, name)
     for role in sorted(rewriter.imports):
         written = add_import(written, "meridian.roles", role)
     for name in sorted(rewriter.imports_plain):
         written = _import_plain(written, name)
     if not rewriter.rules:
         return Rewritten(text)
+    if {"listings-edge-glue-dropped", "copied-bodies-to-sdk"} & set(rewriter.rules):
+        written = _orphans_dropped(module, written)
     findings = tuple(
         Finding(rule, path, line, line_of(text, line)) for rule, line in rewriter.findings
     )
     return Rewritten(written.code, tuple(rewriter.rules), findings)
 
 
+class _Used(cst.CSTVisitor):
+    """Every name a module uses outside its imports."""
+
+    def __init__(self) -> None:
+        self.used: set[str] = set()
+
+    def visit_Import(self, node: cst.Import) -> bool:
+        return False
+
+    def visit_ImportFrom(self, node: cst.ImportFrom) -> bool:
+        return False
+
+    def visit_Name(self, node: cst.Name) -> None:
+        self.used.add(node.value)
+
+
+class _DropImported(cst.CSTTransformer):
+    """`from x import a, b` without the names given; the statement gone
+    where none is left."""
+
+    def __init__(self, gone: set[str]) -> None:
+        super().__init__()
+        self.gone = gone
+
+    def leave_ImportFrom(
+        self, original_node: cst.ImportFrom, updated_node: cst.ImportFrom
+    ) -> cst.ImportFrom | cst.RemovalSentinel:
+        if isinstance(updated_node.names, cst.ImportStar):
+            return updated_node
+        kept = [
+            alias
+            for alias in updated_node.names
+            if (alias.evaluated_alias or alias.evaluated_name) not in self.gone
+        ]
+        if len(kept) == len(updated_node.names):
+            return updated_node
+        if not kept:
+            return cst.RemoveFromParent()
+        last = kept[-1].with_changes(comma=cst.MaybeSentinel.DEFAULT)
+        return updated_node.with_changes(names=[*kept[:-1], last])
+
+
+def _orphans_dropped(before: cst.Module, after: cst.Module) -> cst.Module:
+    """The names imported that only the code a rewrite removed used, no
+    longer imported: what the edge glue or a copied body alone needed."""
+    then, now = _Used(), _Used()
+    before.visit(then)
+    after.visit(now)
+    orphaned = then.used - now.used
+    return after.visit(_DropImported(orphaned)) if orphaned else after
+
+
 # ── Left by hand ────────────────────────────────────────────────────────
+
+#: 924's helpers a plugin adopts by hand (`helper-adopted`): a class the
+#: plugin defines, by its name, and what replaces it.
+ADOPTED_CLASSES: dict[str, str] = {
+    "Streamer": "a stream supervisor: `helpers.sessions.Supervisor` over the plugin's `Link`",
+    "Stream": "a stream supervisor: `helpers.sessions.Supervisor` over the plugin's `Link` "
+    "(a pairs feed: `stream_factory=pairs.supervised`)",
+    "StreamHealth": "a stream's state: `helpers.sessions.SessionState`",
+    "Restart": "a session restarted: `helpers.sessions.Supervisor.restart()`",
+    "Chains": "an option chains machine: `data.option_chains.Feed`, the plugin keeping its "
+    "`ChainSource`",
+    "RawStore": "a raw store: `meridian.edge.RawStore` and `RawStore.tend`",
+    "StreamLog": "a stream's raw lines: `meridian.edge.RawStore`'s appender",
+}
+#: A function or method the plugin defines, by its name, and what replaces it.
+ADOPTED_FUNCTIONS: dict[str, str] = {
+    "new_york_date": "a day by hand: `helpers.calendars.DayClock.of(declaration)`",
+    "close_of": "a day's close by hand: `helpers.calendars.DayClock.of(declaration).close_of`",
+    "previous_close_of": "a day's start by hand: `helpers.calendars.DayClock.opened_at`",
+    "trading_day": "a trading day by hand: `helpers.calendars.DayClock.business_date_of`",
+    "timetable": "a polling loop: `data.Timetable` in a role's `run()`",
+    "again": "a restart loop: a role class's `run()`, restarted by `meridian.run` with "
+    "`helpers.sessions.Backoff`",
+    "licences": "a licence-reading loop: the data role's `on_start` or `run()` "
+    "(`data.Wants.read_licences`)",
+    "use_plan": "a plan switch: `listings.Feed(timeliness=, datasets_by_timeliness=)` and its "
+    "`timeliness`",
+    "use_delayed": "a plan switch: `listings.Feed(timeliness=, datasets_by_timeliness=)` and "
+    "its `timeliness`",
+    "keep_streaming": "an FX lake of its own: `data.pairs.Feed(conflate_first=True, "
+    "day_clock=DayClock.of(...))`",
+}
+#: A calendar reader: a function of these names reading `read_calendar`.
+CALENDAR_READERS = frozenset({"is_open", "previous_open", "next_open", "market_day"})
+#: A page record a listings plugin wrote for itself.
+LISTINGS_PAGES = frozenset(
+    {"meridian.roles.data.ConnectionRead", "meridian.roles.data.DatasetsRead"}
+)
+
+
+def _adopted(node: cst.FunctionDef | cst.ClassDef, classes: list[str]) -> str:
+    """What 924's helpers replace a definition with, or ""."""
+    name = node.name.value
+    if isinstance(node, cst.ClassDef):
+        return ADOPTED_CLASSES.get(name, "")
+    if name in CALENDAR_READERS and "read_calendar(" in cst.Module(body=[node]).code:
+        return "a calendar reader: `helpers.calendars.MarketDays(role, calendar_id)`"
+    if name == "keep_streaming" and classes:
+        held = _plugin.classes.get(classes[-1])
+        if held is not None and _logic_of(held.name, _plugin.classes):
+            return ""  # the SDK's own feed's
+    return ADOPTED_FUNCTIONS.get(name, "")
 
 
 class _Left(cst.CSTVisitor):
@@ -908,7 +1107,32 @@ class _Left(cst.CSTVisitor):
     def _line(self, node: cst.CSTNode) -> int:
         return self.get_metadata(PositionProvider, node).start.line
 
+    def visit_FunctionDef(self, node: cst.FunctionDef) -> None:
+        if is_test(self.path):
+            return
+        what = _adopted(node, self.classes)
+        if what:
+            self.found.append(
+                ("helper-adopted", self._line(node), f"{node.name.value}: {what}")
+            )
+
     def visit_ClassDef(self, node: cst.ClassDef) -> None:
+        if not is_test(self.path):
+            what = _adopted(node, self.classes)
+            based = {_resolved(arg.value, self.names) for arg in node.bases}
+            listings = any(
+                _logic_of(each.name, _plugin.classes) == LISTINGS
+                for each in _plugin.classes.values()
+            )
+            if not what and listings and based & LISTINGS_PAGES:
+                what = (
+                    "a listings source's page record: `listings.connection_read`, "
+                    "`datasets_read`, `figures_read` and their templates"
+                )
+            if what:
+                self.found.append(
+                    ("helper-adopted", self._line(node), f"{node.name.value}: {what}")
+                )
         self.classes.append(node.name.value)
         role = _role_of(node.name.value, _plugin.classes)
         if not role or _logic_of(node.name.value, _plugin.classes):
@@ -942,6 +1166,24 @@ class _Left(cst.CSTVisitor):
     def visit_Call(self, node: cst.Call) -> None:
         if _is_connect(node, self.names) and not is_test(self.path):
             self.found.append(("connect-to-run", self._line(node), ""))
+        if (
+            not is_test(self.path)
+            and _resolved(node.func, self.names).endswith("DatasetLicence")
+            and not (dotted(node.func) or "").startswith("ops.")
+            and not any(
+                arg.keyword is not None and arg.keyword.value == "redistribution"
+                for arg in node.args
+            )
+        ):
+            self.found.append(
+                (
+                    "helper-adopted",
+                    self._line(node),
+                    "DatasetLicence: the licence terms, `redistribution` stated (ruling 1018) "
+                    "beside `derived_use_terms` and `not_affiliated_notice`, as the vendor's "
+                    "terms say",
+                )
+            )
         func = node.func
         if not isinstance(func, cst.Attribute):
             return

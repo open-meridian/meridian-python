@@ -416,7 +416,9 @@ def test_a_dataset_declares_its_class_of_source_and_whose_aggregate() -> None:
         modes=["stream"],
         price_source_class="composite",
         licence_default=meridian.DatasetLicence(
-            redistribution="not_allowed", kept=True, underlying_source="Pyth's aggregate of its publishers"
+            redistribution="not_allowed",
+            kept=True,
+            underlying_source="Pyth's aggregate of its publishers",
         ),
     )
     wire = pyth._wire()

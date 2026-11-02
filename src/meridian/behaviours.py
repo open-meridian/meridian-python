@@ -31,6 +31,7 @@ subject there to at least one case.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import random
 from collections.abc import Awaitable, Callable, Mapping, Sequence
@@ -38,11 +39,21 @@ from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
 from importlib import resources
-from typing import Any
+from typing import Any, cast
 
 from google.protobuf import json_format
 
-__all__ = ["ADAPTERS", "SUBJECTS", "Case", "Report", "cases", "run", "run_async"]
+__all__ = [
+    "ADAPTERS",
+    "HELD_MODULES",
+    "NOT_HELD",
+    "SUBJECTS",
+    "Case",
+    "Report",
+    "cases",
+    "run",
+    "run_async",
+]
 
 
 @dataclass(frozen=True)
@@ -160,31 +171,63 @@ class Clock:
 
 def steps_case(
     made: Callable[[Mapping[str, Any], Clock], Any],
-    call: Callable[[Any, str, Mapping[str, Any]], Mapping[str, Any] | None],
+    call: Callable[[Any, str, Mapping[str, Any]], Any],
 ) -> Adapter:
     """An adapter for steps cases: `made(given, clock)` builds the subject on
     the fake clock, and `call(subject, name, args)` makes one step's call,
-    answering its values by name."""
+    answering its values by name. Either may be a coroutine. A step
+    expecting `refused` passes where its call raises naming that word."""
 
-    def adapter(case: Case) -> None:
+    async def adapter(case: Case) -> None:
         clock = Clock()
         subject = made(case.held.get("given") or {}, clock)
-        for i, step in enumerate(case.held.get("steps") or []):
-            if "clock" in step:
-                clock.now = float(step["clock"])
-            answered = call(subject, step["call"], step.get("args") or {}) or {}
-            for name, wanted in (step.get("expect") or {}).items():
-                got = answered.get(name)
-                if isinstance(wanted, dict) and ("at_least" in wanted or "at_most" in wanted):
-                    low = float(wanted.get("at_least", float("-inf")))
-                    high = float(wanted.get("at_most", float("inf")))
-                    if got is None or not low <= float(got) <= high:
+        if asyncio.iscoroutine(subject):
+            subject = await subject
+        try:
+            for i, step in enumerate(case.held.get("steps") or []):
+                if "clock" in step:
+                    clock.now = float(step["clock"])
+                expect = step.get("expect") or {}
+                try:
+                    answered = call(subject, step["call"], step.get("args") or {})
+                    if asyncio.iscoroutine(answered) or isinstance(answered, Awaitable):
+                        answered = await answered
+                except (TypeError, ValueError) as refused:
+                    word = expect.get("refused")
+                    if word is None:
+                        raise
+                    if str(word).lower() not in str(refused).lower():
                         raise AssertionError(
-                            f"steps[{i}] {step['call']}: {name} is {got}, not within "
-                            f"{low} to {high}"
-                        )
-                elif plain(got) != wanted:
-                    raise AssertionError(f"steps[{i}] {step['call']}: {name} is {got!r}")
+                            f"steps[{i}] {step['call']}: refused, naming no {word}: {refused}"
+                        ) from refused
+                    continue
+                if "refused" in expect:
+                    raise AssertionError(
+                        f"steps[{i}] {step['call']}: answered where {expect['refused']} is "
+                        "refused"
+                    )
+                answered = answered or {}
+                for name, wanted in expect.items():
+                    got = answered.get(name)
+                    if isinstance(wanted, dict) and (
+                        "at_least" in wanted or "at_most" in wanted
+                    ):
+                        low = float(wanted.get("at_least", float("-inf")))
+                        high = float(wanted.get("at_most", float("inf")))
+                        if got is None or not low <= float(got) <= high:
+                            raise AssertionError(
+                                f"steps[{i}] {step['call']}: {name} is {got}, not within "
+                                f"{low} to {high}"
+                            )
+                    elif plain(got) != wanted:
+                        said = f"{name} is {plain(got)!r}, not {wanted!r}"
+                        raise AssertionError(f"steps[{i}] {step['call']}: {said}")
+        finally:
+            closing = getattr(subject, "close", None)
+            if callable(closing):
+                done = closing()
+                if asyncio.iscoroutine(done):
+                    await done
 
     return adapter
 
@@ -302,6 +345,498 @@ async def _wants(given: Mapping[str, Any], recorder: Any, heard: list[tuple[str,
         await wants.hear(Heard(row=row, message=message), answer)
 
 
+# ── 0.35, part B: 924's helpers (rulings 924, 1009, 1016 to 1018) ───────
+
+
+def _iso_ns(text: str) -> int:
+    from datetime import UTC, datetime
+
+    moment = datetime.fromisoformat(str(text).replace("Z", "+00:00"))
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=UTC)
+    return int(moment.timestamp()) * 1_000_000_000
+
+
+def _iso_of(at_ns: int) -> str:
+    from datetime import UTC, datetime
+
+    return datetime.fromtimestamp(at_ns / 1e9, UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _day(text: Any) -> date:
+    return text if isinstance(text, date) else date.fromisoformat(str(text))
+
+
+def _backoff_of(given: Mapping[str, Any], clock: Clock) -> Any:
+    from .helpers.sessions import Backoff
+
+    return Backoff(
+        given["first_s"],
+        given["most_s"],
+        given["jitter"],
+        given["steady_s"],
+        clock=clock,
+        rng=random.Random(given.get("seed", 0)),
+    )
+
+
+class _Refused(Exception):
+    """The fake source refused the key."""
+
+
+class _Statement:
+    def __init__(self, symbol: str) -> None:
+        self.symbol = symbol
+
+
+class _SupervisorHarness:
+    """A `Supervisor` running over a scripted link on the fake clock: each
+    open answered as the next step says, each statement heard put to its
+    `receive`, each wait recorded and held until the next open."""
+
+    def __init__(self, given: Mapping[str, Any], clock: Clock) -> None:
+        from .helpers.sessions import Supervisor
+
+        self.clock = clock
+        self.opens: asyncio.Queue[str] = asyncio.Queue()
+        self.received: asyncio.Queue[list[Any]] = asyncio.Queue()
+        self.waits: list[float] = []
+        self.caught: dict[str, int] | None = None
+        self.release = asyncio.Event()
+        self.sleeping = False
+        harness = self
+
+        class Link:
+            name = "behaviour"
+
+            async def open(self) -> None:
+                said = await harness.opens.get()
+                if said == "fail":
+                    raise ConnectionError("the source did not answer")
+                if said == "refuse":
+                    raise _Refused("the key was refused")
+
+            async def subscribe(self, wanted: Sequence[str]) -> None:
+                return None
+
+            async def receive(self) -> list[Any]:
+                return await harness.received.get()
+
+            async def close(self) -> None:
+                return None
+
+        async def heard(stated: list[Any]) -> None:
+            return None
+
+        async def caught_up(since: dict[str, int]) -> int:
+            harness.caught = {k: v // 1_000_000_000 for k, v in since.items()}
+            return 0
+
+        async def sleep(seconds: float) -> None:
+            harness.waits.append(seconds)
+            harness.sleeping = True
+            try:
+                await harness.release.wait()
+            finally:
+                harness.release.clear()
+                harness.sleeping = False
+
+        self.supervisor = Supervisor(
+            (lambda: None) if given.get("no_key") else Link,
+            heard=heard,
+            caught_up=caught_up,
+            silent_seconds=float(given["silent_s"]),
+            refused=(_Refused,),
+            refused_seconds=float(given["refused_s"]),
+            flush_seconds=0.001,
+            backoff=_backoff_of(given, clock),
+            clock_ns=lambda: int(clock.now * 1_000_000_000),
+            sleep=sleep,
+            clock=clock,
+        )
+        self.supervisor.want(given.get("wanted") or [])
+        self.task = asyncio.ensure_future(self.supervisor.run())
+
+    async def settle(self, done: Callable[[], bool]) -> None:
+        """Until the step's effect is seen (at most two seconds), and a few
+        turns of the session's loop after."""
+        for _ in range(1000):
+            if done():
+                break
+            await asyncio.sleep(0.002)
+        for _ in range(5):
+            await asyncio.sleep(0.002)
+
+    async def step(self, name: str, args: Mapping[str, Any]) -> Mapping[str, Any]:
+        waited = len(self.waits)
+        state = self.supervisor.state
+        heard, opened = state.messages, state.opened
+        self.caught = None
+        done: Callable[[], bool]
+        if name in ("open_fails", "opens", "open_refused"):
+            if self.sleeping:
+                self.release.set()
+            await self.opens.put({"open_fails": "fail", "opens": "ok"}.get(name, "refuse"))
+            if name == "opens":
+                done = lambda: state.opened > opened and state.state == "open"  # noqa: E731
+            else:
+                done = lambda: len(self.waits) > waited  # noqa: E731
+        elif name == "hears":
+            await self.received.put([_Statement(str(args["subject"]))])
+            done = lambda: state.messages > heard  # noqa: E731
+        elif name == "want":
+            wanted = tuple(args.get("wanted") or [])
+            self.supervisor.want(wanted)
+            done = lambda: state.subscribed == wanted or state.state in ("off", "no key")  # noqa: E731
+        elif name == "goes_silent":
+            done = lambda: len(self.waits) > waited  # noqa: E731
+        elif name == "idles":
+            done = lambda: state.state in ("off", "no key")  # noqa: E731
+        else:
+            raise AssertionError(f"Supervisor has no step {name!r}")
+        await self.settle(done)
+        return {
+            "state": state.state,
+            "opened": state.opened,
+            "dropped": state.dropped,
+            "messages": state.messages,
+            "subscribed": list(state.subscribed),
+            "wait_s": self.waits[-1] if len(self.waits) > waited else None,
+            "caught_up": self.caught,
+        }
+
+    async def close(self) -> None:
+        self.task.cancel()
+        with contextlib.suppress(BaseException):
+            await self.task
+
+
+def _supervisor_step(harness: Any, name: str, args: Mapping[str, Any]) -> Any:
+    return harness.step(name, args)
+
+
+def _day_clock(name: str, args: Mapping[str, Any]) -> Any:
+    from .helpers.calendars import DayClock
+
+    clock = DayClock(str(args["time_zone"]), int(args.get("end_minute", 0)))
+    if name == "make":
+        return None
+    if name == "business_date_of":
+        return clock.business_date_of(_iso_ns(args["at"]))
+    if name == "close_of":
+        return _iso_of(clock.close_of(_day(args["day"])))
+    if name == "opened_at":
+        return _iso_of(clock.opened_at(_day(args["day"])))
+    raise AssertionError(f"DayClock has no call {name!r}")
+
+
+class _Calendar:
+    """The deployment's calendar as the fake answers it, through a role
+    object's `read_calendar`, failing its first `fails` reads."""
+
+    def __init__(self, given: Mapping[str, Any]) -> None:
+        self.given = given
+        self.reads = 0
+
+    async def read_calendar(self, **_: Any) -> Any:
+        from .plugin.v1 import operations_pb2 as ops
+
+        self.reads += 1
+        if self.reads <= int(self.given.get("fails", 0)):
+            raise ConnectionError("the calendar did not answer")
+        return ops.ReadCalendarResult(
+            found=True,
+            calendar_id=str(self.given.get("calendar_id", "CAL-1")),
+            weekends=[
+                ops.CalendarWeekend(
+                    weekdays=[
+                        cast(Any, ops.Weekday.Value(w))
+                        for w in self.given.get("weekends") or []
+                    ]
+                )
+            ],
+            days=[
+                ops.CalendarDay(date=str(d), kind=ops.CALENDAR_DAY_KIND_CLOSED)
+                for d in self.given.get("closed") or []
+            ],
+        )
+
+
+def _market_days(given: Mapping[str, Any], clock: Clock) -> Any:
+    from .helpers.calendars import DayClock, MarketDays
+
+    calendar = _Calendar(given)
+    days = MarketDays(
+        calendar,
+        str(given.get("calendar_id", "CAL-1")),
+        day_clock=DayClock(str(given["time_zone"]), int(given.get("end_minute", 0))),
+        backoff=_backoff_of(given["backoff"], clock),
+        clock=clock,
+    )
+    days.calendar = calendar  # type: ignore[attr-defined]
+    return days
+
+
+async def _market_days_step(days: Any, name: str, args: Mapping[str, Any]) -> Mapping[str, Any]:
+    if name == "is_open":
+        return {"open": await days.is_open(_day(args["day"])), "reads": days.calendar.reads}
+    if name in ("previous_open", "next_open"):
+        return {"day": await getattr(days, name)(_day(args["day"]))}
+    if name == "business_date_of":
+        return {"day": await days.business_date_of(_iso_ns(args["at"]))}
+    raise AssertionError(f"MarketDays has no step {name!r}")
+
+
+def _sent_rows(given: Mapping[str, Any], clock: Clock) -> Any:
+    from .roles.data import SentRows
+
+    return SentRows(int(given["capacity"]))
+
+
+def _sent_rows_step(rows: Any, name: str, args: Mapping[str, Any]) -> Mapping[str, Any]:
+    from .roles.data import SentRows
+
+    if name == "make":
+        SentRows(int(args["capacity"]))
+        return {}
+    if name == "changed":
+        said = rows.changed(args["data_type"], args["dataset"], args["row_key"], args["said"])
+        return {"changed": said}
+    raise AssertionError(f"SentRows has no step {name!r}")
+
+
+def _conflator(given: Mapping[str, Any], clock: Clock) -> Any:
+    from .roles.data import Conflator
+
+    return Conflator(
+        int(float(given["every_s"]) * 1_000_000_000),
+        clock_ns=lambda: int(clock.now * 1_000_000_000),
+    )
+
+
+def _conflator_step(held: Any, name: str, args: Mapping[str, Any]) -> Mapping[str, Any]:
+    from .operations import Money, Outcome, Trade
+
+    if name == "put":
+        held.put(args["key"], args["value"])
+        return {}
+    if name == "due":
+        return {"values": held.due()}
+    if name == "put_trade":
+        held.put(args["key"], Trade(price=Money(Decimal(1), "USD"), quantity=Decimal(1)))
+        return {}
+    if name == "put_outcome":
+        held.put(args["key"], Outcome(settlement_value=Money(Decimal(1), "USD")))
+        return {}
+    raise AssertionError(f"Conflator has no step {name!r}")
+
+
+class _Allowance:
+    """A vendor's quota as a plugin keeps it: its limit and what is used."""
+
+    def __init__(self, limit: int, used: int) -> None:
+        self.limit, self.used = limit, used
+
+    def allows(self, calls: int = 1, *, reserve: int = 0) -> bool:
+        return self.limit - self.used - calls >= reserve
+
+    def spend(self, calls: int = 1) -> None:
+        self.used += calls
+
+
+def _timetable(given: Mapping[str, Any], clock: Clock) -> Any:
+    from .roles.data import Timetable
+
+    quota = given.get("allowance")
+    allowance = _Allowance(int(quota["limit"]), int(quota["used"])) if quota else None
+    table = Timetable(
+        allowance=allowance,
+        reserve=int(given.get("reserve", 0)),
+        clock_ns=lambda: int(clock.now * 1_000_000_000),
+    )
+    for dataset, every in (given.get("every_s") or {}).items():
+        table.every(str(dataset), float(every))
+    return table
+
+
+async def _timetable_step(table: Any, name: str, args: Mapping[str, Any]) -> Mapping[str, Any]:
+    if name == "want":
+        table.want(args["dataset"], args["subjects"])
+        return {}
+    if name == "withdraw":
+        table.withdraw(args["dataset"], args.get("subjects"))
+        return {}
+    if name == "every":
+        table.every(str(args["dataset"]), float(args["every_s"]))
+        return {}
+    if name == "due":
+        due = await table.due()
+        used = table.allowance.used if table.allowance is not None else None
+        return {"due": [[dataset, list(subjects)] for dataset, subjects in due], "used": used}
+    raise AssertionError(f"Timetable has no step {name!r}")
+
+
+def _timeliness(name: str, args: Mapping[str, Any]) -> Any:
+    from .roles.data import TIMELINESS, timeliness
+
+    given = {k: v for k, v in args.items() if k in ("choices", "default")}
+    made = timeliness(str(args["label"]), given.pop("choices", TIMELINESS), **given)
+    return {"choices": [c.value for c in made.choices], "default": made.default}
+
+
+def _api_key(name: str, args: Mapping[str, Any]) -> Any:
+    from .roles.data import api_key
+
+    made = api_key(str(args["label"]))
+    return {"required": made.required, "secret": made.secret}
+
+
+def _licence(name: str, args: Mapping[str, Any]) -> Any:
+    from .declaration import DatasetLicence
+
+    made = DatasetLicence(**dict(args))
+    return {"redistribution": made.redistribution}
+
+
+def _stated(fields: Mapping[str, Any]) -> Any:
+    """A statement as a source states it: numbers as Decimals."""
+    from types import SimpleNamespace
+
+    held: dict[str, Any] = {
+        "raw_key": "behaviour/1",
+        "unconverted": (),
+        "venue_code": "",
+        "cancelled": False,
+        "participant_ns": None,
+    }
+    for key, value in fields.items():
+        numeric = key in ("price", "quantity", "bid", "ask", "bid_size", "ask_size", "amount")
+        held[key] = Decimal(str(value)) if numeric else value
+    return SimpleNamespace(**held)
+
+
+async def _listings(
+    given: Mapping[str, Any], recorder: Any, heard: list[tuple[str, Any]]
+) -> None:
+    from .receive import Heard
+    from .roles.data import listings
+    from .roles.data.quality import EdgeChecks
+
+    now = 3_000_000_000
+
+    class Source:
+        def daily(self, symbols: Sequence[str], first: date, last: date) -> list[Any]:
+            return []
+
+        def live(self, symbols: Sequence[str]) -> list[Any]:
+            return [_stated(each) for each in given.get("live") or []]
+
+        def quotes(self, symbols: Sequence[str]) -> list[Any]:
+            return []
+
+    class Lake(listings.Feed):
+        source_name = str(given.get("source_name", "behaviour"))
+
+    mics = dict(given.get("mic_of") or {})
+    feed = recorder.bind(
+        Lake(
+            Source(),
+            listings.Listings(None),
+            clock_ns=lambda: now,
+            timeliness=str(given.get("timeliness", "")),
+            datasets_by_timeliness=given.get("datasets_by_timeliness"),
+            mic_of=mics.get if mics else None,
+        )
+    )
+    for subject, symbol in (given.get("symbols") or {}).items():
+        feed.products.put(subject, symbol)
+    if given.get("edge"):
+        feed.quality = EdgeChecks(clock_ns=lambda: now)
+    for row, message in heard:
+        await feed.on_observations_wanted(Heard(row=row, message=message))
+    for each in given.get("stream") or []:
+        for _kind, fields in each.items():
+            await feed.heard([_stated(fields)])
+    await feed.flush(force=True)
+
+
+_CHAIN_NUMBERS = ("bid", "ask", "bid_size", "ask_size", "open_interest", "volume")
+
+
+_CHAIN_NUMBERS = ("bid", "ask", "bid_size", "ask_size", "open_interest", "volume")
+
+
+async def _option_chains(
+    given: Mapping[str, Any], recorder: Any, heard: list[tuple[str, Any]]
+) -> None:
+    from .helpers.calendars import DayClock, MarketDays
+    from .plugin.v1 import operations_pb2 as ops
+    from .receive import Heard
+    from .roles.data import option_chains
+
+    now = _iso_ns(given["now"])
+    chains = given.get("chain") or {}
+
+    class Source:
+        def expirations(self, symbol: str) -> list[date]:
+            return sorted(_day(d) for d in chains.get(symbol, {}))
+
+        def chain(self, symbol: str, expiration: date) -> list[Any]:
+            out = []
+            for d, options in chains.get(symbol, {}).items():
+                if _day(d) != expiration:
+                    continue
+                for o in options:
+                    number = {k: Decimal(str(o[k])) if k in o else None for k in _CHAIN_NUMBERS}
+                    out.append(
+                        option_chains.ChainOption(
+                            osi=o["osi"],
+                            expiration=expiration,
+                            quoted_at_ns=now,
+                            bid=number["bid"],
+                            ask=number["ask"],
+                            bid_size=number["bid_size"],
+                            ask_size=number["ask_size"],
+                            open_interest=number["open_interest"],
+                            volume=number["volume"],
+                        )
+                    )
+            return out
+
+    recorder.answer(
+        "ReadCalendar",
+        lambda _: ops.ReadCalendarResult(
+            found=True,
+            calendar_id="CAL-1",
+            weekends=[
+                ops.CalendarWeekend(
+                    weekdays=[
+                        cast(Any, ops.Weekday.Value(w)) for w in given.get("weekends") or []
+                    ]
+                )
+            ],
+        ),
+    )
+    days = MarketDays(recorder, "CAL-1", day_clock=DayClock("America/New_York", 960))
+    symbols = dict(given.get("symbols") or {})
+
+    async def symbol_of(subject: str) -> str | None:
+        return symbols.get(subject)
+
+    feed = recorder.bind(
+        option_chains.Feed(
+            Source(),
+            market_days=days,
+            timeliness=str(given.get("timeliness", "")),
+            datasets_by_timeliness=given.get("datasets_by_timeliness"),
+            symbol_of=symbol_of,
+            clock_ns=lambda: now,
+        )
+    )
+    for row, message in heard:
+        await feed.on_observations_wanted(Heard(row=row, message=message))
+
+
 #: This SDK's adapter for each subject it carries.
 ADAPTERS: Mapping[str, Adapter] = {
     "helpers.sessions.Backoff": _backoff_adapter,
@@ -313,6 +848,17 @@ ADAPTERS: Mapping[str, Adapter] = {
     "helpers.chains.osi_symbol": value_case(_chains),
     "helpers.chains.osi_terms": value_case(_chains),
     "roles.data.Wants": acts_case(_wants),
+    "helpers.sessions.Supervisor": steps_case(_SupervisorHarness, _supervisor_step),
+    "helpers.calendars.DayClock": value_case(_day_clock),
+    "helpers.calendars.MarketDays": steps_case(_market_days, _market_days_step),
+    "roles.data.SentRows": steps_case(_sent_rows, _sent_rows_step),
+    "roles.data.Conflator": steps_case(_conflator, _conflator_step),
+    "roles.data.Timetable": steps_case(_timetable, _timetable_step),
+    "roles.data.timeliness": value_case(_timeliness),
+    "roles.data.api_key": value_case(_api_key),
+    "declaration.DatasetLicence": value_case(_licence),
+    "roles.data.listings.Feed": acts_case(_listings),
+    "roles.data.option_chains.Feed": acts_case(_option_chains),
 }
 
 #: The subjects this SDK carries, which design's coverage gate reads: a
@@ -327,4 +873,93 @@ SUBJECTS: Sequence[str] = (
     "helpers.chains.osi_symbol",
     "helpers.chains.osi_terms",
     "roles.data.Wants",
+    "helpers.sessions.Supervisor",
+    "helpers.calendars.DayClock",
+    "helpers.calendars.MarketDays",
+    "roles.data.SentRows",
+    "roles.data.Conflator",
+    "roles.data.Timetable",
+    "roles.data.timeliness",
+    "roles.data.api_key",
+    "declaration.DatasetLicence",
+    "roles.data.listings.Feed",
+    "roles.data.option_chains.Feed",
 )
+
+#: The modules beside `meridian.helpers` whose helpers and common logic are
+#: held to behaviour cases (rulings 1028 and 924's items), each with the
+#: subject path its public names take. Design's coverage gate reads every
+#: public class and function of every `meridian/helpers/*.py` module and of
+#: each of these: each is a subject in SUBJECTS with a case, or is named in
+#: NOT_HELD with why -- so a helper added with no case fails the gate.
+HELD_MODULES: Mapping[str, str] = {
+    "src/meridian/roles/data/_rows.py": "roles.data",
+    "src/meridian/roles/data/_timetable.py": "roles.data",
+    "src/meridian/roles/data/_settings.py": "roles.data",
+    "src/meridian/roles/data/option_chains.py": "roles.data.option_chains",
+}
+
+#: What the gate's scan finds that no case holds, and why: a type a helper
+#: names (no behaviour of its own), or a helper from before 0.35 whose cases
+#: are owed -- the list each SDK release shortens.
+NOT_HELD: Mapping[str, str] = {
+    "helpers.sessions.Link": "a type: the plugin's session, scripted by Supervisor's cases",
+    "helpers.sessions.SessionState": "a type: Supervisor's state, which its cases read",
+    "helpers.sessions.Silent": "a type: a session gone silent, as Supervisor's cases see it",
+    "helpers.debt.CouponSplit": "a type: a coupon's split, which coupon_split answers",
+    "helpers.packages.LegFill": "a type: a leg's fill, which report_fill takes",
+    "roles.data.option_chains.ChainOption": "a type: a series as the source states it",
+    "roles.data.option_chains.SourceTrade": "a type: an option trade, as the source says",
+    "roles.data.option_chains.ChainSource": "a type: the source, faked by its cases",
+    "roles.data.option_chains.Counts": "a type: the Datasets page's counts",
+    "helpers.chains.osi_key": "before 0.35: its cases are owed",
+    "helpers.chains.series_meta": "before 0.35: its cases are owed",
+    "helpers.chains.option_series": "before 0.35: its cases are owed",
+    "helpers.chains.statistic": "before 0.35: its cases are owed",
+    "helpers.chains.read_expirations": "before 0.35: its cases are owed",
+    "helpers.chains.read_chain": "before 0.35: its cases are owed",
+    "helpers.chains.read_open_interest": "before 0.35: its cases are owed",
+    "helpers.chains.want_series": "before 0.35: its cases are owed",
+    "helpers.debt.fill_cash": "before 0.35: its cases are owed",
+    "helpers.debt.relief": "before 0.35: its cases are owed",
+    "helpers.debt.coupon_split": "before 0.35: its cases are owed",
+    "helpers.debt.year_fraction": "before 0.35: its cases are owed",
+    "helpers.debt.coupon_dates": "before 0.35: its cases are owed",
+    "helpers.debt.coupon_period": "before 0.35: its cases are owed",
+    "helpers.debt.accrued_per100": "before 0.35: its cases are owed",
+    "helpers.debt.factor_month": "before 0.35: its cases are owed",
+    "helpers.debt.settlement_month": "before 0.35: its cases are owed",
+    "helpers.debt.factor": "before 0.35: its cases are owed",
+    "helpers.debt.quoted_yield": "before 0.35: its cases are owed",
+    "helpers.debt.characteristics": "before 0.35: its cases are owed",
+    "helpers.debt.read_factors": "before 0.35: its cases are owed",
+    "helpers.debt.latest": "before 0.35: its cases are owed",
+    "helpers.debt.taken": "before 0.35: its cases are owed",
+    "helpers.debt.awaited": "before 0.35: its cases are owed",
+    "helpers.debt.open_claims": "before 0.35: its cases are owed",
+    "helpers.lifecycle.expiry": "before 0.35: its cases are owed",
+    "helpers.lifecycle.assignment": "before 0.35: its cases are owed",
+    "helpers.lifecycle.exercise": "before 0.35: its cases are owed",
+    "helpers.lifecycle.variation": "before 0.35: its cases are owed",
+    "helpers.lifecycle.report": "before 0.35: its cases are owed",
+    "helpers.lifecycle.in_the_money": "before 0.35: its cases are owed",
+    "helpers.lifecycle.exercise_by_exception": "before 0.35: its cases are owed",
+    "helpers.lifecycle.propose": "before 0.35: its cases are owed",
+    "helpers.lifecycle.due_for_release": "before 0.35: its cases are owed",
+    "helpers.lifecycle.release": "before 0.35: its cases are owed",
+    "helpers.lifecycle.read_events": "before 0.35: its cases are owed",
+    "helpers.lifecycle.coupon_received": "before 0.35: its cases are owed",
+    "helpers.lifecycle.redemption": "before 0.35: its cases are owed",
+    "helpers.lifecycle.paydown": "before 0.35: its cases are owed",
+    "helpers.lifecycle.accretion": "before 0.35: its cases are owed",
+    "helpers.lifecycle.tba_allocation": "before 0.35: its cases are owed",
+    "helpers.lifecycle.strip": "before 0.35: its cases are owed",
+    "helpers.lifecycle.reconstitution": "before 0.35: its cases are owed",
+    "helpers.lifecycle.expected_coupon": "before 0.35: its cases are owed",
+    "helpers.lifecycle.expected_maturity": "before 0.35: its cases are owed",
+    "helpers.lifecycle.expected_paydown": "before 0.35: its cases are owed",
+    "helpers.lifecycle.settle_claim": "before 0.35: its cases are owed",
+    "helpers.packages.legs": "before 0.35: its cases are owed",
+    "helpers.packages.propose": "before 0.35: its cases are owed",
+    "helpers.packages.report_fill": "before 0.35: its cases are owed",
+}

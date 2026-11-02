@@ -52,7 +52,9 @@ CATALOGUE = [
         data_types=["meridian.v1.Trade", "meridian.v1.Quote"],
         modes=["stream"],
         cadence=1,
-        licence_default=DatasetLicence(redistribution="not_allowed", kept=False, personal_use=True),
+        licence_default=DatasetLicence(
+            redistribution="not_allowed", kept=False, personal_use=True
+        ),
         venue_id=COINBASE,
     ),
 ]

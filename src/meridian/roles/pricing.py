@@ -181,8 +181,14 @@ class Pricer(Role):
         return answered
 
     async def on_price_batch(self, heard: Heard[ops.PriceBatchRequest]) -> None:
-        """A batch routed to this instance, heard: answered."""
-        await self.answer(heard.message)
+        """A batch routed to this instance, heard: answered, once. A batch at
+        or below the last sequence answered was answered already -- by the
+        catch-up on start, which the stream's seeding then hands on again --
+        and is not answered twice."""
+        batch = heard.message
+        if 0 < int(batch.sequence) <= self.sequence.value:
+            return
+        await self.answer(batch)
 
     async def catch_up(self) -> int:
         """The batches still waiting after the last sequence answered

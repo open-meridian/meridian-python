@@ -41,7 +41,9 @@ self.plugin onto self inside a role class, and replaces an entry point the
 templates wrote and the plugin left unchanged. What it leaves by hand: an
 entry point connecting by hand, an act on the connection, a receive call it
 could not split, a role class lacking a required event, a suite test hearing
-through recorder.receive, and 924's helpers a plugin adopts by hand.
+through recorder.receive, and 924's helpers a plugin adopts by hand. It also
+drops a listings feed's own edge glue, which the SDK's feed now does, and
+makes the `_changed` copies the SDK's SentRows.
 """
 breaking = true
 rewrite = "rewrite.py"
@@ -99,14 +101,19 @@ pricing template's -- replaced with 0.35.0's, which registers the plugin's class
 rule = "listings-edge-glue-dropped"
 what = """`at_the_edge` methods, and a `_record` override whose body only calls \
 `at_the_edge` and then `super()._record`, deleted from classes subclassing \
-`data.listings.Feed`, once the SDK's feed does both (924's item 4)"""
+`data.listings.Feed`, since the SDK's feed now does both: each row recorded unasked or \
+for a standing want aged on the feed's `latency` and judged by its `quality` (924's \
+item 4); a name only they imported no longer imported"""
 
 [[rewrites]]
 rule = "copied-bodies-to-sdk"
-what = """a class or function whose body is, with vendor names normalised, one the \
-data-plugin fit review found copied between plugins -- a rate limiter and its 429 loop, \
-`_changed`, `again`, `licences` -- replaced by the SDK's import, its call sites left \
-where the signatures differ (924's items 3, 6 and 9), once the SDK carries each"""
+what = """a definition whose body is, its layout, comments and docstring aside, one the \
+data-plugin fit review found copied between plugins and whose SDK target exists (ruling \
+1028): the `_changed` method four plugins kept -- a sent row's memory over an \
+OrderedDict -- deleted, its attribute made the SDK's `data.SentRows(<its bound>)` and \
+each call `self.<attribute>.changed(...)` (924's item 6); a name only it imported no \
+longer imported. A rate limiter and its 429 loop stay the plugin's (1028); `again` and \
+`licences` have no import to become and are named by `helper-adopted`"""
 
 [[by_hand]]
 rule = "connect-to-run"
@@ -159,10 +166,21 @@ instead = """bind the plugin's class to the recorder and hand it what it hears: 
 
 [[by_hand]]
 rule = "helper-adopted"
-what = """a plugin's own copy of what 924's helpers now carry, adopted by hand: the \
-supervisor's constructors, the chains feed, the listings pages, the timetable, the \
-calendars, the FX pairs feed, the licence terms; each named with what it replaces"""
-instead = """replace it with the SDK's (`meridian.helpers.sessions`, `.pacing`, \
-`.calendars`; `meridian.roles.data.option_chains`, `.listings`' pages, \
-`data.Timetable`, `data.pairs.Feed(conflate_first=True)`), and keep only the vendor's \
-own words"""
+what = """a plugin's own copy of what 924's helpers now carry, adopted by hand: a stream \
+supervisor (`Streamer`, `Stream`, `StreamHealth`, `Restart`), an option chains machine \
+(`Chains`), a calendar reader (`is_open`, `previous_open`, `market_day` reading \
+`read_calendar`), a day by hand (`new_york_date`, `close_of`, `previous_close_of`, \
+`trading_day`), a listings plugin's own page records, a polling loop (`timetable`), a \
+plan switch (`use_plan`, `use_delayed`), the `again` and `licences` loops, an FX lake of \
+its own (`keep_streaming`), a raw store (`RawStore`, `StreamLog`), and a licence not \
+stating its `redistribution` (ruling 1018); each named with what replaces it"""
+instead = """replace it with the SDK's: `meridian.helpers.sessions.Supervisor` over the \
+plugin's own `Link` (a pairs feed: `stream_factory=pairs.supervised`); \
+`meridian.roles.data.option_chains.Feed` over the plugin's `ChainSource`; \
+`meridian.helpers.calendars.MarketDays` and `DayClock.of(declaration)`; the listings \
+pages (`listings.connection_read`, `datasets_read`, `figures_read` and their templates); \
+`data.Timetable`; `listings.Feed(timeliness=, datasets_by_timeliness=, mic_of=)`; a \
+role class's `run()`, restarted by `meridian.run`; `data.pairs.Feed(conflate_first=True, \
+day_clock=...)`; `meridian.edge.RawStore`; and the vendor's terms stated in full. Keep \
+only the vendor's own words: its transport, its pacing and its conversion stay the \
+plugin's (rulings 1027 and 1028)"""

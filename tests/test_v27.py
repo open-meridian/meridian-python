@@ -588,10 +588,15 @@ def test_a_licence_writes_its_attribution_and_redistribution_terms() -> None:
     with pytest.raises(ValueError, match="redistribution is stated"):
         meridian.DatasetLicence(kept=True)
     notice = "This product uses the vendor's data but is not endorsed by it."
-    noticed = meridian.DatasetLicence(redistribution="not_allowed", not_affiliated_notice=notice)
+    noticed = meridian.DatasetLicence(
+        redistribution="not_allowed", not_affiliated_notice=notice
+    )
     assert noticed._wire().not_affiliated_notice == notice  # 0.32.3
     assert noticed._to_json()["not_affiliated_notice"] == notice
-    assert meridian.DatasetLicence(redistribution="not_allowed")._wire().not_affiliated_notice == ""
+    assert (
+        meridian.DatasetLicence(redistribution="not_allowed")._wire().not_affiliated_notice
+        == ""
+    )
     with pytest.raises(ValueError, match="redistribution is one of"):
         meridian.DatasetLicence(redistribution="sometimes")
     with pytest.raises(ValueError, match="copyright_class is one of"):
@@ -610,16 +615,20 @@ def test_a_licence_writes_its_attribution_and_redistribution_terms() -> None:
 def test_a_licence_sets_both_derived_use_answers_and_a_dataset_its_delay() -> None:
     from meridian.v1 import sidecar_pb2
 
-    assert meridian.DatasetLicence(redistribution="not_allowed", derived_use=True)._wire().derived_use_terms == (
-        sidecar_pb2.DERIVED_USE_NOT_RESTRICTED
-    )
+    assert meridian.DatasetLicence(
+        redistribution="not_allowed", derived_use=True
+    )._wire().derived_use_terms == (sidecar_pb2.DERIVED_USE_NOT_RESTRICTED)
     plain = meridian.DatasetLicence(redistribution="not_allowed", kept=True)
     assert (plain.derived_use, plain.derived_use_terms) == (False, "internal_only")
-    licensed = meridian.DatasetLicence(redistribution="not_allowed", derived_use_terms="redistribution_needs_licence")
+    licensed = meridian.DatasetLicence(
+        redistribution="not_allowed", derived_use_terms="redistribution_needs_licence"
+    )
     assert licensed.derived_use is True
     assert licensed._to_json()["derived_use_terms"] == "redistribution_needs_licence"
     with pytest.raises(ValueError, match="disagrees"):
-        meridian.DatasetLicence(redistribution="not_allowed", derived_use=False, derived_use_terms="not_restricted")
+        meridian.DatasetLicence(
+            redistribution="not_allowed", derived_use=False, derived_use_terms="not_restricted"
+        )
     delayed = meridian.DatasetDeclaration(
         key="delayed",
         vendor="Tiingo",

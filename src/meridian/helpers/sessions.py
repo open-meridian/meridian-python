@@ -196,7 +196,8 @@ class Supervisor:
     waited out `refused_seconds` before it is tried again; any other failure
     waits the `backoff`'s next wait. With `latency` (a `roles.Latency`),
     each message is the `session`'s sign of life and each drop a reconnect
-    counted."""
+    counted. `clock_ns`, `sleep` and `clock` (seconds, monotonic, for the
+    silence) are for a test."""
 
     def __init__(
         self,
@@ -216,6 +217,7 @@ class Supervisor:
         subject_of: Callable[[Any], str | None] = _symbol,
         clock_ns: Callable[[], int] = time.time_ns,
         sleep: Callable[[float], Awaitable[Any]] = asyncio.sleep,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         if silent_seconds < 0 or refused_seconds < 0 or flush_seconds <= 0:
             raise ValueError(
@@ -229,7 +231,7 @@ class Supervisor:
         self.flush_seconds = flush_seconds
         self.backoff = backoff or Backoff()
         self.subject_of = subject_of
-        self.clock_ns, self.sleep = clock_ns, sleep
+        self.clock_ns, self.sleep, self._clock = clock_ns, sleep, clock
         self.state = SessionState()
         #: When each subject was last heard, for the catch-up after a reopen.
         self.last_heard: dict[str, int] = {}
@@ -379,7 +381,7 @@ class Supervisor:
             if since:
                 await self._said(self.caught_up, since)
         pending: asyncio.Future[list[Any]] | None = None
-        quiet_since = time.monotonic()
+        quiet_since = self._clock()
         try:
             while True:
                 if pending is None:
@@ -403,11 +405,9 @@ class Supervisor:
                 if pending in done:
                     stated = pending.result()
                     pending = None
-                    quiet_since = time.monotonic()
+                    quiet_since = self._clock()
                     await self._heard(stated)
-                elif (
-                    self.silent_seconds and time.monotonic() - quiet_since > self.silent_seconds
-                ):
+                elif self.silent_seconds and self._clock() - quiet_since > self.silent_seconds:
                     raise Silent(f"nothing heard for {self.silent_seconds:g} seconds")
                 await self._flush()
         finally:

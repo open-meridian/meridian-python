@@ -37,7 +37,7 @@ from typing import Any
 
 from google.protobuf.message import Message
 
-__all__ = ["Conflator", "SentRows", "digest"]
+__all__ = ["Conflator", "SentRows"]
 
 #: What `Conflator.put` refuses: each is recorded, never conflated (375).
 NEVER_CONFLATED = ("Trade", "Fill", "Outcome", "ExecutionRecorded", "Execution")
@@ -83,7 +83,7 @@ def _feed(hash_: Any, value: Any) -> None:
         hash_.update(b"r" + repr(value).encode() + b";")
 
 
-def digest(value: Any) -> bytes:
+def _digest(value: Any) -> bytes:
     """A stable 16-byte digest of a value's words: a row, a dataclass, a
     protobuf message, text or a number."""
     hash_ = hashlib.blake2b(digest_size=16)
@@ -97,7 +97,7 @@ class SentRows:
 
     def __init__(self, capacity: int = 200_000) -> None:
         if capacity < 1:
-            raise ValueError(f"SentRows holds at least one row: {capacity}")
+            raise ValueError(f"a SentRows' capacity is at least one row: {capacity}")
         self.capacity = capacity
         self._said: OrderedDict[tuple[str, str, str], bytes] = OrderedDict()
 
@@ -105,7 +105,7 @@ class SentRows:
         """Whether the row says something other than its last sending: true
         for one never sent, or forgotten; and it is remembered as sent."""
         key = (data_type, dataset, row_key)
-        now = digest(said)
+        now = _digest(said)
         if self._said.get(key) == now:
             self._said.move_to_end(key)
             return False
@@ -144,7 +144,7 @@ class Conflator:
         a fill or an outcome is refused: each is recorded."""
         if type(value).__name__ in NEVER_CONFLATED:
             raise ValueError(
-                f"a {type(value).__name__} is never conflated (ruling 375): record each"
+                f"{type(value).__name__} is never conflated (ruling 375): record each"
             )
         self._held.pop(key, None)
         self._held[key] = value

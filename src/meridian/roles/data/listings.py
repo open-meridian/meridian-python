@@ -152,7 +152,7 @@ from ._pages import _arrives, _terms
 from ._records import ConnectionRead as RoleConnectionRead
 from ._records import DatasetsRead as RoleDatasetsRead
 from ._records import Served, Want
-from ._rows import digest
+from ._rows import _digest
 from ._settings import END_OF_DAY, REAL_TIME
 from ._wants import backfill_restart
 
@@ -814,7 +814,7 @@ class Feed(Role):
         restatement."""
         assert row.meta is not None
         key = (data_type, row.meta.source.dataset, row.meta.row_key)
-        said = digest(replace(row, meta=replace(row.meta, raw=None)))
+        said = _digest(replace(row, meta=replace(row.meta, raw=None)))
         held = self._sent.get(key)
         if held is not None and held[0] == said:
             row = replace(row, meta=replace(row.meta, raw=held[1]))

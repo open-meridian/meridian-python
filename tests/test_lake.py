@@ -84,7 +84,9 @@ CATALOGUE = [
         modes=["pull", "push"],
         cadence=86_400,
         history=3650,
-        licence_default=DatasetLicence(redistribution="not_allowed", kept=True, personal_use=True),
+        licence_default=DatasetLicence(
+            redistribution="not_allowed", kept=True, personal_use=True
+        ),
         day_time_zone="Etc/UTC",
         venue_id=COINBASE,
     ),
@@ -94,7 +96,9 @@ CATALOGUE = [
         data_types=["meridian.v1.Price"],
         modes=["stream"],
         cadence=1,
-        licence_default=DatasetLicence(redistribution="not_allowed", kept=False, personal_use=True),
+        licence_default=DatasetLicence(
+            redistribution="not_allowed", kept=False, personal_use=True
+        ),
         venue_id=COINBASE,
     ),
 ]
