@@ -139,7 +139,9 @@ connection -- which the connection no longer makes"""
 instead = """make it on the role object holding the act: `self.<act>(...)` inside the \
 role's class; in a page, the role object the plugin gives its pages (a closure or the \
 state they share, ruling 1014); in a function, the role object passed in its place. \
-The finding names each declared role whose acts include it"""
+The finding names each declared role whose acts include it; in an e2e tree's file, a \
+stand-in run as a plugin of its own, each role the file names itself -- a role class's \
+base, a `roles=` it passes -- whose acts include it (SDK 0.35.1)"""
 
 [[by_hand]]
 rule = "receive-not-rewritten"

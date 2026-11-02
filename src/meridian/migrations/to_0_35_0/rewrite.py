@@ -1197,6 +1197,10 @@ class _Left(cst.CSTVisitor):
         self.found: list[tuple[str, int, str]] = []
         self.classes: list[str] = []
         self.connected: set[str] = set()
+        #: The roles a file outside the plugin -- an e2e stand-in -- names
+        #: itself (SDK 0.35.1); the plugin's own files are judged by
+        #: [tool.meridian].
+        self.own_roles: list[str] | None = None
 
     def _line(self, node: cst.CSTNode) -> int:
         return self.get_metadata(PositionProvider, node).start.line
@@ -1293,8 +1297,18 @@ class _Left(cst.CSTVisitor):
         on_connection = owner in self.connected or last in ("plugin", "_plugin")
         if not on_connection:
             return
-        holders = sorted(role for role in _plugin.declared if name in ACTS[role])
-        said = ", ".join(holders) if holders else "no role it declares"
+        if self.own_roles is None:
+            holders = sorted(role for role in _plugin.declared if name in ACTS[role])
+            said = ", ".join(holders) if holders else "no role it declares"
+        else:
+            # A stand-in beside the plugin, not the plugin: judged by the
+            # roles it names itself, or, naming none, by every role.
+            named = self.own_roles or sorted(ACTS)
+            holders = sorted(role for role in named if name in ACTS[role])
+            said = (
+                f"{', '.join(holders) if holders else 'no role it names'}; "
+                "an e2e stand-in, judged by the roles it names itself"
+            )
         self.found.append(("act-on-the-connection", self._line(node), f"{name}: {said}"))
 
 
@@ -1304,6 +1318,21 @@ def _is_connect(node: cst.BaseExpression, names: dict[str, str]) -> bool:
     if not isinstance(node, cst.Call):
         return False
     return _resolved(node.func, names) == "meridian.connect"
+
+
+def _stand_in(path: str) -> bool:
+    """A file of an e2e tree: a stand-in beside the plugin, run as a plugin
+    of its own on core's harness, never the plugin (SDK 0.35.1)."""
+    return path.startswith("e2e/") or "/e2e/" in path
+
+
+def _roles_named(text: str) -> list[str]:
+    """The roles a file names itself: a role class's base (`reporting.Role`)
+    and a role named in a `roles=` it passes (a page's, a declaration's)."""
+    named = set(re.findall(r"\b(\w+)\.Role\b", text))
+    for held in re.findall(r"\broles\s*=\s*(\[[^\]]*\]|\([^)]*\)|[\"'][^\"']*[\"'])", text):
+        named |= set(re.findall(r"[\"'](\w+)[\"']", held))
+    return sorted(role for role in named if role in SURFACES)
 
 
 def left(path: str, text: str) -> list[Finding]:
@@ -1316,6 +1345,8 @@ def left(path: str, text: str) -> list[Finding]:
     names = _Names()
     module.visit(names)
     visitor = _Left(path, names.full)
+    if _stand_in(path):
+        visitor.own_roles = _roles_named(text)
     MetadataWrapper(module).visit(visitor)
     found = []
     for rule, line, said in visitor.found:

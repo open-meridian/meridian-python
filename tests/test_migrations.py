@@ -494,6 +494,47 @@ def test_a_recorders_receive_outside_the_tests_hears_the_class() -> None:
     assert left_by_hand(result) == []
 
 
+def test_an_e2e_stand_ins_act_on_the_connection_is_judged_by_its_own_roles() -> None:
+    """SDK 0.35.1 (the plugin pilot's kalshi): an e2e reader beside a data
+    plugin is a plugin of its own, reading as `reporting`; its acts were
+    judged by the data plugin's [tool.meridian] roles ("no role it
+    declares"). The plugin's own files still are."""
+    files = {
+        "pyproject.toml": '[tool.meridian]\nroles = ["data"]\n',
+        "e2e/reader.py": textwrap.dedent(
+            """\
+            import meridian
+            from meridian import Page
+
+            PAGES = [Page("/", "Rows", levels=["read"], roles=["reporting"])]
+
+            class Reader:
+                async def read(self):
+                    await self.plugin.list_prices(subjects=[])
+                    await self.plugin.list_quotes(subjects=[])
+            """
+        ),
+        "src/p/work.py": textwrap.dedent(
+            """\
+            import meridian
+
+            class Work:
+                async def read(self, plugin: meridian.Plugin):
+                    await plugin.list_prices(subjects=[])
+            """
+        ),
+    }
+    result = migrate(files, "0.34.0", "0.35.0")
+    said = {
+        (path, line): text
+        for _, f in result.by_hand
+        for path, line, text in [(f.file, f.line, f.found)]
+    }
+    assert "[list_prices: reporting; an e2e stand-in" in said[("e2e/reader.py", 8)]
+    assert "[list_quotes: no role it names; an e2e stand-in" in said[("e2e/reader.py", 9)]
+    assert said[("src/p/work.py", 5)].endswith("[list_prices: no role it declares]")
+
+
 def test_a_class_given_two_roles_events_or_a_lambda_is_left_by_hand() -> None:
     files = {
         "pyproject.toml": '[tool.meridian]\nroles = ["data", "signal"]\n',
