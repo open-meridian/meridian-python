@@ -2459,6 +2459,12 @@ the steps from any recorded release to the newest exist and run in order
 plugin check`, and says what is left for a person or an agent to do, with the
 file and line. The first recorded step is from 0.5.0.
 
+A step keeps a file's formatting wherever it rewrites nothing, but what it
+writes follows no formatter: a call it moves or joins can run past the
+plugin's line length. After a migration, run the plugin's own formatter and
+linter (`ruff format` and `ruff check --fix`, say, where it keeps them) over
+the files it wrote, and then its tests and `meridian plugin check`.
+
 The migrations live in this package, in `src/meridian/migrations/`, one
 directory per step, released with the version they lead to:
 
