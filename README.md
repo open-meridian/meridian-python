@@ -2348,8 +2348,9 @@ the process entry point (`run_async` as a coroutine): it handles SIGTERM and
 SIGINT, connects, registers the classes on one connection -- one class per
 role, two for one role refused naming it, a class for a role the instance
 was not launched with not started and logged -- delivers the settings to
-`on_settings`, the watch opened again after a backoff when its stream
-breaks, runs each class's `on_start`, hears one stream for every class, each delivery
+`on_settings`, the first delivery applied before any class starts and the
+watch opened again after a backoff when its stream breaks, runs
+each class's `on_start`, hears one stream for every class, each delivery
 handed to every class hearing its row in order, starts each `run`, serves
 the pages, reports the plugin healthy and, when stopped, cancels the runs and
 calls each `on_stop`. `meridian.connect(..., roles=[...])` is the context

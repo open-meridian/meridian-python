@@ -167,6 +167,39 @@ class _Started(custody.Role):
         self.seen_at_start = list(self.applied)
 
 
+async def test_run_applies_the_first_settings_before_any_class_starts(
+    sidecar: tuple[FakeSidecar, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The spec's lifecycle: run reads the first settings, then calls each
+    class's `on_start` -- which the data template relies on; 0.35.0 started
+    the watch and called `on_start` without waiting for it."""
+    from meridian.v1 import sidecar_pb2
+
+    service, address = sidecar
+    monkeypatch.setenv("MERIDIAN_SIDECAR_ADDRESS", address)
+    service.settings = [sidecar_pb2.SettingsDelivery()]
+    applied: list[Any] = []
+    book = _Started(applied)
+
+    async def configure(now: Any) -> None:
+        await asyncio.sleep(0.05)  # an apply that takes a moment
+        applied.append(now)
+
+    task = asyncio.create_task(
+        meridian.run_async(meridian.Declaration(), [book], on_settings=configure)
+    )
+    try:
+        for _ in range(200):
+            if book.seen_at_start is not None:
+                break
+            await asyncio.sleep(0.01)
+    finally:
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+    assert book.seen_at_start is not None and len(book.seen_at_start) == 1
+
+
 async def test_runs_settings_watch_is_opened_again_when_its_stream_ends(
     sidecar: tuple[FakeSidecar, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:

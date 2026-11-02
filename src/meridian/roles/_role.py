@@ -122,8 +122,9 @@ class RoleBase(ABC):  # noqa: B024 - abstract through each role's required event
     # ── The lifecycle ─────────────────────────────────────────────────────
 
     async def on_start(self) -> None:  # noqa: B027 - optional by design
-        """Once the plugin has registered and read its first settings,
-        before the stream opens: read what the class needs to start."""
+        """Once the plugin has registered and, where `meridian.run` is given
+        `on_settings`, applied its first settings, before the stream opens:
+        read what the class needs to start."""
 
     async def run(self) -> None:  # noqa: B027 - optional by design
         """The class's long-running work -- a poll, a stream -- started after
