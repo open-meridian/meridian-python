@@ -17,7 +17,8 @@ registered on it), and then:
 
 1. delivers the settings to `on_settings`, now and on every change, each an
    instance of the declaration's `@meridian.settings` class where it has
-   one;
+   one, the watch kept as a `run()` is, opened again after a backoff when
+   its stream breaks or ends (SDK 0.35.1);
 2. calls each class's `on_start()`, in the order given;
 3. opens the one stream for the union of the rows the classes hear --
    each role's required events and the optional ones a class overrides --
@@ -203,7 +204,10 @@ class _Running:
         started: list[RoleBase] = []
         try:
             if self.on_settings is not None:
-                tasks.append(asyncio.create_task(self._settings(self.on_settings)))
+                apply = self.on_settings
+                tasks.append(
+                    asyncio.create_task(self._keep("settings", lambda: self._settings(apply)))
+                )
             for role in roles:
                 await role.on_start()
                 started.append(role)
@@ -240,12 +244,15 @@ class _Running:
                     log.exception("%s's on_stop failed", _named(role))
 
     async def _settings(self, apply: Callable[[Any], Awaitable[None] | None]) -> None:
+        """Every delivery of the settings applied; a stream that ends is
+        raised, so the watch is opened again."""
         typed = getattr(self.declaration, "_typed", None)
         stream = self.plugin.settings(typed)
         async for now in stream:
             done = apply(now)
             if done is not None:
                 await done
+        raise ConnectionError("the settings stream ended")
 
     async def _figures(self, figures: Callable[[], Sequence[Figure]]) -> None:
         while True:

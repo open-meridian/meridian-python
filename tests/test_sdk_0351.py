@@ -18,7 +18,7 @@ import pytest
 
 import meridian
 from conftest import FakeSidecar
-from meridian.roles import data
+from meridian.roles import custody, data
 from meridian.roles.data import event_contracts, pairs
 from meridian.suites import Recorder
 
@@ -153,3 +153,47 @@ async def test_a_bars_pass_and_a_reread_ask_for_no_venue_until_a_contract_is_ser
     feed.venue.asked = False
     await feed.keep_bars(once=True)
     assert len(lake.on("ResolveVenue")) == asked + 1
+
+
+# ── meridian.run: the first settings before on_start; the watch kept ──────
+
+
+class _Started(custody.Role):
+    def __init__(self, applied: list[Any]) -> None:
+        self.applied = applied
+        self.seen_at_start: list[Any] | None = None
+
+    async def on_start(self) -> None:
+        self.seen_at_start = list(self.applied)
+
+
+async def test_runs_settings_watch_is_opened_again_when_its_stream_ends(
+    sidecar: tuple[FakeSidecar, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A settings stream that broke was not watched again: a change made
+    after it never reached the plugin. The watch is kept as a `run()` is."""
+    from meridian import _run
+    from meridian.helpers.sessions import Backoff
+    from meridian.v1 import sidecar_pb2
+
+    service, address = sidecar
+    monkeypatch.setenv("MERIDIAN_SIDECAR_ADDRESS", address)
+    monkeypatch.setattr(_run, "Backoff", lambda: Backoff(first_s=0.01, most_s=0.02))
+    # The fake's stream sends its deliveries and ends, each time it is opened.
+    service.settings = [sidecar_pb2.SettingsDelivery()]
+    applied: list[Any] = []
+    task = asyncio.create_task(
+        meridian.run_async(
+            meridian.Declaration(), [_Started(applied)], on_settings=applied.append
+        )
+    )
+    try:
+        for _ in range(300):
+            if len(applied) >= 3:
+                break
+            await asyncio.sleep(0.01)
+    finally:
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+    assert len(applied) >= 3
