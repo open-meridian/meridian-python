@@ -1,0 +1,15 @@
+# open-meridian 0.35.4 to 0.35.5: additive, with no contract change (ruling
+# 1072): nothing a plugin calls changed shape, so only the pins move.
+from = "0.35.4"
+to = "0.35.5"
+summary = """
+Additive, with no contract change. helpers.sessions.FX_WEEK is the FX week's
+trading sessions, Sunday 17:00 to Friday 17:00 New York in New York's own
+time, daylight saving and all, usable wherever sessions are taken
+(LiveValue.of(..., sessions=), ems.ReferenceCheck.stale(..., sessions=),
+roles.in_session); a plugin keeping its own copy may use it instead. The base
+template links kit 0.16.0 (pages.KIT), whose om-live cells draws a page's live
+values. Nothing a plugin calls changed shape: `meridian plugin migrate` moves
+the pins and changes no code.
+"""
+breaking = false

@@ -56,6 +56,15 @@ How the source is reached -- a WebSocket, a line protocol over TCP, SSE, FIX
 -- is the plugin's `Link`, never here: this module holds no transport, only
 the supervision.
 
+**The FX week** (SDK 0.35.5, ruling 1072): `FX_WEEK`, the `TradingSessions`
+the spot FX market keeps, Sunday 17:00 to Friday 17:00 New York, its edges
+the 17:00 New York roll and its time zone `America/New_York`, so it follows
+daylight saving on both sides of the year. Use it wherever trading sessions
+are taken -- `LiveValue.of(..., sessions=sessions.FX_WEEK)`,
+`ems.ReferenceCheck.stale(..., sessions=sessions.FX_WEEK)`, `roles.in_session`
+-- where an FX dataset names no calendar of its own
+(spec/sessions-and-data-report-their-latency-and-quality, "In session").
+
 A supervisor is also `data.pairs.Streamer` (`health`, `want`, `retarget`,
 `run(once=)`, `silent_seconds`): `data.pairs.supervised` makes one for a
 pairs feed over its market's own socket, so a pairs plugin needs no stream
@@ -74,9 +83,34 @@ from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-__all__ = ["Backoff", "CaughtUp", "Link", "SessionState", "Silent", "Supervisor"]
+from ..plugin.v1 import operations_pb2 as ops
+
+__all__ = ["FX_WEEK", "Backoff", "CaughtUp", "Link", "SessionState", "Silent", "Supervisor"]
 
 log = logging.getLogger("meridian.helpers.sessions")
+
+#: The FX week (see the module): Sunday 17:00 to Friday 17:00 New York, the
+#: 17:00 roll at each edge, in New York's own time, daylight saving and all.
+#: One message, shared: read it, never change it.
+FX_WEEK = ops.TradingSessions(
+    time_zone="America/New_York",
+    sessions=[
+        ops.TradingSession(
+            weekdays=[ops.WEEKDAY_SUNDAY], start_minute=17 * 60, end_minute=1440
+        ),
+        ops.TradingSession(
+            weekdays=[
+                ops.WEEKDAY_MONDAY,
+                ops.WEEKDAY_TUESDAY,
+                ops.WEEKDAY_WEDNESDAY,
+                ops.WEEKDAY_THURSDAY,
+            ],
+            start_minute=0,
+            end_minute=1440,
+        ),
+        ops.TradingSession(weekdays=[ops.WEEKDAY_FRIDAY], start_minute=0, end_minute=17 * 60),
+    ],
+)
 
 
 class Backoff:

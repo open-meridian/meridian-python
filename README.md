@@ -2,7 +2,7 @@
 
 The Python SDK for building [Open Meridian](https://open-meridian.com) plugins:
 the tools a trader has an AI agent build, and the bots and analytics a
-developer writes. Python 3.11 or newer. This is release 0.35.4; its reference
+developer writes. Python 3.11 or newer. This is release 0.35.5; its reference
 is at [open-meridian.dev](https://open-meridian.dev/api/python-sdk/).
 
 ## Start here
@@ -2290,7 +2290,7 @@ rewrites the modules' imports and says what is left by hand.
       await lifecycle.propose(self, [expected])
   ```
 
-### Each role is one class (0.35.0 to 0.35.4)
+### Each role is one class (0.35.0 to 0.35.5)
 
 From 0.35.0 (spec/each-role-is-one-generated-class; rulings 1004, 1005 and
 1009 to 1023) a plugin writes one class per role it holds. Each extends its
@@ -2546,7 +2546,17 @@ plugin. No transports package is shipped (ruling 1027).
       ]
   ```
 
-  **Run 0.35.0 to 0.35.4 on a core of contract v29**: no contract changed.
+- **0.35.5, additive** (ruling 1072): the FX week, once.
+  `helpers.sessions.FX_WEEK` is the spot FX market's trading sessions,
+  Sunday 17:00 to Friday 17:00 New York, its edges the 17:00 roll in New
+  York's own time, so they stay at 17:00 there on both sides of daylight
+  saving. Give it wherever sessions are taken where an FX dataset names no
+  calendar of its own: `LiveValue.of(..., sessions=sessions.FX_WEEK)`,
+  `ems.ReferenceCheck.stale(..., sessions=sessions.FX_WEEK)`,
+  `roles.in_session`. The base template links kit 0.16.0 (`pages.KIT`),
+  whose `<om-live cells>` draws a page's live values.
+
+  **Run 0.35.0 to 0.35.5 on a core of contract v29**: no contract changed.
 
 ## Moving a plugin to a new release
 
@@ -2636,6 +2646,7 @@ carries libcst.
 | 0.35.1 to 0.35.2: a fix: a typed delivery of the settings (`meridian.run`'s `on_settings`, `plugin.settings(Config)`, `first_settings`) holds every setting delivered in `config.values`, the storage kinds' `<kind>_window_days` and `<kind>_past_window` the SDK declares among them, which it dropped; `RawStore.tend(plugin, settings=config, today=...)` reads the kind's window from the settings as delivered, typed or not, `today` the UTC date where not given; no field may be named `missing`, `refused` or `values` | only the pins move | a `Declaration(settings=Config.declared())`, the 0.35.1 way to reach the window settings (`typed-settings-declared`): declare `settings=Config`, so `on_settings` receives a `Config` (a handler reading `delivered.values` reads them unchanged; one reading `.missing_required` reads `.missing`), and give it to `RawStore.tend(..., settings=config)` in place of the windows copied by hand |
 | 0.35.2 to 0.35.3: a fix: `helpers.sessions.Supervisor` hands `heard` every message received (`[]` for a heartbeat, ruling 418), waits at least a failure's `retry_after`, and opens a new session for what is wanted with `reopen_on_want=True` (`pairs.supervised` does); `SessionState.label`; a row delivered latest value first keyed by its own kind (a rate or a statistic no longer fails the hearing loop) and by its series key; a table setting's rows a list, typed or not; `RawStore.tend` reads from the settings only what it is not given, keeps what is past a window given alone, refuses a window below 0 or an unknown `past`; a typed delivery's SDK settings read only; `Recorder.hear(role, *rows)`; `PageClient` refuses a plain stand-in's acts; `Declaration(pricing_models=[PricingModelDeclaration(...)])`; the 0.33.0, 0.35.0 and 0.35.2 steps rewrite and name more | only the pins move | a `named` override calling `dataset` (`named-calls-dataset`); a method `timeliness(...)` hiding a listings feed's property (`timeliness-overridden`); a role class's field `subjects` (`subjects-shadowed`); a 0.34 handler name reached through another name (`old-handler-name`); a `receive(...)` left (`receive-gone`); a test reading `<x>.plugin.on(...)` (`stand-in-read`); a role class made outside the entry point, a test or a `bind(...)` (`unregistered-role-object`); a base pinned by tag alone where the plugin pins by digest (`base-digest`); and, by behaviour, a `heard` given to a `Supervisor` now handed `[]`, and a table's rows read as a tuple, now a list |
 | 0.35.3 to 0.35.4: a fix and an addition (ruling 1070): a book record's view keyed by its entity (`views.ENTITY_KEYS`), an order whose venue's ID is set later held once; a quote stating no source time timed by its `valid_from_ns` (`roles.source_ns`, `confirmed_ns`), so `ems.ReferenceCheck` no longer judges it stale; the views' stream surviving a read again that fails outside gRPC; `pages.live_values` and `LiveValue.of`, a page's values worked out from its views with source, age and staleness counted only in session, served by `pages.live` to the kit's `<om-live cells>`; every template's AGENTS.md says so | only the pins move | a live module of the plugin's own, its cells worked out from views (`live.py`'s `Board`), moved onto `pages.live_values` and `LiveValue.of`, and its page script onto `<om-live cells>`; by behaviour, a book view's row keyed `order_id=<id>` alone (a key built from every identifier no longer matches), and a quote with no source time no longer stale by the pre-trade check |
+| 0.35.4 to 0.35.5: additive (ruling 1072): `helpers.sessions.FX_WEEK`, the FX week's trading sessions, Sunday 17:00 to Friday 17:00 New York, the 17:00 roll in New York's own time on both sides of daylight saving, usable wherever sessions are taken (`LiveValue.of`, `ems.ReferenceCheck.stale`, `roles.in_session`); the base template links kit 0.16.0 (`pages.KIT`) | only the pins move | an FX week of the plugin's own (a `TradingSessions` for Sunday to Friday 17:00 New York, the samples' `FX_WEEK`), replaced by `helpers.sessions.FX_WEEK`; by behaviour, a page on the base template loads kit 0.16.0 where the deployment carries it |
 
 `tests/migrations/` holds the plugins the migrations are recorded for, as
 written and as their migration leaves them, and `make check-migrations` holds
