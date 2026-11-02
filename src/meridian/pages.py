@@ -157,11 +157,13 @@ if TYPE_CHECKING:
 log = logging.getLogger("meridian.pages")
 
 #: The kit the base template links, from the path the dashboard serves it at on
-#: the plugin's own host: the version the deployment serves, 0.12.0 since
-#: core's chart 0.1.305 (meridian-ui bd7c794), whose components the role
-#: templates use (`data-om-opens`). A dashboard answers any 0.x with the newest
-#: 0.x it carries, so an older one still loads; this names what is served.
-KIT = "0.12.0"
+#: the plugin's own host: 0.16.0 from SDK 0.35.5 (meridian-ui daab0da, ruling
+#: 1072), whose `om-live cells` draws a page's live values (`pages.live_values`);
+#: 0.12.0 before, since core's chart 0.1.305 (meridian-ui bd7c794), whose
+#: components the role templates use (`data-om-opens`). A dashboard answers
+#: any 0.x with the newest 0.x it carries, so an older one still loads; this
+#: names what is served.
+KIT = "0.16.0"
 
 #: The form field, and the header, a request that changes something carries its
 #: token in.
