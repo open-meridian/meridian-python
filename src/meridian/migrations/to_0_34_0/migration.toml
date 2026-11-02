@@ -83,7 +83,9 @@ names"""
 rule = "suite-cases-v29"
 what = """a test running a role's suite that contract v29 adds cases to: the data \
 suite's records-a-pools-factor; operations', portfolio's, reporting's, servicing's and \
-signal's reads-a-pools-factors and hears-a-factor-recorded"""
+signal's reads-a-pools-factors and hears-a-factor-recorded; not the data suite's where \
+the plugin names meridian.roles.data.testing's PAIRS_NOT_PRESENTED, \
+EVENT_CONTRACTS_NOT_PRESENTED or RATES_NOT_PRESENTED, which name its case (SDK 0.35.1)"""
 instead = """map each new case to the plugin's own producer through the SDK's v29 \
 helpers -- an agency's factor recorded (meridian.helpers.debt.factor, record_factors or \
 Wants.record("factors", ...)), a pool's factors read (debt.read_factors) and heard \

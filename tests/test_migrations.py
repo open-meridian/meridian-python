@@ -1996,6 +1996,26 @@ def test_v29s_suite_cases_and_a_quality_assessment_naming_no_data_type_are_left(
     ]
 
 
+@pytest.mark.parametrize("named", ["PAIRS", "EVENT_CONTRACTS", "RATES"])
+def test_a_data_suite_naming_the_sdks_not_presented_set_is_not_left(named: str) -> None:
+    """SDK 0.35.1 (the plugin pilot's kalshi): a plugin spreading the SDK's
+    not-presented set into its own, in another file, names v29's factor case
+    already; another role's suite run is still left."""
+    files = {
+        "tests/venue_cases.py": (
+            f"from meridian.roles.data.testing import {named}_NOT_PRESENTED\n"
+            f"NOT_PRESENTED = {{**{named}_NOT_PRESENTED}}\n"
+        ),
+        "tests/test_data_role.py": (
+            "import venue_cases as v\n"
+            'report = run(\n    "data", PRODUCERS, not_presented=v.NOT_PRESENTED\n)\n'
+        ),
+        "tests/test_board.py": 'report = run("reporting", PRODUCERS)\n',
+    }
+    result = migrate(files, "0.33.5", "0.34.0")
+    assert left_by_hand(result) == [("suite-cases-v29", "tests/test_board.py", 1)]
+
+
 def test_v29s_base_pinned_by_digest_drops_its_digest() -> None:
     dockerfile = (
         f"ARG BASE=ghcr.io/open-meridian/plugin-python:0.33.5@{_DIGEST}\nFROM ${{BASE}}\n"
