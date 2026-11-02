@@ -122,3 +122,34 @@ async def test_a_feed_bound_to_the_recorder_resolves_its_venue(feed: Any) -> Non
     lake = recorder.bind(feed())
     assert (await lake.venue_id()).startswith("VEN-")
     assert [sent.row for sent in recorder.sent] == ["ResolveVenue"]
+
+
+# ── An event-contract feed asks for its venue once a contract is served ───
+
+
+async def test_a_bars_pass_and_a_reread_ask_for_no_venue_until_a_contract_is_served() -> None:
+    """The pilot's kalshi e2e: `Feed.run()` resolved the venue on start,
+    through its bars pass, before any contract was served."""
+    from fake_venues import NOW_NS, BarsMarket, contracts_catalogue, contracts_venue
+    from meridian.roles.data.testing import Lake
+
+    lake = Lake(contracts_venue.VENUE)
+    feed = lake.bind(
+        event_contracts.Feed(
+            BarsMarket(),
+            event_contracts.ContractMap(),
+            clock_ns=lambda: NOW_NS,
+            bars_declared=contracts_catalogue("bars")[0],
+        )
+    )
+    assert await feed.keep_bars(once=True) == 0
+    await feed.reread()
+    assert lake.on("ResolveVenue") == []
+    # Once a contract is served, a pass asks for it.
+    subject = await lake.held(feed, "BASE-1")
+    await feed.record_live([subject], data_type="meridian.v1.Price")
+    assert feed.contracts.mapped()
+    asked = len(lake.on("ResolveVenue"))
+    feed.venue.asked = False
+    await feed.keep_bars(once=True)
+    assert len(lake.on("ResolveVenue")) == asked + 1
