@@ -1,0 +1,23 @@
+# open-meridian 0.35.3 to 0.35.4: a fix and an addition, with no contract
+# change (ruling 1070, question 450, and what was decided under A after it):
+# nothing a plugin calls changed shape, so only the pins move.
+from = "0.35.3"
+to = "0.35.4"
+summary = """
+A fix and an addition, with no contract change. A book record's view keys it
+by its entity (views.ENTITY_KEYS): an order whose venue's ID is set later is
+held once, and its key is now `order_id=<id>` alone. A quote stating no source
+time is timed by its valid_from_ns (roles.source_ns, confirmed_ns), so the
+pre-trade check (ems.ReferenceCheck) no longer judges such a quote stale. The
+views' stream survives a read again that fails outside gRPC (the lake down
+after a loss), says so and reads again. pages.live serves a page's live values
+as well as a view: pages.live_values(key, compute, views=...) answers the
+values a plugin works out from its views, each a LiveValue.of(...) carrying
+its source, age and staleness, counted only in session, and never stale with
+no ceiling declared; the kit's om-live draws them. Every template's AGENTS.md
+"Subscribe to what a page shows" says so. Nothing a plugin calls changed
+shape: `meridian plugin migrate` moves the pins and changes no code. A plugin
+with a live module of its own (a board of cells worked out from views) moves
+onto pages.live_values by hand.
+"""
+breaking = false

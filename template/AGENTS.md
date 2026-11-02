@@ -435,6 +435,15 @@ no bus call.
 - **Book records too.** `OrderUpdated`, `PositionChanged` and the other
   records your roles hear keep a view by entity. A page reads the view, not
   `list_orders` on every request.
+- **Figures worked out from views: `pages.live_values`.** Where a page
+  shows a mid, a cross or a move rather than the rows as recorded, its
+  `pages.live` function answers `await pages.live_values(key, compute,
+  views=...)`, `compute` making each value with `LiveValue.of(key, shown,
+  rows, datasets=..., liveness=..., sessions=...)`. Each carries its source
+  dataset, its age, and a stale flag past its dataset's ceiling, counted
+  only in session; with no ceiling declared it is never stale. The kit's
+  `<om-live cells>` (kit 0.16.0) draws them into the elements marked
+  `data-live`. Never write a live module of your own.
 
 ```python
 @pages.live("/rates/live", levels="read")
