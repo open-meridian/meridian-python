@@ -44,16 +44,17 @@ DAILY = meridian.DatasetDeclaration(
     modes=["pull"],
     cadence=86_400,
     history=1_826,
-    licence_default=meridian.DatasetLicence(
-        kept=True,
-        # The deployment admin sets the licence on Data sources, and a term
-        # left unstated is read restrictively; state your vendor's where known:
-        # derived_use_terms="internal_only",
-        # redistribution="not_allowed",
-        # not_affiliated_notice="",
-    ),
     day_time_zone="Etc/UTC",
 )
+# The deployment admin settles the terms with the vendor and sets the
+# licence on Data sources; the plugin only describes them. A dataset's terms
+# and pricing in plain words, for its docs (and, from the contract's next
+# revision, its declaration), for example:
+#
+#   "Daily closes and bars, five years back. Included in the vendor's free
+#    plan for personal use; business use needs its Business plan ($99 a
+#    month). Not for redistribution; the vendor asks that pages showing it
+#    say 'Data from Reference vendor'."
 
 
 @meridian.settings

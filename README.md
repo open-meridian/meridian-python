@@ -2434,9 +2434,10 @@ example:
   and the stream's seeding, handing it on again, is not answered twice.
 
 Nothing in the SDK refuses a licence term left unstated (ruling 1030):
-the deployment admin sets a dataset's licence on Data sources, and a term
-left unstated is read restrictively; the data template shows the three
-terms commented. `helpers.pacing` is not in 0.35 (ruling 1028): the data template's
+the deployment admin settles terms with the vendor and sets a dataset's
+licence on Data sources, and the plugin only describes them (ruling 1032):
+the data template declares no `licence_default` and shows, commented, a
+dataset's terms and pricing described in plain words. `helpers.pacing` is not in 0.35 (ruling 1028): the data template's
 `pacing.py` shows a vendor's rate limit and `Retry-After` kept by the
 plugin. No transports package is shipped (ruling 1027).
 
