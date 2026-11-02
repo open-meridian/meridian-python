@@ -2,7 +2,7 @@
 
 The Python SDK for building [Open Meridian](https://open-meridian.com) plugins:
 the tools a trader has an AI agent build, and the bots and analytics a
-developer writes. Python 3.11 or newer. This is release 0.35.0; its reference
+developer writes. Python 3.11 or newer. This is release 0.35.1; its reference
 is at [open-meridian.dev](https://open-meridian.dev/api/python-sdk/).
 
 ## Start here
@@ -2280,7 +2280,7 @@ rewrites the modules' imports and says what is left by hand.
       await lifecycle.propose(self, [expected])
   ```
 
-### Each role is one class (0.35.0)
+### Each role is one class (0.35.0 and 0.35.1)
 
 From 0.35.0 (spec/each-role-is-one-generated-class; rulings 1004, 1005 and
 1009 to 1023) a plugin writes one class per role it holds. Each extends its
@@ -2445,7 +2445,28 @@ dataset's terms and pricing described in plain words. `helpers.pacing` is not in
 `pacing.py` shows a vendor's rate limit and `Retry-After` kept by the
 plugin. No transports package is shipped (ruling 1027).
 
-  **Run 0.35.0 on a core of contract v29**: no contract changed.
+- **0.35.1, a fix** (ruling 1023): an act is made through the role object,
+  never the connection. The pairs and event-contract feeds resolved their
+  venue through `self.plugin`, so every such data plugin failed under
+  `meridian.run` ("'Plugin' object has no attribute 'resolve_venue'"); they
+  resolve it through the feed. The suites' `Recorder.plugin` is now a
+  stand-in for the connection holding only what `meridian.Plugin` holds
+  (the recorder's `identity`, `raw_record`, `note_not_carried`), so a class,
+  helper or page acting through the connection fails in a plugin's tests as
+  it does when it runs; `recorder.bind(...)` binds a class to it, and a
+  `PageClient` given a recorder hands its pages it as `request.plugin`.
+  `meridian.run` applies the first settings before any class's `on_start`,
+  and keeps the settings watch, opened again after a backoff when its
+  stream breaks; a reopened stream (`hear_again()`, a break) reads the
+  lake's latest again only of the rows seeded, handed only to the classes
+  that seed; an event-contract feed asks for its venue only once a contract
+  is served. Migrating from 0.34.0 and earlier, the steps also drop a data
+  feed's own handlers from `receive`, make a recorder's `receive` in the
+  plugin's own code `recorder.hear(...)`, leave a base pinned at a later
+  release as it is, and name less by hand. Nothing a plugin calls changed;
+  `meridian plugin migrate` moves the pins.
+
+  **Run 0.35.0 and 0.35.1 on a core of contract v29**: no contract changed.
 
 ## Moving a plugin to a new release
 
@@ -2531,6 +2552,7 @@ carries libcst.
 | 0.33.0 to 0.33.1: additive, on contract v28: an event-contract `Market` may answer `bars(contract, interval, first_ns, until_ns)` (`Candle`, `HOUR`, `DAY`), its plugin declaring a third dataset keyed `bars` (`meridian.v1.Bar`, on its session day) and running `Feed.keep_bars(declared)`; `EventContractsChecks` accept `bars` where the hook is supplied and refuse any other third dataset; the feed-delay producer stands on the quote where the last trade states no time or no prices are declared (ruling 626); a row stating an interval is no duplicate of the same values over another | only the pins move: no migrate step is needed beyond them | a venue keeping bars declares `bars`, names `BARS_DECLARED` in its `venue_cases` and drops `a-daily-bar` from `NOT_PRESENTED`; a plugin's own feed-delay producer standing on the quote can be removed |
 | 0.33.5 to 0.34.0: the SDK declares contract v29, fixed income: the contract's money rules, accrual and factors (`helpers.debt`), the seven fixed-income records reported and servicing's expectations (`helpers.lifecycle`), `analytics.DEBT_MEASURES` and their reference computations (`analytics.debt`), a quality assessment's data type, a derived value in money, the suites' factor cases and the widened `about` markers; `meridian.roles` holds only roles, its topic modules `chains`, `packages`, `lifecycle` and `debt` moved to `meridian.helpers` with no shim (ruling 1001). Breaking | every import and name of `meridian.roles.chains`, `.packages`, `.lifecycle` or `.debt` onto `meridian.helpers` (`import meridian.roles.chains`, `from meridian.roles import chains`, `from meridian.roles.chains import X`; `from meridian.roles import Latency, chains` split in two; `meridian.roles.debt.factor(...)`, a patch target's string); a base pinned by digest at an older release moved to 0.34.0, its digest dropped (offline) | map each role suite's v29 cases, or name those about what the plugin never presents; name a `QualityAssessment`'s `data_type`; an old path still named in a comment, a dynamic import or read through `from meridian.roles import *`; pin the base's digest again |
 | 0.34.0 to 0.35.0: each role is one class (spec/each-role-is-one-generated-class): `meridian.roles.<role>.Role` for every role, generated from the matrix and the suites, its acts methods and its events `on_<row>` methods, required ones abstract; seven role modules added (`compliance`, `confirmation`, `oms`, `portfolio`, `reference`, `servicing`, `settlement`); `meridian.run` and `run_async` the entry point, `on_start`, `run` (restarted with `helpers.sessions.Backoff`) and `on_stop`, `seed`, `subjects()` and `hear_again()` per class on one stream; `connect(roles=)` required; the connection keeps only what is plugin-wide, and makes no act; `receive` gone; `connectivity.Trader`, `pricing.Pricer` and the data feeds role classes; helpers given the role object; `Recorder.bind` and `Recorder.hear`; `meridian.behaviours`; 924's helpers -- `helpers.sessions.Supervisor`, `helpers.calendars` (`DayClock`, `MarketDays`), `data.SentRows`, `Conflator`, `Timetable`, `timeliness`, `api_key`, the listings feed's timeliness, two clocks, MIC venues, edge and pages, `data.option_chains`, `pairs.Feed(conflate_first=, day_clock=)` and `pairs.supervised` -- each held to behaviour cases. No contract change. Breaking | a `receive` call whose handlers are one class's methods on one declared role's events made that class's `on_<row>` methods, the class given the role's base, `seed=False` its `seed = False`, the connection it took dropped; the SDK's own handlers dropped from a `receive`; a Trader's, a feed's and a Pricer's renamed methods and arguments, the connection given them dropped (a recorder's call `recorder.bind(...)`); `self.plugin.<act>` on `self` in a role class, a helper given `self.plugin` given `self`; an unchanged template entry point replaced; a listings feed's own `at_the_edge` and the `_record` override calling it deleted (the feed does both), and the `_changed` copies made `data.SentRows`, a name only they imported dropped | an entry point connecting by hand, moved to `meridian.run`; an act on the connection, made on the role object holding it; a `receive` no rewrite reached; a role class lacking a required event; a suite test hearing through `recorder.receive` or giving a class a stand-in connection; 924's helpers adopted by hand (`helper-adopted`): a stream supervisor of its own onto `helpers.sessions.Supervisor` over its `Link`, a chains machine onto `data.option_chains.Feed`, a calendar reader and a day by hand onto `helpers.calendars`, listings pages onto the SDK's, a polling loop onto `data.Timetable`, a plan switch onto the listings feed's `timeliness`, the `again` and `licences` loops onto a role's `run()`, an FX lake onto `pairs.Feed(conflate_first=True)`, and a raw store onto `meridian.edge.RawStore` |
+| 0.35.0 to 0.35.1: a fix (ruling 1023): the pairs and event-contract feeds resolve their venue through the feed, not the connection; the suites' `Recorder.plugin` a stand-in for the connection that makes no act, a `PageClient` given a recorder handing its pages the same; `meridian.run` applies the first settings before `on_start` and keeps the settings watch; a reopened stream reads the latest only of rows seeded; an event-contract feed asks for its venue once a contract is served; the 0.34.0 and 0.35.0 steps rewrite more (a feed's own handlers dropped from `receive`, a recorder's `receive` outside the tests heard, a later base pin kept) and name less by hand | only the pins move: no migrate step is needed beyond them | a plugin's test acting through `recorder.plugin` or a page's `request.plugin`, or asserting a class's `plugin` is the recorder, now fails as the plugin would when run: the act made on the role object, the assertion on `recorder.plugin` |
 
 `tests/migrations/` holds the plugins the migrations are recorded for, as
 written and as their migration leaves them, and `make check-migrations` holds

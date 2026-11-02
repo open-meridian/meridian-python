@@ -1,0 +1,20 @@
+# open-meridian 0.35.0 to 0.35.1: a fix, with no contract change (ruling
+# 1023): nothing a plugin calls changed shape, so only the pins move.
+from = "0.35.0"
+to = "0.35.1"
+summary = """
+A fix. The pairs and event-contract feeds resolve their venue through the
+feed, the data role's class, not the connection, which makes no act under
+meridian.run: every such data plugin failed there on 0.35.0 (ruling 1023).
+The suites' Recorder.plugin is a stand-in for the connection holding only
+what it holds, so a class, helper or page acting through the connection fails
+in a plugin's tests as it fails when it runs; a PageClient given a Recorder
+hands its pages the same stand-in. meridian.run applies the first settings
+before any class's on_start and keeps the settings watch, opened again when
+its stream breaks; a reopened stream reads the lake's latest again only of
+the rows seeded; an event-contract feed asks for its venue only once a
+contract is served. The 0.34.0 and 0.35.0 steps rewrite more of a plugin
+migrated through them. Nothing a plugin calls changed shape: `meridian plugin
+migrate` moves the pins and changes no code.
+"""
+breaking = false
