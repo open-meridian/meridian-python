@@ -451,7 +451,8 @@ async def test_the_scaffold_registers_with_a_real_sidecar() -> None:
     assert not any("external account(s) to link" in line for line in said), said
     registered = next(line for line in said if "registered as" in line)
     assert "roles custody" in registered, said
-    assert RECORD_STATEMENT in next(line for line in said if "may publish" in line), said
+    # `meridian.run` logs no grants from 0.35; the scaffold's publish grant is
+    # the sidecar's, held by test_the_runtime_says_who_this_plugin_is.
     assert code == 0, said
 
 
