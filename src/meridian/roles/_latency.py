@@ -328,8 +328,10 @@ class Latency:
 
     def aged(self, dataset: str, hop: int | str, row: Any, session: str = "") -> int:
         """A row's age at a hop, recorded now: how old it was, or -1 for a
-        row with no source time, which records nothing."""
-        held = source_ns(row)
+        row stating no source time, which records nothing (a quote's
+        `valid_from_ns`, which `source_ns` falls back to, is not a time
+        its source stated)."""
+        held = _stated_ns(row)
         if not held:
             return -1
         age = int(self.clock_ns()) - held
@@ -518,7 +520,30 @@ class Latency:
 def source_ns(row: Any) -> int:
     """A row's source time (the spec's "The hops"): its `event` source time
     where it has one, else its earliest; 0 for none. A row is a typed
-    operation's dataclass or the wire's message alike."""
+    operation's dataclass or the wire's message alike.
+
+    A quote stating no source time is timed by the moment it is in force
+    from, its `valid_from_ns` (SDK 0.35.4): before, it had none, so its age
+    was its whole age since 1970 and `ems.ReferenceCheck` judged every such
+    quote stale."""
+    held = _stated_ns(row)
+    if held:
+        return held
+    meta = getattr(row, "meta", None)
+    if meta is not None and _is_quote(row):
+        return int(getattr(meta, "valid_from_ns", 0) or 0)
+    return 0
+
+
+def _is_quote(row: Any) -> bool:
+    descriptor = getattr(row, "DESCRIPTOR", None)
+    name = descriptor.name if descriptor is not None else type(row).__name__
+    return bool(name == "Quote")
+
+
+def _stated_ns(row: Any) -> int:
+    """The source time a row states: its `event` time where it has one,
+    else its earliest; 0 for none."""
     meta = getattr(row, "meta", None)
     times = list(getattr(meta, "source_times", ()) or ()) if meta is not None else []
     if not times:
@@ -566,7 +591,8 @@ class Liveness:
 
 def confirmed_ns(row: Any, liveness: Liveness | None = None) -> int:
     """A value's confirmed time (the spec's staleness): the later of its
-    source time and its dataset's liveness after it."""
+    source time (`source_ns`: a quote stating none, the moment it is in
+    force from) and its dataset's liveness after it."""
     held = source_ns(row)
     if liveness is None:
         return held

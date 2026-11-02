@@ -175,3 +175,55 @@ def test_every_book_row_a_view_keeps_names_its_entity() -> None:
                 assert name in held.fields_by_name, f"{record.name} has no {path}"
                 found = held.fields_by_name[name]
                 held = found.message_type or held
+
+
+# ── 2. A quote stating no source time ────────────────────────────────────────
+
+NOW = 1_791_417_600_000_000_000
+SECOND = 1_000_000_000
+QUOTES = ops.DatasetRef(dataset="oanda-1:quotes", stale_after_ns=5 * SECOND)
+
+
+def untimed_quote(valid_from_ns: int) -> ops.Quote:
+    """A quote as a stream that states no time of its own sends it: in force
+    from the moment it was heard."""
+    return ops.Quote(
+        meta=ops.ObservationMeta(
+            subjects=[ops.SubjectRef(entity_id="INS-EURUSD")],
+            source=ops.Source(dataset="oanda-1:quotes", venue_id="VEN-OANDA"),
+            valid_from_ns=valid_from_ns,
+        ),
+        bid=ops.Money(currency_code="USD"),
+    )
+
+
+def test_a_quote_stating_no_time_is_timed_by_its_valid_from() -> None:
+    from meridian.roles import confirmed_ns, source_ns
+
+    held = untimed_quote(NOW - SECOND)
+    assert source_ns(held) == NOW - SECOND
+    assert confirmed_ns(held) == NOW - SECOND
+    # The typed operation's own dataclass, alike.
+    typed = meridian.Quote(
+        meta=meridian.ObservationMeta(valid_from_ns=NOW - SECOND), bid=meridian.Money(1, "USD")
+    )
+    assert source_ns(typed) == NOW - SECOND
+    # A time the source stated still comes first.
+    stated = untimed_quote(NOW - SECOND)
+    stated.meta.source_times.add(kind=ops.SOURCE_TIME_KIND_EVENT, at_ns=NOW - 3 * SECOND)
+    assert source_ns(stated) == NOW - 3 * SECOND
+    # Another row stating none still has none.
+    price = ops.Price(meta=ops.ObservationMeta(valid_from_ns=NOW - SECOND))
+    assert source_ns(price) == 0
+
+
+def test_the_pre_trade_check_no_longer_judges_such_a_quote_stale() -> None:
+    from meridian.roles import Latency, ems
+
+    latency = Latency(clock_ns=lambda: NOW)
+    check = ems.ReferenceCheck(clock_ns=lambda: NOW, latency=latency)
+    assert check.stale(untimed_quote(NOW - SECOND), dataset=QUOTES) is None
+    found = check.stale(untimed_quote(NOW - 6 * SECOND), dataset=QUOTES)
+    assert found is not None and found.age_ns == 6 * SECOND
+    # The edge's feed delay records only times a source stated.
+    assert latency.aged("oanda-1:quotes", "AGE_HOP_EDGE", untimed_quote(NOW)) == -1
