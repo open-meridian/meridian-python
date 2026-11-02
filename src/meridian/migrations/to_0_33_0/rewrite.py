@@ -133,6 +133,42 @@ class _Subjects(cst.CSTTransformer):
         )
 
 
+class _Annotated(cst.CSTTransformer):
+    """In a file whose SubjectRefs this step made the SDK's, each annotation
+    naming the wire's (`list[ops.SubjectRef]`) the SDK's too (SDK 0.35.3: a
+    strict type check refused the SDK's value under the wire's name)."""
+
+    def __init__(self, wire: _Wire, package: str) -> None:
+        super().__init__()
+        self.wire = wire
+        self.package = package
+        self.depth = 0
+        self.applied: list[str] = []
+
+    def visit_Annotation(self, node: cst.Annotation) -> None:
+        self.depth += 1
+
+    def leave_Annotation(
+        self, original_node: cst.Annotation, updated_node: cst.Annotation
+    ) -> cst.Annotation:
+        self.depth -= 1
+        return updated_node
+
+    def _sdk(self, node: cst.BaseExpression) -> cst.BaseExpression:
+        if self.depth and _of_wire(node, self.wire) == NAME:
+            self.applied.append("subject-ref-from-the-sdk")
+            return cst.Attribute(value=cst.Name(self.package), attr=cst.Name(NAME))
+        return node
+
+    def leave_Attribute(
+        self, original_node: cst.Attribute, updated_node: cst.Attribute
+    ) -> cst.BaseExpression:
+        return self._sdk(updated_node)
+
+    def leave_Name(self, original_node: cst.Name, updated_node: cst.Name) -> cst.BaseExpression:
+        return self._sdk(updated_node)
+
+
 class _Named(cst.CSTVisitor):
     """Each local name still named outside an import."""
 
@@ -208,6 +244,9 @@ def rewrite(path: str, text: str) -> Rewritten:
     rewritten = module.visit(subjects)
     if not subjects.applied:
         return Rewritten(text)
+    annotated = _Annotated(wire, package)
+    rewritten = rewritten.visit(annotated)
+    subjects.applied.extend(annotated.applied)
     if imports.package is None:
         context = CodemodContext()
         AddImportsVisitor.add_needed_import(context, "meridian")

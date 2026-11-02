@@ -194,6 +194,52 @@ def add_import(module: cst.Module, source: str, name: str) -> cst.Module:
     added = module.visit(adding)
     if adding.added:
         return added
+    placed = _placed(module, source, name)
+    if placed is not None:
+        return placed
     context = CodemodContext()
     AddImportsVisitor.add_needed_import(context, source, name)
     return AddImportsVisitor(context).transform_module(module)
+
+
+def _from_module(statement: cst.BaseStatement) -> tuple[str, bool] | None:
+    """A top-level `from x import ...`'s module, and whether it is relative;
+    None for any other statement."""
+    if not isinstance(statement, cst.SimpleStatementLine) or len(statement.body) != 1:
+        return None
+    small = statement.body[0]
+    if isinstance(small, cst.ImportFrom):
+        module = dotted(small.module) if small.module is not None else ""
+        return module or "", bool(small.relative)
+    if isinstance(small, cst.Import):
+        return dotted(small.names[0].name) or "", False
+    return None
+
+
+def _placed(module: cst.Module, source: str, name: str) -> cst.Module | None:
+    """`from source import name` placed among the file's own imports where
+    isort puts it -- among the absolute imports of its package, in order,
+    and always before the file's relative imports (SDK 0.35.3: libcst's
+    placement put it after them) -- where the file has relative imports;
+    None otherwise, for libcst to place."""
+    body = list(module.body)
+    held = [(i, _from_module(s)) for i, s in enumerate(body)]
+    relative = next((i for i, found in held if found is not None and found[1]), None)
+    if relative is None:
+        return None
+    absolute = [
+        (i, found[0]) for i, found in held[:relative] if found is not None and not found[1]
+    ]
+    if not absolute:
+        return None
+    root = source.split(".")[0]
+    mine = [(i, m) for i, m in absolute if m.split(".")[0] == root]
+    later = next((i for i, m in mine if m > source), None)
+    at = later if later is not None else (mine or absolute)[-1][0] + 1
+    made = cst.parse_statement(f"from {source} import {name}\n")
+    if at < len(body) and at == later:
+        # Before an import of its package: that one's blank lines are its.
+        made = made.with_changes(leading_lines=body[at].leading_lines)
+        body[at] = body[at].with_changes(leading_lines=[])
+    body.insert(at, made)
+    return module.with_changes(body=body)

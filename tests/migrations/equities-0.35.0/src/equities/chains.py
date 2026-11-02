@@ -32,7 +32,7 @@ class Chains:
         if day in self.days:
             return self.days[day]
         try:
-            answer = await self.lake.plugin.read_calendar(
+            answer = await self.lake.read_calendar(
                 calendar_id="CAL-1", from_date=day, to_date=day
             )
         except MeridianError as failed:

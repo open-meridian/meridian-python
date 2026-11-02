@@ -59,7 +59,7 @@ import libcst as cst
 from libcst.metadata import MetadataWrapper, ParentNodeProvider, PositionProvider
 
 from .. import Finding, Rewritten
-from .._cst import add_import, dotted, is_test, line_of
+from .._cst import add_import, dotted, is_test, line_of, literal
 
 HERE = Path(__file__).parent
 TARGET = "0.35.0"
@@ -188,6 +188,18 @@ class _OntoSentRows(cst.CSTTransformer):
             return cst.Assign(
                 targets=[cst.AssignTarget(updated_node.target)], value=self._made()
             )
+        if dotted(updated_node.target) == self.attr and isinstance(
+            updated_node.value, cst.Call
+        ):
+            # A dataclass's field (SDK 0.35.3): its type and its default the
+            # SDK's, `field(default_factory=lambda: SentRows(<bound>))`.
+            made = cst.parse_expression(
+                f"field(default_factory=lambda: SentRows({self.bound}))"
+            )
+            return updated_node.with_changes(
+                annotation=cst.Annotation(cst.Name("SentRows")),
+                value=made,
+            )
         return updated_node
 
     def leave_Assign(self, original_node: cst.Assign, updated_node: cst.Assign) -> cst.Assign:
@@ -289,6 +301,10 @@ class _Class:
     # A `plugin` dataclass field, or an `__init__` taking `plugin` and
     # keeping it as `self.plugin` or `self._plugin`.
     given_plugin: bool = False
+    # The acts it makes on its connection (`self.plugin.<act>(...)`), and
+    # the methods of a role class's base it defines otherwise (SDK 0.35.3).
+    acts: set[str] = field(default_factory=set)
+    clashes: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -327,6 +343,14 @@ class _Plugin:
     # Objects bound to the SDK's common logic, by their dotted name in a
     # file (`trader`, `self.trader`), and what each is.
     objects: dict[str, str] = field(default_factory=dict)
+    # Objects of a role's class, the plugin's or the SDK's, by their dotted
+    # name in a file, and the role (SDK 0.35.3).
+    role_objects: dict[str, str] = field(default_factory=dict)
+    # Classes not made a role's class, by name: the rule naming why, and
+    # what (SDK 0.35.3).
+    unplanned: dict[str, tuple[str, str]] = field(default_factory=dict)
+    # Methods a removed `receive` left empty, removed with it (SDK 0.35.3).
+    emptied: set[str] = field(default_factory=set)
     # The method renames reaching every reference in the plugin.
     renames: dict[str, str] = field(default_factory=dict)
     # An `on_start` added to a class whose template's entry point is replaced.
@@ -385,6 +409,16 @@ class _Reader(cst.CSTVisitor):
         self.built: list[tuple[str, str]] = []
         self.receives: list[tuple[int, int, cst.Call]] = []
         self._in: list[_Class] = []
+        self._functions: list[cst.FunctionDef] = []
+        #: A receive, by its place, that is all its class's method does: the
+        #: method's name (SDK 0.35.3).
+        self.sole: dict[tuple[int, int], str] = {}
+
+    def visit_FunctionDef(self, node: cst.FunctionDef) -> None:
+        self._functions.append(node)
+
+    def leave_FunctionDef(self, original_node: cst.FunctionDef) -> None:
+        self._functions.pop()
 
     def visit_ClassDef(self, node: cst.ClassDef) -> None:
         held = _Class(
@@ -395,6 +429,8 @@ class _Reader(cst.CSTVisitor):
         for statement in node.body.body:
             if isinstance(statement, cst.FunctionDef):
                 held.methods.add(statement.name.value)
+                if _clashes(statement):
+                    held.clashes.append(statement.name.value)
                 if statement.name.value == "__init__":
                     params = [p.name.value for p in statement.params.params]
                     held.given_plugin |= "plugin" in params[1:2]
@@ -429,6 +465,23 @@ class _Reader(cst.CSTVisitor):
         ):
             at = self.get_metadata(PositionProvider, node).start
             self.receives.append((at.line, at.column, node))
+            method = self._functions[-1] if self._functions else None
+            if method is not None and self._in and method.name.value != "__init__":
+                real = [s for s in method.body.body if not _is_docstring(s)]
+                if (
+                    len(real) == 1
+                    and isinstance(real[0], cst.SimpleStatementLine)
+                    and len(real[0].body) == 1
+                    and _call_of(real[0].body[0]) is node
+                ):
+                    self.sole[(at.line, at.column)] = method.name.value
+        if (
+            self._in
+            and isinstance(node.func, cst.Attribute)
+            and dotted(node.func.value) in ("self.plugin", "self._plugin")
+            and node.func.attr.value in EVERY_ACT
+        ):
+            self._in[-1].acts.add(node.func.attr.value)
 
 
 def given(files: dict[str, str]) -> None:
@@ -491,6 +544,19 @@ def given(files: dict[str, str]) -> None:
     # planned (SDK 0.35.1).
     for reader, line, column, call in heard:
         _plan_hear(plugin, reader, line, column, call, owners)
+    # A method a removed receive was all of: removed with it (SDK 0.35.3).
+    for reader in readers:
+        for receive in plugin.receives:
+            if receive.path == reader.path and receive.removed:
+                emptied = reader.sole.get((receive.line, receive.column))
+                if emptied:
+                    plugin.emptied.add(emptied)
+    # Each object of a role's class, once every class's role is planned.
+    for reader in readers:
+        for name, built in reader.built:
+            role = _role_of(built, plugin.classes)
+            if role:
+                plugin.role_objects[name] = role
     # A class renamed's methods are renamed wherever they are named, when no
     # other class of the plugin has a method of the same name.
     for name, plan in plugin.plans.items():
@@ -549,6 +615,20 @@ def _plan_receive(
                 plugin.receives.append(receive)
             return
         (role,) = roles
+        held = plugin.classes[name]
+        others = sorted(held.acts - ACTS[role])
+        if not already and (others or held.clashes):
+            # Made a role's class, it would lose the acts of another role it
+            # makes, or its own `run(...)` would be the role's (SDK 0.35.3).
+            plugin.unplanned.setdefault(
+                name,
+                ("role-class-two-roles", ", ".join(others))
+                if others
+                else ("role-method-clash", ", ".join(held.clashes)),
+            )
+            if receive.dropped:
+                plugin.receives.append(receive)
+            return
         plan = plugin.plans.setdefault(name, _Plan(role, add_base=not already))
         for keyword, method in mine.items():
             wanted = SURFACES[role]["events"][ROW_OF[keyword]]
@@ -633,7 +713,10 @@ def _recorder(arg: cst.BaseExpression) -> cst.BaseExpression | None:
         made = (dotted(arg.func) or "").rsplit(".", 1)[-1]
         return arg if made.endswith("Recorder") or made == "Lake" else None
     name = dotted(arg) or ""
-    return arg if "recorder" in name.lower() or name.endswith("lake") else None
+    last = name.rsplit(".", 1)[-1].lower()
+    # A stand-in named as one (`stand_in`, SDK 0.35.3) is bound to as well.
+    held = "recorder" in last or last.endswith("lake") or "stand_in" in last
+    return arg if held else None
 
 
 class _Rewriter(cst.CSTTransformer):
@@ -749,6 +832,28 @@ class _Rewriter(cst.CSTTransformer):
 
     def leave_FunctionDef(
         self, original_node: cst.FunctionDef, updated_node: cst.FunctionDef
+    ) -> cst.FunctionDef | cst.RemovalSentinel:
+        if (
+            self.classes
+            and not _empty(original_node.body.body)
+            and _empty(updated_node.body.body)
+        ):
+            # A method whose `receive` was all it did: gone with it, and each
+            # call of it named (SDK 0.35.3).
+            self.rules.append("receive-to-role-methods")
+            return cst.RemovalSentinel.REMOVE
+        made = self._function(original_node, updated_node)
+        if (
+            made.name.value == "__init__"
+            and not _empty(original_node.body.body)
+            and _empty(made.body.body)
+        ):
+            # An `__init__` that only kept the connection: the base's serves.
+            return cst.RemovalSentinel.REMOVE
+        return made
+
+    def _function(
+        self, original_node: cst.FunctionDef, updated_node: cst.FunctionDef
     ) -> cst.FunctionDef:
         name = updated_node.name.value
         owner = self.classes[-1] if self.classes else ""
@@ -761,19 +866,33 @@ class _Rewriter(cst.CSTTransformer):
         if renamed and self.classes:
             self.rules.append("common-logic-renamed")
             return updated_node.with_changes(name=cst.Name(renamed))
-        if name == "__init__" and plan is not None and _plugin.classes[owner].given_plugin:
+        # A class this step makes a role class, or the plugin's own class
+        # of the SDK's logic (a Trader of its own, SDK 0.35.3), given the
+        # connection first: it no longer takes it.
+        dropping = (plan is not None and _plugin.classes[owner].given_plugin) or bool(logic)
+        if name == "__init__" and dropping:
             params = list(updated_node.params.params)
             if len(params) > 1 and params[1].name.value == "plugin":
                 if len(params) == 2:
                     params[0] = params[0].with_changes(comma=cst.MaybeSentinel.DEFAULT)
                 del params[1]
+                uses = _PluginUses(self.names)
+                original_node.body.visit(uses)
+                for each in uses.left:
+                    line = self.get_metadata(PositionProvider, each).start.line
+                    self.findings.append(("plugin-param-removed", line))
+                body = cast(
+                    cst.IndentedBlock, updated_node.body.visit(_PluginToSelf(self.names))
+                )
                 kept_body: list[Any] = [
-                    s for s in updated_node.body.body if not _keeps_plugin(s)
+                    _super_without_plugin(s) for s in body.body if not _keeps_plugin(s)
                 ]
-                self.rules.append("receive-to-role-methods")
+                self.rules.append(
+                    "common-logic-renamed" if plan is None else "receive-to-role-methods"
+                )
                 return updated_node.with_changes(
                     params=updated_node.params.with_changes(params=params),
-                    body=updated_node.body.with_changes(body=kept_body),
+                    body=body.with_changes(body=kept_body),
                 )
         return updated_node
 
@@ -787,8 +906,8 @@ class _Rewriter(cst.CSTTransformer):
         if name in _plugin.renames:
             self.rules.append("receive-to-role-methods")
             return updated_node.with_changes(attr=cst.Name(_plugin.renames[name]))
-        logic = _plugin.objects.get(owner, "")
-        if owner == "self":
+        logic = _plugin.objects.get(owner, "") or _object_named(owner)
+        if owner == "self" or _is_super(updated_node.value):
             logic = self._logic()
         renamed = _logic_rename(logic, name)
         if renamed:
@@ -798,6 +917,11 @@ class _Rewriter(cst.CSTTransformer):
 
     def leave_Call(self, original_node: cst.Call, updated_node: cst.Call) -> cst.BaseExpression:
         at = self.get_metadata(PositionProvider, original_node).start
+        if (
+            isinstance(original_node.func, cst.Attribute)
+            and original_node.func.attr.value in _plugin.emptied
+        ):
+            self.findings.append(("emptied-method-called", at.line))
         receive = self.receives.get((at.line, at.column))
         if (
             receive is not None
@@ -832,6 +956,18 @@ class _Rewriter(cst.CSTTransformer):
             updated_node = updated_node.with_changes(
                 func=func.with_changes(value=cst.Name("self"))
             )
+        # <role object>.plugin.<act>(...) on the role object (SDK 0.35.3):
+        # `self.lake.plugin.record_liveness(...)` is `self.lake`'s act.
+        if (
+            isinstance(func, cst.Attribute)
+            and isinstance(func.value, cst.Attribute)
+            and func.value.attr.value in ("plugin", "_plugin")
+            and func.attr.value in ACTS.get(_role_object(dotted(func.value.value) or ""), ())
+        ):
+            self.rules.append("self-plugin-act-to-self")
+            updated_node = updated_node.with_changes(
+                func=func.with_changes(value=func.value.value)
+            )
         # A helper given self.plugin, given self.
         helper = _resolved(updated_node.func, self.names).startswith("meridian.") or (
             isinstance(updated_node.func, cst.Attribute)
@@ -862,11 +998,16 @@ class _Rewriter(cst.CSTTransformer):
         logic = bool(_logic_of(built, _plugin.classes))
         # A class this step makes a role class took the connection first,
         # whatever it was given there; the SDK's own only where it is one.
-        given = local in _plugin.plans and _plugin.classes[local].given_plugin
+        given = (
+            local in _plugin.plans
+            and _plugin.classes[local].given_plugin
+            and not built.startswith("meridian.")  # rates.Feed is not the plugin's Feed
+        )
         positional = [arg for arg in updated_node.args if arg.keyword is None and not arg.star]
         connection = bool(positional) and _is_connection(positional[0].value)
-        if positional and given and not connection and is_test(self.path):
-            # A stand-in for the connection, which a class no longer takes.
+        if positional and given and not connection and not _main(self.path):
+            # A stand-in for the connection, which a class no longer takes:
+            # in a test, a preview or a page's fallback (SDK 0.35.3).
             line = self.get_metadata(PositionProvider, original_node).start.line
             self.findings.append(("suite-producer-to-role", line))
         if positional and ((logic and connection) or given):
@@ -891,6 +1032,15 @@ class _Rewriter(cst.CSTTransformer):
     def leave_SimpleStatementLine(
         self, original_node: cst.SimpleStatementLine, updated_node: cst.SimpleStatementLine
     ) -> cst.BaseStatement | cst.RemovalSentinel:
+        comment = updated_node.trailing_whitespace.comment
+        if (
+            comment is not None
+            and "fmt: skip" in comment.value
+            and not original_node.deep_equals(updated_node)
+        ):
+            # Kept from the formatter: its hand layout fits the old code.
+            line = self.get_metadata(PositionProvider, original_node).start.line
+            self.findings.append(("fmt-skip-rewritten", line))
         for small in original_node.body:
             call = _call_of(small)
             if call is not None:
@@ -927,7 +1077,13 @@ def _edge_glue(statement: Any) -> bool:
         return False
     code = cst.Module(body=[statement]).code
     calls = [s for s in statement.body.body if not _is_docstring(cast(Any, s))]
-    return len(calls) <= 2 and "at_the_edge(" in code and "super()._record(" in code
+    if "super()._record(" not in code:
+        return False
+    if len(calls) <= 2 and "at_the_edge(" in code:
+        return True
+    # 0.33's temporary override (alpaca's, SDK 0.35.3): the rows aged on the
+    # feed's latency and judged by its checks by hand, then recorded.
+    return ".aged(" in code and ".judged(" in code and "AGE_HOP_EDGE" in code
 
 
 def _copied(statement: cst.BaseStatement) -> tuple[str, str] | None:
@@ -949,6 +1105,39 @@ def _import_plain(module: cst.Module, name: str) -> cst.Module:
     context = CodemodContext()
     AddImportsVisitor.add_needed_import(context, name)
     return AddImportsVisitor(context).transform_module(module)
+
+
+def _is_super(node: cst.BaseExpression) -> bool:
+    """`super()`, as `super().on_want(...)` reaches the logic beneath."""
+    return isinstance(node, cst.Call) and dotted(node.func) == "super" and not node.args
+
+
+def _role_object(owner: str) -> str:
+    """The role of the class an object is: by its dotted name in a file, or
+    by its last name where the plugin binds that name to objects of one
+    role (`self.lake`, given the lake made elsewhere)."""
+    if not owner or owner == "self":
+        return ""
+    if owner in _plugin.role_objects:
+        return _plugin.role_objects[owner]
+    last = owner.rsplit(".", 1)[-1]
+    found = {
+        role for name, role in _plugin.role_objects.items() if name.rsplit(".", 1)[-1] == last
+    }
+    return found.pop() if len(found) == 1 else ""
+
+
+def _object_named(owner: str) -> str:
+    """The SDK's logic an object reached another way is (SDK 0.35.3):
+    `state.lake` or `rig.trader`, by its last name, where the plugin binds
+    that name to one kind of the SDK's logic (`self.lake = Lake(...)`)."""
+    if "." not in owner:
+        return ""
+    last = owner.rsplit(".", 1)[-1]
+    found = {
+        logic for name, logic in _plugin.objects.items() if name.rsplit(".", 1)[-1] == last
+    }
+    return found.pop() if len(found) == 1 else ""
 
 
 def _logic_rename(logic: str, name: str) -> str:
@@ -1019,11 +1208,72 @@ def _keeps_plugin(statement: Any) -> bool:
     )
 
 
+def _super_without_plugin(statement: Any) -> Any:
+    """`super().__init__(plugin, ...)` without the connection, which the
+    SDK's logic beneath no longer takes; any other statement as it is."""
+    if not isinstance(statement, cst.SimpleStatementLine):
+        return statement
+    small = statement.body[0]
+    call = small.value if isinstance(small, cst.Expr) else None
+    if (
+        isinstance(call, cst.Call)
+        and isinstance(call.func, cst.Attribute)
+        and call.func.attr.value == "__init__"
+        and _is_super(call.func.value)
+        and call.args
+        and call.args[0].keyword is None
+        and isinstance(call.args[0].value, cst.Name)
+        and call.args[0].value.value in ("plugin", "self")
+    ):
+        rest = list(call.args[1:])
+        made = call.with_changes(args=_without(call.args, rest))
+        return statement.with_changes(body=[small.with_changes(value=made)])
+    return statement
+
+
 def _is_connection(arg: cst.BaseExpression) -> bool:
     """Whether a first argument is the connection a 0.34.0 constructor took:
     `plugin`, `self.plugin`, `request.plugin`, or a recorder in its place."""
     name = dotted(arg) or ""
     return name.rsplit(".", 1)[-1] in ("plugin", "_plugin") or _recorder(arg) is not None
+
+
+#: A role class's base's own methods (0.35.0's `RoleBase`): a class defining
+#: one otherwise -- `run(self, account_id)` -- is not made a role's class.
+BASE_METHODS = {
+    "on_start": True,  # async
+    "run": True,
+    "on_stop": True,
+    "subjects": False,
+    "hear_again": False,
+    "heard_rows": False,
+    "plugin": False,
+}
+
+
+def _clashes(method: cst.FunctionDef) -> bool:
+    """Whether a method is a role base's own, defined otherwise: a
+    parameter it requires beyond `self`, or async where the base's is not
+    (or the reverse); `plugin` defined at all."""
+    name = method.name.value
+    if name not in BASE_METHODS:
+        return False
+    if name == "plugin":
+        return True
+    params = method.params
+    required = [p for p in params.params[1:] if p.default is None]
+    required += [p for p in params.kwonly_params if p.default is None]
+    return bool(required) or (method.asynchronous is not None) != BASE_METHODS[name]
+
+
+def _empty(body: Sequence[Any]) -> bool:
+    """A body holding nothing but its docstring, or `pass`."""
+    return all(
+        _is_docstring(s)
+        or isinstance(s, cst.SimpleStatementLine)
+        and all(isinstance(small, cst.Pass) for small in s.body)
+        for s in body
+    )
 
 
 #: The SDK's methods given a role object first from 0.35.0, where 0.34.0's
@@ -1033,6 +1283,93 @@ def _is_connection(arg: cst.BaseExpression) -> bool:
 ROLE_FIRST = frozenset(
     {"resolve", "catch_up", "load", "template", "read", "run", "permitted", "hold"}
 )
+
+
+def _main(path: str) -> bool:
+    """The plugin's entry point, `src/<package>/__main__.py`."""
+    return _MAIN.match(path) is not None
+
+
+class _PluginUses(cst.CSTVisitor):
+    """In an `__init__` whose `plugin` parameter this step drops: each place
+    still reading it (SDK 0.35.3). A helper given it (`data.Wants(plugin,
+    ...)`, `rates.Feed(plugin, ...)`, `Latency(plugin)`) is given `self` --
+    the role object, bound by the time it acts; anything else
+    (`self.me = plugin.identity`) is named, since the connection is not
+    bound until the class is registered."""
+
+    def __init__(self, names: dict[str, str]) -> None:
+        super().__init__()
+        self.names = names
+        self.helped: set[int] = set()  # id() of each Name given to a helper
+        self.dropped: set[int] = set()  # and of the one `super().__init__` was
+        self.left: list[cst.Name] = []
+
+    def visit_Call(self, node: cst.Call) -> None:
+        func = node.func
+        helper = _helper(func, self.names)
+        # `super().__init__(plugin, ...)`: dropped with the parameter.
+        beneath = (
+            isinstance(func, cst.Attribute)
+            and func.attr.value == "__init__"
+            and _is_super(func.value)
+        )
+        for arg in node.args:
+            if isinstance(arg.value, cst.Name) and arg.value.value == "plugin":
+                if helper:
+                    self.helped.add(id(arg.value))
+                elif beneath and arg is node.args[0]:
+                    self.dropped.add(id(arg.value))
+
+    def visit_Assign(self, node: cst.Assign) -> bool:
+        # `self.plugin = plugin` goes with the parameter.
+        return not (
+            dotted(node.targets[0].target) in ("self.plugin", "self._plugin")
+            and dotted(node.value) == "plugin"
+        )
+
+    def visit_Name(self, node: cst.Name) -> None:
+        if node.value == "plugin" and id(node) not in self.helped | self.dropped:
+            self.left.append(node)
+
+    def visit_Attribute(self, node: cst.Attribute) -> bool:
+        node.value.visit(self)
+        return False  # an attribute's own name (`x.plugin`) is not the parameter
+
+    def visit_Arg(self, node: cst.Arg) -> bool:
+        node.value.visit(self)
+        return False  # a keyword's name (`plugin=`) is not the parameter
+
+    def visit_Param(self, node: cst.Param) -> bool:
+        return False
+
+
+def _helper(func: cst.BaseExpression, names: dict[str, str]) -> bool:
+    """A call given a role object first from 0.35.0: the SDK's own, or one
+    of its methods taking one (`ROLE_FIRST`)."""
+    return _resolved(func, names).startswith("meridian.") or (
+        isinstance(func, cst.Attribute) and func.attr.value in ROLE_FIRST
+    )
+
+
+class _PluginToSelf(cst.CSTTransformer):
+    """Each `plugin` a helper is given, `self`."""
+
+    def __init__(self, names: dict[str, str]) -> None:
+        super().__init__()
+        self.names = names
+
+    def leave_Call(self, original_node: cst.Call, updated_node: cst.Call) -> cst.Call:
+        if not _helper(updated_node.func, self.names):
+            return updated_node
+        return updated_node.with_changes(
+            args=[
+                arg.with_changes(value=cst.Name("self"))
+                if isinstance(arg.value, cst.Name) and arg.value.value == "plugin"
+                else arg
+                for arg in updated_node.args
+            ]
+        )
 
 
 def _entry(path: str, text: str) -> Rewritten | None:
@@ -1071,7 +1408,11 @@ def rewrite(path: str, text: str) -> Rewritten:
     for name in sorted(rewriter.imports_plain):
         written = _import_plain(written, name)
     if not rewriter.rules:
-        return Rewritten(text)
+        # Nothing rewritten, but perhaps something found (SDK 0.35.3).
+        findings = tuple(
+            Finding(rule, path, line, line_of(text, line)) for rule, line in rewriter.findings
+        )
+        return Rewritten(text, (), findings)
     if {"listings-edge-glue-dropped", "copied-bodies-to-sdk"} & set(rewriter.rules):
         written = _orphans_dropped(module, written)
     findings = tuple(
@@ -1094,6 +1435,14 @@ class _Used(cst.CSTVisitor):
 
     def visit_Name(self, node: cst.Name) -> None:
         self.used.add(node.value)
+
+    def visit_Assign(self, node: cst.Assign) -> None:
+        # Each name `__all__` exports is used: its import stays (SDK 0.35.3).
+        if any(dotted(target.target) == "__all__" for target in node.targets):
+            for element in getattr(node.value, "elements", ()):
+                value = literal(element.value)
+                if value:
+                    self.used.add(value)
 
 
 class _DropImported(cst.CSTTransformer):
@@ -1180,6 +1529,10 @@ def _adopted(node: cst.FunctionDef | cst.ClassDef, classes: list[str]) -> str:
         return ADOPTED_CLASSES.get(name, "")
     if name in CALENDAR_READERS and "read_calendar(" in cst.Module(body=[node]).code:
         return "a calendar reader: `helpers.calendars.MarketDays(role, calendar_id)`"
+    if name == "again" and not re.search(
+        r"\bwhile\b[\s\S]*\bsleep\(", cst.Module(body=[node]).code
+    ):
+        return ""  # a function merely named so (SDK 0.35.3)
     if name == "keep_streaming" and classes:
         held = _plugin.classes.get(classes[-1])
         if held is not None and _logic_of(held.name, _plugin.classes):
@@ -1232,6 +1585,10 @@ class _Left(cst.CSTVisitor):
                     ("helper-adopted", self._line(node), f"{node.name.value}: {what}")
                 )
         self.classes.append(node.name.value)
+        unplanned = _plugin.unplanned.get(node.name.value)
+        held_here = _plugin.classes.get(node.name.value)
+        if unplanned is not None and held_here is not None and held_here.path == self.path:
+            self.found.append((unplanned[0], self._line(node), unplanned[1]))
         role = _role_of(node.name.value, _plugin.classes)
         if not role or _logic_of(node.name.value, _plugin.classes):
             return
@@ -1265,6 +1622,26 @@ class _Left(cst.CSTVisitor):
         if _is_connect(node, self.names) and not is_test(self.path):
             self.found.append(("connect-to-run", self._line(node), ""))
         if (
+            isinstance(node.func, cst.Call)
+            and dotted(node.func.func) == "type"
+            and node.args
+            and node.args[0].keyword is None
+            and _recorder(node.args[0].value) is not None
+        ):
+            # `type(work)(recorder, ...)`: a class made anew, given the
+            # recorder in the connection's place (SDK 0.35.3).
+            self.found.append(("suite-producer-to-role", self._line(node), "type(...)"))
+        if (
+            dotted(node.func) == "getattr"
+            and len(node.args) >= 2
+            and (dotted(node.args[0].value) or "").rsplit(".", 1)[-1] in ("plugin", "_plugin")
+            and literal(node.args[1].value) is not None
+        ):
+            # An act named as it runs, on the connection (SDK 0.35.3).
+            self.found.append(
+                ("act-on-the-connection", self._line(node), "getattr: an act named as it runs")
+            )
+        if (
             not is_test(self.path)
             and _resolved(node.func, self.names) == "meridian.roles.custody.account_pages"
             and not any(
@@ -1286,7 +1663,11 @@ class _Left(cst.CSTVisitor):
         owner = dotted(func.value) or ""
         name = func.attr.value
         if name == "receive" and any(arg.keyword is not None for arg in node.args):
-            if is_test(self.path) and "recorder" in owner.lower():
+            rows = any(
+                arg.keyword is not None and arg.keyword.value in ROW_OF for arg in node.args
+            )
+            if is_test(self.path) and ("recorder" in owner.lower() or rows):
+                # A recorder however named (`lake.receive(...)`, SDK 0.35.3).
                 self.found.append(("suite-producer-to-role", self._line(node), ""))
             elif not is_test(self.path) or owner in self.connected:
                 self.found.append(("receive-not-rewritten", self._line(node), ""))

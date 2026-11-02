@@ -59,7 +59,8 @@ meridian.plugin.v1.operations_pb2) and handed to the SDK became \
 `meridian.SubjectRef(...)`: from contract v28 a SubjectRef carries its role, and the \
 typed operations take the SDK's dataclass and refuse the wire's (ruling 599). One \
 built inside another wire message, or added to a wire message's field, stays the \
-wire's"""
+wire's. From SDK 0.35.3, in a file where one became the SDK's, an annotation naming the \
+wire's (`list[ops.SubjectRef]`) names the SDK's too"""
 
 [[rewrites]]
 rule = "base-digest-dropped"
