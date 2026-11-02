@@ -19,7 +19,7 @@ checked as it is built, and is the wire's `Job` when done:
         analytics.measure("historical_var"),
         accounts=["ACC-12"],
     )
-    answer = await analytics.Jobs().run(plugin, job)        # inline, or waited for
+    answer = await analytics.Jobs().run(self, job)    # self, the role class; inline or waited
     for figure in answer.figures("exposure"):
         print(figure.breakdown, figure.value, figure.currency_instrument_id)
 

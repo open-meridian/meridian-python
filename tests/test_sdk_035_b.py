@@ -299,7 +299,7 @@ async def test_a_chains_feed_held_by_a_listings_class_acts_through_its_connectio
     await lake.on_observations_wanted(Heard(row="ObservationsWanted", message=want))
     (quotes,) = recorder.on("RecordQuotes")
     assert quotes.quotes[0].meta.series_key[0].value == "SPY   261120C00500000"
-    assert lake.chains.plugin is recorder and lake.chains.counts.reads == 1
+    assert lake.chains.plugin is recorder.plugin and lake.chains.counts.reads == 1
     # Read again, the same quote is not sent again.
     await lake.on_observations_wanted(
         Heard(row="ObservationsWanted", message=ops.ObservationsWantedEvent(

@@ -163,7 +163,7 @@ def test_the_recorder_binds_a_class_and_hands_it_what_it_hears() -> None:
     )
     asyncio.run(recorder.hear(lake))
     assert lake.wanted == ["WNT-1"]
-    assert lake.plugin is recorder and lake.plugin.identity.instance_id == "lake-1"
+    assert lake.plugin is recorder.plugin and lake.plugin.identity.instance_id == "lake-1"
     assert [sent.row for sent in recorder.sent] == ["ObservationsWanted", "DeclineWant"]
 
 

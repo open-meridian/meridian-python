@@ -1448,11 +1448,13 @@ class Mapping:
     venue_account_code: str
     account_id: str
 
+DESK = Desk()  # the plugin's ems.Role class, registered with meridian.run(roles=[DESK])
+
 @pages.route("/venue-accounts", levels="admin", methods=["POST"], params=Mapping)
 async def map_account(request: meridian.Request) -> meridian.Response:
     """Map a book account to the code it trades under at a linked connectivity plugin."""
     mapping = request.params
-    await request.plugin.map_venue_account(
+    await DESK.map_venue_account(  # on the role object, never request.plugin (ruling 1014)
         connectivity_instance_id=mapping.connectivity_instance_id,
         venue_account_code=mapping.venue_account_code,
         account_id=mapping.account_id,

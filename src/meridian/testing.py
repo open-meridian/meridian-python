@@ -276,7 +276,11 @@ class PageClient:
     """The plugin's pages, asked in-process as its sidecar would ask them.
 
     `plugin` is what a view reaches as `request.plugin`: a stand-in for the
-    sidecar whose operations answer here. `read` and `write` are the accounts
+    sidecar whose operations answer here; given the suites' `Recorder`, the
+    recorder's connection (`recorder.plugin`), which makes no act, so a page
+    acting through `request.plugin` fails here as it does when the plugin
+    runs (SDK 0.35.1): a page acts through the role object the plugin gives
+    it (ruling 1014). `read` and `write` are the accounts
     the person asking may read and write, cut to each session's level;
     `deployment_admin`, whether they are a deployment admin, which every
     request this client sends says. `roles` are the roles the plugin was
@@ -300,7 +304,9 @@ class PageClient:
         self.pages = pages
         self.own_settings = dict(own_settings or {})
         self.second_pair_of_eyes = frozenset(second_pair_of_eyes)
-        self.plugin = plugin
+        from .suites import Recorder
+
+        self.plugin = plugin.plugin if isinstance(plugin, Recorder) else plugin
         self.read = frozenset(read)
         self.write = frozenset(write)
         self.subject = subject
