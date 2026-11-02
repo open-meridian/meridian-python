@@ -67,12 +67,10 @@ contract-diff:
 # PyPI depends on nothing by URL (PyPI refuses that) and a plugin installs one
 # thing. `make vendor-schema` moves the copy to SCHEMA_REV; `check-vendored`
 # fails when the two disagree, as core's check-codegen does for its bindings.
-# meridian-schema's behaviours-osi at 028ed42 (main at a97f8cb -- contract
-# v29, DESIGN29 at 17f9a78, and the behaviour cases every SDK runs, SDK
-# 0.35, schema #17 -- with two cases more: an OSI symbol's strike read back
-# as a plain decimal), its gen/ and boundaries/ vendored here byte for byte.
-# Moved to schema main once that branch merges.
-SCHEMA_REV := 6d89d4b1a854c15c2bb3ff936867166ef87e7e75
+# meridian-schema main at ce3a6f3 (#20; tree equal to sdk-035-b-1030's
+# 8c8ed77 -- contract v29, DESIGN29 at 17f9a78, and SDK 0.35's 58 behaviour
+# cases), its gen/ and boundaries/ vendored here byte for byte.
+SCHEMA_REV := ce3a6f33d1ce1459d71e17c3658e82d762d3e930
 SCHEMA_REPO := https://github.com/open-meridian/meridian-schema.git
 SCRATCH     := .schema-scratch
 
@@ -229,7 +227,7 @@ test:
 # plugin check --run-tests`, from the released command line named here, as a
 # plugin's own CI installs it. `make test` checks what each migration writes
 # and runs each plugin's own tests; this adds the framework's rules.
-MERIDIAN_CLI := 0.1.17
+MERIDIAN_CLI := 0.1.55
 
 check-migrations:
 	@$(DOCKER) build $(CONTEXTS) -f Dockerfile.python --target migrations \

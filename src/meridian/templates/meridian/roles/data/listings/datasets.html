@@ -1,0 +1,15 @@
+{#- A listings source's Datasets (meridian.roles.data.listings.DatasetsRead,
+    SDK 0.35): the data role's (meridian/roles/data/datasets.html), the
+    source's nuance at its blocks only -- a section under the source's name
+    (`venue`) with the listings mapped and streamed and the rows restated,
+    unchanged, not converted and caught up after a gap. A plugin extends
+    this for its own nuance. -#}
+{% extends "meridian/roles/data/datasets.html" %}
+{% block vendor_sections %}
+{% if data.listings_mapped %}
+<section class="panel">
+<h2>{{ venue|default("Listings") }}</h2>
+<p class="muted">{{ data.listings_mapped }} {{ "listing" if data.listings_mapped == 1 else "listings" }} mapped, {{ data.listings_streamed }} streamed{% if data.past_stream_limit %} ({{ data.past_stream_limit }} past what one session may stream){% endif %}. Rows restated {{ data.restated }}, unchanged {{ data.unchanged }}{% if data.unconverted %}; {{ data.unconverted }} values that did not convert, kept as reported{% endif %}{% if data.caught_up %}; {{ data.caught_up }} trades caught up after a gap{% endif %}.</p>
+</section>
+{% endif %}
+{% endblock %}

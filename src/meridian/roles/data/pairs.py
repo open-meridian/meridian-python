@@ -93,6 +93,7 @@ from typing import Any, Protocol, cast
 
 from ...errors import MeridianError, NotGranted
 from ...figures import Figure
+from ...helpers.sessions import Link, Supervisor
 from ...operations import (
     Bar,
     Eligibility,
@@ -146,6 +147,7 @@ __all__ = [
     "connection_read",
     "datasets_read",
     "figures_read",
+    "supervised",
 ]
 
 log = logging.getLogger("meridian.roles.data.pairs")
@@ -181,6 +183,9 @@ _SECURITY_SCHEMES = {"cusip", "isin", "sedol", "figi"}
 
 _DAILY_KINDS = {ops.PRICE_KIND_CLOSE}
 _LIVE_KINDS = {ops.PRICE_KIND_LAST, ops.PRICE_KIND_BID, ops.PRICE_KIND_ASK}
+#: Asked for by name only (0.35, an FX venue's): the mid of the best bid and
+#: offer, where both stand.
+_ASKED_KINDS = _LIVE_KINDS | {ops.PRICE_KIND_MID}
 
 
 # ── What the venue's answers are read into ──────────────────────────────
@@ -381,7 +386,10 @@ class Market(Protocol):
 
     def heard(self, text: str, received_ns: int) -> list[Print | Top]:
         """One stream message -- kept as a raw record first -- read into the
-        trades and best bids and offers it states."""
+        trades and best bids and offers it states. From 0.35 a market may
+        also key a message before reading it, `conflation_key(text) -> str |
+        None`: the product and kind of a price or a best bid and offer, None
+        for a trade, which a feed with `conflate_first` uses."""
         ...
 
 
@@ -460,6 +468,106 @@ class _NoStream:
         if once:
             return
         await asyncio.Event().wait()
+
+
+class _MarketLink:
+    """A pairs market's stream as a `helpers.sessions.Link`, over the
+    market's own socket (`connect`, `subscriptions`): what is wanted changing
+    opens the socket again with the new names, as the venues' streams take
+    no unsubscription the market states."""
+
+    def __init__(
+        self,
+        address: str,
+        connect: Callable[[str], Awaitable[Socket]],
+        subscriptions: Callable[[Sequence[str]], list[str]],
+        opened: Callable[[Sequence[str]], Awaitable[Any]] | None,
+    ) -> None:
+        self.name = address
+        self.address, self.connect, self.subscriptions = address, connect, subscriptions
+        self.opened = opened
+        self.socket: Socket | None = None
+        self.subscribed: tuple[str, ...] | None = None
+
+    async def open(self) -> None:
+        self.socket = await self.connect(self.address)
+        self.subscribed = None
+
+    async def subscribe(self, wanted: Sequence[str]) -> None:
+        names = tuple(wanted)
+        if self.subscribed is not None and names != self.subscribed:
+            await self.close()
+            await self.open()
+            if self.opened is not None:
+                await self.opened(names)
+        assert self.socket is not None
+        for text in self.subscriptions(names):
+            await self.socket.send(text)
+        self.subscribed = names
+
+    async def receive(self) -> list[Any]:
+        assert self.socket is not None
+        return [await self.socket.receive()]
+
+    async def close(self) -> None:
+        if self.socket is not None:
+            socket, self.socket = self.socket, None
+            await socket.close()
+
+
+class _Supervised(Supervisor):
+    """A supervisor as a pairs feed's `Streamer` (see `supervised`)."""
+
+    #: The feed's `opened`, handed to each market link made.
+    _made: Callable[[Sequence[str]], Awaitable[Any]] | None = None
+
+    def retarget(self, address: Any, *more: Any) -> None:
+        """Stream from another source (sample data switched): opened again."""
+        connect, subscriptions = more
+        held = self._made
+
+        def link() -> Link:
+            return _MarketLink(address, connect, subscriptions, held)
+
+        super().retarget(link)
+
+
+def supervised(
+    *,
+    address: str,
+    connect: Callable[[str], Awaitable[Socket]],
+    subscriptions: Callable[[Sequence[str]], list[str]],
+    heard: Callable[[str], Awaitable[None]],
+    opened: Callable[[Sequence[str]], Awaitable[None]],
+    clock_ns: Callable[[], int] = time.time_ns,
+    silent_seconds: float = SILENT_SECONDS,
+) -> Streamer:
+    """A pairs feed's stream factory (0.35, 924's item 2): its market's
+    stream kept open by a `helpers.sessions.Supervisor` -- reopened after a
+    drop or silence with jittered backoff, reset once steady, and each
+    opening handed to `opened` so the gap is read back -- so the plugin
+    keeps only its market's socket, never a stream class of its own:
+
+        pairs.Feed(market, products, stream_factory=pairs.supervised)
+    """
+
+    async def each(texts: list[Any]) -> None:
+        for text in texts:
+            await heard(text)
+
+    def link() -> Link:
+        return _MarketLink(address, connect, subscriptions, opened)
+
+    made = _Supervised(
+        link,
+        heard=each,
+        opened=opened,
+        clock_ns=clock_ns,
+        silent_seconds=silent_seconds,
+        session=address,
+    )
+    made._made = opened
+    return made
 
 
 # ── The product map ─────────────────────────────────────────────────────
@@ -637,11 +745,29 @@ class Feed(Role):
     #: force, recorded for the live dataset once a pass.
     alive_ns: int = 0
     liveness_ns: int = 0
+    #: (0.35, 924's item 12) Conflate the stream's messages before they are
+    #: converted and kept as raw records (ruling 929: a plugin may keep raw
+    #: records only for what it records): a message the market keys
+    #: (`Market.conflation_key`, a price or a best bid and offer) is held,
+    #: the latest per key, and converted once a pass; one it does not (a
+    #: trade) is converted as it arrives. For a venue sending far more
+    #: prices than the lake keeps, as an FX venue does.
+    conflate_first: bool = False
+    #: (0.35) The daily dataset's day, from its declaration
+    #: (`helpers.calendars.DayClock.of`): a day's business date and its end
+    #: by the declared zone and end minute (an FX day ending 17:00 New York);
+    #: None for the UTC day.
+    day_clock: Any = None
     wants: Wants = field(init=False)
     stream: Streamer = field(init=False)
 
     def __post_init__(self) -> None:
+        from ._rows import Conflator
+
         self.wants = Wants(self, (DAILY, LIVE, TRADES), clock_ns=self.clock_ns)
+        self.conflator = Conflator(
+            int(LIVE_EVERY_SECONDS * NANOS_PER_SECOND), clock_ns=self.clock_ns
+        )
         made = self.stream_factory or cast(StreamFactory, _NoStream)
         self.stream = made(
             address=self.market.stream_address,
@@ -956,22 +1082,31 @@ class Feed(Role):
             unconverted=self._unconverted(unread),
         )
 
+    def _day(self, at_ns: int) -> date:
+        """The business date a moment counts to: by the day clock, else UTC."""
+        if self.day_clock is not None:
+            day: date = self.day_clock.business_date_of(at_ns)
+            return day
+        return utc_day(at_ns // NANOS_PER_SECOND)
+
     def _daily_meta(
         self, mapped: Mapped, candle: Candle, optional: Iterable[Unread] = ()
     ) -> Any:
         now = self.clock_ns()
-        forming = candle.end_ns > now
-        times = [] if forming else [SourceTime(kind="published", at_ns=candle.end_ns)]
+        day = self._day(candle.start_s * NANOS_PER_SECOND)
+        end = candle.end_ns if self.day_clock is None else self.day_clock.close_of(day)
+        forming = end > now
+        times = [] if forming else [SourceTime(kind="published", at_ns=end)]
         return self._meta(
             f"{mapped.product}:1d:{candle.start_s}",
             mapped,
             DAILY,
             candle.start_s * NANOS_PER_SECOND,
-            candle.end_ns,
+            end,
             times,
             candle.raw_key,
             optional,
-            candle.day,
+            day,
         )
 
     def close(self, mapped: Mapped, candle: Candle) -> Price | None:
@@ -1113,7 +1248,7 @@ class Feed(Role):
         await self.ensure_mapped()
         subjects = list(subjects)
         await self.name(subjects)
-        today = utc_day(self.clock_ns() // NANOS_PER_SECOND)
+        today = self._day(self.clock_ns())
         reach = self.market.session.limits.history_days
         declined: dict[str, str] = {}
         prices: list[Price] = []
@@ -1170,12 +1305,20 @@ class Feed(Role):
                         prices.append(self._live(mapped, "last", tick.price, tick))
                     elif tick:
                         self.counts.unread += 1
-                if wanted & {ops.PRICE_KIND_BID, ops.PRICE_KIND_ASK}:
+                if wanted & {ops.PRICE_KIND_BID, ops.PRICE_KIND_ASK, ops.PRICE_KIND_MID}:
                     best = await self._asked(self.market.top, mapped.product)
                     if best and ops.PRICE_KIND_BID in wanted and best.bid is not None:
                         prices.append(self._live(mapped, "bid", best.bid, best))
                     if best and ops.PRICE_KIND_ASK in wanted and best.ask is not None:
                         prices.append(self._live(mapped, "ask", best.ask, best))
+                    if (
+                        best
+                        and ops.PRICE_KIND_MID in wanted
+                        and best.bid is not None
+                        and best.ask is not None
+                    ):
+                        mid = (best.bid + best.ask) / 2
+                        prices.append(self._live(mapped, "mid", mid, best))
                     self.counts.unread += len(best.unread) if best else 0
             if len(prices) == before:
                 declined[subject] = "source_silent"
@@ -1318,7 +1461,20 @@ class Feed(Role):
         best bid and offer kept as its latest; sent at once where a batch is
         full, else by the next pass keeping current."""
         self.alive_ns = self.clock_ns()
-        for seen in self.market.heard(text, self.alive_ns):
+        keyed = getattr(self.market, "conflation_key", None)
+        if self.conflate_first and keyed is not None:
+            key = keyed(text)
+            if key is not None:
+                self.conflator.put(key, (text, self.alive_ns))
+                return
+        self._converted(text, self.alive_ns)
+        if len(self.pending_trades) >= BATCH:
+            await self.flush()
+
+    def _converted(self, text: str, at_ns: int) -> None:
+        """One message converted (its raw record kept by the market): its
+        trades kept to send, each product's latest best bid and offer."""
+        for seen in self.market.heard(text, at_ns):
             mapped = self.streams.get(seen.product)
             if mapped is None:
                 continue
@@ -1329,8 +1485,6 @@ class Feed(Role):
                 self.wants.edge().sequenced(LIVE, seen.sequence)
             if row := self.quote(mapped, seen):
                 self.pending_quotes[mapped.product] = row
-        if len(self.pending_trades) >= BATCH:
-            await self.flush()
 
     async def on_opened(self, names: Sequence[str]) -> None:
         """The stream opened: each product's trades since the last one recorded
@@ -1351,6 +1505,8 @@ class Feed(Role):
         """Send the trades heard, in batches, and each product's latest best bid
         and offer: at most once a pass, so a quote at most once a second."""
         await self.alive()
+        for text, at_ns in self.conflator.due():
+            self._converted(text, at_ns)
         trades, self.pending_trades = self.pending_trades, []
         quotes, self.pending_quotes = list(self.pending_quotes.values()), {}
         if not trades and not quotes:
@@ -1412,7 +1568,7 @@ class Feed(Role):
         if key == LIVE:
             if data_type == QUOTE:
                 return True
-            return data_type in ("", PRICE) and (not kinds or bool(set(kinds) & _LIVE_KINDS))
+            return data_type in ("", PRICE) and (not kinds or bool(set(kinds) & _ASKED_KINDS))
         return key == TRADES and data_type in ("", TRADE)
 
     async def _answer(
@@ -1445,13 +1601,13 @@ class Feed(Role):
             return await self.record_days(subjects, day, day, want.data_type, want.want_id)
         if want.valid_from_ns:
             until = want.valid_until_ns or self.clock_ns()
-            first = utc_day(want.valid_from_ns // NANOS_PER_SECOND)
-            last = utc_day(max(until - 1, want.valid_from_ns) // NANOS_PER_SECOND)
+            first = self._day(want.valid_from_ns)
+            last = self._day(max(until - 1, want.valid_from_ns))
             return await self.record_days(subjects, first, last, want.data_type, want.want_id)
         # The latest: the days of the past week the venue has, the forming one
         # among them, so a subject the venue still trades is never declined
         # for a day that has barely begun (a decline stands a day).
-        today = utc_day(self.clock_ns() // NANOS_PER_SECOND)
+        today = self._day(self.clock_ns())
         first = today - timedelta(days=LATEST_DAYS - 1)
         return await self.record_days(subjects, first, today, want.data_type, want.want_id)
 
@@ -1478,7 +1634,7 @@ class Feed(Role):
         for subjects, kinds in _grouped(live):
             await self.record_live(subjects, kinds)
         if daily:
-            today = utc_day(self.clock_ns() // NANOS_PER_SECOND)
+            today = self._day(self.clock_ns())
             for want in self.wants.standing_of(DAILY):
                 await self.record_days(want.subjects, today - timedelta(days=1), today,
                                        want.data_type)  # fmt: skip

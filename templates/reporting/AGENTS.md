@@ -283,6 +283,12 @@ and subscribe to comes from the roles `pyproject.toml` declares under
   an adapter over its venue (`Venue`), and tests that adapter on
   `meridian.roles.connectivity.testing.Rig` over a fake broker. How the
   plugin reaches its vendor -- its client, its stream, FIX -- stays its own.
+  The data template (`meridian plugin new --role data`) shows it in two
+  examples, neither wired in (rulings 1027 and 1028): `stream.py`, a
+  vendor's WebSocket stream from an established library kept open by the
+  SDK's `meridian.helpers.sessions.Supervisor` (reopened with jittered
+  backoff, the gap caught up after a reopen); and `pacing.py`, the vendor's
+  rate limit and its 429's `Retry-After` kept by the plugin.
 - **Follow the role's common part.** A person who knows a role knows any
   plugin of it: `meridian.roles.<role>` (`data`, `custody`, `operations`,
   `reporting`, `connectivity`) gives each common page's record (`<Page>Read`, the page's

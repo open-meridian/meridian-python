@@ -4,6 +4,242 @@
   "behaviours_are": "each module's behaviour cases: what every SDK carrying the module's helper or a role's common logic does, each case naming its subject by a path the same in every SDK. A value case's call and args give its expect: a value, or refused naming the field; a steps case's steps are calls on a fake clock moved to `clock` seconds first, each expecting a value or one within at_least and at_most; an acts case's heard deliveries, with the fake source given, send what its sends says, matched as a suite case's expect is. Each SDK runs every case in its own tests, an adapter per subject, and one with no adapter fails; plugins never run them.",
   "behaviours": [
     {
+      "module": "calendars",
+      "since": "0.35.0",
+      "says": "An SDK carrying helpers.calendars dates a moment by a dataset's declared day as these cases say, and reads the deployment's market days as they say: a failed read read again after its backoff, never every call.\n",
+      "cases": [
+        {
+          "name": "day-clock-a-moment-before-the-close-is-that-days",
+          "subject": "helpers.calendars.DayClock",
+          "kind": "value",
+          "call": "business_date_of",
+          "args": {
+            "time_zone": "America/New_York",
+            "end_minute": 960,
+            "at": "2026-10-08T19:59:00Z"
+          },
+          "expect": {
+            "value": "2026-10-08"
+          }
+        },
+        {
+          "name": "day-clock-a-moment-at-the-close-is-the-next-days",
+          "subject": "helpers.calendars.DayClock",
+          "kind": "value",
+          "call": "business_date_of",
+          "args": {
+            "time_zone": "America/New_York",
+            "end_minute": 960,
+            "at": "2026-10-08T20:00:00Z"
+          },
+          "expect": {
+            "value": "2026-10-09"
+          }
+        },
+        {
+          "name": "day-clock-a-utc-day-ends-at-the-next-midnight",
+          "subject": "helpers.calendars.DayClock",
+          "kind": "value",
+          "call": "business_date_of",
+          "args": {
+            "time_zone": "Etc/UTC",
+            "end_minute": 0,
+            "at": "2026-10-08T23:59:59Z"
+          },
+          "expect": {
+            "value": "2026-10-08"
+          }
+        },
+        {
+          "name": "day-clock-a-days-close-follows-daylight-saving",
+          "subject": "helpers.calendars.DayClock",
+          "kind": "value",
+          "call": "close_of",
+          "args": {
+            "time_zone": "America/New_York",
+            "end_minute": 960,
+            "day": "2026-03-09"
+          },
+          "expect": {
+            "value": "2026-03-09T20:00:00Z"
+          }
+        },
+        {
+          "name": "day-clock-a-days-close-in-standard-time",
+          "subject": "helpers.calendars.DayClock",
+          "kind": "value",
+          "call": "close_of",
+          "args": {
+            "time_zone": "America/New_York",
+            "end_minute": 960,
+            "day": "2026-03-06"
+          },
+          "expect": {
+            "value": "2026-03-06T21:00:00Z"
+          }
+        },
+        {
+          "name": "day-clock-a-utc-days-close-is-the-next-midnight",
+          "subject": "helpers.calendars.DayClock",
+          "kind": "value",
+          "call": "close_of",
+          "args": {
+            "time_zone": "Etc/UTC",
+            "end_minute": 0,
+            "day": "2026-10-08"
+          },
+          "expect": {
+            "value": "2026-10-09T00:00:00Z"
+          }
+        },
+        {
+          "name": "day-clock-a-day-opens-at-the-previous-close",
+          "subject": "helpers.calendars.DayClock",
+          "kind": "value",
+          "call": "opened_at",
+          "args": {
+            "time_zone": "America/New_York",
+            "end_minute": 1020,
+            "day": "2026-10-08"
+          },
+          "expect": {
+            "value": "2026-10-07T21:00:00Z"
+          }
+        },
+        {
+          "name": "day-clock-refuses-a-zone-that-is-no-iana-zone",
+          "subject": "helpers.calendars.DayClock",
+          "kind": "value",
+          "call": "make",
+          "args": {
+            "time_zone": "Mars/Olympus",
+            "end_minute": 0
+          },
+          "expect": {
+            "refused": "day_time_zone"
+          }
+        },
+        {
+          "name": "day-clock-refuses-an-end-past-the-day",
+          "subject": "helpers.calendars.DayClock",
+          "kind": "value",
+          "call": "make",
+          "args": {
+            "time_zone": "Etc/UTC",
+            "end_minute": 1440
+          },
+          "expect": {
+            "refused": "day_end_minute"
+          }
+        },
+        {
+          "name": "market-days-read-a-failed-calendar-again-after-its-backoff",
+          "subject": "helpers.calendars.MarketDays",
+          "kind": "steps",
+          "given": {
+            "calendar_id": "CAL-1",
+            "weekends": [
+              "WEEKDAY_SATURDAY",
+              "WEEKDAY_SUNDAY"
+            ],
+            "closed": [
+              "2026-11-26"
+            ],
+            "fails": 1,
+            "backoff": {
+              "first_s": 5,
+              "most_s": 600,
+              "jitter": 0,
+              "steady_s": 0
+            },
+            "time_zone": "America/New_York",
+            "end_minute": 960
+          },
+          "steps": [
+            {
+              "call": "is_open",
+              "args": {
+                "day": "2026-11-25"
+              },
+              "expect": {
+                "open": null,
+                "reads": 1
+              }
+            },
+            {
+              "clock": 1,
+              "call": "is_open",
+              "args": {
+                "day": "2026-11-25"
+              },
+              "expect": {
+                "open": null,
+                "reads": 1
+              }
+            },
+            {
+              "clock": 6,
+              "call": "is_open",
+              "args": {
+                "day": "2026-11-25"
+              },
+              "expect": {
+                "open": true,
+                "reads": 2
+              }
+            },
+            {
+              "call": "is_open",
+              "args": {
+                "day": "2026-11-26"
+              },
+              "expect": {
+                "open": false,
+                "reads": 2
+              }
+            },
+            {
+              "call": "is_open",
+              "args": {
+                "day": "2026-11-28"
+              },
+              "expect": {
+                "open": false,
+                "reads": 2
+              }
+            },
+            {
+              "call": "previous_open",
+              "args": {
+                "day": "2026-11-27"
+              },
+              "expect": {
+                "day": "2026-11-25"
+              }
+            },
+            {
+              "call": "next_open",
+              "args": {
+                "day": "2026-11-26"
+              },
+              "expect": {
+                "day": "2026-11-27"
+              }
+            },
+            {
+              "call": "business_date_of",
+              "args": {
+                "at": "2026-11-27T22:00:00Z"
+              },
+              "expect": {
+                "day": "2026-11-30"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
       "module": "chains",
       "since": "0.35.0",
       "says": "An SDK carrying helpers.chains writes a series' 21-character OSI symbol from its root, expiration, right and strike, reads one back -- its strike a plain decimal, never in exponent form -- and refuses what no OSI symbol holds.\n",
@@ -103,6 +339,1385 @@
           "expect": {
             "refused": "root"
           }
+        }
+      ]
+    },
+    {
+      "module": "data-listings",
+      "since": "0.35.0",
+      "says": "An SDK carrying the data role's listings feed records each kind into the dataset of the plan's timeliness, declines a want the plan does not serve, keeps both of a source's clocks, resolves a venue by its MIC too, and judges a standing want's rows at the edge.\n",
+      "cases": [
+        {
+          "name": "listings-decline-a-want-of-the-timeliness-not-in-force",
+          "subject": "roles.data.listings.Feed",
+          "kind": "acts",
+          "given": {
+            "instance": "lake-1",
+            "timeliness": "delayed",
+            "datasets_by_timeliness": {
+              "live": {
+                "real_time": "live",
+                "delayed": "live_delayed"
+              },
+              "trades": {
+                "real_time": "trades",
+                "delayed": "trades_delayed"
+              }
+            },
+            "symbols": {
+              "INS-1": "SPY"
+            }
+          },
+          "heard": [
+            {
+              "row": "ObservationsWanted",
+              "message": {
+                "want_id": "WNT-1",
+                "dataset": "lake-1:live",
+                "data_type": "meridian.v1.Price",
+                "subjects": [
+                  {
+                    "entity_id": "INS-1"
+                  }
+                ]
+              }
+            }
+          ],
+          "sends": [
+            {
+              "row": "DeclineWant",
+              "fields": {
+                "want_id": "WNT-1",
+                "reason": "UNANSWERED_REASON_NOT_COVERED",
+                "subjects": [
+                  {
+                    "entity_id": "INS-1"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "listings-decline-quotes-on-a-plan-not-real-time",
+          "subject": "roles.data.listings.Feed",
+          "kind": "acts",
+          "given": {
+            "instance": "lake-1",
+            "timeliness": "delayed",
+            "datasets_by_timeliness": {
+              "live": {
+                "real_time": "live",
+                "delayed": "live_delayed"
+              }
+            },
+            "symbols": {
+              "INS-1": "SPY"
+            }
+          },
+          "heard": [
+            {
+              "row": "ObservationsWanted",
+              "message": {
+                "want_id": "WNT-2",
+                "dataset": "lake-1:live_delayed",
+                "data_type": "meridian.v1.Quote",
+                "subjects": [
+                  {
+                    "entity_id": "INS-1"
+                  }
+                ]
+              }
+            }
+          ],
+          "sends": [
+            {
+              "row": "DeclineWant",
+              "fields": {
+                "want_id": "WNT-2",
+                "reason": "UNANSWERED_REASON_NOT_COVERED"
+              }
+            }
+          ]
+        },
+        {
+          "name": "listings-record-into-the-dataset-of-the-timeliness-in-force",
+          "subject": "roles.data.listings.Feed",
+          "kind": "acts",
+          "given": {
+            "instance": "lake-1",
+            "timeliness": "delayed",
+            "datasets_by_timeliness": {
+              "live": {
+                "real_time": "live",
+                "delayed": "live_delayed"
+              }
+            },
+            "symbols": {
+              "INS-1": "SPY"
+            },
+            "live": [
+              {
+                "symbol": "SPY",
+                "kind": "last",
+                "amount": "500.10",
+                "at_ns": 1000000000,
+                "row_key": "SPY:last:1"
+              }
+            ]
+          },
+          "heard": [
+            {
+              "row": "ObservationsWanted",
+              "message": {
+                "want_id": "WNT-3",
+                "dataset": "lake-1:live_delayed",
+                "data_type": "meridian.v1.Price",
+                "subjects": [
+                  {
+                    "entity_id": "INS-1"
+                  }
+                ]
+              }
+            }
+          ],
+          "sends": [
+            {
+              "row": "RecordPrices",
+              "fields": {
+                "want_id": "WNT-3",
+                "prices": [
+                  {
+                    "kind": "PRICE_KIND_LAST",
+                    "meta": {
+                      "source": {
+                        "dataset": "lake-1:live_delayed"
+                      },
+                      "subjects": [
+                        {
+                          "entity_id": "INS-1"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "listings-keep-the-participants-time-as-the-event-time",
+          "subject": "roles.data.listings.Feed",
+          "kind": "acts",
+          "given": {
+            "instance": "lake-1",
+            "symbols": {
+              "INS-1": "SPY"
+            },
+            "stream": [
+              {
+                "trade": {
+                  "symbol": "SPY",
+                  "at_ns": 2000000000,
+                  "participant_ns": 1000000000,
+                  "price": "500.10",
+                  "quantity": "100",
+                  "row_key": "SPY:t:7"
+                }
+              }
+            ]
+          },
+          "heard": [
+            {
+              "row": "ObservationsWanted",
+              "message": {
+                "want_id": "WNT-4",
+                "dataset": "lake-1:trades",
+                "data_type": "meridian.v1.Trade",
+                "standing": true,
+                "subjects": [
+                  {
+                    "entity_id": "INS-1"
+                  }
+                ]
+              }
+            }
+          ],
+          "sends": [
+            {
+              "row": "RecordTrades",
+              "fields": {
+                "trades": [
+                  {
+                    "meta": {
+                      "source_times": [
+                        {
+                          "kind": "SOURCE_TIME_KIND_EVENT",
+                          "at_ns": 1000000000
+                        },
+                        {
+                          "kind": "SOURCE_TIME_KIND_CONSOLIDATED",
+                          "at_ns": 2000000000
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "listings-resolve-a-venue-by-its-mic-too",
+          "subject": "roles.data.listings.Feed",
+          "kind": "acts",
+          "given": {
+            "instance": "lake-1",
+            "source_name": "fake",
+            "symbols": {
+              "INS-1": "SPY"
+            },
+            "mic_of": {
+              "P": "ARCX"
+            },
+            "stream": [
+              {
+                "trade": {
+                  "symbol": "SPY",
+                  "at_ns": 2000000000,
+                  "price": "500.10",
+                  "quantity": "100",
+                  "row_key": "SPY:t:8",
+                  "venue_code": "P"
+                }
+              }
+            ]
+          },
+          "heard": [
+            {
+              "row": "ObservationsWanted",
+              "message": {
+                "want_id": "WNT-5",
+                "dataset": "lake-1:trades",
+                "data_type": "meridian.v1.Trade",
+                "standing": true,
+                "subjects": [
+                  {
+                    "entity_id": "INS-1"
+                  }
+                ]
+              }
+            }
+          ],
+          "sends": [
+            {
+              "row": "ResolveVenue",
+              "fields": {
+                "identifiers": [
+                  {
+                    "scheme": "symbol",
+                    "value": "P",
+                    "source": "fake"
+                  },
+                  {
+                    "scheme": "iso10383",
+                    "value": "ARCX"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "listings-judge-a-standing-wants-rows-at-the-edge",
+          "subject": "roles.data.listings.Feed",
+          "kind": "acts",
+          "given": {
+            "instance": "lake-1",
+            "symbols": {
+              "INS-1": "SPY"
+            },
+            "edge": true,
+            "stream": [
+              {
+                "quote": {
+                  "symbol": "SPY",
+                  "at_ns": 2000000000,
+                  "bid": "501.00",
+                  "ask": "500.00",
+                  "bid_size": "100",
+                  "ask_size": "100",
+                  "row_key": "SPY:q:1"
+                }
+              }
+            ]
+          },
+          "heard": [
+            {
+              "row": "ObservationsWanted",
+              "message": {
+                "want_id": "WNT-6",
+                "dataset": "lake-1:live",
+                "data_type": "meridian.v1.Quote",
+                "standing": true,
+                "subjects": [
+                  {
+                    "entity_id": "INS-1"
+                  }
+                ]
+              }
+            }
+          ],
+          "sends": [
+            {
+              "row": "RecordQuotes",
+              "fields": {
+                "quotes": [
+                  {
+                    "meta": {
+                      "quality": "QUALITY_STATE_INVALID"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "data-option-chains",
+      "since": "0.35.0",
+      "says": "An SDK carrying the data role's option chains records the series, quotes and statistics of the expirations a want names, under the underlying, dated by the market's days, and declines what the plan or the source does not serve.\n",
+      "cases": [
+        {
+          "name": "option-chains-record-the-quotes-of-the-expirations-wanted",
+          "subject": "roles.data.option_chains.Feed",
+          "kind": "acts",
+          "given": {
+            "instance": "lake-1",
+            "now": "2026-11-02T15:00:00Z",
+            "symbols": {
+              "INS-SPY": "SPY"
+            },
+            "weekends": [
+              "WEEKDAY_SATURDAY",
+              "WEEKDAY_SUNDAY"
+            ],
+            "chain": {
+              "SPY": {
+                "2026-11-20": [
+                  {
+                    "osi": "SPY   261120C00500000",
+                    "bid": "5.10",
+                    "ask": "5.20",
+                    "bid_size": "10",
+                    "ask_size": "12",
+                    "open_interest": "1500",
+                    "volume": "300"
+                  }
+                ],
+                "2026-12-18": [
+                  {
+                    "osi": "SPY   261218C00500000",
+                    "bid": "9.00",
+                    "ask": "9.20",
+                    "bid_size": "5",
+                    "ask_size": "5",
+                    "open_interest": "800",
+                    "volume": "40"
+                  }
+                ]
+              }
+            }
+          },
+          "heard": [
+            {
+              "row": "ObservationsWanted",
+              "message": {
+                "want_id": "WNT-1",
+                "dataset": "lake-1:options",
+                "data_type": "meridian.v1.Quote",
+                "expiration_from": "2026-11-20",
+                "expiration_to": "2026-11-20",
+                "subjects": [
+                  {
+                    "entity_id": "INS-SPY"
+                  }
+                ]
+              }
+            }
+          ],
+          "sends": [
+            {
+              "row": "RecordQuotes",
+              "fields": {
+                "want_id": "WNT-1",
+                "quotes": [
+                  {
+                    "meta": {
+                      "subjects": [
+                        {
+                          "entity_id": "INS-SPY"
+                        }
+                      ],
+                      "series_key": [
+                        {
+                          "scheme": "occ_osi",
+                          "value": "SPY   261120C00500000"
+                        }
+                      ],
+                      "source": {
+                        "dataset": "lake-1:options"
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": "RecordLiveness",
+              "fields": {
+                "liveness": [
+                  {
+                    "dataset": "lake-1:options"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "option-chains-date-open-interest-the-market-day-before",
+          "subject": "roles.data.option_chains.Feed",
+          "kind": "acts",
+          "given": {
+            "instance": "lake-1",
+            "now": "2026-11-02T15:00:00Z",
+            "symbols": {
+              "INS-SPY": "SPY"
+            },
+            "weekends": [
+              "WEEKDAY_SATURDAY",
+              "WEEKDAY_SUNDAY"
+            ],
+            "chain": {
+              "SPY": {
+                "2026-11-20": [
+                  {
+                    "osi": "SPY   261120C00500000",
+                    "bid": "5.10",
+                    "ask": "5.20",
+                    "bid_size": "10",
+                    "ask_size": "12",
+                    "open_interest": "1500",
+                    "volume": "300"
+                  }
+                ],
+                "2026-12-18": [
+                  {
+                    "osi": "SPY   261218C00500000",
+                    "bid": "9.00",
+                    "ask": "9.20",
+                    "bid_size": "5",
+                    "ask_size": "5",
+                    "open_interest": "800",
+                    "volume": "40"
+                  }
+                ]
+              }
+            }
+          },
+          "heard": [
+            {
+              "row": "ObservationsWanted",
+              "message": {
+                "want_id": "WNT-2",
+                "dataset": "lake-1:options",
+                "data_type": "meridian.v1.Statistic",
+                "expiration_from": "2026-11-20",
+                "expiration_to": "2026-11-20",
+                "subjects": [
+                  {
+                    "entity_id": "INS-SPY"
+                  }
+                ]
+              }
+            }
+          ],
+          "sends": [
+            {
+              "row": "RecordStatistics",
+              "fields": {
+                "statistics": [
+                  {
+                    "kind": "STATISTIC_KIND_OPEN_INTEREST",
+                    "meta": {
+                      "business_date": "2026-10-30",
+                      "series_key": [
+                        {
+                          "scheme": "occ_osi",
+                          "value": "SPY   261120C00500000"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "kind": "STATISTIC_KIND_VOLUME",
+                    "meta": {
+                      "business_date": "2026-11-02"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "option-chains-record-a-series-terms-on-the-listed-option-template",
+          "subject": "roles.data.option_chains.Feed",
+          "kind": "acts",
+          "given": {
+            "instance": "lake-1",
+            "now": "2026-11-02T15:00:00Z",
+            "symbols": {
+              "INS-SPY": "SPY"
+            },
+            "weekends": [
+              "WEEKDAY_SATURDAY",
+              "WEEKDAY_SUNDAY"
+            ],
+            "chain": {
+              "SPY": {
+                "2026-11-20": [
+                  {
+                    "osi": "SPY   261120C00500000",
+                    "bid": "5.10",
+                    "ask": "5.20",
+                    "bid_size": "10",
+                    "ask_size": "12",
+                    "open_interest": "1500",
+                    "volume": "300"
+                  }
+                ],
+                "2026-12-18": [
+                  {
+                    "osi": "SPY   261218C00500000",
+                    "bid": "9.00",
+                    "ask": "9.20",
+                    "bid_size": "5",
+                    "ask_size": "5",
+                    "open_interest": "800",
+                    "volume": "40"
+                  }
+                ]
+              }
+            }
+          },
+          "heard": [
+            {
+              "row": "ObservationsWanted",
+              "message": {
+                "want_id": "WNT-3",
+                "dataset": "lake-1:options",
+                "data_type": "meridian.v1.ListedSeries",
+                "subjects": [
+                  {
+                    "entity_id": "INS-SPY"
+                  }
+                ]
+              }
+            }
+          ],
+          "sends": [
+            {
+              "row": "RecordSeries",
+              "fields": {
+                "series": [
+                  {
+                    "template_id": "TPL-listed-option",
+                    "meta": {
+                      "series_key": [
+                        {
+                          "scheme": "occ_osi",
+                          "value": "SPY   261120C00500000"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "template_id": "TPL-listed-option",
+                    "meta": {
+                      "series_key": [
+                        {
+                          "scheme": "occ_osi",
+                          "value": "SPY   261218C00500000"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "option-chains-on-a-plan-not-real-time-decline-quotes",
+          "subject": "roles.data.option_chains.Feed",
+          "kind": "acts",
+          "given": {
+            "instance": "lake-1",
+            "now": "2026-11-02T15:00:00Z",
+            "symbols": {
+              "INS-SPY": "SPY"
+            },
+            "weekends": [
+              "WEEKDAY_SATURDAY",
+              "WEEKDAY_SUNDAY"
+            ],
+            "chain": {
+              "SPY": {
+                "2026-11-20": [
+                  {
+                    "osi": "SPY   261120C00500000",
+                    "bid": "5.10",
+                    "ask": "5.20",
+                    "bid_size": "10",
+                    "ask_size": "12",
+                    "open_interest": "1500",
+                    "volume": "300"
+                  }
+                ],
+                "2026-12-18": [
+                  {
+                    "osi": "SPY   261218C00500000",
+                    "bid": "9.00",
+                    "ask": "9.20",
+                    "bid_size": "5",
+                    "ask_size": "5",
+                    "open_interest": "800",
+                    "volume": "40"
+                  }
+                ]
+              }
+            },
+            "timeliness": "delayed",
+            "datasets_by_timeliness": {
+              "real_time": "options",
+              "delayed": "options_delayed"
+            }
+          },
+          "heard": [
+            {
+              "row": "ObservationsWanted",
+              "message": {
+                "want_id": "WNT-4",
+                "dataset": "lake-1:options_delayed",
+                "data_type": "meridian.v1.Quote",
+                "subjects": [
+                  {
+                    "entity_id": "INS-SPY"
+                  }
+                ]
+              }
+            }
+          ],
+          "sends": [
+            {
+              "row": "DeclineWant",
+              "fields": {
+                "want_id": "WNT-4",
+                "reason": "UNANSWERED_REASON_NOT_COVERED",
+                "subjects": [
+                  {
+                    "entity_id": "INS-SPY"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "option-chains-decline-an-underlying-with-no-symbol",
+          "subject": "roles.data.option_chains.Feed",
+          "kind": "acts",
+          "given": {
+            "instance": "lake-1",
+            "now": "2026-11-02T15:00:00Z",
+            "symbols": {
+              "INS-SPY": "SPY"
+            },
+            "weekends": [
+              "WEEKDAY_SATURDAY",
+              "WEEKDAY_SUNDAY"
+            ],
+            "chain": {
+              "SPY": {
+                "2026-11-20": [
+                  {
+                    "osi": "SPY   261120C00500000",
+                    "bid": "5.10",
+                    "ask": "5.20",
+                    "bid_size": "10",
+                    "ask_size": "12",
+                    "open_interest": "1500",
+                    "volume": "300"
+                  }
+                ],
+                "2026-12-18": [
+                  {
+                    "osi": "SPY   261218C00500000",
+                    "bid": "9.00",
+                    "ask": "9.20",
+                    "bid_size": "5",
+                    "ask_size": "5",
+                    "open_interest": "800",
+                    "volume": "40"
+                  }
+                ]
+              }
+            }
+          },
+          "heard": [
+            {
+              "row": "ObservationsWanted",
+              "message": {
+                "want_id": "WNT-5",
+                "dataset": "lake-1:options",
+                "data_type": "meridian.v1.Quote",
+                "subjects": [
+                  {
+                    "entity_id": "INS-NONE"
+                  }
+                ]
+              }
+            }
+          ],
+          "sends": [
+            {
+              "row": "DeclineWant",
+              "fields": {
+                "want_id": "WNT-5",
+                "reason": "UNANSWERED_REASON_NOT_COVERED",
+                "subjects": [
+                  {
+                    "entity_id": "INS-NONE"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "data-rows",
+      "since": "0.35.0",
+      "says": "An SDK carrying the data role's SentRows sends a row again only when what it says changed, within its capacity; one carrying its Conflator hands back the latest per key once a period, and never conflates a trade, a fill or an outcome.\n",
+      "cases": [
+        {
+          "name": "sent-rows-a-row-is-sent-again-only-when-it-changed",
+          "subject": "roles.data.SentRows",
+          "kind": "steps",
+          "given": {
+            "capacity": 2
+          },
+          "steps": [
+            {
+              "call": "changed",
+              "args": {
+                "data_type": "meridian.v1.Quote",
+                "dataset": "lake-1:live",
+                "row_key": "A",
+                "said": "1.00/1.01"
+              },
+              "expect": {
+                "changed": true
+              }
+            },
+            {
+              "call": "changed",
+              "args": {
+                "data_type": "meridian.v1.Quote",
+                "dataset": "lake-1:live",
+                "row_key": "A",
+                "said": "1.00/1.01"
+              },
+              "expect": {
+                "changed": false
+              }
+            },
+            {
+              "call": "changed",
+              "args": {
+                "data_type": "meridian.v1.Quote",
+                "dataset": "lake-1:live",
+                "row_key": "A",
+                "said": "1.00/1.02"
+              },
+              "expect": {
+                "changed": true
+              }
+            },
+            {
+              "call": "changed",
+              "args": {
+                "data_type": "meridian.v1.Price",
+                "dataset": "lake-1:live",
+                "row_key": "A",
+                "said": "1.00/1.02"
+              },
+              "expect": {
+                "changed": true
+              }
+            },
+            {
+              "call": "changed",
+              "args": {
+                "data_type": "meridian.v1.Quote",
+                "dataset": "lake-1:live_delayed",
+                "row_key": "A",
+                "said": "1.00/1.02"
+              },
+              "expect": {
+                "changed": true
+              }
+            }
+          ]
+        },
+        {
+          "name": "sent-rows-forget-the-least-recently-sent-past-capacity",
+          "subject": "roles.data.SentRows",
+          "kind": "steps",
+          "given": {
+            "capacity": 2
+          },
+          "steps": [
+            {
+              "call": "changed",
+              "args": {
+                "data_type": "meridian.v1.Quote",
+                "dataset": "d",
+                "row_key": "A",
+                "said": "1"
+              },
+              "expect": {
+                "changed": true
+              }
+            },
+            {
+              "call": "changed",
+              "args": {
+                "data_type": "meridian.v1.Quote",
+                "dataset": "d",
+                "row_key": "B",
+                "said": "1"
+              },
+              "expect": {
+                "changed": true
+              }
+            },
+            {
+              "call": "changed",
+              "args": {
+                "data_type": "meridian.v1.Quote",
+                "dataset": "d",
+                "row_key": "A",
+                "said": "1"
+              },
+              "expect": {
+                "changed": false
+              }
+            },
+            {
+              "call": "changed",
+              "args": {
+                "data_type": "meridian.v1.Quote",
+                "dataset": "d",
+                "row_key": "C",
+                "said": "1"
+              },
+              "expect": {
+                "changed": true
+              }
+            },
+            {
+              "call": "changed",
+              "args": {
+                "data_type": "meridian.v1.Quote",
+                "dataset": "d",
+                "row_key": "A",
+                "said": "1"
+              },
+              "expect": {
+                "changed": false
+              }
+            },
+            {
+              "call": "changed",
+              "args": {
+                "data_type": "meridian.v1.Quote",
+                "dataset": "d",
+                "row_key": "B",
+                "said": "1"
+              },
+              "expect": {
+                "changed": true
+              }
+            }
+          ]
+        },
+        {
+          "name": "sent-rows-refuses-a-capacity-of-none",
+          "subject": "roles.data.SentRows",
+          "kind": "steps",
+          "given": {
+            "capacity": 1
+          },
+          "steps": [
+            {
+              "call": "make",
+              "args": {
+                "capacity": 0
+              },
+              "expect": {
+                "refused": "capacity"
+              }
+            }
+          ]
+        },
+        {
+          "name": "conflator-hands-back-the-latest-per-key-once-a-period",
+          "subject": "roles.data.Conflator",
+          "kind": "steps",
+          "given": {
+            "every_s": 1
+          },
+          "steps": [
+            {
+              "call": "put",
+              "args": {
+                "key": "EUR/USD",
+                "value": "1.0801"
+              }
+            },
+            {
+              "clock": 0.2,
+              "call": "put",
+              "args": {
+                "key": "EUR/USD",
+                "value": "1.0802"
+              }
+            },
+            {
+              "clock": 0.3,
+              "call": "put",
+              "args": {
+                "key": "GBP/USD",
+                "value": "1.2701"
+              }
+            },
+            {
+              "clock": 0.5,
+              "call": "due",
+              "expect": {
+                "values": [
+                  "1.0802",
+                  "1.2701"
+                ]
+              }
+            },
+            {
+              "clock": 0.7,
+              "call": "put",
+              "args": {
+                "key": "EUR/USD",
+                "value": "1.0803"
+              }
+            },
+            {
+              "clock": 0.9,
+              "call": "due",
+              "expect": {
+                "values": []
+              }
+            },
+            {
+              "clock": 1.5,
+              "call": "due",
+              "expect": {
+                "values": [
+                  "1.0803"
+                ]
+              }
+            },
+            {
+              "clock": 1.6,
+              "call": "due",
+              "expect": {
+                "values": []
+              }
+            }
+          ]
+        },
+        {
+          "name": "conflator-never-conflates-a-trade",
+          "subject": "roles.data.Conflator",
+          "kind": "steps",
+          "given": {
+            "every_s": 1
+          },
+          "steps": [
+            {
+              "call": "put_trade",
+              "args": {
+                "key": "EUR/USD"
+              },
+              "expect": {
+                "refused": "trade"
+              }
+            },
+            {
+              "call": "put_outcome",
+              "args": {
+                "key": "KX-1"
+              },
+              "expect": {
+                "refused": "outcome"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "data-terms",
+      "since": "0.35.0",
+      "says": "An SDK carrying the data role's settings makes a timeliness and a key setting as these cases say.\n",
+      "cases": [
+        {
+          "name": "timeliness-offers-the-data-terms-delayed-by-default",
+          "subject": "roles.data.timeliness",
+          "kind": "value",
+          "call": "timeliness",
+          "args": {
+            "label": "Stocks plan"
+          },
+          "expect": {
+            "value": {
+              "choices": [
+                "real_time",
+                "delayed",
+                "end_of_day"
+              ],
+              "default": "delayed"
+            }
+          }
+        },
+        {
+          "name": "timeliness-offers-what-the-vendor-offers-in-order",
+          "subject": "roles.data.timeliness",
+          "kind": "value",
+          "call": "timeliness",
+          "args": {
+            "label": "Options plan",
+            "choices": [
+              "delayed",
+              "real_time"
+            ],
+            "default": "real_time"
+          },
+          "expect": {
+            "value": {
+              "choices": [
+                "real_time",
+                "delayed"
+              ],
+              "default": "real_time"
+            }
+          }
+        },
+        {
+          "name": "timeliness-refuses-another-word",
+          "subject": "roles.data.timeliness",
+          "kind": "value",
+          "call": "timeliness",
+          "args": {
+            "label": "Plan",
+            "choices": [
+              "real_time",
+              "fifteen_minutes"
+            ]
+          },
+          "expect": {
+            "refused": "timeliness"
+          }
+        },
+        {
+          "name": "timeliness-refuses-a-default-it-does-not-offer",
+          "subject": "roles.data.timeliness",
+          "kind": "value",
+          "call": "timeliness",
+          "args": {
+            "label": "Plan",
+            "choices": [
+              "real_time"
+            ],
+            "default": "delayed"
+          },
+          "expect": {
+            "refused": "default"
+          }
+        },
+        {
+          "name": "api-key-is-a-required-secret",
+          "subject": "roles.data.api_key",
+          "kind": "value",
+          "call": "api_key",
+          "args": {
+            "label": "API key"
+          },
+          "expect": {
+            "value": {
+              "required": true,
+              "secret": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "module": "data-timetable",
+      "since": "0.35.0",
+      "says": "An SDK carrying the data role's Timetable has a polled dataset's subjects due as these cases say: at once when wanted, then at its cadence, within its allowance and its reserve.\n",
+      "cases": [
+        {
+          "name": "timetable-reads-a-subject-at-once-then-at-its-cadence",
+          "subject": "roles.data.Timetable",
+          "kind": "steps",
+          "given": {
+            "every_s": {
+              "tapes": 30,
+              "chain": 300
+            }
+          },
+          "steps": [
+            {
+              "call": "want",
+              "args": {
+                "dataset": "tapes",
+                "subjects": [
+                  "INS-1",
+                  "INS-2"
+                ]
+              }
+            },
+            {
+              "call": "want",
+              "args": {
+                "dataset": "chain",
+                "subjects": [
+                  "INS-1"
+                ]
+              }
+            },
+            {
+              "call": "due",
+              "expect": {
+                "due": [
+                  [
+                    "tapes",
+                    [
+                      "INS-1",
+                      "INS-2"
+                    ]
+                  ],
+                  [
+                    "chain",
+                    [
+                      "INS-1"
+                    ]
+                  ]
+                ]
+              }
+            },
+            {
+              "clock": 10,
+              "call": "due",
+              "expect": {
+                "due": []
+              }
+            },
+            {
+              "clock": 15,
+              "call": "want",
+              "args": {
+                "dataset": "tapes",
+                "subjects": [
+                  "INS-3"
+                ]
+              }
+            },
+            {
+              "call": "due",
+              "expect": {
+                "due": [
+                  [
+                    "tapes",
+                    [
+                      "INS-3"
+                    ]
+                  ]
+                ]
+              }
+            },
+            {
+              "clock": 30,
+              "call": "due",
+              "expect": {
+                "due": [
+                  [
+                    "tapes",
+                    [
+                      "INS-1",
+                      "INS-2"
+                    ]
+                  ]
+                ]
+              }
+            },
+            {
+              "clock": 31,
+              "call": "withdraw",
+              "args": {
+                "dataset": "tapes",
+                "subjects": [
+                  "INS-3"
+                ]
+              }
+            },
+            {
+              "clock": 60,
+              "call": "due",
+              "expect": {
+                "due": [
+                  [
+                    "tapes",
+                    [
+                      "INS-1",
+                      "INS-2"
+                    ]
+                  ]
+                ]
+              }
+            },
+            {
+              "clock": 300,
+              "call": "due",
+              "expect": {
+                "due": [
+                  [
+                    "tapes",
+                    [
+                      "INS-1",
+                      "INS-2"
+                    ]
+                  ],
+                  [
+                    "chain",
+                    [
+                      "INS-1"
+                    ]
+                  ]
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "timetable-keeps-the-allowances-reserve-for-reads-wanted-now",
+          "subject": "roles.data.Timetable",
+          "kind": "steps",
+          "given": {
+            "every_s": {
+              "tapes": 30
+            },
+            "allowance": {
+              "limit": 3,
+              "used": 0
+            },
+            "reserve": 1
+          },
+          "steps": [
+            {
+              "call": "want",
+              "args": {
+                "dataset": "tapes",
+                "subjects": [
+                  "INS-1"
+                ]
+              }
+            },
+            {
+              "call": "due",
+              "expect": {
+                "due": [
+                  [
+                    "tapes",
+                    [
+                      "INS-1"
+                    ]
+                  ]
+                ],
+                "used": 1
+              }
+            },
+            {
+              "clock": 30,
+              "call": "due",
+              "expect": {
+                "due": [
+                  [
+                    "tapes",
+                    [
+                      "INS-1"
+                    ]
+                  ]
+                ],
+                "used": 2
+              }
+            },
+            {
+              "clock": 60,
+              "call": "due",
+              "expect": {
+                "due": [],
+                "used": 2
+              }
+            }
+          ]
+        },
+        {
+          "name": "timetable-refuses-a-cadence-of-none",
+          "subject": "roles.data.Timetable",
+          "kind": "steps",
+          "given": {
+            "every_s": {
+              "tapes": 30
+            }
+          },
+          "steps": [
+            {
+              "call": "every",
+              "args": {
+                "dataset": "chain",
+                "every_s": 0
+              },
+              "expect": {
+                "refused": "chain"
+              }
+            }
+          ]
         }
       ]
     },
@@ -355,7 +1970,7 @@
     {
       "module": "sessions",
       "since": "0.35.0",
-      "says": "An SDK carrying helpers.sessions.Backoff waits as these cases say after each failure of a long-running work: doubling within its jitter to its most, and from its first again once the work ran steadily.\n",
+      "says": "An SDK carrying helpers.sessions.Backoff waits as these cases say after each failure of a long-running work: doubling within its jitter to its most, and from its first again once the work ran steadily. One carrying helpers.sessions.Supervisor keeps a session as these cases say: its waits, its state, its subscriptions and its catch-up after a reopen.\n",
       "cases": [
         {
           "name": "backoff-doubles-to-its-most-then-resets-when-steady",
@@ -502,6 +2117,170 @@
           "expect": {
             "refused": "jitter"
           }
+        },
+        {
+          "name": "supervisor-waits-its-backoff-and-catches-up-after-a-reopen",
+          "subject": "helpers.sessions.Supervisor",
+          "kind": "steps",
+          "given": {
+            "first_s": 1,
+            "most_s": 60,
+            "jitter": 0,
+            "steady_s": 60,
+            "silent_s": 30,
+            "refused_s": 300,
+            "wanted": [
+              "AAA",
+              "BBB"
+            ]
+          },
+          "steps": [
+            {
+              "call": "open_fails",
+              "expect": {
+                "state": "waiting",
+                "opened": 0,
+                "dropped": 1,
+                "wait_s": 1
+              }
+            },
+            {
+              "call": "open_fails",
+              "expect": {
+                "state": "waiting",
+                "opened": 0,
+                "dropped": 2,
+                "wait_s": 2
+              }
+            },
+            {
+              "call": "opens",
+              "expect": {
+                "state": "open",
+                "opened": 1,
+                "subscribed": [
+                  "AAA",
+                  "BBB"
+                ]
+              }
+            },
+            {
+              "clock": 5,
+              "call": "hears",
+              "args": {
+                "subject": "AAA"
+              },
+              "expect": {
+                "messages": 1
+              }
+            },
+            {
+              "clock": 40,
+              "call": "goes_silent",
+              "expect": {
+                "state": "waiting",
+                "dropped": 3,
+                "wait_s": 4
+              }
+            },
+            {
+              "call": "opens",
+              "expect": {
+                "state": "open",
+                "opened": 2,
+                "caught_up": {
+                  "AAA": 5,
+                  "BBB": 5
+                }
+              }
+            },
+            {
+              "call": "want",
+              "args": {
+                "wanted": [
+                  "AAA"
+                ]
+              },
+              "expect": {
+                "subscribed": [
+                  "AAA"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "supervisor-waits-out-a-refused-key-longer",
+          "subject": "helpers.sessions.Supervisor",
+          "kind": "steps",
+          "given": {
+            "first_s": 1,
+            "most_s": 60,
+            "jitter": 0,
+            "steady_s": 60,
+            "silent_s": 30,
+            "refused_s": 300,
+            "wanted": [
+              "AAA"
+            ]
+          },
+          "steps": [
+            {
+              "call": "open_refused",
+              "expect": {
+                "state": "refused",
+                "opened": 0,
+                "dropped": 0,
+                "wait_s": 300
+              }
+            },
+            {
+              "call": "opens",
+              "expect": {
+                "state": "open",
+                "opened": 1,
+                "subscribed": [
+                  "AAA"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "supervisor-holds-nothing-while-nothing-is-wanted-or-there-is-no-key",
+          "subject": "helpers.sessions.Supervisor",
+          "kind": "steps",
+          "given": {
+            "first_s": 1,
+            "most_s": 60,
+            "jitter": 0,
+            "steady_s": 60,
+            "silent_s": 30,
+            "refused_s": 300,
+            "wanted": [],
+            "no_key": true
+          },
+          "steps": [
+            {
+              "call": "idles",
+              "expect": {
+                "state": "off",
+                "opened": 0
+              }
+            },
+            {
+              "call": "want",
+              "args": {
+                "wanted": [
+                  "AAA"
+                ]
+              },
+              "expect": {
+                "state": "no key",
+                "opened": 0
+              }
+            }
+          ]
         }
       ]
     }

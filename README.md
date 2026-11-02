@@ -2376,6 +2376,71 @@ common logic to the behaviour cases every SDK runs (meridian-schema's
 `boundaries/behaviours.json`, vendored as `src/meridian/behaviours.json`),
 an adapter per subject; a plugin never runs them.
 
+**924's helpers** (the data-plugin fit review's list; rulings 924, 1009,
+1016, 1017, 1023, 1027, 1028 and 1030). A helper the SDK carries has behaviour
+that core or the lake depends on every plugin doing the same, and behaviour
+cases every SDK passes; what faces a vendor -- its transport, its pacing,
+its `Retry-After`, its allowance -- is the plugin's, at most a template
+example:
+
+- `meridian.helpers.sessions.Supervisor` keeps one session with a source
+  open over the plugin's own `Link` (`open`, `subscribe`, `receive`,
+  `close`): reopened after a drop or silence with `Backoff`'s jittered
+  waits, a refused key waited out longer, subscribed to exactly what is
+  wanted, its state for Connection (`SessionState`), its reconnects and
+  signs of life on `roles.Latency`, and after a reopen its catch-up,
+  `caught_up(last_heard_ns_by_subject)`. It holds no transport (ruling
+  1027): the data template's `stream.py` shows a WebSocket stream from an
+  established library under it, and `pairs.supervised` keeps a pairs
+  market's own socket with it.
+- `meridian.helpers.calendars`: `DayClock.of(declaration)`, a dataset's
+  business day by its declared zone and end minute (`business_date_of`,
+  `close_of`, `opened_at`); `MarketDays(role, calendar_id)`, the
+  deployment's calendar read through a role object (`is_open`,
+  `previous_open`, `next_open`, `business_date_of`), a failed read read
+  again after a backoff.
+- `data.SentRows(capacity)` (a row sent again only when what it says
+  changed, by a digest of its values, never `repr`), `data.Conflator(every_ns)`
+  (the latest per key once a period; never a trade, a fill or an outcome)
+  and `data.Timetable` (a polled source's standing wants read at each
+  dataset's cadence, gated by its sessions and the market's days, within
+  the vendor's allowance as the plugin keeps it, a reserve left for reads
+  wanted now).
+- `data.timeliness(label, choices, default)` and `data.api_key(label,
+  description)`, the two common settings; the choices `real_time`,
+  `delayed`, `end_of_day`.
+- `data.listings.Feed(..., timeliness=, datasets_by_timeliness=, mic_of=)`:
+  the dataset of the plan's timeliness in force (`in_force`, `dataset`, a
+  want of another declined, `refused`), a stated `participant_ns` kept as
+  the `event` time beside the consolidated one (`Stated`), a venue resolved
+  by its MIC too, a row sent again only when it changed, and the edge glue
+  four plugins kept -- each row recorded unasked or for a standing want aged
+  on `latency` and judged by `quality` (`at_the_edge`); its pages
+  `listings.connection_read`, `datasets_read`, `figures_read` and the
+  templates `meridian/roles/data/listings/connection.html` and
+  `datasets.html`.
+- `data.option_chains.Feed` over the plugin's `ChainSource` (`expirations`,
+  `chain` answering `ChainOption`s, optionally `trades` answering
+  `SourceTrade`s): a source's chains recorded under each underlying, its
+  series, quotes, open interest (the market day before) and volume, only
+  what changed, at most so many reads a minute, standing wants kept current
+  in `run()`, trades streamed for what stands; registered by itself, or held
+  by another data role class as `role=` and handed the wants it `serves`.
+- `data.pairs.Feed(conflate_first=True, day_clock=...)`: a venue's prices
+  held the latest per key (`Market.conflation_key`) and read and kept as
+  raw records once a pass (ruling 929), a day by the declared zone, and the
+  `mid` kind where asked: an FX venue's feed.
+- A Pricer answers a batch once: the catch-up on start answers what waits,
+  and the stream's seeding, handing it on again, is not answered twice.
+
+Nothing in the SDK refuses a licence term left unstated (ruling 1030):
+the deployment admin settles terms with the vendor and sets a dataset's
+licence on Data sources, and the plugin only describes them (ruling 1032):
+the data template declares no `licence_default` and shows, commented, a
+dataset's terms and pricing described in plain words. `helpers.pacing` is not in 0.35 (ruling 1028): the data template's
+`pacing.py` shows a vendor's rate limit and `Retry-After` kept by the
+plugin. No transports package is shipped (ruling 1027).
+
   **Run 0.35.0 on a core of contract v29**: no contract changed.
 
 ## Moving a plugin to a new release
@@ -2455,7 +2520,7 @@ carries libcst.
 | 0.32.3 to 0.33.0: the SDK declares contract v28: `meridian.SubjectRef` only (ruling 599); `Latency.report` sends ReportLatency and the three latency cases are required (518); the ems's actions permitted read (600); listed options' and futures' chains, lifecycle and packages (`roles.chains`, `roles.lifecycle`, `roles.packages`); a signal's derived series, saved scenarios and quality escalated (`roles.signal`); the filings slice (`roles.data.filings`); quality states at the edge (`roles.data.quality`); `DataEligibility`; the suites' v28 cases, marked by `about` (602). Breaking | an `ops.SubjectRef(...)` handed to the SDK into `meridian.SubjectRef(...)`; a base pinned by digest at an older release moved to 0.33.0, its digest dropped (offline) | a heard message's subjects passed to a typed operation: convert them; map each role suite's v28 cases, or name those about what the plugin never presents; map the three latency cases a v27 plugin named not presented; pin the base's digest again |
 | 0.33.0 to 0.33.1: additive, on contract v28: an event-contract `Market` may answer `bars(contract, interval, first_ns, until_ns)` (`Candle`, `HOUR`, `DAY`), its plugin declaring a third dataset keyed `bars` (`meridian.v1.Bar`, on its session day) and running `Feed.keep_bars(declared)`; `EventContractsChecks` accept `bars` where the hook is supplied and refuse any other third dataset; the feed-delay producer stands on the quote where the last trade states no time or no prices are declared (ruling 626); a row stating an interval is no duplicate of the same values over another | only the pins move: no migrate step is needed beyond them | a venue keeping bars declares `bars`, names `BARS_DECLARED` in its `venue_cases` and drops `a-daily-bar` from `NOT_PRESENTED`; a plugin's own feed-delay producer standing on the quote can be removed |
 | 0.33.5 to 0.34.0: the SDK declares contract v29, fixed income: the contract's money rules, accrual and factors (`helpers.debt`), the seven fixed-income records reported and servicing's expectations (`helpers.lifecycle`), `analytics.DEBT_MEASURES` and their reference computations (`analytics.debt`), a quality assessment's data type, a derived value in money, the suites' factor cases and the widened `about` markers; `meridian.roles` holds only roles, its topic modules `chains`, `packages`, `lifecycle` and `debt` moved to `meridian.helpers` with no shim (ruling 1001). Breaking | every import and name of `meridian.roles.chains`, `.packages`, `.lifecycle` or `.debt` onto `meridian.helpers` (`import meridian.roles.chains`, `from meridian.roles import chains`, `from meridian.roles.chains import X`; `from meridian.roles import Latency, chains` split in two; `meridian.roles.debt.factor(...)`, a patch target's string); a base pinned by digest at an older release moved to 0.34.0, its digest dropped (offline) | map each role suite's v29 cases, or name those about what the plugin never presents; name a `QualityAssessment`'s `data_type`; an old path still named in a comment, a dynamic import or read through `from meridian.roles import *`; pin the base's digest again |
-| 0.34.0 to 0.35.0: each role is one class (spec/each-role-is-one-generated-class): `meridian.roles.<role>.Role` for every role, generated from the matrix and the suites, its acts methods and its events `on_<row>` methods, required ones abstract; seven role modules added (`compliance`, `confirmation`, `oms`, `portfolio`, `reference`, `servicing`, `settlement`); `meridian.run` and `run_async` the entry point, `on_start`, `run` (restarted with `helpers.sessions.Backoff`) and `on_stop`, `seed`, `subjects()` and `hear_again()` per class on one stream; `connect(roles=)` required; the connection keeps only what is plugin-wide, and makes no act; `receive` gone; `connectivity.Trader`, `pricing.Pricer` and the data feeds role classes; helpers given the role object; `Recorder.bind` and `Recorder.hear`; `meridian.behaviours`. No contract change. Breaking | a `receive` call whose handlers are one class's methods on one declared role's events made that class's `on_<row>` methods, the class given the role's base, `seed=False` its `seed = False`, the connection it took dropped; the SDK's own handlers dropped from a `receive`; a Trader's, a feed's and a Pricer's renamed methods and arguments, the connection given them dropped (a recorder's call `recorder.bind(...)`); `self.plugin.<act>` on `self` in a role class, a helper given `self.plugin` given `self`; an unchanged template entry point replaced | an entry point connecting by hand, moved to `meridian.run`; an act on the connection, made on the role object holding it; a `receive` no rewrite reached; a role class lacking a required event; a suite test hearing through `recorder.receive` or giving a class a stand-in connection; 924's helpers adopted by hand |
+| 0.34.0 to 0.35.0: each role is one class (spec/each-role-is-one-generated-class): `meridian.roles.<role>.Role` for every role, generated from the matrix and the suites, its acts methods and its events `on_<row>` methods, required ones abstract; seven role modules added (`compliance`, `confirmation`, `oms`, `portfolio`, `reference`, `servicing`, `settlement`); `meridian.run` and `run_async` the entry point, `on_start`, `run` (restarted with `helpers.sessions.Backoff`) and `on_stop`, `seed`, `subjects()` and `hear_again()` per class on one stream; `connect(roles=)` required; the connection keeps only what is plugin-wide, and makes no act; `receive` gone; `connectivity.Trader`, `pricing.Pricer` and the data feeds role classes; helpers given the role object; `Recorder.bind` and `Recorder.hear`; `meridian.behaviours`; 924's helpers -- `helpers.sessions.Supervisor`, `helpers.calendars` (`DayClock`, `MarketDays`), `data.SentRows`, `Conflator`, `Timetable`, `timeliness`, `api_key`, the listings feed's timeliness, two clocks, MIC venues, edge and pages, `data.option_chains`, `pairs.Feed(conflate_first=, day_clock=)` and `pairs.supervised` -- each held to behaviour cases. No contract change. Breaking | a `receive` call whose handlers are one class's methods on one declared role's events made that class's `on_<row>` methods, the class given the role's base, `seed=False` its `seed = False`, the connection it took dropped; the SDK's own handlers dropped from a `receive`; a Trader's, a feed's and a Pricer's renamed methods and arguments, the connection given them dropped (a recorder's call `recorder.bind(...)`); `self.plugin.<act>` on `self` in a role class, a helper given `self.plugin` given `self`; an unchanged template entry point replaced; a listings feed's own `at_the_edge` and the `_record` override calling it deleted (the feed does both), and the `_changed` copies made `data.SentRows`, a name only they imported dropped | an entry point connecting by hand, moved to `meridian.run`; an act on the connection, made on the role object holding it; a `receive` no rewrite reached; a role class lacking a required event; a suite test hearing through `recorder.receive` or giving a class a stand-in connection; 924's helpers adopted by hand (`helper-adopted`): a stream supervisor of its own onto `helpers.sessions.Supervisor` over its `Link`, a chains machine onto `data.option_chains.Feed`, a calendar reader and a day by hand onto `helpers.calendars`, listings pages onto the SDK's, a polling loop onto `data.Timetable`, a plan switch onto the listings feed's `timeliness`, the `again` and `licences` loops onto a role's `run()`, an FX lake onto `pairs.Feed(conflate_first=True)`, and a raw store onto `meridian.edge.RawStore` |
 
 `tests/migrations/` holds the plugins the migrations are recorded for, as
 written and as their migration leaves them, and `make check-migrations` holds

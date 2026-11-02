@@ -11,6 +11,10 @@ requires-python = ">=3.11"
 # beside speaks one version of the contract, and a range would let a rebuild
 # pick up another.
 dependencies = ["open-meridian==0.35.0"]
+# The vendor's own clients are the plugin's to choose: for a WebSocket stream
+# (src/reference_plugin/stream.py's example), an established library, added
+# here -- "websockets>=13,<16" -- once the plugin streams. Left out while the
+# reference vendor does not, so the image stays the SDK and the plugin.
 
 [project.scripts]
 reference-plugin = "reference_plugin.__main__:main"
