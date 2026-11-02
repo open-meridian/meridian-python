@@ -436,6 +436,38 @@ def test_each_role_shapes_by_hand_work_leaves_nothing_by_hand(
     assert left_by_hand(result) == []
 
 
+def test_a_data_feeds_own_handlers_leave_its_receive_call() -> None:
+    """SDK 0.35.1 (the plugin pilot's kalshi): a feed's `on_want` and
+    `on_withdrawn` handed to `receive` are dropped as a Trader's are -- the
+    feed is a data role class, hearing them by itself -- and the call with
+    them; 0.35.0 left the call naming them by hand."""
+    files = {
+        "pyproject.toml": '[tool.meridian]\nroles = ["data"]\n',
+        "src/p/__main__.py": textwrap.dedent(
+            """\
+            import meridian
+            from meridian.roles.data.event_contracts import ContractMap, Feed
+
+            async def hear(plugin, feed):
+                await plugin.receive(
+                    observations_wanted=feed.on_want, want_withdrawn=feed.on_withdrawn
+                )
+
+            async def run(market):
+                async with await meridian.connect() as plugin:
+                    feed = Feed(plugin, market, ContractMap())
+                    await hear(plugin, feed)
+            """
+        ),
+    }
+    result = migrate(files, "0.34.0", "0.35.0")
+    written = result.files["src/p/__main__.py"]
+    assert ".receive(" not in written and "feed = Feed(market, ContractMap())" in written
+    rules = {r for step in result.steps for rules in step.rewrote.values() for r in rules}
+    assert {"sdk-handlers-dropped", "common-logic-renamed"} <= rules
+    assert [rule for rule, _, _ in left_by_hand(result)] == ["connect-to-run"]
+
+
 def test_a_class_given_two_roles_events_or_a_lambda_is_left_by_hand() -> None:
     files = {
         "pyproject.toml": '[tool.meridian]\nroles = ["data", "signal"]\n',

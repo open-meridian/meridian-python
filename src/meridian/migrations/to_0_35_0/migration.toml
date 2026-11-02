@@ -64,7 +64,8 @@ named by `connect-to-run` where it is not"""
 [[rewrites]]
 rule = "sdk-handlers-dropped"
 what = """entries of a `receive` call whose handlers are the SDK's own common logic -- \
-a Trader's `on_placement`, `on_instruction` and `on_execution`, a Pricer's `heard` -- \
+a Trader's `on_placement`, `on_instruction` and `on_execution`, a Pricer's `heard`, a \
+pairs, event-contract or listings feed's `on_want` and `on_withdrawn` (SDK 0.35.1) -- \
 removed, the call with them where none is left, since that logic is a role class \
 registered by itself"""
 

@@ -12,8 +12,9 @@ methods of a class in another:
   that role's base, its handler methods are renamed `on_<row>` (every
   reference with them), `seed=False` becomes its `seed = False`, a `plugin`
   it was given leaves it, and the call is removed;
-- `sdk-handlers-dropped`: a Trader's and a Pricer's handlers dropped from a
-  `receive` call, those classes being registered by themselves;
+- `sdk-handlers-dropped`: a Trader's, a Pricer's and a data feed's handlers
+  dropped from a `receive` call, those classes being registered by
+  themselves (the feeds' from SDK 0.35.1);
 - `common-logic-renamed`: the SDK's renamed methods and arguments, and the
   connection given first to a Trader, a Pricer or a feed dropped (a
   recorder's call becoming `recorder.bind(...)`);
@@ -92,6 +93,10 @@ TRADER_HANDLERS = {
     "on_execution": "on_execution_recorded",
 }
 FEED_HANDLERS = {"on_want": "on_observations_wanted", "on_withdrawn": "on_want_withdrawn"}
+#: The data feeds, whose handlers `receive` was handed as a Trader's were
+#: (SDK 0.35.1): `data.option_chains.Feed` is 0.35.0's, so no 0.34.0 plugin
+#: hands `receive` its handlers.
+FEEDS = (PAIRS, CONTRACTS, LISTINGS)
 #: The feeds' methods renamed where a role's act has the name (0.35.0).
 FEED_METHODS = {
     PAIRS: {"record_trades": "record_trades_of", "record_quotes": "record_quotes_of"},
@@ -303,6 +308,8 @@ class _Receive:
     # The keywords dropped (the SDK's own handlers) and whether the call goes.
     dropped: set[str] = field(default_factory=set)
     removed: bool = False
+    # Whether any handler is a class's this step makes a role class.
+    mapped: bool = False
 
 
 @dataclass
@@ -508,9 +515,7 @@ def _plan_receive(
         owner = dotted(value.value) or ""
         method = value.attr.value
         logic = plugin.objects.get(owner, "")
-        if (logic == TRADER and method in TRADER_HANDLERS) or (
-            logic == PRICER and method == "heard"
-        ):
+        if _sdk_handler(logic, method):
             receive.dropped.add(keyword)
             continue
         mine[keyword] = method
@@ -537,7 +542,21 @@ def _plan_receive(
                 plan.renames[method] = wanted
         plan.seed_false |= seed_false
     receive.removed = len(receive.dropped) + len(mine) == len(handlers)
+    receive.mapped = bool(mine)
     plugin.receives.append(receive)
+
+
+def _sdk_handler(logic: str, method: str) -> bool:
+    """Whether `method` of an object of the SDK's common logic is that
+    logic's own handler, which its role class hears by itself: a Trader's, a
+    Pricer's, and a data feed's (SDK 0.35.1), by 0.34.0's name or 0.35.0's."""
+    if logic == TRADER:
+        return method in TRADER_HANDLERS or method in TRADER_HANDLERS.values()
+    if logic == PRICER:
+        return method in ("heard", "on_price_batch")
+    if logic in FEEDS:
+        return method in FEED_HANDLERS or method in FEED_HANDLERS.values()
+    return False
 
 
 # ── Rewriting a file ────────────────────────────────────────────────────
@@ -809,7 +828,9 @@ class _Rewriter(cst.CSTTransformer):
                         name = dotted(small.targets[0].target)
                         if name is not None:
                             self.cancelled.add(name)
-                    self.rules.append("receive-to-role-methods")
+                    self.rules.append(
+                        "receive-to-role-methods" if receive.mapped else "sdk-handlers-dropped"
+                    )
                     return cst.RemovalSentinel.REMOVE
             if (
                 isinstance(small, cst.Expr)
