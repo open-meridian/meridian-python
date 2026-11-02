@@ -9,6 +9,9 @@
    opens a new session where what is wanted changes, for a source whose
    subscriptions are its address (server-sent events) -- and for
    `pairs.supervised`, whose socket was closed under its pending receive.
+3. A table setting's rows are a list of dicts whether delivered typed or
+   untyped: the kind a table is declared as (`Setting(kind=list)`) and
+   what `meridian.Settings.values` has always held.
 """
 
 from __future__ import annotations
@@ -17,7 +20,11 @@ import asyncio
 import contextlib
 from typing import Any
 
+import meridian
+from conftest import FakeSidecar
+from meridian.declaration import Declaration, RecordKind, Storage
 from meridian.helpers.sessions import Backoff, Supervisor
+from meridian.v1 import sidecar_pb2
 
 
 class _Link:
@@ -345,3 +352,43 @@ class _Socket:
 
     async def close(self) -> None:
         self.gone.set()
+
+
+# ── 3. A table's rows are one type, typed or not ────────────────────────
+
+
+@meridian.settings
+class _Tabled:
+    funds: list[dict[str, str]] = meridian.setting(
+        "Funds", columns=[meridian.Column("ticker", label="Ticker", required=True)]
+    )
+    empty: list[dict[str, str]] = meridian.setting(
+        "Empty", columns=[meridian.Column("ticker", label="Ticker")]
+    )
+
+
+_TABLED = Declaration(
+    settings=_Tabled,
+    storage=Storage(kinds=[RecordKind("responses", "Raw responses", window_days=30)]),
+)
+
+
+async def test_a_tables_rows_are_a_list_whether_delivered_typed_or_untyped(
+    sidecar: tuple[FakeSidecar, str],
+) -> None:
+    """Fails on 0.35.2: the typed delivery gave a tuple, the untyped a list."""
+    service, address = sidecar
+    delivery = sidecar_pb2.SettingsDelivery(
+        values=[sidecar_pb2.SettingValue(name="funds", value='[{"ticker": "VIGIX"}]')]
+    )
+    service.settings = [delivery, delivery]
+    async with await meridian.connect(
+        address, heartbeat=False, declaration=_TABLED, roles=[]
+    ) as plugin:
+        typed = await plugin.first_settings(_Tabled)
+        untyped = await anext(plugin.settings())
+    rows = [{"ticker": "VIGIX"}]
+    assert typed.funds == rows and type(typed.funds) is list
+    assert type(typed.empty) is list and typed.empty == []
+    assert type(typed.values["funds"]) is list and typed.values["funds"] == rows
+    assert type(untyped.values["funds"]) is list and untyped.values["funds"] == rows
