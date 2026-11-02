@@ -33,7 +33,7 @@ wanted was last heard so the gap is read back from the source's history:
 
     supervisor = sessions.Supervisor(
         lambda: VendorLink(credentials),          # the plugin's Link, or None for no key
-        heard=feed.heard,                          # each receive()'s statements
+        heard=feed.heard,                          # each receive()'s statements, [] too
         flush=feed.flush,                          # what is due, recorded
         caught_up=feed.caught_up,                  # the gap after a reopen
         latency=latency, session="stocks", silent_seconds=600, refused=(Refused,),
@@ -185,7 +185,9 @@ class Supervisor:
 
     `link` makes a fresh `Link` for each session, or None where it cannot
     yet (no key: said, and tried again when `restart` is called). `heard` is
-    handed each `receive()`'s statements; `flush`, where given, is called
+    handed each `receive()`'s statements, every message received, one that
+    states nothing (a heartbeat, a status) as []: each is the source's sign
+    of life (ruling 418); `flush`, where given, is called
     after each and at least every `flush_seconds`; `opened(wanted)` each
     time a session opens, before anything is read; `caught_up` on every
     open after the first, with each wanted subject's last heard moment (by
@@ -429,5 +431,7 @@ class Supervisor:
             subject = self.subject_of(item)
             if subject:
                 self.last_heard[subject] = now
-        if stated:
-            await self._said(self.heard, stated)
+        # Every message is handed on, one stating nothing (a heartbeat, a
+        # status) as []: it is the source's sign of life to the feed too
+        # (ruling 418), as each was before the supervisor (0.35.3).
+        await self._said(self.heard, stated)
