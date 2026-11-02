@@ -472,20 +472,19 @@ class _NoStream:
 
 class _MarketLink:
     """A pairs market's stream as a `helpers.sessions.Link`, over the
-    market's own socket (`connect`, `subscriptions`): what is wanted changing
-    opens the socket again with the new names, as the venues' streams take
-    no unsubscription the market states."""
+    market's own socket (`connect`, `subscriptions`). The venues' streams
+    take no unsubscription the market states, so what is wanted changing
+    opens a new session with the new names (the supervisor's
+    `reopen_on_want`), never a drop counted: each link subscribes once."""
 
     def __init__(
         self,
         address: str,
         connect: Callable[[str], Awaitable[Socket]],
         subscriptions: Callable[[Sequence[str]], list[str]],
-        opened: Callable[[Sequence[str]], Awaitable[Any]] | None,
     ) -> None:
         self.name = address
         self.address, self.connect, self.subscriptions = address, connect, subscriptions
-        self.opened = opened
         self.socket: Socket | None = None
         self.subscribed: tuple[str, ...] | None = None
 
@@ -495,11 +494,6 @@ class _MarketLink:
 
     async def subscribe(self, wanted: Sequence[str]) -> None:
         names = tuple(wanted)
-        if self.subscribed is not None and names != self.subscribed:
-            await self.close()
-            await self.open()
-            if self.opened is not None:
-                await self.opened(names)
         assert self.socket is not None
         for text in self.subscriptions(names):
             await self.socket.send(text)
@@ -518,16 +512,12 @@ class _MarketLink:
 class _Supervised(Supervisor):
     """A supervisor as a pairs feed's `Streamer` (see `supervised`)."""
 
-    #: The feed's `opened`, handed to each market link made.
-    _made: Callable[[Sequence[str]], Awaitable[Any]] | None = None
-
     def retarget(self, address: Any, *more: Any) -> None:
         """Stream from another source (sample data switched): opened again."""
         connect, subscriptions = more
-        held = self._made
 
         def link() -> Link:
-            return _MarketLink(address, connect, subscriptions, held)
+            return _MarketLink(address, connect, subscriptions)
 
         super().retarget(link)
 
@@ -556,17 +546,17 @@ def supervised(
             await heard(text)
 
     def link() -> Link:
-        return _MarketLink(address, connect, subscriptions, opened)
+        return _MarketLink(address, connect, subscriptions)
 
     made = _Supervised(
         link,
         heard=each,
         opened=opened,
+        reopen_on_want=True,
         clock_ns=clock_ns,
         silent_seconds=silent_seconds,
         session=address,
     )
-    made._made = opened
     return made
 
 

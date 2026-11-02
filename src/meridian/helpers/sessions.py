@@ -24,8 +24,11 @@ what is, and opens it again after it breaks, closes or goes silent, after
 its `Backoff`. The plugin supplies the `Link` -- its transport and its
 vendor's protocol: opening and authenticating, subscribing, reading the
 next statements, closing -- and the supervisor holds what every plugin
-copied: the waits with jitter, the silence timeout, a refused key waited out
-longer, a restart when the settings change, the session's state for the
+copied: the waits with jitter, never shorter than a source asked (a 429's
+`Retry-After`, as the failure's `retry_after`), the silence timeout, a
+refused key waited out longer, a restart when the settings change, a new
+session where what is wanted changes and the source takes no subscription
+in a session already open (`reopen_on_want`), the session's state for the
 Connection page (`SessionState`), its signs of life and reconnects on the
 plugin's `roles.Latency`, and one catch-up hook after a reopen,
 `caught_up(last_heard_ns_by_subject) -> int`, given when each subject
@@ -39,6 +42,15 @@ wanted was last heard so the gap is read back from the source's history:
         latency=latency, session="stocks", silent_seconds=600, refused=(Refused,),
     )
     supervisor.want(symbols); supervisor.restart(); await supervisor.run()
+
+A source asking to be left alone a while (an HTTP 429's `Retry-After`)
+says so on the failure its `Link` raises: an exception with a `retry_after`
+in seconds is waited out at least that long, whatever the backoff's next
+wait. A source whose subscriptions are its address -- server-sent events
+naming the feeds in the URL, a socket taking no unsubscription -- is given
+`reopen_on_want=True`: what is wanted changing then opens a new session for
+it at once, never a drop counted or a backoff waited, rather than
+`subscribe` being called on the session open.
 
 How the source is reached -- a WebSocket, a line protocol over TCP, SSE, FIX
 -- is the plugin's `Link`, never here: this module holds no transport, only
@@ -55,6 +67,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import math
 import random
 import time
 from collections.abc import Awaitable, Callable, Sequence
@@ -124,9 +137,11 @@ class Link(Protocol):
     vendor's protocol. `open` connects and authenticates, raising one of the
     supervisor's `refused` exceptions where the source refuses the key;
     `subscribe` makes the session's subscriptions exactly `wanted` (called
-    again whenever they change); `receive` answers the next statements read,
-    converted ([] for a heartbeat), raising where the session broke; `close`
-    ends it."""
+    again whenever they change, unless the supervisor opens a new session
+    then: `reopen_on_want`); `receive` answers the next statements read,
+    converted ([] for a heartbeat), raising where the session broke (an
+    exception with a `retry_after`, in seconds, where the source asked to be
+    left that long); `close` ends it."""
 
     name: str
 
@@ -175,6 +190,15 @@ class SessionState:
         return self.dropped
 
 
+def _asked(failure: BaseException) -> float:
+    """The seconds a failure says its source asked to be left (its
+    `retry_after`, a 429's `Retry-After`), else 0."""
+    asked = getattr(failure, "retry_after", None)
+    if isinstance(asked, bool) or not isinstance(asked, int | float):
+        return 0.0
+    return float(asked) if math.isfinite(asked) and asked > 0 else 0.0
+
+
 def _symbol(item: Any) -> str | None:
     symbol = getattr(item, "symbol", None)
     return symbol if isinstance(symbol, str) and symbol else None
@@ -196,7 +220,10 @@ class Supervisor:
     and the session goes on. A session silent for `silent_seconds` (0 for
     never) is taken for broken; one whose `open` raises one of `refused` is
     waited out `refused_seconds` before it is tried again; any other failure
-    waits the `backoff`'s next wait. With `latency` (a `roles.Latency`),
+    waits the `backoff`'s next wait; and either never less than the
+    failure's `retry_after` (seconds), where it has one. With
+    `reopen_on_want`, what is wanted changing opens a new session for it
+    rather than subscribing the open one. With `latency` (a `roles.Latency`),
     each message is the `session`'s sign of life and each drop a reconnect
     counted. `clock_ns`, `sleep` and `clock` (seconds, monotonic, for the
     silence) are for a test."""
@@ -216,6 +243,7 @@ class Supervisor:
         refused_seconds: float = 300.0,
         flush_seconds: float = 0.5,
         backoff: Backoff | None = None,
+        reopen_on_want: bool = False,
         subject_of: Callable[[Any], str | None] = _symbol,
         clock_ns: Callable[[], int] = time.time_ns,
         sleep: Callable[[float], Awaitable[Any]] = asyncio.sleep,
@@ -232,6 +260,7 @@ class Supervisor:
         self.refused, self.refused_seconds = refused, refused_seconds
         self.flush_seconds = flush_seconds
         self.backoff = backoff or Backoff()
+        self.reopen_on_want = reopen_on_want
         self.subject_of = subject_of
         self.clock_ns, self.sleep, self._clock = clock_ns, sleep, clock
         self.state = SessionState()
@@ -301,14 +330,14 @@ class Supervisor:
                 self.state.state = "refused"
                 self.state.last_error = f"refused: {refused}"[:300]
                 log.warning("%s refused the session: %s", made.name, refused)
-                wait = self.refused_seconds
+                wait = max(self.refused_seconds, _asked(refused))
             except Exception as broken:  # noqa: BLE001 - said, and opened again
                 self.state.dropped += 1
                 self.state.last_error = f"{type(broken).__name__}: {broken}"[:300]
                 log.warning("%s stopped: %s", made.name, self.state.last_error)
                 if self.latency is not None:
                     self.latency.count(self.session, reconnects=1)
-                wait = self.backoff.failed()
+                wait = max(self.backoff.failed(), _asked(broken))
             finally:
                 with contextlib.suppress(Exception):
                     await made.close()
@@ -400,6 +429,8 @@ class Supervisor:
                         raise _Restart()
                     if not self._wanted:
                         return
+                    if self.reopen_on_want and self._wanted != state.subscribed:
+                        raise _Restart()
                     await link.subscribe(self._wanted)
                     state.subscribed = self._wanted
                 else:
