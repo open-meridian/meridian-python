@@ -35,8 +35,9 @@ holding the act (`chains.read_chain(role, ...)`, `debt.read_factors(role,
 role. `sessions` holds `Backoff`, the wait between a long-running work's
 tries, with which `meridian.run` restarts a role's `run()`, and (924's item
 2) `Supervisor`, a session with a source kept open over the plugin's own
-`Link`, its state (`SessionState`) and its catch-up after a reopen;
-`calendars` (924's item 5) a dataset's business day as its declaration
+`Link`, its state (`SessionState`) and its catch-up after a reopen, and
+(0.35.5) `FX_WEEK`, the FX market's trading sessions, Sunday 17:00 to
+Friday 17:00 New York; `calendars` (924's item 5) a dataset's business day as its declaration
 states it (`DayClock`) and the deployment's market days read through a role
 object (`MarketDays`). Neither holds a transport or a vendor's pacing: those
 are each plugin's (rulings 1027 and 1028).
