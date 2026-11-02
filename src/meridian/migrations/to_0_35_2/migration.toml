@@ -1,0 +1,36 @@
+# open-meridian 0.35.1 to 0.35.2: a fix, with no contract change. A typed
+# delivery of the settings keeps the settings the SDK declares beside the
+# class; nothing a plugin calls changed shape, so the pins move, and the
+# untyped declaration a plugin made to reach them is named, to undo by hand.
+from = "0.35.1"
+to = "0.35.2"
+summary = """
+A fix. An instance of the class decorated @meridian.settings -- what
+meridian.run hands on_settings, and plugin.settings(Config) and
+first_settings deliver -- holds only the class's fields, so the settings the
+SDK declares beside them, each storage kind's <kind>_window_days and
+<kind>_past_window, never reached a typed plugin, and RawStore.tend could
+not be given them. From 0.35.2 the instance's .values is every setting
+delivered, by name, read only, as meridian.Settings.values holds them: its
+fields as typed, then the SDK's; and RawStore.tend(plugin, settings=config,
+today=...) reads the kind's window and what is done past it from the
+settings as delivered, typed or not. No field may be named missing, refused
+or values. Nothing a plugin calls changed shape: `meridian plugin migrate`
+moves the pins, and names a declaration that gave its typed class's
+settings untyped (Config.declared()) to reach the windows, which is now
+undone by hand.
+"""
+breaking = false
+rewrite = "rewrite.py"
+
+[[by_hand]]
+rule = "typed-settings-declared"
+what = """a Declaration given its @meridian.settings class's settings untyped, \
+settings=Config.declared(): on 0.35.1 the way to reach the storage kinds' window \
+settings, which a typed delivery dropped, at the cost of on_settings receiving \
+meridian.Settings rather than a Config"""
+instead = """declare settings=Config: on_settings then receives a Config, whose \
+.values holds every setting delivered, the window settings among them (a handler \
+reading delivered.values reads them unchanged; one reading .missing_required reads \
+.missing); give it to RawStore.tend(plugin, settings=config, today=...) in place of \
+the window and past-window values copied by hand"""

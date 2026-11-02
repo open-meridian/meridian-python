@@ -102,7 +102,7 @@ def test_every_release_since_the_first_recorded_has_its_step() -> None:
         ("0.6.0", "0.6.1"),
         ("0.6.1", "0.7.0"),
     ]
-    assert (steps[-1].source, steps[-1].target) == ("0.35.0", "0.35.1")
+    assert (steps[-1].source, steps[-1].target) == ("0.35.1", "0.35.2")
     # A release that moves the version records its step, if only the pins.
     assert steps[-1].target == SDK
 
@@ -2104,6 +2104,35 @@ def test_a_step_never_moves_back_a_base_pinned_at_a_later_release(source: str) -
     result = migrate({"Dockerfile": dockerfile}, source, "0.35.0")
     assert "Dockerfile" not in result.files
     assert [r for r, path, _ in left_by_hand(result) if path == "Dockerfile"] == []
+
+
+@pytest.mark.parametrize(
+    "declaring",
+    [
+        "from meridian.declaration import Declaration\nD = Declaration(\n"
+        "    settings=Config.declared(),\n)\n",
+        "import meridian\nD = meridian.Declaration(\n    settings=Config.declared(),\n)\n",
+    ],
+)
+def test_a_declaration_of_a_typed_class_untyped_is_left_by_hand(declaring: str) -> None:
+    """SDK 0.35.2 (the plugin pilot's fred): `settings=Config.declared()`
+    reached the storage kinds' window settings on 0.35.1, which a typed
+    delivery dropped; from 0.35.2 the typed delivery holds them, so the
+    declaration names its class again, by hand."""
+    result = migrate({"src/p/declaration.py": declaring}, "0.35.1", "0.35.2")
+    assert result.files == {}
+    assert left_by_hand(result) == [("typed-settings-declared", "src/p/declaration.py", 3)]
+
+
+def test_a_declaration_naming_its_class_or_a_list_is_not_left() -> None:
+    files = {
+        "src/p/a.py": "import meridian\nD = meridian.Declaration(settings=Config)\n",
+        "src/p/b.py": "import meridian\nD = meridian.Declaration(settings=[KEY])\n",
+        "src/p/c.py": "import meridian\nconfig = await plugin.first_settings(Config)\n",
+        "src/p/d.py": "D = Declaration(settings=Config.declared())\n",  # not the SDK's
+    }
+    result = migrate(files, "0.35.1", "0.35.2")
+    assert result.files == {} and left_by_hand(result) == []
 
 
 # ── 0.34.0: the topic modules leave meridian.roles (ruling 1001) ────────

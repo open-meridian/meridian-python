@@ -2,7 +2,7 @@
 
 The Python SDK for building [Open Meridian](https://open-meridian.com) plugins:
 the tools a trader has an AI agent build, and the bots and analytics a
-developer writes. Python 3.11 or newer. This is release 0.35.1; its reference
+developer writes. Python 3.11 or newer. This is release 0.35.2; its reference
 is at [open-meridian.dev](https://open-meridian.dev/api/python-sdk/).
 
 ## Start here
@@ -749,7 +749,8 @@ async with await meridian.connect(declaration=DECLARATION, interface=INTERFACE) 
   `<kind>_past_window`, `archived`, `kept` or `deleted`, defaulting to
   `archived` where the instance has an archive and `kept` otherwise. A
   plugin declaring a setting of either name is refused. The deployment
-  refuses a window below its hold.
+  refuses a window below its hold. A typed delivery holds them in
+  `config.values`, beside the class's fields.
 - **The archive** is the instance's own, where a deployment admin allowed it
   one: `edge.archive_dir()` where it is mounted (`MERIDIAN_ARCHIVE_DIR`), or
   in a cloud the bucket `MERIDIAN_ARCHIVE_BUCKET` names (an `s3://` URL, read
@@ -1327,6 +1328,13 @@ in `request.own_settings_refused`. An environment so refused is empty: not
 `live`, so the plugin reaches the demo host, and not demo, so `is_demo` and
 the badge count it live.
 
+`config.values` is every setting delivered, by name, read only, as
+`meridian.Settings.values` holds them: the class's fields as typed on the
+instance, then the settings the SDK declares beside them, which are no
+field of the class -- each storage kind's `<kind>_window_days` and
+`<kind>_past_window`. A secret's value is never in its `repr`. No field may
+be named `missing`, `refused` or `values`.
+
 Every page's loader holds the kit's patterns as macros, `meridian/kit.html`:
 `status`, `action`, `notice`, `badge`, `tiles`, `when`, `grid`,
 `nothing_here`, `empty` and `facts`.
@@ -1763,7 +1771,9 @@ class Lake(data.Role):                         # wants = data.Wants(lake, ("dail
 - **Raw records as files** (`meridian.edge.RawStore`): a vendor's answers
   kept before anything is read from them, a unit a UTC day, a live answer a
   line added only when it changed, and the units past the kind's window
-  archived, kept or deleted (`store.tend(plugin, window_days, past, today)`).
+  archived, kept or deleted (`store.tend(plugin, window_days, past, today)`,
+  or `store.tend(plugin, settings=config, today=today)`, reading the kind's
+  two window settings from the settings as delivered, typed or not).
 - **Connectivity** (`meridian.roles.connectivity`): the role's whole work
   over a venue's adapter. `Trader` hears each placement naming its instance
   and places it in the account its `ems` mapped, noted in storage before it
@@ -2280,7 +2290,7 @@ rewrites the modules' imports and says what is left by hand.
       await lifecycle.propose(self, [expected])
   ```
 
-### Each role is one class (0.35.0 and 0.35.1)
+### Each role is one class (0.35.0 to 0.35.2)
 
 From 0.35.0 (spec/each-role-is-one-generated-class; rulings 1004, 1005 and
 1009 to 1023) a plugin writes one class per role it holds. Each extends its
@@ -2466,7 +2476,18 @@ plugin. No transports package is shipped (ruling 1027).
   release as it is, and name less by hand. Nothing a plugin calls changed;
   `meridian plugin migrate` moves the pins.
 
-  **Run 0.35.0 and 0.35.1 on a core of contract v29**: no contract changed.
+- **0.35.2, a fix**: a typed delivery of the settings -- what
+  `meridian.run` hands `on_settings`, and `plugin.settings(Config)` and
+  `first_settings` deliver -- held only the class's fields, so the storage
+  kinds' window settings the SDK declares beside them never reached a typed
+  plugin. It now holds every setting delivered in `config.values`, and
+  `RawStore.tend(plugin, settings=config, today=...)` reads the kind's
+  window and what is done past it from the settings as delivered. A
+  declaration giving its class's settings untyped to reach them
+  (`settings=Config.declared()`) can name the class again: `meridian plugin
+  migrate` names each one, left by hand.
+
+  **Run 0.35.0 to 0.35.2 on a core of contract v29**: no contract changed.
 
 ## Moving a plugin to a new release
 
@@ -2553,6 +2574,7 @@ carries libcst.
 | 0.33.5 to 0.34.0: the SDK declares contract v29, fixed income: the contract's money rules, accrual and factors (`helpers.debt`), the seven fixed-income records reported and servicing's expectations (`helpers.lifecycle`), `analytics.DEBT_MEASURES` and their reference computations (`analytics.debt`), a quality assessment's data type, a derived value in money, the suites' factor cases and the widened `about` markers; `meridian.roles` holds only roles, its topic modules `chains`, `packages`, `lifecycle` and `debt` moved to `meridian.helpers` with no shim (ruling 1001). Breaking | every import and name of `meridian.roles.chains`, `.packages`, `.lifecycle` or `.debt` onto `meridian.helpers` (`import meridian.roles.chains`, `from meridian.roles import chains`, `from meridian.roles.chains import X`; `from meridian.roles import Latency, chains` split in two; `meridian.roles.debt.factor(...)`, a patch target's string); a base pinned by digest at an older release moved to 0.34.0, its digest dropped (offline) | map each role suite's v29 cases, or name those about what the plugin never presents; name a `QualityAssessment`'s `data_type`; an old path still named in a comment, a dynamic import or read through `from meridian.roles import *`; pin the base's digest again |
 | 0.34.0 to 0.35.0: each role is one class (spec/each-role-is-one-generated-class): `meridian.roles.<role>.Role` for every role, generated from the matrix and the suites, its acts methods and its events `on_<row>` methods, required ones abstract; seven role modules added (`compliance`, `confirmation`, `oms`, `portfolio`, `reference`, `servicing`, `settlement`); `meridian.run` and `run_async` the entry point, `on_start`, `run` (restarted with `helpers.sessions.Backoff`) and `on_stop`, `seed`, `subjects()` and `hear_again()` per class on one stream; `connect(roles=)` required; the connection keeps only what is plugin-wide, and makes no act; `receive` gone; `connectivity.Trader`, `pricing.Pricer` and the data feeds role classes; helpers given the role object; `Recorder.bind` and `Recorder.hear`; `meridian.behaviours`; 924's helpers -- `helpers.sessions.Supervisor`, `helpers.calendars` (`DayClock`, `MarketDays`), `data.SentRows`, `Conflator`, `Timetable`, `timeliness`, `api_key`, the listings feed's timeliness, two clocks, MIC venues, edge and pages, `data.option_chains`, `pairs.Feed(conflate_first=, day_clock=)` and `pairs.supervised` -- each held to behaviour cases. No contract change. Breaking | a `receive` call whose handlers are one class's methods on one declared role's events made that class's `on_<row>` methods, the class given the role's base, `seed=False` its `seed = False`, the connection it took dropped; the SDK's own handlers dropped from a `receive`; a Trader's, a feed's and a Pricer's renamed methods and arguments, the connection given them dropped (a recorder's call `recorder.bind(...)`); `self.plugin.<act>` on `self` in a role class, a helper given `self.plugin` given `self`; an unchanged template entry point replaced; a listings feed's own `at_the_edge` and the `_record` override calling it deleted (the feed does both), and the `_changed` copies made `data.SentRows`, a name only they imported dropped | an entry point connecting by hand, moved to `meridian.run`; an act on the connection, made on the role object holding it; a `receive` no rewrite reached; a role class lacking a required event; a suite test hearing through `recorder.receive` or giving a class a stand-in connection; 924's helpers adopted by hand (`helper-adopted`): a stream supervisor of its own onto `helpers.sessions.Supervisor` over its `Link`, a chains machine onto `data.option_chains.Feed`, a calendar reader and a day by hand onto `helpers.calendars`, listings pages onto the SDK's, a polling loop onto `data.Timetable`, a plan switch onto the listings feed's `timeliness`, the `again` and `licences` loops onto a role's `run()`, an FX lake onto `pairs.Feed(conflate_first=True)`, and a raw store onto `meridian.edge.RawStore` |
 | 0.35.0 to 0.35.1: a fix (ruling 1023): the pairs and event-contract feeds resolve their venue through the feed, not the connection; the suites' `Recorder.plugin` a stand-in for the connection that makes no act, a `PageClient` given a recorder handing its pages the same; `meridian.run` applies the first settings before `on_start` and keeps the settings watch; a reopened stream reads the latest only of rows seeded; an event-contract feed asks for its venue once a contract is served; the 0.34.0 and 0.35.0 steps rewrite more (a feed's own handlers dropped from `receive`, a recorder's `receive` outside the tests heard, a later base pin kept) and name less by hand | only the pins move: no migrate step is needed beyond them | a plugin's test acting through `recorder.plugin` or a page's `request.plugin`, or asserting a class's `plugin` is the recorder, now fails as the plugin would when run: the act made on the role object, the assertion on `recorder.plugin` |
+| 0.35.1 to 0.35.2: a fix: a typed delivery of the settings (`meridian.run`'s `on_settings`, `plugin.settings(Config)`, `first_settings`) holds every setting delivered in `config.values`, the storage kinds' `<kind>_window_days` and `<kind>_past_window` the SDK declares among them, which it dropped; `RawStore.tend(plugin, settings=config, today=...)` reads the kind's window from the settings as delivered, typed or not, `today` the UTC date where not given; no field may be named `missing`, `refused` or `values` | only the pins move | a `Declaration(settings=Config.declared())`, the 0.35.1 way to reach the window settings (`typed-settings-declared`): declare `settings=Config`, so `on_settings` receives a `Config` (a handler reading `delivered.values` reads them unchanged; one reading `.missing_required` reads `.missing`), and give it to `RawStore.tend(..., settings=config)` in place of the windows copied by hand |
 
 `tests/migrations/` holds the plugins the migrations are recorded for, as
 written and as their migration leaves them, and `make check-migrations` holds
