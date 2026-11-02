@@ -170,15 +170,66 @@ def _rate_terms(record: Any) -> str:
     return "|".join(str(each) for each in held)
 
 
+#: Each book record's entity, by the fields naming it (SDK 0.35.4): its own
+#: ID where it has one, else what it is held per; a dotted path reaches
+#: into a message. Never every `*_id` it carries: an order's
+#: `venue_order_id` and `locate_id`, and a placement's `venue_order_id` and
+#: `picked_quote_id`, are set later, so one order was held twice (0.35.3).
+ENTITY_KEYS: dict[str, tuple[str, ...]] = {
+    "StatementRecordedEvent": ("statement_id",),
+    "CustodialPosition": ("account_id", "instrument_id"),
+    "BookPosition": ("account_id", "instrument_id"),
+    "Break": ("break_id",),
+    "AccountFigures": ("account_id",),
+    "AccountAttributes": ("account_id",),
+    "ActivityRecordedEvent": ("activity_id",),
+    "SyncStatusRecordedEvent": (
+        "status.source",
+        "status.account_id",
+        "status.external_account_id",
+    ),
+    "ActivityReResolution": ("activity_id",),
+    "Order": ("order_id",),
+    "Placement": ("placement_id",),
+    "Execution": ("execution_id",),
+    "UnplacedFact": ("unplaced_id",),
+    "TradingInstruction": ("target", "setter_level"),
+    "Locate": ("locate_record_id",),
+    "Booking": ("booking_id",),
+    "Alert": ("alert_id",),
+    "LifecycleEvent": ("event_id",),
+}
+
+
+def _field_text(record: Any, path: str) -> str:
+    """A field's value in a key: a message's set fields, each `name:value`."""
+    held = record
+    for name in path.split("."):
+        held = getattr(held, name)
+    if hasattr(held, "ListFields"):
+        return ",".join(f"{f.name}:{value}" for f, value in held.ListFields())
+    return str(held)
+
+
 def _record_key(record: Any) -> str:
-    """A book record's key in a view: its entity, by every identifier it
-    carries at its top level, in field order."""
-    parts = [
-        f"{f.name}={getattr(record, f.name)}"
-        for f in record.DESCRIPTOR.fields
-        if f.name.endswith("_id") and f.type == f.TYPE_STRING
-    ]
-    return "|".join(parts)
+    """A book record's key in a view: its entity (`ENTITY_KEYS`), so a
+    record changed -- a venue's ID set on an order -- replaces the one held.
+    A record of a kind not listed there is keyed by its first identifier,
+    its own in the protos' field order, else by its whole state."""
+    paths = ENTITY_KEYS.get(record.DESCRIPTOR.name)
+    if paths is None:
+        first = next(
+            (
+                f.name
+                for f in record.DESCRIPTOR.fields
+                if f.name.endswith("_id") and f.type == f.TYPE_STRING
+            ),
+            None,
+        )
+        if first is None:
+            return str(record.SerializeToString(deterministic=True).hex())
+        paths = (first,)
+    return "|".join(f"{path}={_field_text(record, path)}" for path in paths)
 
 
 @dataclass
