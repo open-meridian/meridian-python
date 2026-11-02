@@ -12,18 +12,31 @@
 3. A table setting's rows are a list of dicts whether delivered typed or
    untyped: the kind a table is declared as (`Setting(kind=list)`) and
    what `meridian.Settings.values` has always held.
+4. `RawStore.tend` reads from the settings only what it is not given, a
+   window alone keeping what is past it; a setting missing from settings
+   given is refused, as are a window below 0 and a `past` it cannot act on.
+   A typed delivery's SDK settings are held read only; `Recorder.hear`
+   hears the rows given alone; a session's state has a page's words.
 """
 
 from __future__ import annotations
 
 import asyncio
 import contextlib
+from datetime import date
+from pathlib import Path
 from typing import Any
+
+import pytest
 
 import meridian
 from conftest import FakeSidecar
 from meridian.declaration import Declaration, RecordKind, Storage
-from meridian.helpers.sessions import Backoff, Supervisor
+from meridian.edge import RawStore
+from meridian.helpers.sessions import Backoff, SessionState, Supervisor
+from meridian.plugin.v1 import operations_pb2 as ops
+from meridian.roles import reporting
+from meridian.suites import Recorder
 from meridian.v1 import sidecar_pb2
 
 
@@ -392,3 +405,138 @@ async def test_a_tables_rows_are_a_list_whether_delivered_typed_or_untyped(
     assert type(typed.empty) is list and typed.empty == []
     assert type(typed.values["funds"]) is list and typed.values["funds"] == rows
     assert type(untyped.values["funds"]) is list and untyped.values["funds"] == rows
+
+
+# ── 4. tend's windows, the delivery held read only, one row heard, labels ─
+
+DAY_NS = 86_400 * 1_000_000_000
+OCT_1 = 1_790_812_800 * 1_000_000_000
+
+
+class _Mover:
+    def __init__(self) -> None:
+        self.moved: list[tuple[str, str]] = []
+        self.stored: Any = None
+
+    async def archive_unit(self, kind: str, unit: str, **span: int) -> None:
+        self.moved.append(("archived", unit))
+
+    async def delete_unit(self, kind: str, unit: str, **span: int) -> None:
+        self.moved.append(("deleted", unit))
+
+
+def _kept(root: Path) -> RawStore:
+    store = RawStore(root)
+    for day in range(10):
+        store.keep("candles", "BTC-USD", {"received_at_ns": OCT_1 + day * DAY_NS, "body": "[]"})
+    return store
+
+
+async def test_tend_given_a_window_alone_moves_nothing_past_it(tmp_path: Path) -> None:
+    """Refused on 0.35.2 (no settings): `past` defaults to `kept`."""
+    store, mover = _kept(tmp_path), _Mover()
+    await store.tend(mover, window_days=3, today=date(2026, 10, 10))
+    assert mover.moved == [] and mover.stored[0].record_count == 10
+
+
+async def test_tend_needs_from_the_settings_only_what_is_not_given(tmp_path: Path) -> None:
+    """Refused on 0.35.2: the window given, the settings holding only what
+    is done past it were refused for lacking the window setting."""
+    store, mover = _kept(tmp_path), _Mover()
+    held = {"responses_past_window": "deleted"}
+    await store.tend(mover, window_days=8, settings=held, today=date(2026, 10, 10))
+    assert [unit for _, unit in mover.moved] == ["responses/2026-10-01"]
+
+
+async def test_tend_refuses_a_setting_the_settings_do_not_hold(tmp_path: Path) -> None:
+    """The SDK fills both settings in every delivery for a declared kind:
+    one missing is a kind not declared, refused naming it, never guessed."""
+    store = _kept(tmp_path)
+    with pytest.raises(ValueError, match="responses_past_window"):
+        await store.tend(
+            _Mover(), window_days=8, settings={"responses_window_days": 8}, today=date.today()
+        )
+    with pytest.raises(ValueError, match="responses_window_days"):
+        await store.tend(_Mover(), past="deleted", settings={}, today=date.today())
+    with pytest.raises(TypeError, match="settings="):
+        await store.tend(_Mover(), past="archived", today=date.today())
+
+
+@pytest.mark.parametrize(
+    ("window", "past", "named"),
+    [
+        (-1, "kept", "responses_window_days is 0 or more"),
+        (True, "kept", "responses_window_days is a whole number"),
+        ("thirty", "kept", "responses_window_days is a whole number"),
+        (30, "archive", "responses_past_window is one of archived, kept, deleted"),
+    ],
+)
+async def test_tend_refuses_a_window_or_a_past_it_cannot_act_on(
+    tmp_path: Path, window: Any, past: str, named: str
+) -> None:
+    """0.35.2 held a negative window at 0 and did nothing for a `past` it
+    did not know, so a typo never moved a unit."""
+    with pytest.raises(ValueError, match=named):
+        await _kept(tmp_path).tend(_Mover(), window, past, date(2026, 10, 10))
+
+
+async def test_tend_reads_a_window_given_as_text_and_a_window_of_none(tmp_path: Path) -> None:
+    mover = _Mover()
+    await _kept(tmp_path).tend(
+        mover, settings={"responses_window_days": "0", "responses_past_window": "archived"},
+        today=date(2026, 10, 10),
+    )  # fmt: skip
+    assert len(mover.moved) == 9
+
+
+def test_a_typed_deliverys_sdk_settings_are_held_read_only() -> None:
+    config = _Tabled._of({"responses_window_days": 30})
+    with pytest.raises(TypeError):
+        config._more["responses_window_days"] = 1  # type: ignore[index]
+    assert config.values["responses_window_days"] == 30
+    assert config == _Tabled._of({"responses_window_days": 30})
+
+
+class _Reader(reporting.Role):
+    """A reporting class hearing two rows."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.positions: list[Any] = []
+        self.orders: list[Any] = []
+
+    async def on_position_changed(self, heard: Any) -> None:
+        self.positions.append(heard.message)
+
+    async def on_order_updated(self, heard: Any) -> None:
+        self.orders.append(heard.message)
+
+
+async def test_recorder_hears_one_row_given_it() -> None:
+    """0.35.2's `hear(role)` delivered every row answered again each call."""
+    recorder = Recorder()
+    reader = recorder.bind(_Reader())
+    recorder.answer("PositionChanged", lambda _: ops.PositionChangedEvent())
+    recorder.answer("OrderUpdated", lambda _: ops.OrderUpdatedEvent())
+    await recorder.hear(reader, "OrderUpdated")
+    await recorder.hear(reader, "OrderUpdated")
+    assert (len(reader.positions), len(reader.orders)) == (0, 2)
+    await recorder.hear(reader)
+    assert (len(reader.positions), len(reader.orders)) == (1, 3)
+    with pytest.raises(ValueError, match="hears no ObservationsWanted"):
+        await recorder.hear(reader, "ObservationsWanted")
+
+
+def test_a_sessions_state_has_the_words_a_page_shows() -> None:
+    words = {state: SessionState(state=state).label for state in _STATES}
+    assert words == {
+        "off": "Off",
+        "no key": "No key",
+        "connecting": "Connecting",
+        "open": "Open",
+        "waiting": "Waiting",
+        "refused": "Refused",
+    }
+
+
+_STATES = ("off", "no key", "connecting", "open", "waiting", "refused")

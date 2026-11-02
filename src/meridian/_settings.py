@@ -603,7 +603,7 @@ class Typed:
     missing: tuple[str, ...]
     refused: tuple[RefusedSetting, ...]
     # The settings delivered that are no field of the class: the ones the SDK
-    # declares beside it (0.35.2).
+    # declares beside it (0.35.2), held read only (0.35.3).
     _more: Mapping[str, Any]
 
     @property
@@ -670,7 +670,10 @@ class Typed:
             if name not in given
         }
         return cast(Any, cls)(
-            **given, missing=tuple(missing), refused=tuple(refused), _more=more
+            **given,
+            missing=tuple(missing),
+            refused=tuple(refused),
+            _more=_Values(more, frozenset()),
         )
 
 
@@ -746,7 +749,9 @@ def settings(cls: type[_C]) -> type[_C]:
         (
             "_more",
             Mapping[str, Any],
-            dataclasses.field(default_factory=dict, repr=False, hash=False),
+            dataclasses.field(
+                default_factory=lambda: _Values({}, frozenset()), repr=False, hash=False
+            ),
         )
     )
     made_class = dataclasses.make_dataclass(

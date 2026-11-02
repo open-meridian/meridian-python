@@ -400,12 +400,24 @@ class Recorder(Operations):
         role._bind(self.plugin)
         return role
 
-    async def hear(self, role: RoleBase) -> None:
+    async def hear(self, role: RoleBase, *rows: str) -> None:
         """Each row `role` hears -- its role's required events and each
         optional one it overrides -- handed what `answer` gives for it, in
         order, to its `on_<row>` method, and kept as heard; then returns,
-        where a sidecar's stream stays open. `bind` it first."""
-        await self._hear({row: getattr(role, role.EVENTS[row]) for row in role.heard_rows()})
+        where a sidecar's stream stays open. `bind` it first.
+
+        Given `rows` (0.35.3), those rows alone, so a test hears one row
+        without every other row answered being delivered again, as
+        `Recorder.receive(<row>=handler)` did before 0.35. A row the class
+        does not hear is refused, naming it."""
+        heard = role.heard_rows()
+        unheard = [row for row in rows if row not in heard]
+        if unheard:
+            raise ValueError(
+                f"{type(role).__name__} hears no {', '.join(unheard)}: it hears "
+                f"{', '.join(heard) or 'nothing'}"
+            )
+        await self._hear({row: getattr(role, role.EVENTS[row]) for row in (rows or heard)})
 
     async def _hear(self, handlers: Mapping[str, Callable[[Any], Awaitable[None]]]) -> None:
         from .receive import Heard

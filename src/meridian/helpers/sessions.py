@@ -189,6 +189,25 @@ class SessionState:
         """How often the session was opened again after it dropped."""
         return self.dropped
 
+    @property
+    def label(self) -> str:
+        """The state as a page shows it (0.35.3): the SDK's own pages' words
+        (`pairs`' Connection page), so a plugin's page draws a supervised
+        session alike rather than keeping a map of its own."""
+        return _LABELS.get(self.state, self.state.capitalize())
+
+
+#: Each state's words on a page: the state's own word, capitalized, as the
+#: SDK's pages have drawn it.
+_LABELS = {
+    "off": "Off",
+    "no key": "No key",
+    "connecting": "Connecting",
+    "open": "Open",
+    "waiting": "Waiting",
+    "refused": "Refused",
+}
+
 
 def _asked(failure: BaseException) -> float:
     """The seconds a failure says its source asked to be left (its
