@@ -314,6 +314,18 @@ class LiveView:
         finally:
             self._shared.listeners.discard(queue)
 
+    async def _changes(self) -> AsyncIterator[int]:
+        """Each change's sequence, as `events` would send it, unsent and
+        unlogged: what wakes a page's live values (`meridian.live`)."""
+        queue: asyncio.Queue[tuple[int, list[Any], list[str], list[float]]] = asyncio.Queue()
+        self._shared.listeners.add(queue)
+        try:
+            while True:
+                sequence, _, _, _ = await queue.get()
+                yield sequence
+        finally:
+            self._shared.listeners.discard(queue)
+
 
 def _json(row: Any, key: str) -> dict[str, Any]:
     said = MessageToDict(row, preserving_proto_field_name=True)

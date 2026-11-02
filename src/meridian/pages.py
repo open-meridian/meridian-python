@@ -137,7 +137,7 @@ import threading
 import time
 import typing
 import urllib.parse
-from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Hashable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NoReturn, cast
@@ -152,6 +152,7 @@ from .v1 import sidecar_pb2
 
 if TYPE_CHECKING:
     from .client import Plugin
+    from .live import LiveValues
 
 log = logging.getLogger("meridian.pages")
 
@@ -547,6 +548,8 @@ class Pages:
         # calls naming it there.
         self._replacing: dict[tuple[str, str], tuple[Tool, Guarded]] = {}
         self.not_offered: list[NotOffered] = []
+        # A page's live values by their key (`live_values`).
+        self._live_values: dict[Hashable, LiveValues] = {}
         # Held by this process alone, and new at every start.
         self._secret = secrets.token_bytes(32)
         loaders: list[jinja2.BaseLoader] = [
@@ -703,12 +706,15 @@ class Pages:
     ) -> Callable[[Callable[[Request], Awaitable[Any]]], Callable[[Request], Awaitable[Any]]]:
         """A page's live channel (contract v28, amended 2026-10-30;
         spec/one-data-access-model, step 2), drawn by the kit's `om-live`:
-        the decorated function opens the `LiveView` a request shows
-        (`await plugin.subscribe(...)`), and `GET path` answers its snapshot,
-        `{"sequence", "rows"}`, `GET path/events` its event stream, each
-        event the view's changes over 250 ms, the latest per row key. A
-        view is shared by every page showing the same selector and lingers
-        after the last, so a reload does not churn it.
+        the decorated function answers what a request shows -- the
+        `LiveView` it opens (`await plugin.subscribe(...)`), its rows as
+        recorded, or from SDK 0.35.4 the `LiveValues` worked out from views
+        (`await pages.live_values(...)`, `meridian.live`), each value with
+        its source, age and staleness -- and `GET path` answers its
+        snapshot, `{"sequence", "rows"}`, `GET path/events` its event
+        stream, each event what changed over 250 ms, the latest per row
+        key. Either is shared by every page showing the same selector or key
+        and lingers after the last, so a reload does not churn it.
 
             @pages.live("/rates/live", levels="read")
             async def rates(request):
@@ -721,8 +727,11 @@ class Pages:
             async def snapshot(request: Request) -> Response:
                 view = await open_view(request)
                 try:
+                    said = view.snapshot()
+                    if inspect.isawaitable(said):
+                        said = await said
                     return Response(
-                        body=json.dumps(view.snapshot(), separators=(",", ":")),
+                        body=json.dumps(said, separators=(",", ":")),
                         content_type="application/json",
                     )
                 finally:
@@ -750,6 +759,55 @@ class Pages:
             return open_view
 
         return decorate
+
+    async def live_values(
+        self,
+        key: Hashable,
+        compute: Callable[[Sequence[Any]], Any],
+        *,
+        views: Callable[[], Awaitable[Sequence[Any]]] | None = None,
+        wakes: Callable[[], Sequence[Any]] | None = None,
+        clock: Callable[[], int] = time.time_ns,
+        linger: float = 30.0,
+    ) -> LiveValues:
+        """A page's live values for `key` (SDK 0.35.4; `meridian.live`):
+        worked out by `compute` from the views `views` opens the first time
+        (`plugin.subscribe(...)`, closed once the values are dropped), and
+        again on each of their changes, on each change of the views `wakes`
+        names now (views held elsewhere), and once a second; told by
+        `clock`, the deployment's. One `LiveValues` per key, each call a
+        reader: `close()` it when done (`pages.live` does), and it is dropped
+        `linger` seconds after its last reader. The `compute` given last is
+        used."""
+        from .live import LiveValues
+
+        loop = asyncio.get_running_loop()
+        held = self._live_values.get(key)
+        if held is None or held.dropped or held._loop is not loop:
+            opened = tuple(await views()) if views is not None else ()
+            again = self._live_values.get(key)
+            if again is not None and not again.dropped and again._loop is loop:
+                # Made meanwhile, by another request: what this one opened let go.
+                for view in opened:
+                    with contextlib.suppress(Exception):
+                        await view.close()
+                held = again
+            else:
+                held = LiveValues(
+                    key,
+                    compute,
+                    opened,
+                    wakes=wakes,
+                    clock=clock,
+                    linger=linger,
+                    held=self._live_values,
+                )
+                self._live_values[key] = held
+        held.compute = compute
+        held.wakes = wakes
+        held.clock = clock
+        held._read()
+        return held
 
     def tool(
         self,

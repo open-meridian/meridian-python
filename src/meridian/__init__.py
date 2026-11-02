@@ -399,6 +399,7 @@ from .errors import (
     Refused,
 )
 from .figures import Figure, FigureState
+from .live import LiveValue, LiveValues
 
 # An amount of currency as a typed operation takes one, the two readers of a
 # number off the wire, and the nested messages a typed operation takes with
@@ -660,6 +661,8 @@ __all__ = [
     "GiveUpRecord",
     "Grants",
     "Heard",
+    "LiveValue",
+    "LiveValues",
     "LiveView",
     "Holding",
     "HoldingSide",
