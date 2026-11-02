@@ -428,7 +428,13 @@ class _Views:
         again when it breaks, every view subscribed and read again on it.
         It names the first view's row, so it is not every row the plugin's
         roles hear; what it hears of that row beyond its subscriptions names
-        none of them, and no view takes it."""
+        none of them, and no view takes it.
+
+        It never ends but by being cancelled (SDK 0.35.4): a read again that
+        fails -- after a loss, the lake down, its refusal in this package's
+        terms rather than gRPC's -- is said, and the stream opened again,
+        every view subscribed and read again on it; until then a view keeps
+        its rows and holds what is delivered to it."""
         while True:
             call = self.plugin._operations().Receive(
                 ops.ReceiveRequest(rows=[row], subjects=[])
@@ -444,6 +450,12 @@ class _Views:
                 _log.warning("the views' stream ended; opening it again")
             except grpc.aio.AioRpcError as failed:
                 _log.warning("the views' stream broke (%s); opening it again", failed.code())
+            except Exception as failed:  # noqa: BLE001 - said; the stream is opened again
+                _log.warning(
+                    "the views' read failed (%s: %s); opening the stream again to read again",
+                    type(failed).__name__,
+                    failed,
+                )
             finally:
                 call.cancel()
             await asyncio.sleep(RETRY_SECONDS)

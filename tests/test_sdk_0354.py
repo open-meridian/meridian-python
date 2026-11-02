@@ -13,6 +13,7 @@ report, decided under A after ruling 1070).
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import AsyncIterator
 
 import grpc
@@ -24,7 +25,7 @@ from meridian.operations import DELIVERED
 from meridian.plugin.v1 import operations_pb2 as ops
 from meridian.plugin.v1 import operations_pb2_grpc
 from meridian.v1 import sidecar_pb2_grpc
-from meridian.views import ENTITY_KEYS, _record_key
+from meridian.views import ENTITY_KEYS, _record_key, views_of
 
 ACCOUNT = "ACC-1"
 PARTITION = "account:ACC-1"
@@ -227,3 +228,87 @@ def test_the_pre_trade_check_no_longer_judges_such_a_quote_stale() -> None:
     assert found is not None and found.age_ns == 6 * SECOND
     # The edge's feed delay records only times a source stated.
     assert latency.aged("oanda-1:quotes", "AGE_HOP_EDGE", untimed_quote(NOW)) == -1
+
+
+# ── 3. The views' stream survives a failed read again ───────────────────────
+
+
+class DownLake(operations_pb2_grpc.PluginOperationsServicer):
+    """A lake that goes down after a loss: the views' read again refused, in
+    the package's terms (not gRPC's), until it is back."""
+
+    def __init__(self) -> None:
+        self.latest = untimed_quote(NOW)
+        self.latest.meta.sequence = 10
+        self.head = 10
+        self.down = 0
+        self.reads = 0
+        self.subscribed: list[ops.SubscribeRequest] = []
+        self.pushed: asyncio.Queue[ops.Delivery] = asyncio.Queue()
+
+    async def Receive(self, request, context):  # noqa: N802
+        await context.send_initial_metadata(())
+        while True:
+            yield await self.pushed.get()
+
+    async def Subscribe(self, request, context):  # noqa: N802
+        self.subscribed.append(request)
+        return ops.SubscribeReply()
+
+    async def Unsubscribe(self, request, context):  # noqa: N802
+        return ops.UnsubscribeReply()
+
+    async def ListQuotes(self, request, context):  # noqa: N802
+        self.reads += 1
+        if self.down:
+            self.down -= 1
+            await context.abort(grpc.StatusCode.UNAVAILABLE, "the lake is restarting")
+        return ops.ListQuotesResult(
+            quotes=[self.latest],
+            watermark=ops.Watermark(
+                partitions=[ops.PartitionSequence(partition=QUOTES.dataset, sequence=self.head)]
+            ),
+        )
+
+    def lose(self) -> None:
+        self.pushed.put_nowait(
+            ops.Delivery(meta=ops.DeliveryMeta(), lost=ops.Lost(rows=["QuotesRecorded"]))
+        )
+
+
+async def test_the_views_stream_survives_a_lake_down_after_a_loss(monkeypatch, caplog) -> None:
+    from meridian import views
+
+    monkeypatch.setattr(views, "RETRY_SECONDS", 0.05)
+    fake = DownLake()
+    server, address = await _serve(fake)
+    plugin = await meridian.connect(address, heartbeat=False, roles=[])
+    try:
+        view = await plugin.subscribe("QuotesRecorded", subjects=["INS-EURUSD"])
+        assert [q.meta.sequence for q in view.rows().values()] == [10]
+        stream = views_of(plugin).stream
+        assert stream is not None
+
+        # A loss, the lake down for the next three reads, then back with a
+        # later quote.
+        fake.down = 3
+        fake.latest = untimed_quote(NOW + SECOND)
+        fake.latest.meta.sequence = 12
+        fake.head = 12
+        with caplog.at_level(logging.WARNING, logger="meridian.views"):
+            fake.lose()
+            for _ in range(100):
+                await asyncio.sleep(0.05)
+                if fake.reads >= 5 and not fake.down:
+                    break
+            await asyncio.sleep(0.2)
+
+        assert not stream.done(), "the stream task never ends"
+        assert fake.reads >= 5, "read again until the lake answered"
+        assert [q.meta.sequence for q in view.rows().values()] == [12], "its rows read again"
+        said = [r.getMessage() for r in caplog.records if r.name == "meridian.views"]
+        assert any("read failed" in each and "lake is restarting" in each for each in said)
+        await view.close()
+    finally:
+        await plugin.leave()
+        await server.stop(grace=None)
