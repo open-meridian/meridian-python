@@ -11,7 +11,10 @@ methods of a class in another:
   plugin defines, on the events of one role it declares. The class gains
   that role's base, its handler methods are renamed `on_<row>` (every
   reference with them), `seed=False` becomes its `seed = False`, a `plugin`
-  it was given leaves it, and the call is removed;
+  it was given leaves it, and the call is removed; and a recorder's
+  `receive` outside the tests (a preview), handing it one role class's
+  handlers or the SDK's logic's, becomes `await recorder.hear(<obj>)`
+  (SDK 0.35.1);
 - `sdk-handlers-dropped`: a Trader's, a Pricer's and a data feed's handlers
   dropped from a `receive` call, those classes being registered by
   themselves (the feeds' from SDK 0.35.1);
@@ -310,6 +313,9 @@ class _Receive:
     removed: bool = False
     # Whether any handler is a class's this step makes a role class.
     mapped: bool = False
+    # A recorder's call outside the tests: the object it hears, as written
+    # (SDK 0.35.1); the call becomes `<recorder>.hear(<object>)`.
+    hear: str = ""
 
 
 @dataclass
@@ -472,11 +478,19 @@ def given(files: dict[str, str]) -> None:
     for each in plugin.classes.values():
         for method in each.methods:
             owners.setdefault(method, []).append(each.name)
+    heard: list[tuple[_Reader, int, int, cst.Call]] = []
     for reader in readers:
         if is_test(reader.path):
             continue
         for line, column, call in reader.receives:
-            _plan_receive(plugin, reader.path, line, column, call, owners)
+            if isinstance(call.func, cst.Attribute) and _recorder(call.func.value) is not None:
+                heard.append((reader, line, column, call))
+            else:
+                _plan_receive(plugin, reader.path, line, column, call, owners)
+    # A recorder's receive outside the tests, once every class's role is
+    # planned (SDK 0.35.1).
+    for reader, line, column, call in heard:
+        _plan_hear(plugin, reader, line, column, call, owners)
     # A class renamed's methods are renamed wherever they are named, when no
     # other class of the plugin has a method of the same name.
     for name, plan in plugin.plans.items():
@@ -544,6 +558,53 @@ def _plan_receive(
     receive.removed = len(receive.dropped) + len(mine) == len(handlers)
     receive.mapped = bool(mine)
     plugin.receives.append(receive)
+
+
+def _plan_hear(
+    plugin: _Plugin,
+    reader: _Reader,
+    line: int,
+    column: int,
+    call: cst.Call,
+    owners: dict[str, list[str]],
+) -> None:
+    """A recorder's `receive` outside the tests -- a preview, a script --
+    handing it one object's handlers: that object's role class hears what
+    the recorder answers through `recorder.hear(<object>)` (SDK 0.35.1).
+    The object is the SDK's common logic, each handler its own, or one class
+    of the plugin's that is, or this step makes, a role's class."""
+    held: set[str] = set()
+    methods: list[str] = []
+    for arg in call.args:
+        if arg.keyword is None or arg.keyword.value not in ROW_OF:
+            return
+        if not isinstance(arg.value, cst.Attribute):
+            return
+        held.add(cst.Module([]).code_for_node(arg.value.value))
+        methods.append(arg.value.attr.value)
+    if len(held) != 1 or not methods:
+        return
+    (code,) = held
+    obj = call.args[0].value.value  # type: ignore[attr-defined]
+    logic = plugin.objects.get(dotted(obj) or "", "") or _logic_made(obj, reader.names)
+    if logic:
+        if not all(_sdk_handler(logic, method) for method in methods):
+            return
+    else:
+        classes = set.intersection(*(set(owners.get(m, ())) for m in methods))
+        if len(classes) != 1 or not _role_of(next(iter(classes)), plugin.classes):
+            return
+    plugin.receives.append(_Receive(reader.path, line, column, hear=code))
+
+
+def _logic_made(node: cst.BaseExpression, names: dict[str, str]) -> str:
+    """The SDK's common logic an object is made as in place --
+    `pricing.Pricer(...)`, or `recorder.bind(pricing.Pricer(...))` -- or ""."""
+    if not isinstance(node, cst.Call):
+        return ""
+    if isinstance(node.func, cst.Attribute) and node.func.attr.value == "bind" and node.args:
+        return _logic_made(node.args[0].value, names)
+    return _logic_of(_resolved(node.func, names), _plugin.classes)
 
 
 def _sdk_handler(logic: str, method: str) -> bool:
@@ -738,6 +799,18 @@ class _Rewriter(cst.CSTTransformer):
     def leave_Call(self, original_node: cst.Call, updated_node: cst.Call) -> cst.BaseExpression:
         at = self.get_metadata(PositionProvider, original_node).start
         receive = self.receives.get((at.line, at.column))
+        if (
+            receive is not None
+            and receive.hear
+            and isinstance(updated_node.func, cst.Attribute)
+        ):
+            # The handlers' object, as this step rewrote it.
+            heard = cast(cst.Attribute, updated_node.args[0].value).value
+            self.rules.append("receive-to-role-methods")
+            return cst.Call(
+                func=updated_node.func.with_changes(attr=cst.Name("hear")),
+                args=[cst.Arg(heard)],
+            )
         if receive is not None and receive.dropped and not receive.removed:
             args = [
                 arg

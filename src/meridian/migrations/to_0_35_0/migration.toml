@@ -59,7 +59,11 @@ first argument dropped where it is called, a recorder's call becoming \
 `recorder.bind(...)`), and the call is removed -- an awaited statement, or a \
 `create_task` assigned to a name and that name's `cancel()`; the object is \
 registered with `meridian.run(roles=[...])` where the entry point is replaced, and \
-named by `connect-to-run` where it is not"""
+named by `connect-to-run` where it is not; and, outside the tests (a preview, a \
+script), a recorder's `receive` handing it the handlers of one object -- a class that \
+is or becomes a role's class, or the SDK's common logic, each handler its own -- made \
+`await <recorder>.hear(<object>)`, which hands the class each row it hears that the \
+recorder answers (SDK 0.35.1)"""
 
 [[rewrites]]
 rule = "sdk-handlers-dropped"

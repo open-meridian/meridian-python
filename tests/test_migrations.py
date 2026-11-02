@@ -468,6 +468,32 @@ def test_a_data_feeds_own_handlers_leave_its_receive_call() -> None:
     assert [rule for rule, _, _ in left_by_hand(result)] == ["connect-to-run"]
 
 
+def test_a_recorders_receive_outside_the_tests_hears_the_class() -> None:
+    """SDK 0.35.1 (the plugin pilot's kalshi preview): a recorder's `receive`
+    in the plugin's own code, handing it a feed's handlers, becomes the
+    recorder hearing the feed, which 0.35.0 left by hand."""
+    files = {
+        "pyproject.toml": '[tool.meridian]\nroles = ["data"]\n',
+        "src/p/preview.py": textwrap.dedent(
+            """\
+            from meridian.roles.data.event_contracts import ContractMap, Feed
+            from meridian.suites import Recorder
+
+            async def worked(market):
+                lake = Recorder("p")
+                feed = Feed(lake, market, ContractMap())
+                await lake.receive(observations_wanted=feed.on_want)
+                return feed
+            """
+        ),
+    }
+    result = migrate(files, "0.34.0", "0.35.0")
+    written = result.files["src/p/preview.py"]
+    assert "feed = lake.bind(Feed(market, ContractMap()))" in written
+    assert "await lake.hear(feed)" in written and ".receive(" not in written
+    assert left_by_hand(result) == []
+
+
 def test_a_class_given_two_roles_events_or_a_lambda_is_left_by_hand() -> None:
     files = {
         "pyproject.toml": '[tool.meridian]\nroles = ["data", "signal"]\n',
