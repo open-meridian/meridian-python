@@ -220,6 +220,7 @@ async def test_declarations_name_the_roles_they_serve_on_the_v15_sidecar() -> No
         heartbeat=False,
         interface=meridian.Interface(port=8000, title="Roles", pages=pages),
         settings=[meridian.Setting("poll_minutes", int, default=15, roles=["custody"])],
+        roles=[],
     ) as plugin:
         assert plugin.identity.roles == ("custody",)
 
@@ -232,6 +233,7 @@ async def test_declarations_name_the_roles_they_serve_on_the_v15_sidecar() -> No
                 title="Roles",
                 pages=[meridian.Page("/orders", "Orders", levels=["write"], roles=["oms"])],
             ),
+            roles=[],
         )
     said = str(refused.value)
     assert "serves oms, which this plugin was not launched with" in said, said
@@ -444,7 +446,9 @@ async def test_the_scaffold_registers_with_a_real_sidecar() -> None:
     assert "Refused" in page["writing for Ada"], page["writing for Ada"]
     assert page["writing without the token"] == 403
 
-    assert any("reported 1 external account(s) to link" in line for line in said), said
+    # The scaffold declares no role, so it registers no custody class and
+    # reports no external accounts (SDK 0.35); the act itself is held below.
+    assert not any("external account(s) to link" in line for line in said), said
     registered = next(line for line in said if "registered as" in line)
     assert "roles custody" in registered, said
     assert RECORD_STATEMENT in next(line for line in said if "may publish" in line), said
