@@ -20,3 +20,4 @@ where = ["src"]
 
 [tool.meridian]
 roles = ["data", "custody", "connectivity"]
+declaration = "broker.declaration:DECLARATION"

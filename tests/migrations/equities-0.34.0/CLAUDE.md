@@ -1,0 +1,3 @@
+# equities
+
+@AGENTS.md

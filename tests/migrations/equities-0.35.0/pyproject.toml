@@ -19,3 +19,4 @@ where = ["src"]
 
 [tool.meridian]
 roles = ["data"]
+declaration = "equities.declaration:DECLARATION"

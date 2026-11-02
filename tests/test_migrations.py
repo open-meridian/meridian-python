@@ -310,6 +310,8 @@ V35 = {
             ("connect-to-run", "src/broker/__main__.py", 24),
             ("act-on-the-connection", "src/broker/book.py", 15),
             ("act-on-the-connection", "src/broker/page.py", 12),
+            # custody's pages given no role object to act through (1014).
+            ("act-on-the-connection", "src/broker/page.py", 64),
         ],
     ),
     # SDK 0.35's second part: a listings and chains plugin in Massive's shape,
@@ -396,17 +398,42 @@ BY_HAND = {
 }
 
 
+def by_hand_done(name: str, into: Path) -> None:
+    """The work a 0.35.0 fixture's findings name, done as a person would: its
+    tests' recorded edits (`BY_HAND`), and the files the findings name as a
+    person rewrote them (`tests/migrations/<name>-0.35.0-done/`, laid over
+    the migrated tree)."""
+    for old, new in BY_HAND.get(name, []):
+        for path in (into / "tests").glob("*.py"):
+            path.write_text(path.read_text().replace(old, new))
+    done = FIXTURES / f"{name}-0.35.0-done"
+    for path in plugin_files(done) if done.is_dir() else {}:
+        (into / path).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(done / path, into / path)
+
+
 @pytest.mark.parametrize("name", sorted(V35))
 def test_each_role_shape_passes_its_own_tests_once_its_findings_are_done(
     tmp_path: Path, name: str
 ) -> None:
-    """With only the work the findings name done -- none for the broker's and
-    the reader's tests -- each passes its own tests against this SDK."""
+    """With the work the findings name done, each passes its own tests
+    against this SDK."""
     migrated(f"{name}-0.34.0", "0.34.0", "0.35.0", tmp_path)
-    for old, new in BY_HAND.get(name, []):
-        for path in (tmp_path / "tests").glob("*.py"):
-            path.write_text(path.read_text().replace(old, new))
+    by_hand_done(name, tmp_path)
     own_tests_pass(tmp_path)
+
+
+@pytest.mark.parametrize("name", sorted(V35))
+def test_each_role_shapes_by_hand_work_leaves_nothing_by_hand(
+    tmp_path: Path, name: str
+) -> None:
+    """The recorded by-hand work is the whole of it: migrated again, the done
+    plugin is left as it is, with nothing left by hand."""
+    migrated(f"{name}-0.34.0", "0.34.0", "0.35.0", tmp_path)
+    by_hand_done(name, tmp_path)
+    result = migrate(plugin_files(tmp_path), "0.34.0", "0.35.0")
+    assert result.files == {}
+    assert left_by_hand(result) == []
 
 
 def test_a_class_given_two_roles_events_or_a_lambda_is_left_by_hand() -> None:
@@ -487,28 +514,31 @@ def test_the_steps_role_surfaces_are_0_35s() -> None:
         ("desk-0.5.0", "0.5.0", "0.7.0"),
         ("snaptrade-0.6.1", "0.6.1", "0.7.0"),
         ("listed-0.33.5", "0.33.5", "0.34.0"),
-        # Held out until meridian-cli carries 0.35.0's check (TODO: CLI 0.1.55,
-        # then pin it in the Makefile's MERIDIAN_CLI): its template-shape rule
-        # asks for `meridian.connect(` and must take `meridian.run(` and
-        # `run_async(` too, and its new rule fails a declared role with no
-        # `<role>.Role` class registered (ruling 1015). Then add
-        # ("lake-0.34.0", "0.34.0", "0.35.0"), ("quote-0.34.0", "0.34.0", "0.35.0"),
-        # ("broker-0.34.0", "0.34.0", "0.35.0"), ("reader-0.34.0", "0.34.0", "0.35.0")
-        # and ("equities-0.34.0", "0.34.0", "0.35.0").
+        # From meridian 0.1.55, whose check takes `meridian.run(` and fails a
+        # declared role with no class registered (ruling 1015).
+        ("lake-0.34.0", "0.34.0", "0.35.0"),
+        ("quote-0.34.0", "0.34.0", "0.35.0"),
+        ("broker-0.34.0", "0.34.0", "0.35.0"),
+        ("reader-0.34.0", "0.34.0", "0.35.0"),
+        ("equities-0.34.0", "0.34.0", "0.35.0"),
     ],
 )
 def test_each_migrated_plugin_passes_plugin_check(
     tmp_path: Path, fixture: str, source: str, target: str
 ) -> None:
-    """`meridian plugin check --run-tests` over each, as `meridian plugin
-    migrate` runs it after the steps. `make check-migrations` installs the
-    command line and requires this; elsewhere it is skipped without it."""
+    """`meridian plugin check --run-tests` over each, migrated and with the
+    work its findings name done (`by_hand_done`): a plugin `meridian plugin
+    migrate` moved and a person finished passes the framework's check. `make
+    check-migrations` installs the command line and requires this; elsewhere
+    it is skipped without it."""
     meridian = shutil.which("meridian")
     if meridian is None:
         if os.environ.get("MERIDIAN_PLUGIN_CHECK") == "required":
             pytest.fail("meridian is not installed, and make check-migrations requires it")
         pytest.skip("meridian is not installed; make check-migrations runs this")
     migrated(fixture, source, target, tmp_path)
+    if target == "0.35.0":
+        by_hand_done(fixture.rsplit("-", 1)[0], tmp_path)
     ran = subprocess.run(
         [meridian, "plugin", "check", "--run-tests", "--dir", str(tmp_path)],
         env={**os.environ, "PYTHONPATH": str(tmp_path / "src"), "PYTHONDONTWRITEBYTECODE": "1"},

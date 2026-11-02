@@ -1166,6 +1166,22 @@ class _Left(cst.CSTVisitor):
     def visit_Call(self, node: cst.Call) -> None:
         if _is_connect(node, self.names) and not is_test(self.path):
             self.found.append(("connect-to-run", self._line(node), ""))
+        if (
+            not is_test(self.path)
+            and _resolved(node.func, self.names) == "meridian.roles.custody.account_pages"
+            and not any(
+                arg.keyword is not None and arg.keyword.value == "role" for arg in node.args
+            )
+        ):
+            # 0.34.0's pages made custody's acts on the connection; 0.35.0's
+            # are given the role object to make them on (ruling 1014).
+            self.found.append(
+                (
+                    "act-on-the-connection",
+                    self._line(node),
+                    "account_pages: give it role=, answering the custody role object",
+                )
+            )
         func = node.func
         if not isinstance(func, cst.Attribute):
             return

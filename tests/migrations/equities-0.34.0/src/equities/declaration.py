@@ -13,4 +13,4 @@ LIVE = meridian.DatasetDeclaration(
     day_end_minute=960,
 )
 
-DECLARATION = meridian.Declaration(catalogue=[LIVE])
+DECLARATION = meridian.Declaration(catalogue=[LIVE], documentation="docs")
