@@ -72,7 +72,7 @@ contract-diff:
 # 0.35's second part's: 924's helpers, 60 cases in all), its gen/ and
 # boundaries/ vendored here byte for byte. Moved to schema main once that
 # branch merges.
-SCHEMA_REV := 43e09c3f03f39e5cab9ab3d1a02030e6d1dbdbb2
+SCHEMA_REV := e41e76ea874b032af713cb0740dddbe90e0971d2
 SCHEMA_REPO := https://github.com/open-meridian/meridian-schema.git
 SCRATCH     := .schema-scratch
 
