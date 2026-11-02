@@ -693,8 +693,8 @@ theirs.
 
 ### Start the loop
 
-The instance is called `reference-plugin` below. Use whatever the person
-wants it called, and the same name in every command.
+The instance is called `<instance>` below: whatever the person wants it
+called, the same name in every command.
 
 **The first time an instance is launched, the person approves what it asks
 for.** Show them the `roles` in `pyproject.toml`'s `[tool.meridian]`
@@ -706,7 +706,7 @@ Run it in the background, and keep it running for the whole session:
 
 ```sh
 mkdir -p .meridian
-meridian plugin dev --instance reference-plugin --yes --json > .meridian/dev.jsonl 2> .meridian/dev.err
+meridian plugin dev --instance <instance> --yes --json > .meridian/dev.jsonl 2> .meridian/dev.err
 ```
 
 Its output goes under `.meridian/` on purpose. `plugin dev` sends every file
@@ -750,10 +750,10 @@ Ask the question that answers what you changed:
 
 | To know | Run |
 |---|---|
-| What a page shows, as the person is served it | `meridian plugin open --instance reference-plugin --level open --print /` for Accounts under Open (`--level view` under View), and `--level manage --print /setup` for Setup under Manage: any path on the plugin, at a level it is declared with |
-| What the plugin printed or logged since your change | `meridian plugin logs --instance reference-plugin --since <R-1>` |
-| What the sidecar refused it, or what else happened | `meridian plugin events --instance reference-plugin --since <R-1> --json` |
-| What the person sees in a browser | `meridian plugin open --instance reference-plugin --level open`: a link one browser opens once, at that level. Give it to the person, or open it in your browser pane |
+| What a page shows, as the person is served it | `meridian plugin open --instance <instance> --level open --print /` for Accounts under Open (`--level view` under View), and `--level manage --print /setup` for Setup under Manage: any path on the plugin, at a level it is declared with |
+| What the plugin printed or logged since your change | `meridian plugin logs --instance <instance> --since <R-1>` |
+| What the sidecar refused it, or what else happened | `meridian plugin events --instance <instance> --since <R-1> --json` |
+| What the person sees in a browser | `meridian plugin open --instance <instance> --level open`: a link one browser opens once, at that level. Give it to the person, or open it in your browser pane |
 
 `--level` is the home's button the session is opened by: `manage`, `open` or
 `view`. Name it every time. A page answers 403 at a level it is not declared
@@ -784,7 +784,7 @@ When the person is satisfied:
    exits 0.
 2. Raise `version` in `pyproject.toml`. A version is never replaced.
 3. Show the person the roles again, and get their yes.
-4. Run `meridian plugin dev --release --instance reference-plugin --yes`.
+4. Run `meridian plugin dev --release --instance <instance> --yes`.
 
 That uploads this directory as that version and runs it in place of the live
 instance. It is then an ordinary version in the deployment's catalogue.
@@ -792,12 +792,15 @@ instance. It is then an ordinary version in the deployment's catalogue.
 ### Stop
 
 Stop the background `plugin dev`. The instance keeps running, live, as it was.
-`meridian plugin stop reference-plugin` ends it, which is the person's call.
+`meridian plugin stop <instance>` ends it, which is the person's call.
 
 ## Publish it to a registry
 
-To list a version on the platform's registry, publish a signed release tag
-of it:
+Only a plugin meant to be listed on the platform's registry is published; a
+private one never is, and a version of it reaches a deployment by
+`meridian plugin upload` once its pull request is merged. Ask the person
+which this plugin is before publishing anything. To list a version on the
+platform's registry, publish a signed release tag of it:
 
 1. Once: `meridian plugin key setup`. It makes git's SSH signing key ready,
    or a new one, sets git to sign tags with it, and registers its public half

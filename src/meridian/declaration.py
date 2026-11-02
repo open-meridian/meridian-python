@@ -154,6 +154,8 @@ from .bounds import (
     NOT_CARRIED_SCHEME_LENGTH,
     PLUGIN_DECLARATION_AFFIRMATION_DEADLINE_RANGE,
     PLUGIN_DECLARATION_NOT_CARRIED_COUNT,
+    PLUGIN_DECLARATION_PRICING_MODELS_COUNT,
+    PRICING_MODEL_DECLARATION_MODEL_VERSION_RANGE,
     RAW_RECORD_KIND_LABEL_LENGTH,
     RAW_RECORD_KIND_NAME_LENGTH,
     RAW_RECORD_KIND_WINDOW_DAYS_RANGE,
@@ -789,6 +791,36 @@ class AlgorithmDeclaration:
         )
 
 
+@dataclass(frozen=True)
+class PricingModelDeclaration:
+    """A model a pricing plugin's version answers batches for (contract v27,
+    W12.3; `PluginDeclaration.pricing_models`): its id and the version of it
+    the plugin's version answers, 1 or more."""
+
+    model_id: str
+    model_version: int
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.model_id, str) or not self.model_id.strip():
+            raise ValueError("a pricing model's model_id is empty; name it")
+        version = self.model_version
+        bound = PRICING_MODEL_DECLARATION_MODEL_VERSION_RANGE
+        if (
+            isinstance(version, bool)
+            or not isinstance(version, int)
+            or not bound.admits(version)
+        ):
+            raise ValueError(
+                f"the pricing model {self.model_id}'s model_version is 1 or more, "
+                f"not {version!r}"
+            )
+
+    def _wire(self) -> sidecar_pb2.PricingModelDeclaration:
+        return sidecar_pb2.PricingModelDeclaration(
+            model_id=self.model_id, model_version=self.model_version
+        )
+
+
 #: The vendor's documentation's sections, each `docs/<name>.md`, in the order
 #: a version's declaration names them (W8.1, contract v25): `overview` and
 #: `setup`, which `meridian plugin check` requires; `troubleshooting` and
@@ -880,7 +912,10 @@ class Declaration:
     From contract v25 its `interface` (`meridian.Interface`), whether it
     `reads_external_accounts`, its `documentation` folder, and an
     operations plugin's `affirmation_deadline` in minutes after midnight
-    (1 to 1440; 0 declares none)."""
+    (1 to 1440; 0 declares none).
+    From contract v27 a pricing plugin's `pricing_models`
+    (`PricingModelDeclaration`), each model once (SDK 0.35.3: a plugin
+    subclassed the declaration to send them)."""
 
     settings: Sequence[Any] | type[Any] = ()
     not_carried: Sequence[NotCarried] = field(default=())
@@ -891,6 +926,7 @@ class Declaration:
     reads_external_accounts: bool = False
     documentation: str | os.PathLike[str] | None = None
     affirmation_deadline: int = 0
+    pricing_models: Sequence[PricingModelDeclaration] = ()
     _read: dict[str, tuple[_Section, ...]] = field(
         default_factory=dict, init=False, repr=False, compare=False
     )
@@ -944,6 +980,16 @@ class Declaration:
         again = next((one for one in named if named.count(one) > 1), None)
         if again is not None:
             raise ValueError(f"the algorithm {again} is declared twice; each identifier once")
+        models = tuple(self.pricing_models)
+        object.__setattr__(self, "pricing_models", models)
+        if not PLUGIN_DECLARATION_PRICING_MODELS_COUNT.admits(len(models)):
+            raise ValueError(
+                f"at most {PLUGIN_DECLARATION_PRICING_MODELS_COUNT.most} pricing models"
+            )
+        ids = [held.model_id for held in models]
+        twice_model = next((one for one in ids if ids.count(one) > 1), None)
+        if twice_model is not None:
+            raise ValueError(f"the pricing model {twice_model} is declared twice; each once")
         reserved = self.storage._reserved if self.storage is not None else frozenset()
         taken = next(
             (setting.name for setting in self.settings if setting.name in reserved), None
@@ -1115,6 +1161,7 @@ class Declaration:
                 for section in self._sections()
             ],
             affirmation_deadline=self.affirmation_deadline,
+            pricing_models=[held._wire() for held in self.pricing_models],
         )
 
     def to_json(self) -> dict[str, Any]:
@@ -1159,6 +1206,11 @@ class Declaration:
         ]
         if self.affirmation_deadline:
             out["affirmation_deadline"] = self.affirmation_deadline
+        if self.pricing_models:
+            out["pricing_models"] = [
+                {"model_id": held.model_id, "model_version": held.model_version}
+                for held in self.pricing_models
+            ]
         return out
 
     def _texts(self) -> list[dict[str, str]]:

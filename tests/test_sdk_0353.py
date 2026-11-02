@@ -540,3 +540,62 @@ def test_a_sessions_state_has_the_words_a_page_shows() -> None:
 
 
 _STATES = ("off", "no key", "connecting", "open", "waiting", "refused")
+
+
+# ── The samples' SDK items: a page's stand-in, a pricing plugin's models ──
+
+
+class _StandIn:
+    """A test's own stand-in for the connection: an act and a read of its."""
+
+    identity = "held"
+
+    def __init__(self) -> None:
+        self.recorded: list[Any] = []
+
+    async def record_prices(self, prices: Any) -> None:
+        self.recorded.append(prices)
+
+
+def test_a_page_given_a_plain_stand_in_cannot_act_through_it() -> None:
+    """0.35.1 unmasked a `Recorder` given to `PageClient`; a plain stand-in
+    still let a page act on `request.plugin` (the samples' operations)."""
+    from meridian.testing import PageClient
+
+    held = _StandIn()
+    client = PageClient([], held)
+    with pytest.raises(AttributeError, match="record_prices is an act"):
+        getattr(client.plugin, "record_prices")  # noqa: B009 - the read is the point
+    assert client.plugin.identity == "held" and client.plugin.recorded == []
+    client.plugin.extra = 1
+    assert held.extra == 1  # type: ignore[attr-defined]
+    recorder = Recorder()
+    assert PageClient([], recorder).plugin is recorder.plugin
+    assert PageClient([]).plugin is None
+
+
+def test_a_declaration_carries_a_pricing_plugins_models() -> None:
+    """Contract v27's `PluginDeclaration.pricing_models`, which the samples'
+    pricing plugin sent through a subclass of its own."""
+    made = Declaration(
+        pricing_models=[
+            meridian.PricingModelDeclaration("black-scholes", 2),
+            meridian.PricingModelDeclaration("bachelier", 1),
+        ]
+    )
+    wire = made.to_wire().pricing_models
+    assert [(m.model_id, m.model_version) for m in wire] == [
+        ("black-scholes", 2),
+        ("bachelier", 1),
+    ]
+    assert made.to_json()["pricing_models"][0] == {
+        "model_id": "black-scholes",
+        "model_version": 2,
+    }
+    assert "pricing_models" not in Declaration().to_json()
+    with pytest.raises(ValueError, match="declared twice"):
+        Declaration(pricing_models=[meridian.PricingModelDeclaration("bs", 1)] * 2)
+    with pytest.raises(ValueError, match="1 or more"):
+        meridian.PricingModelDeclaration("bs", 0)
+    with pytest.raises(ValueError, match="empty"):
+        meridian.PricingModelDeclaration(" ", 1)

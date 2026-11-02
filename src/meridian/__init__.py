@@ -384,6 +384,7 @@ from .declaration import (
     DatasetLicence,
     Declaration,
     NotCarried,
+    PricingModelDeclaration,
     RecordKind,
     Storage,
 )
@@ -716,6 +717,7 @@ __all__ = [
     "PriceBasis",
     "PriceKind",
     "PricedUnit",
+    "PricingModelDeclaration",
     "Provenance",
     "ProvenanceKind",
     "QualityAssessment",

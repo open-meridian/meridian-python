@@ -304,9 +304,11 @@ class PageClient:
         self.pages = pages
         self.own_settings = dict(own_settings or {})
         self.second_pair_of_eyes = frozenset(second_pair_of_eyes)
-        from .suites import Recorder
+        from .suites import unacting
 
-        self.plugin = plugin.plugin if isinstance(plugin, Recorder) else plugin
+        # A Recorder's connection, or a plain stand-in without its acts
+        # (SDK 0.35.3): a page acting through `request.plugin` fails here.
+        self.plugin = unacting(plugin)
         self.read = frozenset(read)
         self.write = frozenset(write)
         self.subject = subject
