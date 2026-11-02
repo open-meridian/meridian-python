@@ -2017,6 +2017,30 @@ def test_v28s_base_pinned_by_digest_drops_its_digest() -> None:
 # ── 0.33.5 to 0.34.0: contract v29 ───────────────────────────────────────
 
 
+_RUNTIME = "ghcr.io/open-meridian/meridian-runtime:8def82a@sha256:" + "cd" * 32
+_HARNESS = "ghcr.io/open-meridian/meridian-harness:8def82a@sha256:" + "ef" * 32
+
+
+@pytest.mark.parametrize(
+    ("comment", "left"),
+    [
+        ("# Core 8def82a, contract v28, as published with chart 0.1.313.", [3, 4]),
+        ("# Core's images for the e2e.", [3, 4]),
+        ("# Core 1ae36f0, contract v29, as published with chart 0.1.339.", []),
+    ],
+)
+def test_core_images_pinned_below_v29_are_named(comment: str, left: list[int]) -> None:
+    """SDK 0.35.1 (the plugin pilot): the step to contract v29 moved no
+    e2e's core pins and named none; it names each one pinned to a core below
+    v29, or naming no contract, for a person to pin by digest."""
+    makefile = (
+        f"E2E := 1\n{comment}\nRUNTIME_IMAGE ?= {_RUNTIME}\nHARNESS_IMAGE ?= {_HARNESS}\n"
+    )
+    result = migrate({"Makefile": makefile}, "0.33.5", "0.34.0")
+    assert result.files == {}
+    assert left_by_hand(result) == [("core-images", "Makefile", line) for line in left]
+
+
 def test_v29s_suite_cases_and_a_quality_assessment_naming_no_data_type_are_left() -> None:
     files = {
         "tests/test_suite.py": 'report = run("data", PRODUCERS, not_presented=NP)\n',

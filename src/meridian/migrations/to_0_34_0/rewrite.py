@@ -43,7 +43,7 @@ from libcst.codemod import CodemodContext
 from libcst.codemod.visitors import AddImportsVisitor
 from libcst.metadata import MetadataWrapper, PositionProvider
 
-from .. import Finding, Rewritten, version
+from .. import Finding, Rewritten, core_pins, version
 from .._cst import dotted, imports_of, is_test, line_of
 
 TARGET = "0.34.0"
@@ -408,6 +408,12 @@ class _Assessments(cst.CSTVisitor):
 
 
 def left(path: str, text: str) -> list[Finding]:
+    if path == "Makefile":
+        # Core's images an e2e runs on, pinned below contract v29 (SDK 0.35.1).
+        return [
+            Finding("core-images", path, line, line_of(text, line))
+            for line in core_pins(path, text, 29)
+        ]
     if not path.endswith(".py"):
         return []
     found: list[Finding] = []

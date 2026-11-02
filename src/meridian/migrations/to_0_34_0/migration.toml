@@ -72,6 +72,18 @@ build the old release while saying the new one; a base at 0.34.0 or a later \
 release -- `meridian plugin migrate` pins the release it migrates to -- left as it is"""
 
 [[by_hand]]
+rule = "core-images"
+what = """the Makefile pins core's runtime or harness image for the plugin's e2e \
+(`RUNTIME_IMAGE ?=`, `HARNESS_IMAGE ?=`) to a core below contract v29, or names no \
+contract for it: the migration runs with no network and cannot read a core's digest \
+(SDK 0.35.1)"""
+instead = """pin both to one core of contract v29 by digest -- \
+`ghcr.io/open-meridian/meridian-runtime:<core>@sha256:<digest>` and \
+`meridian-harness:<core>@sha256:<digest>`, the digests `docker buildx imagetools \
+inspect` names -- and say the core and its contract in the comment above them \
+(`# Core <sha>, contract v29, ...`)"""
+
+[[by_hand]]
 rule = "base-digest"
 what = """the Dockerfile's base was pinned by digest, and the digest was dropped \
 when its tag moved"""
