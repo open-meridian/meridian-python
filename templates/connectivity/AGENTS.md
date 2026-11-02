@@ -159,7 +159,9 @@ and subscribe to comes from the roles `pyproject.toml` declares under
   `archivable=False` for state read and updated in place. Declare no window
   setting of your own: the SDK declares `<kind>_window_days` and
   `<kind>_past_window` for every kind, and refuses a plugin that takes either
-  name. Keep each kind in units it can find again -- a file or directory per
+  name; read them from the settings as delivered (`config.values`, beside
+  your typed fields) or let `meridian.edge.RawStore.tend(plugin,
+  settings=config, today=...)` read them. Keep each kind in units it can find again -- a file or directory per
   account and month, say -- and name a record by its path within its unit
   (`plugin.raw_record("activity/ACC-1/2019-03/act-77.json")`). When a unit's
   last record is past the kind's window, do what `<kind>_past_window` says:

@@ -13,6 +13,7 @@ here and finds what the vendor said.
     key = store.keep("candles", "BTC-USD", {"received_at_ns": now, "body": text, ...})
     key = store.keep_line("ticker", "BTC-USD", {"received_at_ns": now, "body": text})
     await store.tend(plugin, window_days=30, past="archived", today=today)
+    await store.tend(plugin, settings=config, today=today)   # the kind's own settings
 
 One kind of raw record (`kind`, the plugin's `RecordKind` key), kept in units
 of a UTC day: `<kind>/2026-10-09/`, holding that day's answers as one file
@@ -28,7 +29,10 @@ lines is the current day's and bounded, so a stream's memory stays flat.
 Past the kind's window a day's unit is archived, kept or deleted as its
 `<kind>_past_window` setting says, through the SDK's `archive_unit` and
 `delete_unit`, each reporting the move before anything is removed (`tend`);
-what storage holds is said on every heartbeat (`plugin.stored`).
+what storage holds is said on every heartbeat (`plugin.stored`). Given the
+settings as delivered (`settings=`, from 0.35.2: a `@meridian.settings`
+instance, `meridian.Settings` or their values), `tend` reads the kind's
+window and past-window settings from them, so the plugin copies neither.
 
 How the plugin reaches its vendor is its own: this keeps what came back,
 whatever the transport.
@@ -41,9 +45,9 @@ import logging
 import re
 import tempfile
 from collections import OrderedDict
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any, TextIO
 
@@ -285,12 +289,30 @@ class RawStore:
                 )
         return found
 
-    async def tend(self, plugin: Any, window_days: int, past: str, today: date) -> None:
+    async def tend(
+        self,
+        plugin: Any,
+        window_days: int | None = None,
+        past: str | None = None,
+        today: date | None = None,
+        *,
+        settings: Any = None,
+    ) -> None:
         """Move each day's unit past the window as `past` says -- `archived` or
         `deleted` through the SDK, `kept` left -- never today's, which is still
         being written; then say what storage holds (`plugin.stored`). A move
         refused (no archive, a deletion inside the deployment's hold) keeps
-        the unit, and the next pass tries again."""
+        the unit, and the next pass tries again.
+
+        From 0.35.2 `settings` -- the settings as delivered: an instance of
+        the class decorated `@meridian.settings`, `meridian.Settings`, or
+        their values -- gives the window and `past` not given, read from the
+        kind's own settings, `<kind>_window_days` and `<kind>_past_window`,
+        which the SDK declares; `today` is the UTC date where not given."""
+        if window_days is None or past is None:
+            window_days, past = self._window(settings, window_days, past)
+        if today is None:
+            today = datetime.now(UTC).date()
         cutoff = today - timedelta(days=max(window_days, 0))
         self._forget(before=today.isoformat())
         for unit in self.units():
@@ -325,3 +347,35 @@ class RawStore:
                     last_received_ns=max(u.last_ns for u in held),
                 )
             ]
+
+    def _window(
+        self, settings: Any, window_days: int | None, past: str | None
+    ) -> tuple[int, str]:
+        """The window and what is done past it: as given, else the kind's own
+        settings in `settings`."""
+        if settings is None:
+            raise TypeError(
+                "tend is given the window and what is done past it, or the settings "
+                "that hold them (settings=)"
+            )
+        values = (
+            settings if isinstance(settings, Mapping) else getattr(settings, "values", None)
+        )
+        if not isinstance(values, Mapping):
+            raise TypeError(
+                f"settings is a {type(settings).__name__}: give the settings as delivered "
+                "(a @meridian.settings instance, meridian.Settings) or their values"
+            )
+        named = (f"{self.kind}_window_days", f"{self.kind}_past_window")
+        absent = [name for name in named if name not in values]
+        if absent:
+            raise ValueError(
+                f"the settings hold no {' or '.join(absent)}: the SDK declares them for "
+                f"each kind the declaration's Storage(kinds=...) names, and {self.kind} "
+                "is not among them"
+            )
+        if window_days is None:
+            window_days = int(values[named[0]])
+        if past is None:
+            past = str(values[named[1]])
+        return window_days, past

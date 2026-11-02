@@ -17,7 +17,9 @@ registered on it), and then:
 
 1. delivers the settings to `on_settings`, now and on every change, each an
    instance of the declaration's `@meridian.settings` class where it has
-   one -- the first delivery applied before any class starts (SDK 0.35.1;
+   one, its `.values` every setting delivered, the SDK's own beside the
+   class's fields (SDK 0.35.2) -- the first delivery applied before any
+   class starts (SDK 0.35.1;
    spec/each-role-is-one-generated-class, its lifecycle), and the watch
    kept as a `run()` is, opened again after a backoff when its stream
    breaks or ends;
