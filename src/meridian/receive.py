@@ -509,16 +509,37 @@ class _Latest:
     @classmethod
     def _key(cls, row: ConflatedRow, record: Any) -> tuple[Any, ...]:
         """The key a row is delivered latest value first by (W10.5): its
-        dataset, subjects and venue, and a price's kind and asset, a bar's
-        interval start, or a quote's asset (the asset from contract v19, so
-        BTC priced in USD and in USDC on one venue are two values)."""
+        dataset, subjects, venue and series key (a chain's rows name their
+        series by it, under one underlying), and what each kind of row adds:
+        a price's kind and asset (the asset from contract v19, so BTC priced
+        in USD and in USDC on one venue are two values; none where a v29
+        price is a yield or a spread), a quote's asset, a rate's kind,
+        tenor, maturity and convention (v27), a statistic's kind and
+        business date (v28), a listed series nothing more (v28), and any
+        other row -- a bar -- its interval start.
+
+        0.35.2 read every row with a `kind` as a price, so a rate or a
+        statistic, which has a kind and no price, failed the stream on every
+        delivery (SDK 0.35.3)."""
         meta = record.meta
-        fields = record.DESCRIPTOR.fields_by_name
+        held = record.DESCRIPTOR.name
         which: tuple[Any, ...]
-        if "kind" in fields:
+        if held == "Price":
             which = (record.kind, cls._asset(record.price))
-        elif "bid" in fields:
+        elif held == "Quote":
             which = (cls._asset(record.bid, record.ask),)
+        elif held == "Rate":
+            which = (
+                record.kind,
+                record.tenor.count,
+                record.tenor.unit,
+                record.maturity_date,
+                record.convention.SerializeToString(deterministic=True),
+            )
+        elif held == "Statistic":
+            which = (record.kind, meta.business_date)
+        elif held == "ListedSeries":
+            which = ()
         else:
             which = (meta.valid_from_ns,)
         return (
@@ -526,6 +547,7 @@ class _Latest:
             meta.source.dataset,
             tuple(subject.entity_id for subject in meta.subjects),
             meta.source.venue_id,
+            tuple(key.SerializeToString(deterministic=True) for key in meta.series_key),
             *which,
         )
 
