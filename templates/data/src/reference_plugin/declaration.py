@@ -44,7 +44,14 @@ DAILY = meridian.DatasetDeclaration(
     modes=["pull"],
     cadence=86_400,
     history=1_826,
-    licence_default=meridian.DatasetLicence(redistribution="not_allowed", kept=True),
+    licence_default=meridian.DatasetLicence(
+        kept=True,
+        # The deployment admin sets the licence on Data sources, and a term
+        # left unstated is read restrictively; state your vendor's where known:
+        # derived_use_terms="internal_only",
+        # redistribution="not_allowed",
+        # not_affiliated_notice="",
+    ),
     day_time_zone="Etc/UTC",
 )
 

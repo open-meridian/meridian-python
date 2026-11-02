@@ -172,8 +172,8 @@ supervisor (`Streamer`, `Stream`, `StreamHealth`, `Restart`), an option chains m
 `read_calendar`), a day by hand (`new_york_date`, `close_of`, `previous_close_of`, \
 `trading_day`), a listings plugin's own page records, a polling loop (`timetable`), a \
 plan switch (`use_plan`, `use_delayed`), the `again` and `licences` loops, an FX lake of \
-its own (`keep_streaming`), a raw store (`RawStore`, `StreamLog`), and a licence not \
-stating its `redistribution` (ruling 1018); each named with what replaces it"""
+its own (`keep_streaming`), and a raw store (`RawStore`, `StreamLog`); each named with \
+what replaces it"""
 instead = """replace it with the SDK's: `meridian.helpers.sessions.Supervisor` over the \
 plugin's own `Link` (a pairs feed: `stream_factory=pairs.supervised`); \
 `meridian.roles.data.option_chains.Feed` over the plugin's `ChainSource`; \
@@ -181,6 +181,5 @@ plugin's own `Link` (a pairs feed: `stream_factory=pairs.supervised`); \
 pages (`listings.connection_read`, `datasets_read`, `figures_read` and their templates); \
 `data.Timetable`; `listings.Feed(timeliness=, datasets_by_timeliness=, mic_of=)`; a \
 role class's `run()`, restarted by `meridian.run`; `data.pairs.Feed(conflate_first=True, \
-day_clock=...)`; `meridian.edge.RawStore`; and the vendor's terms stated in full. Keep \
-only the vendor's own words: its transport, its pacing and its conversion stay the \
+day_clock=...)`; and `meridian.edge.RawStore`. Keep only the vendor's own words: its transport, its pacing and its conversion stay the \
 plugin's (rulings 1027 and 1028)"""

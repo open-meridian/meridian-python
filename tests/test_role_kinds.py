@@ -405,7 +405,7 @@ CATALOGUE = [
         modes=["pull"],
         cadence=1,
         history=0,
-        licence_default=meridian.DatasetLicence(redistribution="not_allowed", kept=True),
+        licence_default=meridian.DatasetLicence(kept=True),
         day_time_zone="Etc/UTC",
         day_end_minute=0,
     )

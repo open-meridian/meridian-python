@@ -36,9 +36,9 @@ reached, a role class lacking a required event, a suite test hearing
 through `recorder.receive`, and a helper 924 placed that the plugin adopts
 by hand (`ADOPTED`: a stream supervisor, a calendar reader, a day's close
 by hand, a chains machine, listings pages, a timetable, a plan switch, the
-`again` and `licences` loops, an FX lake, a raw store, a licence not
-stating its redistribution). The roles' surfaces are 0.35.0's, as `roles.json` beside this
-records them, so the step reads the same whatever SDK runs it later.
+`again` and `licences` loops, an FX lake, a raw store). The roles' surfaces
+are 0.35.0's, as `roles.json` beside this records them, so the step reads
+the same whatever SDK runs it later.
 """
 
 from __future__ import annotations
@@ -1166,24 +1166,6 @@ class _Left(cst.CSTVisitor):
     def visit_Call(self, node: cst.Call) -> None:
         if _is_connect(node, self.names) and not is_test(self.path):
             self.found.append(("connect-to-run", self._line(node), ""))
-        if (
-            not is_test(self.path)
-            and _resolved(node.func, self.names).endswith("DatasetLicence")
-            and not (dotted(node.func) or "").startswith("ops.")
-            and not any(
-                arg.keyword is not None and arg.keyword.value == "redistribution"
-                for arg in node.args
-            )
-        ):
-            self.found.append(
-                (
-                    "helper-adopted",
-                    self._line(node),
-                    "DatasetLicence: the licence terms, `redistribution` stated (ruling 1018) "
-                    "beside `derived_use_terms` and `not_affiliated_notice`, as the vendor's "
-                    "terms say",
-                )
-            )
         func = node.func
         if not isinstance(func, cst.Attribute):
             return

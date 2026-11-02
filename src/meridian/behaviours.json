@@ -1393,7 +1393,7 @@
     {
       "module": "data-terms",
       "since": "0.35.0",
-      "says": "An SDK carrying the data role's settings makes a timeliness and a key setting as these cases say, and refuses a dataset licence not stating its redistribution.\n",
+      "says": "An SDK carrying the data role's settings makes a timeliness and a key setting as these cases say.\n",
       "cases": [
         {
           "name": "timeliness-offers-the-data-terms-delayed-by-default",
@@ -1482,33 +1482,6 @@
               "required": true,
               "secret": true
             }
-          }
-        },
-        {
-          "name": "licence-states-its-redistribution",
-          "subject": "declaration.DatasetLicence",
-          "kind": "value",
-          "call": "make",
-          "args": {
-            "kept": true,
-            "redistribution": "not_allowed"
-          },
-          "expect": {
-            "value": {
-              "redistribution": "not_allowed"
-            }
-          }
-        },
-        {
-          "name": "licence-not-stating-its-redistribution-is-refused",
-          "subject": "declaration.DatasetLicence",
-          "kind": "value",
-          "call": "make",
-          "args": {
-            "kept": true
-          },
-          "expect": {
-            "refused": "redistribution"
           }
         }
       ]

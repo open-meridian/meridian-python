@@ -345,7 +345,7 @@ async def _wants(given: Mapping[str, Any], recorder: Any, heard: list[tuple[str,
         await wants.hear(Heard(row=row, message=message), answer)
 
 
-# ── 0.35, part B: 924's helpers (rulings 924, 1009, 1016 to 1018) ───────
+# ── 0.35, part B: 924's helpers (rulings 924, 1009, 1016, 1017) ────────
 
 
 def _iso_ns(text: str) -> int:
@@ -691,13 +691,6 @@ def _api_key(name: str, args: Mapping[str, Any]) -> Any:
     return {"required": made.required, "secret": made.secret}
 
 
-def _licence(name: str, args: Mapping[str, Any]) -> Any:
-    from .declaration import DatasetLicence
-
-    made = DatasetLicence(**dict(args))
-    return {"redistribution": made.redistribution}
-
-
 def _stated(fields: Mapping[str, Any]) -> Any:
     """A statement as a source states it: numbers as Decimals."""
     from types import SimpleNamespace
@@ -856,7 +849,6 @@ ADAPTERS: Mapping[str, Adapter] = {
     "roles.data.Timetable": steps_case(_timetable, _timetable_step),
     "roles.data.timeliness": value_case(_timeliness),
     "roles.data.api_key": value_case(_api_key),
-    "declaration.DatasetLicence": value_case(_licence),
     "roles.data.listings.Feed": acts_case(_listings),
     "roles.data.option_chains.Feed": acts_case(_option_chains),
 }
@@ -881,7 +873,6 @@ SUBJECTS: Sequence[str] = (
     "roles.data.Timetable",
     "roles.data.timeliness",
     "roles.data.api_key",
-    "declaration.DatasetLicence",
     "roles.data.listings.Feed",
     "roles.data.option_chains.Feed",
 )

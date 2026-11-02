@@ -450,13 +450,7 @@ class DatasetLicence:
     where the vendor serves an aggregate, whose aggregate it is, in words --
     "Pyth's aggregate of its publishers" -- shown on the Data sources page;
     empty for none. A core earlier than the amendment's refuses a
-    registration setting it.
-
-    From 0.35.0 (ruling 1018; 924's item 10) `redistribution` is stated on
-    every licence, or the licence is refused: a vendor's terms always say
-    whether its data may be passed on, and a plugin says what they say.
-    `meridian plugin check` holds a dataset to `derived_use_terms`,
-    `redistribution` and `not_affiliated_notice` beside it."""
+    registration setting it."""
 
     kept: bool = False
     retention_days: int = 0
@@ -489,12 +483,6 @@ class DatasetLicence:
             said = str(getattr(self, name) or "").strip().lower().removeprefix(prefix)
             if said and said not in words:
                 raise ValueError(f"a licence's {name} is one of {', '.join(words)}")
-            if name == "redistribution" and not said:
-                # SDK 0.35 (ruling 1018): every declared licence states it.
-                raise ValueError(
-                    "a licence's redistribution is stated: one of "
-                    f"{', '.join(words)}, as the vendor's terms say"
-                )
             object.__setattr__(self, name, said)
         terms = str(self.derived_use_terms or "").strip().lower()
         terms = terms.removeprefix("derived_use_")

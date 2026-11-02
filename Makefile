@@ -67,12 +67,11 @@ contract-diff:
 # PyPI depends on nothing by URL (PyPI refuses that) and a plugin installs one
 # thing. `make vendor-schema` moves the copy to SCHEMA_REV; `check-vendored`
 # fails when the two disagree, as core's check-codegen does for its bindings.
-# meridian-schema's sdk-035-b at 43e09c3 (main at 6d89d4b -- contract v29,
-# DESIGN29 at 17f9a78, and the behaviour cases every SDK runs -- with SDK
-# 0.35's second part's: 924's helpers, 60 cases in all), its gen/ and
-# boundaries/ vendored here byte for byte. Moved to schema main once that
-# branch merges.
-SCHEMA_REV := e41e76ea874b032af713cb0740dddbe90e0971d2
+# meridian-schema's sdk-035-b-1030 at 8c8ed77 (main at e41e76e -- contract
+# v29, DESIGN29 at 17f9a78, and SDK 0.35's behaviour cases -- less the two
+# licence cases ruling 1030 drops: 58 cases), its gen/ and boundaries/
+# vendored here byte for byte. Moved to schema main once that branch merges.
+SCHEMA_REV := 8c8ed77fa3ba58583c1975f5753f9cf94b7c9d5e
 SCHEMA_REPO := https://github.com/open-meridian/meridian-schema.git
 SCRATCH     := .schema-scratch
 
