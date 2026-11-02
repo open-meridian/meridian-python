@@ -1412,8 +1412,10 @@ class Plugin:
 
         Given a class decorated `@meridian.settings`, each delivery is an
         instance of it: its fields typed and defaulted, `at_least` and
-        `at_most` held, `.missing` the required settings holding nothing and
-        `.refused` the values refused.
+        `at_most` held, `.missing` the required settings holding nothing,
+        `.refused` the values refused and, from 0.35.2, `.values` every
+        setting delivered, the ones the SDK declares beside the class's
+        fields among them (each storage kind's window settings).
         """
         if typed is None:
             return self._settings()

@@ -24,6 +24,13 @@ whose saved value this version cannot read; `.refused` says each such value
 (`meridian.RefusedSetting`), never raised. A secret field is never in `repr`
 or `str`. `meridian.Setting` tuples keep working, and a class and a tuple
 declare the same thing.
+
+From 0.35.2 `.values` is every setting delivered, by name, read only, as
+`meridian.Settings.values` holds them: the class's fields, as typed on the
+instance, and the settings the SDK declares beside them, which are no field
+of the class -- each storage kind's `<kind>_window_days` and
+`<kind>_past_window` (`RawStore.tend(..., settings=config)` reads them).
+A secret's value is never in its `repr`.
 """
 
 from __future__ import annotations
@@ -31,7 +38,7 @@ from __future__ import annotations
 import dataclasses
 import logging
 import typing
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from typing import Any, ClassVar, cast
 
 from .client import AppliesWhen, Choice, Column, RefusedSetting, Setting
@@ -555,14 +562,63 @@ def stale_reference_after(*, roles: Sequence[str] = ()) -> Any:
     )
 
 
+#: The names a delivery's own attributes take, which no field may.
+_DELIVERY = frozenset({"missing", "refused", "values", "_more"})
+
+
+class _Values(Mapping[str, Any]):
+    """Every setting delivered, by name, read only; a secret's value is never
+    in its `repr`."""
+
+    __slots__ = ("_held", "_secret")
+
+    def __init__(self, held: Mapping[str, Any], secret: frozenset[str]) -> None:
+        self._held = dict(held)
+        self._secret = secret
+
+    def __getitem__(self, name: str) -> Any:
+        return self._held[name]
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._held)
+
+    def __len__(self) -> int:
+        return len(self._held)
+
+    def __repr__(self) -> str:
+        shown = ", ".join(
+            f"{name!r}: {'<secret>' if name in self._secret else repr(value)}"
+            for name, value in self._held.items()
+        )
+        return "{" + shown + "}"
+
+
 class Typed:
     """The base a class decorated `@meridian.settings` is given: its
-    declaration, each field's label, and the settings missing."""
+    declaration, each field's label, the settings missing, and every
+    setting delivered (`values`)."""
 
     __meridian_settings__: ClassVar[tuple[Setting, ...]] = ()
     __meridian_bounds__: ClassVar[dict[str, tuple[int | None, int | None]]] = {}
     missing: tuple[str, ...]
     refused: tuple[RefusedSetting, ...]
+    # The settings delivered that are no field of the class: the ones the SDK
+    # declares beside it (0.35.2).
+    _more: Mapping[str, Any]
+
+    @property
+    def values(self) -> Mapping[str, Any]:
+        """Every setting delivered, by name, read only (0.35.2): the class's
+        fields, as typed on the instance, then the settings the SDK declares
+        beside them -- each storage kind's `<kind>_window_days` and
+        `<kind>_past_window` -- typed by their declarations, defaults filled,
+        a table's rows a tuple. What `meridian.Settings.values` holds, so a
+        delivery reads alike typed or not."""
+        declared = type(self).__meridian_settings__
+        held = {each.name: getattr(self, each.name) for each in declared}
+        for name, value in self._more.items():
+            held.setdefault(name, value)
+        return _Values(held, frozenset(each.name for each in declared if each.secret))
 
     @classmethod
     def declared(cls) -> tuple[Setting, ...]:
@@ -604,7 +660,16 @@ class Typed:
             if isinstance(value, int) and not isinstance(value, bool):
                 value = _held(cls.__name__, each.name, value, least, most)
             given[each.name] = value
-        return cast(Any, cls)(**given, missing=tuple(missing), refused=tuple(refused))
+        # The settings delivered beside the class's own -- the ones the SDK
+        # declares (0.35.2) -- kept, never dropped.
+        more = {
+            name: tuple(dict(row) for row in value) if isinstance(value, list) else value
+            for name, value in values.items()
+            if name not in given
+        }
+        return cast(Any, cls)(
+            **given, missing=tuple(missing), refused=tuple(refused), _more=more
+        )
 
 
 def _held(owner: str, name: str, value: int, least: int | None, most: int | None) -> int:
@@ -632,7 +697,8 @@ def settings(cls: type[_C]) -> type[_C]:
     `meridian.sample_data()` or `meridian.account_currency()` is a setting
     named as the field. The class
     becomes a frozen dataclass of the values, with `declared()`,
-    `label(name)`, `.missing` and `.refused`."""
+    `label(name)`, `.missing`, `.refused` and, from 0.35.2, `.values`: every
+    setting delivered, the SDK's own beside the class's."""
     hints = typing.get_type_hints(cls)
     declared: list[Setting] = []
     bounds: dict[str, tuple[int | None, int | None]] = {}
@@ -640,6 +706,10 @@ def settings(cls: type[_C]) -> type[_C]:
     for name in hints:
         given = cls.__dict__.get(name)
         where = f"{cls.__name__}.{name}"
+        if name in _DELIVERY:
+            raise TypeError(
+                f"{where} is named as a delivery's own {name}; name the setting otherwise"
+            )
         kind = _kind(hints[name], where)
         if isinstance(given, _Field):
             made = given.declared(name, kind)
@@ -670,6 +740,13 @@ def settings(cls: type[_C]) -> type[_C]:
         )
     fields.append(("missing", tuple[str, ...], dataclasses.field(default=())))
     fields.append(("refused", tuple[RefusedSetting, ...], dataclasses.field(default=())))
+    fields.append(
+        (
+            "_more",
+            Mapping[str, Any],
+            dataclasses.field(default_factory=dict, repr=False, hash=False),
+        )
+    )
     made_class = dataclasses.make_dataclass(
         cls.__name__,
         fields,
