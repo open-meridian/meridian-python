@@ -230,3 +230,64 @@ async def test_runs_settings_watch_is_opened_again_when_its_stream_ends(
         with pytest.raises(asyncio.CancelledError):
             await task
     assert len(applied) >= 3
+
+
+# ── hear_again follows seed ───────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("seeds", [False, True])
+async def test_hear_again_reads_the_latest_only_for_a_class_that_seeds(
+    sidecar: tuple[FakeSidecar, str], monkeypatch: pytest.MonkeyPatch, seeds: bool
+) -> None:
+    """The pilot: a class with `seed = False` calling `hear_again()` had the
+    lake's latest read for its subjects on the reopened stream -- a read
+    that is itself a want -- which its start never asked."""
+    from conftest import Stream
+    from meridian.receive import Heard
+    from meridian.roles import signal
+
+    service, address = sidecar
+    monkeypatch.setenv("MERIDIAN_SIDECAR_ADDRESS", address)
+    service.roles = ("signal",)
+
+    class Watching(signal.Role):
+        seed = seeds
+
+        def __init__(self) -> None:
+            self.held = ["INS-A"]
+
+        def subjects(self) -> list[str]:
+            return self.held
+
+        async def on_prices_recorded(self, heard: Heard[Any]) -> None:
+            return None
+
+    watching = Watching()
+    service.operations.streams = [Stream()]
+
+    async def opened(times: int) -> None:
+        for _ in range(200):
+            if len(service.operations.received) >= times:
+                break
+            await asyncio.sleep(0.025)
+        await asyncio.sleep(0.4)  # past the refusal wait, and what it reads
+
+    task = asyncio.create_task(meridian.run_async(meridian.Declaration(), [watching]))
+    try:
+        await opened(1)
+        watching.held = ["INS-A", "INS-B"]
+        watching.hear_again()
+        await opened(2)
+    finally:
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+    asked = [list(each.subjects) for each in service.operations.reads]
+    if seeds:
+        # Read at the start, and again for the subjects as they stand.
+        assert [[s.entity_id for s in subjects] for subjects in asked] == [
+            ["INS-A"],
+            ["INS-A", "INS-B"],
+        ]
+    else:
+        assert asked == []

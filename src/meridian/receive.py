@@ -790,7 +790,9 @@ async def follow(
     at the start. `subjects` are the lake's subjects the stream names, or
     what answers them, read again each time the stream opens; setting
     `reopen` opens it again at once, catching up as after a broken stream
-    (`Role.hear_again()`)."""
+    (`Role.hear_again()`). A reopened stream catches up what was handed
+    on before by sequence, and reads the lake's latest again only of the
+    rows `seed` names (SDK 0.35.1)."""
     given = {name: handler for name, handler in handlers.items() if handler is not None}
     rows = [row for row in DELIVERED if row.name in given]
     latest_rows = [row for row in CONFLATED if row.name in given]
@@ -869,7 +871,17 @@ async def follow(
                         started = True
                     else:
                         await follower.catch_up_all()
-                        await latest.read()
+                        # The latest read again only of the rows seeded, and
+                        # handed only to a class that seeds (SDK 0.35.1): a
+                        # read of the lake is itself a want, which a row not
+                        # seeded never made.
+                        seeded_latest = {row.name for row in latest_rows} & seeded
+                        if seeded_latest:
+                            token = seeding.set(True)
+                            try:
+                                await latest.read(seeded_latest)
+                            finally:
+                                seeding.reset(token)
                         await full.read()
                         await sequenced.read()
                 wait = RETRY_SECONDS
