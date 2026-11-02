@@ -1949,6 +1949,20 @@ def test_v29s_base_pinned_by_digest_drops_its_digest() -> None:
     assert ("base-digest", "Dockerfile", 1) in left_by_hand(result)
 
 
+@pytest.mark.parametrize("source", ["0.30.0", "0.31.1", "0.32.3", "0.33.4"])
+def test_a_step_never_moves_back_a_base_pinned_at_a_later_release(source: str) -> None:
+    """SDK 0.35.1 (the plugin pilot's migrate from 0.33.4): `meridian plugin
+    migrate` pins the base to the release it migrates to, by digest, before
+    the steps run; a step moving the base to its own, earlier release
+    overwrote that pin, and the run ended on 0.34.0 with no digest."""
+    dockerfile = (
+        f"ARG BASE=ghcr.io/open-meridian/plugin-python:0.35.0@{_DIGEST}\nFROM ${{BASE}}\n"
+    )
+    result = migrate({"Dockerfile": dockerfile}, source, "0.35.0")
+    assert "Dockerfile" not in result.files
+    assert [r for r, path, _ in left_by_hand(result) if path == "Dockerfile"] == []
+
+
 # ── 0.34.0: the topic modules leave meridian.roles (ruling 1001) ────────
 
 

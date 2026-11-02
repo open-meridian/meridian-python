@@ -43,7 +43,7 @@ from libcst.codemod import CodemodContext
 from libcst.codemod.visitors import AddImportsVisitor
 from libcst.metadata import MetadataWrapper, PositionProvider
 
-from .. import Finding, Rewritten
+from .. import Finding, Rewritten, version
 from .._cst import dotted, imports_of, is_test, line_of
 
 TARGET = "0.34.0"
@@ -353,7 +353,7 @@ def _dockerfile(path: str, text: str) -> Rewritten:
     out: list[str] = []
     for n, line in enumerate(text.splitlines(keepends=True), 1):
         found = _BASE.search(line)
-        if found and found.group("tag") != TARGET:
+        if found and version(found.group("tag")) < version(TARGET):  # never a later pin
             line = line[: found.start()] + found.group("head") + TARGET + line[found.end() :]
             rules.append("base-digest-dropped")
             findings.append(Finding("base-digest", path, n, line.strip()))

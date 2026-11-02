@@ -68,7 +68,8 @@ rule = "base-digest-dropped"
 what = """the Dockerfile's base, pinned by digest at an older release of \
 plugin-python, moved to 0.34.0 with its digest dropped: the migration runs with no \
 network, so it cannot read 0.34.0's digest, and an old digest under a new tag would \
-build the old release while saying the new one"""
+build the old release while saying the new one; a base at 0.34.0 or a later \
+release -- `meridian plugin migrate` pins the release it migrates to -- left as it is"""
 
 [[by_hand]]
 rule = "base-digest"
