@@ -120,7 +120,7 @@ DESIGN ?= ../meridian-design
 # Core's v29 protos (contract v29, fixed income; DESIGN29 at 17f9a78), the
 # branch the core stages build on, before it lands: its head after stage E,
 # ruling 1006's comments and core main merged in.
-CORE_REV   := 1ae36f02e07a877b588ea0301f6a45315b9c7256
+CORE_REV   := b7d29cebcf923b78dda117bbda4daff387e17bda
 CORE_PROTO ?= https://github.com/open-meridian/meridian-core.git\#$(CORE_REV):proto
 # And meridian-schema's, which core's import, at the revision vendored here.
 SCHEMA_PROTO ?= https://github.com/open-meridian/meridian-schema.git\#$(SCHEMA_REV):proto
