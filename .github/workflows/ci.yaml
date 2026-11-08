@@ -1,6 +1,8 @@
-# CI is confirmation, not the first place a failure is found. The pre-push hook
-# runs the same target locally, so a red run here means the hook was bypassed or
-# the runner differs from a developer's machine -- both worth knowing.
+# CI runs everything but conformance, and the pull request merges on it
+# (accepted 2026-11-07, superseding ruling 1075's full local gate). The
+# pre-push hook runs a fast gate -- lint, and the stages the changed paths
+# select (`make pre-push`) -- so a red run here is reproduced with
+# `make ci-stage STAGE=ci-remote`, its cause fixed, and never rerun until green.
 #
 # The single job is named for the make target it runs. ci-mirror-check enforces
 # that correspondence from inside ci-local, so a job added here without a target
@@ -13,8 +15,8 @@
 # it from here would put a credential that reads private source into a public
 # repository. Ruled out on 2026-09-12.
 #
-# The gate still runs, twice. `make ci-local` includes it and the pre-push hook
-# runs ci-local, so no push from a workspace can break it. meridian-design's CI
+# The gate still runs, twice. The pre-push hook runs it whenever the package
+# or the suite changed, so no such push from a workspace can break it. meridian-design's CI
 # runs the same suite against its own fixtures, and being private it may.
 #
 # What neither covers is a commit made through GitHub's web interface. That is a
@@ -44,10 +46,11 @@ jobs:
   # private source. Ruled out 2026-09-12.
   #
   # The gate is not dropped. It runs in meridian-design's CI, which is private
-  # and already checks out every sibling, and it runs in `make ci-local` here,
-  # which the pre-push hook fires, so a push that breaks it does not happen from
-  # a workspace. What is missing is confirmation on a run started from GitHub
-  # alone, and that window is named rather than papered over.
+  # and already checks out every sibling, and the pre-push hook runs it here
+  # whenever the package or the suite changed, so a push that breaks it does
+  # not happen from a workspace. What is missing is confirmation on a run
+  # started from GitHub alone, and that window is named rather than papered
+  # over.
   ci-remote:
     runs-on: ubuntu-latest
     steps:
