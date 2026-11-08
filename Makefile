@@ -327,18 +327,18 @@ conformance:
 			|| { echo "no fixtures at $(DESIGN)/fixtures; set DESIGN=<path to meridian-design>" >&2; exit 1; }; \
 		fixtures="$(abspath $(DESIGN))/fixtures"; at="$(DESIGN)'s working tree"; \
 	else \
-		rev=$$(tools/sibling-at-main.sh "$(DESIGN)" $(DESIGN_CACHE) $(DESIGN_MAIN) fixtures) \
+		rev=$$(tools/sibling-at-main.sh files "$(DESIGN)" $(DESIGN_CACHE) $(DESIGN_MAIN) fixtures) \
 			|| { echo "conformance FAILED: design's fixtures at its main could not be read (DESIGN=$(DESIGN))" >&2; exit 1; }; \
 		fixtures="$(CURDIR)/$(DESIGN_MAIN)/fixtures"; at="design's main at $$rev"; \
 	fi; \
 	$(DOCKER) build $(CONTEXTS) -f Dockerfile.python --target conformance -t meridian-python-conformance . >/dev/null 2>&1 \
-		|| { echo "conformance image FAILED to build" >&2; rm -rf $(DESIGN_MAIN); exit 1; }; \
+		|| { echo "conformance image FAILED to build" >&2; tools/sibling-at-main.sh remove $(DESIGN_CACHE) $(DESIGN_MAIN); exit 1; }; \
 	docker run --rm \
 		-v "$$fixtures":/fixtures:ro \
 		-e MERIDIAN_FIXTURES=/fixtures \
 		meridian-python-conformance \
 		python -m pytest -q tests/test_conformance.py >.conformance.log 2>&1; \
-	status=$$?; rm -rf $(DESIGN_MAIN); \
+	status=$$?; tools/sibling-at-main.sh remove $(DESIGN_CACHE) $(DESIGN_MAIN); \
 	if [ $$status -ne 0 ]; then \
 		echo "conformance FAILED against $$at. The last 30 lines, and the whole of it in .conformance.log:" >&2; \
 		tail -30 .conformance.log >&2; exit 1; \
