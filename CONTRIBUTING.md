@@ -27,8 +27,12 @@ so a plugin you write stays yours. Start with `meridian plugin new`; see
 
 ## For the team
 
-Run `make ci-local` before pushing; `make install-hooks` makes that automatic.
-A change goes on a branch, whose push runs that gate, and lands through one
-pull request per version, its summary the change log. CI runs once, on the
-pull request, and it merges when green, up to date with `main`, as a merge
-commit: that keeps the branch's commit SHAs, which other repositories pin.
+`make install-hooks` makes every push run `make pre-push`, the fast gate:
+lint, and the stages the changed paths select (the Makefile's
+`PRE_PUSH_MAP`), conformance among them. A change goes on a branch and lands
+through one pull request per version, its summary the change log. CI on the
+pull request runs everything else, and it merges when green, up to date with
+`main`, as a merge commit: that keeps the branch's commit SHAs, which other
+repositories pin. Reproduce a failing CI job with `make ci-stage
+STAGE=<job>` before pushing again; `make ci-local` runs every gate, for when
+CI is down.

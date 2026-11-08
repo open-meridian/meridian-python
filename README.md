@@ -2654,10 +2654,12 @@ each result to `meridian plugin check --run-tests`.
 
 ## Working on it
 
-    make ci-local
+    make pre-push
 
-Run `make install-hooks` once on a fresh clone, so that `git push` fires
-`ci-local` first. Without it the gate exists and does not run.
+The fast gate: lint, and the stages the changed paths select, each named with
+why. Run `make install-hooks` once on a fresh clone, so that `git push` fires
+it first. CI on the pull request runs everything else; `make ci-local` runs
+every gate, for when CI is down.
 
 ## Releasing
 

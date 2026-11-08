@@ -9,12 +9,14 @@ PY    := python3
 unexport GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR \
          GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_PREFIX
 
-.PHONY: help ci-local ci-remote ci-local-deep install-hooks ci-mirror-check contract-diff \
+.PHONY: help ci-local ci-remote ci-local-deep ci-stage pre-push pre-push-run install-hooks ci-mirror-check contract-diff \
         build package test lint conformance fmt vendor-schema check-vendored \
         base-image check-scaffold check-migrations oracle-live oracle-regenerate
 
 help:
-	@echo "  make ci-local       run every gate (the pre-push gate, and what CI mirrors)"
+	@echo "  make pre-push       the fast gate the pre-push hook runs: lint, and the stages the changed paths select"
+	@echo "  make ci-local       every gate, CI's and conformance: optional, for when CI is down"
+	@echo "  make ci-stage STAGE=<job>  one CI job, as it runs there ($(CI_STAGES))"
 	@echo "  make build          install the package and prove it imports"
 	@echo "  make package        build the wheel and prove it installs alone"
 	@echo "  make base-image     the plugin base image, plugin-python, from that wheel"
@@ -27,10 +29,13 @@ help:
 	@echo "  make oracle-live    the QuantLib oracle's case sets against the pinned QuantLib (scheduled)"
 	@echo "  make oracle-regenerate SET=<set>  a case set's answers from the pinned QuantLib (a version bump)"
 	@echo "  make fmt            apply the formatter"
-	@echo "  make install-hooks  point git at hooks/ so push fires ci-local"
+	@echo "  make install-hooks  point git at hooks/ so push fires pre-push"
 
-# Local green is the completion signal; CI is confirmation.
-# Every job in .github/workflows must be reachable from here.
+# Every gate: CI's (ci-remote) and conformance. CI on the pull request runs
+# ci-remote, and the pull request merges on it (accepted 2026-11-07,
+# superseding ruling 1075's full local gate); this is the optional full run,
+# for when CI is down. Every job in .github/workflows must be reachable from
+# here.
 ci-local: ci-remote conformance
 	@echo
 	@echo "ci-local: GREEN"
@@ -42,8 +47,8 @@ ci-local: ci-remote conformance
 #
 # Elsewhere is real, not a euphemism: meridian-design's own CI runs this SDK's
 # conformance suite against its fixtures, and it is private so it may. Here, the
-# pre-push hook runs ci-local, so conformance passes before any push from a
-# workspace. The uncovered case is a commit made through GitHub's web interface,
+# pre-push hook runs conformance whenever the package or the suite changed
+# (PRE_PUSH_MAP), so it passes before any such push from a workspace. The uncovered case is a commit made through GitHub's web interface,
 # which nothing in this repo can check and design's next run will.
 ci-remote: contract-diff ci-mirror-check check-vendored build package check-scaffold test \
            check-migrations lint
@@ -51,6 +56,75 @@ ci-remote: contract-diff ci-mirror-check check-vendored build package check-scaf
 	@echo "ci-remote: GREEN (conformance not included; see this target's comment)"
 
 ci-local-deep: ci-local
+
+# One CI job, as it runs there: reproduce a failing job with this before
+# pushing again, rather than rerunning CI until it is green.
+CI_STAGES := ci-remote oracle-live
+ci-stage:
+	@case " $(CI_STAGES) " in *" $(STAGE) "*) ;; \
+		*) echo "ci-stage: STAGE is one of CI's jobs: $(CI_STAGES)" >&2; exit 2;; esac
+	@$(MAKE) --no-print-directory $(STAGE)
+
+# The fast gate (accepted 2026-11-07; the pre-push hook runs it): CI on the
+# pull request runs ci-remote whole, so a push runs only what its changes
+# reach. Every push runs the contract diff, the mirror and lint (ruff, its
+# formatting and mypy); the rest only when a path the branch changed against
+# PRE_PUSH_BASE maps to them here (<glob>=<stage>,...; tools/pre_push.py
+# prints which ran and why):
+#
+#   python       build and test: the package imports, and its unit tests and
+#                the templates' pass
+#   vendored     check-vendored: the wire bindings are the schema's
+#   package      package: the wheel installs alone
+#   scaffold     check-scaffold: the base image and each role's template
+#   migrations   check-migrations: each recorded migration passes plugin check
+#   conformance  conformance, against design's fixtures at its origin/main;
+#                not in CI (the fixtures are private), so here whenever the
+#                package or the suite changes
+PRE_PUSH_BASE ?= origin/main
+PRE_PUSH_ALWAYS := checks
+PRE_PUSH_ORDER := checks python vendored package scaffold migrations conformance
+PRE_PUSH_MAP := \
+	src/*=python,package,conformance \
+	tests/*=python \
+	tests/migrations/*=migrations \
+	tests/test_migrations.py=migrations \
+	src/meridian/migrations/*=migrations \
+	tests/test_conformance.py=conformance \
+	template/*=python,scaffold \
+	templates/*=python,scaffold \
+	src/meridian/v1/*=vendored \
+	src/meridian/plugin/*=vendored \
+	src/meridian/bounds.py=vendored \
+	src/meridian/suites.json=vendored \
+	src/meridian/fields.json=vendored \
+	src/meridian/transitions.json=vendored \
+	src/meridian/behaviours.json=vendored \
+	pyproject.toml=python,package,scaffold,conformance \
+	Dockerfile.python=python,package,scaffold,migrations,conformance \
+	README.md=package LICENSE=package NOTICE=package \
+	Makefile=python,vendored,conformance
+
+pre-push:
+	@$(PY) tools/pre_push.py --self-test >/dev/null
+	@mkdir -p build
+	@$(PY) tools/pre_push.py plan --base "$(PRE_PUSH_BASE)" --always "$(PRE_PUSH_ALWAYS)" \
+		--order "$(PRE_PUSH_ORDER)" --map "$(PRE_PUSH_MAP)" --out build/pre-push.plan
+	@began=$$(date +%s); \
+	eval "$(MAKE) --no-print-directory pre-push-run $$(cat build/pre-push.plan)" \
+		|| { echo "pre-push: FAILED after $$(( $$(date +%s) - began ))s" >&2; exit 1; }; \
+	took=$$(( $$(date +%s) - began )); \
+	echo; echo "pre-push: GREEN in $$((took / 60))m$$(printf %02d $$((took % 60)))s; CI runs everything else"
+
+pre-push-run: $(addprefix pre-push-,$(PRE_PUSH_STAGES))
+
+pre-push-checks: contract-diff ci-mirror-check lint
+pre-push-python: build test
+pre-push-vendored: check-vendored
+pre-push-package: package
+pre-push-scaffold: check-scaffold
+pre-push-migrations: check-migrations
+pre-push-conformance: conformance
 
 ci-mirror-check:
 	@$(PY) tools/ci_mirror_check.py --repo-root .
@@ -236,22 +310,40 @@ check-migrations:
 		     echo "  DOCKER_BUILDKIT=1 docker build $(CONTEXTS) -f Dockerfile.python --target migrations --build-arg MERIDIAN_CLI_VERSION=$(MERIDIAN_CLI) --progress=plain ." >&2; exit 1; }
 	@echo "check-migrations OK: every recorded migration's plugin passes meridian $(MERIDIAN_CLI)'s plugin check --run-tests"
 
-# The fixtures are not in this repo. Mounted read-only from the design repo, so
-# this SDK and the Rust runtime assert against the same pinned bytes rather than
-# against each other.
+# The fixtures are not in this repo. Read from the design repo, so this SDK and
+# the Rust runtime assert against the same pinned bytes rather than against
+# each other: at design's origin/main (accepted 2026-11-07, as design's own
+# gate reads its siblings), fetched into a bare cache under build/ through
+# the checkout at DESIGN, never its working tree, and written to build/ for
+# the run (tools/sibling-at-main.sh). DESIGN_AT=worktree reads DESIGN's
+# working tree instead, for fixtures not yet on design's main.
+DESIGN_AT ?= main
+DESIGN_CACHE := build/siblings/meridian-design.git
+DESIGN_MAIN := build/siblings/meridian-design
+
 conformance:
-	@test -d "$(DESIGN)/fixtures" \
-		|| { echo "no fixtures at $(DESIGN)/fixtures; set DESIGN=<path to meridian-design>" >&2; exit 1; }
-	@$(DOCKER) build $(CONTEXTS) -f Dockerfile.python --target conformance -t meridian-python-conformance . >/dev/null 2>&1 \
-		|| { echo "conformance image FAILED to build" >&2; exit 1; }
-	@docker run --rm \
-		-v "$(abspath $(DESIGN))/fixtures":/fixtures:ro \
+	@if [ "$(DESIGN_AT)" = worktree ]; then \
+		test -d "$(DESIGN)/fixtures" \
+			|| { echo "no fixtures at $(DESIGN)/fixtures; set DESIGN=<path to meridian-design>" >&2; exit 1; }; \
+		fixtures="$(abspath $(DESIGN))/fixtures"; at="$(DESIGN)'s working tree"; \
+	else \
+		rev=$$(tools/sibling-at-main.sh files "$(DESIGN)" $(DESIGN_CACHE) $(DESIGN_MAIN) fixtures) \
+			|| { echo "conformance FAILED: design's fixtures at its main could not be read (DESIGN=$(DESIGN))" >&2; exit 1; }; \
+		fixtures="$(CURDIR)/$(DESIGN_MAIN)/fixtures"; at="design's main at $$rev"; \
+	fi; \
+	$(DOCKER) build $(CONTEXTS) -f Dockerfile.python --target conformance -t meridian-python-conformance . >/dev/null 2>&1 \
+		|| { echo "conformance image FAILED to build" >&2; tools/sibling-at-main.sh remove $(DESIGN_CACHE) $(DESIGN_MAIN); exit 1; }; \
+	docker run --rm \
+		-v "$$fixtures":/fixtures:ro \
 		-e MERIDIAN_FIXTURES=/fixtures \
 		meridian-python-conformance \
-		python -m pytest -q tests/test_conformance.py >.conformance.log 2>&1 \
-		|| { echo "conformance FAILED. The last 30 lines, and the whole of it in .conformance.log:" >&2; \
-		     tail -30 .conformance.log >&2; exit 1; }
-	@echo "conformance OK: this SDK decodes and re-encodes every pinned message"
+		python -m pytest -q tests/test_conformance.py >.conformance.log 2>&1; \
+	status=$$?; tools/sibling-at-main.sh remove $(DESIGN_CACHE) $(DESIGN_MAIN); \
+	if [ $$status -ne 0 ]; then \
+		echo "conformance FAILED against $$at. The last 30 lines, and the whole of it in .conformance.log:" >&2; \
+		tail -30 .conformance.log >&2; exit 1; \
+	fi; \
+	echo "conformance OK: this SDK decodes and re-encodes every pinned message, $$at"
 
 # The QuantLib oracle (spec/the-analytics-engines-first-release, Q12):
 # committed answers from the pinned QuantLib, which `make test` holds the
@@ -289,4 +381,4 @@ fmt:
 
 install-hooks:
 	@git config core.hooksPath hooks
-	@echo "hooks installed: git push now runs 'make ci-local' first"
+	@echo "hooks installed: git push now runs 'make pre-push' first"

@@ -57,7 +57,7 @@ lookup is a bug waiting for the day an identifier gets reassigned.
 
 ## Conventions
 
-Type hints everywhere, checked. Formatting and lint are enforced by `ci-local`,
+Type hints everywhere, checked. Formatting and lint are enforced by the gates,
 so do not argue with the formatter. Prefer a dataclass over a dict for anything
 that crosses a function boundary more than once.
 
@@ -65,9 +65,15 @@ Async where the work is I/O bound, which for a connector is nearly all of it.
 
 ## Verification
 
-    make ci-local
+    make pre-push
 
-Conformance runs against the fixtures in the design repo, so this SDK and the
+The fast gate (accepted 2026-11-07, superseding ruling 1075's full local
+gate): lint, and the stages the changed paths select (`PRE_PUSH_MAP`). CI on
+the pull request runs everything else; a failing job is reproduced with
+`make ci-stage STAGE=<job>` before pushing again. `make ci-local` runs every
+gate, for when CI is down.
+
+Conformance runs against the fixtures in the design repo, at its main, so this SDK and the
 Rust kernel assert against the same pinned bytes rather than against each other.
 Plugin tests run against the aggregator's sandbox, whose data is deterministic,
 so they are real integration tests rather than mocks.
