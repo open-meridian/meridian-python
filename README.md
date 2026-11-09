@@ -2,7 +2,7 @@
 
 The Python SDK for building [Open Meridian](https://open-meridian.com) plugins:
 the tools a trader has an AI agent build, and the bots and analytics a
-developer writes. Python 3.11 or newer. This is release 0.35.5; its reference
+developer writes. Python 3.11 or newer. This is release 0.36.0; its reference
 is at [open-meridian.dev](https://open-meridian.dev/api/python-sdk/).
 
 ## Start here
@@ -981,7 +981,7 @@ storage: each dataset it serves, by a key its rows name as the instance, a
 colon and the key (`coinbase-1:daily`):
 
 ```python
-from meridian import DatasetDeclaration, DatasetLicence, Declaration
+from meridian import DatasetDeclaration, Declaration
 
 DECLARATION = Declaration(
     settings=SETTINGS,
@@ -994,7 +994,7 @@ DECLARATION = Declaration(
             modes=["pull", "push"],          # how its rows can arrive
             cadence=86_400,                  # seconds between updates; 0, only when asked
             history=3650,                    # days it reaches back; 0, none stated
-            licence_default=DatasetLicence(kept=True, personal_use=True),
+            terms_and_pricing="Free for personal use; no redistribution.",  # in words
             day_time_zone="Etc/UTC",         # the day a business date is in
             day_end_minute=0,                # minutes after local midnight it ends
             venue_id="VEN-...",              # the venue it is; empty for consolidated
@@ -1004,9 +1004,11 @@ DECLARATION = Declaration(
 ```
 
 A data type is named by its message and an optional field it fills by its
-dictionary entry; the licence is what the vendor's standard terms say, which
-the deployment's licence confirms or replaces, never whether a deployment meets
-them. Each is refused here past the dictionary's bounds (a key, a zone that is
+dictionary entry; `terms_and_pricing` is the vendor's terms and pricing in plain
+words, at most 2,000 characters, shown on Data sources and in the plugin's docs,
+never a licence: the deployment admin's licence is the one enforced, and a
+dataset nobody has licensed is kept and read with each use right read
+restrictively (contract 30, ruling 1032). Each is refused here past the dictionary's bounds (a key, a zone that is
 no IANA zone, a mode twice, a venue that is no venue master ID), and a
 catalogue from a version not holding `data` is refused.
 
@@ -2558,6 +2560,47 @@ plugin. No transports package is shipped (ruling 1027).
 
   **Run 0.35.0 to 0.35.5 on a core of contract v29**: no contract changed.
 
+### Standing analytics and a stream held to its far end (contract 30; 0.36.0)
+
+- **The SDK declares contract 30** (`meridian.SCHEMA_VERSION` "v30").
+- **A standing job** (spec/one-data-access-model, section 4): built
+  `analytics.job(..., standing=True)`, its inputs live (no watermark, as-of,
+  business date or what-if, each refused naming `standing`), each measure
+  naming when it is computed again -- `analytics.measure(..., refresh=
+  "per_change")`, or `refresh="cadence", cadence_ns=..., material_move_bp=...`.
+  `analytics.Jobs().standing(self, job)` registers it, subscribes by its job
+  ID (`plugin.subscribe(..., job_ids=[...])`) and answers a `LiveView` of its
+  figures, values and what was not evaluated, kept current from
+  `DerivedSeriesUpdated` in the job's sequence; after a gap, a loss or a
+  broken stream its whole answer is read again (`ReadJobAnswer`, figures and
+  `values`), and a job the component no longer holds is registered again. A
+  `Job`'s measures and a `DerivedSeries`' rule are `meridian.MeasureRef`;
+  `analytics.measure` answers the wire's, which `analytics.job` takes.
+- **A stream held to its far end.** The delivery stream and the views' stream
+  that name the lake's rows, or carry a view, and hear nothing for
+  `receive.QUIET_SECONDS` (60 s, doubling to 15 minutes while nothing comes)
+  are opened again and caught up as after a break, so a far end restarted
+  without breaking the stream -- the lake killed behind the sidecar -- never
+  leaves a view frozen; each read a stream catches up by is given
+  `receive.READ_SECONDS` (60 s) to answer.
+- **A dataset's terms in words** (ruling 1032): `DatasetDeclaration.
+  terms_and_pricing` replaces `licence_default`, and `DatasetLicence` and
+  `DataEligibility` are gone; `sessions_calendar_id` names the trading-sessions
+  calendar its live rows follow (ruling 455), read by
+  `helpers.sessions.read_sessions(self, dataset)`; `gap_recovery` --
+  `backfill`, `stream_only` or `none` -- how a gap in it is recovered. A
+  version declares `Declaration(most_shards=...)`, the most pods of one
+  instance its vendor allows.
+- **An event contract's terms stated** (1035): an event-contract feed states
+  each contract's payout, close, bounds and `Contract.category` at
+  `ResolveIdentifier` (`stated_binary_event_contract`).
+- **The suites**: `holds-a-standing-figure` (reporting, portfolio,
+  compliance, signal) and `reads-the-source-priorities` (the eight roles that
+  read the lake, `role.list_source_priorities()`); the behaviour cases of
+  0.35.3's `Supervisor` and of `views.latest_key`.
+
+  **Run 0.36.0 on a core of contract 30.**
+
 ## Moving a plugin to a new release
 
     meridian plugin migrate            # to the latest release
@@ -2647,6 +2690,7 @@ carries libcst.
 | 0.35.2 to 0.35.3: a fix: `helpers.sessions.Supervisor` hands `heard` every message received (`[]` for a heartbeat, ruling 418), waits at least a failure's `retry_after`, and opens a new session for what is wanted with `reopen_on_want=True` (`pairs.supervised` does); `SessionState.label`; a row delivered latest value first keyed by its own kind (a rate or a statistic no longer fails the hearing loop) and by its series key; a table setting's rows a list, typed or not; `RawStore.tend` reads from the settings only what it is not given, keeps what is past a window given alone, refuses a window below 0 or an unknown `past`; a typed delivery's SDK settings read only; `Recorder.hear(role, *rows)`; `PageClient` refuses a plain stand-in's acts; `Declaration(pricing_models=[PricingModelDeclaration(...)])`; the 0.33.0, 0.35.0 and 0.35.2 steps rewrite and name more | only the pins move | a `named` override calling `dataset` (`named-calls-dataset`); a method `timeliness(...)` hiding a listings feed's property (`timeliness-overridden`); a role class's field `subjects` (`subjects-shadowed`); a 0.34 handler name reached through another name (`old-handler-name`); a `receive(...)` left (`receive-gone`); a test reading `<x>.plugin.on(...)` (`stand-in-read`); a role class made outside the entry point, a test or a `bind(...)` (`unregistered-role-object`); a base pinned by tag alone where the plugin pins by digest (`base-digest`); and, by behaviour, a `heard` given to a `Supervisor` now handed `[]`, and a table's rows read as a tuple, now a list |
 | 0.35.3 to 0.35.4: a fix and an addition (ruling 1070): a book record's view keyed by its entity (`views.ENTITY_KEYS`), an order whose venue's ID is set later held once; a quote stating no source time timed by its `valid_from_ns` (`roles.source_ns`, `confirmed_ns`), so `ems.ReferenceCheck` no longer judges it stale; the views' stream surviving a read again that fails outside gRPC; `pages.live_values` and `LiveValue.of`, a page's values worked out from its views with source, age and staleness counted only in session, served by `pages.live` to the kit's `<om-live cells>`; every template's AGENTS.md says so | only the pins move | a live module of the plugin's own, its cells worked out from views (`live.py`'s `Board`), moved onto `pages.live_values` and `LiveValue.of`, and its page script onto `<om-live cells>`; by behaviour, a book view's row keyed `order_id=<id>` alone (a key built from every identifier no longer matches), and a quote with no source time no longer stale by the pre-trade check |
 | 0.35.4 to 0.35.5: additive (ruling 1072): `helpers.sessions.FX_WEEK`, the FX week's trading sessions, Sunday 17:00 to Friday 17:00 New York, the 17:00 roll in New York's own time on both sides of daylight saving, usable wherever sessions are taken (`LiveValue.of`, `ems.ReferenceCheck.stale`, `roles.in_session`); the base template links kit 0.16.0 (`pages.KIT`) | only the pins move | an FX week of the plugin's own (a `TradingSessions` for Sunday to Friday 17:00 New York, the samples' `FX_WEEK`), replaced by `helpers.sessions.FX_WEEK`; by behaviour, a page on the base template loads kit 0.16.0 where the deployment carries it |
+| 0.35.5 to 0.36.0: the SDK declares contract 30: a standing job (`analytics.job(..., standing=True)`, `analytics.measure(..., refresh=, cadence_ns=, material_move_bp=)`, `analytics.Jobs().standing(self, job)` answering a `LiveView`, `plugin.subscribe(..., job_ids=)`, `meridian.MeasureRef`); a stream that names the lake's rows or carries a view, silent past `receive.QUIET_SECONDS`, opened again and caught up, each catch-up read given `receive.READ_SECONDS`; `DatasetDeclaration.terms_and_pricing` (ruling 1032; `licence_default`, `DatasetLicence` and `DataEligibility` gone), `sessions_calendar_id` (`helpers.sessions.read_sessions`), `gap_recovery`; `Declaration(most_shards=)`; an event contract's terms and `Contract.category` stated at its resolve (1035); the suites' `holds-a-standing-figure` and `reads-the-source-priorities` | `licence-default-described`: each literal `licence_default=DatasetLicence(...)` written as `terms_and_pricing="..."`, the retired names dropped from the import; `base-digest-dropped` | a licence the rule could not read, or `DatasetLicence`, `DataEligibility` or `.licence_default` still named (`licence-default-left`); an SDK `DerivedSeries` or `CorporateActionAnnounced` given the wire's `MeasureRef` (`measure-ref-sdk-form`); the suites contract 30 grew (`suite-cases-v30`); core's images below contract 30 (`core-images`); the base's digest (`base-digest`) |
 
 `tests/migrations/` holds the plugins the migrations are recorded for, as
 written and as their migration leaves them, and `make check-migrations` holds
