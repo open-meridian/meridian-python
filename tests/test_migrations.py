@@ -2852,6 +2852,14 @@ def test_a_licence_default_is_written_as_its_terms_in_words() -> None:
                 key="bars", vendor="Coinbase", data_types=["meridian.v1.Bar"],
                 modes=["pull"], licence_default=licence_for("bars"),
             )
+            ODD = DatasetDeclaration(
+                key="odd", vendor="Coinbase", data_types=["meridian.v1.Bar"],
+                modes=["pull"], licence_default=DatasetLicence(kept=True, meters="display"),
+            )
+            LONG = DatasetDeclaration(
+                key="long", vendor="Coinbase", data_types=["meridian.v1.Bar"],
+                modes=["pull"], licence_default=DatasetLicence(attribution_text=LONGTEXT),
+            )
             """
         ),
         "src/p/plain.py": textwrap.dedent(
@@ -2870,6 +2878,18 @@ def test_a_licence_default_is_written_as_its_terms_in_words() -> None:
                     attribution_text="Source: ECB",
                     eligibility=DataEligibility(uses=["personal", "commercial"]),
                 ),
+            )
+            """
+        ),
+        "src/p/shared.py": textwrap.dedent(
+            """\
+            from meridian import DatasetDeclaration, DatasetLicence
+
+            LIC = DatasetLicence(kept=True, retention_days=2)
+            DAYS = LIC.retention_days
+            D = DatasetDeclaration(
+                key="d", vendor="v", data_types=["meridian.v1.Bar"], modes=["pull"],
+                licence_default=LIC,
             )
             """
         ),
@@ -2899,8 +2919,15 @@ def test_a_licence_default_is_written_as_its_terms_in_words() -> None:
             """
         ),
     }
+    # Terms past the field's 2,000 characters, in words: left, never cut.
+    files["src/p/declared.py"] = files["src/p/declared.py"].replace(
+        "LONGTEXT", '"' + "x" * 2001 + '"'
+    )
     result = migrate(files, "0.35.5", "0.36.0")
     declared = result.files["src/p/declared.py"]
+    # An argument the rule does not word, and terms too long: by hand.
+    assert 'licence_default=DatasetLicence(kept=True, meters="display")' in declared
+    assert "licence_default=DatasetLicence(attribution_text=" in declared
     assert 'terms_and_pricing="Kept by the lake; kept 2 days at most; display allowed."' in (
         declared
     )
@@ -2919,10 +2946,15 @@ def test_a_licence_default_is_written_as_its_terms_in_words() -> None:
     ) in plain
     left = {(each["rule"], each["file"], each["line"]) for each in as_json(result)["by_hand"]}
     assert ("licence-default-left", "src/p/declared.py", 21) in left
+    assert ("licence-default-left", "src/p/declared.py", 25) in left
+    assert ("licence-default-left", "src/p/declared.py", 29) in left
     assert ("licence-default-left", "tests/test_declared.py", 4) in left
     assert ("suite-cases-v30", "tests/test_suite.py", 4) in left
     assert ("measure-ref-sdk-form", "src/p/derived.py", 4) in left
     assert not any(f == "src/p/derived.py" and n == 5 for _, f, n in left)
+    # A shared licence read otherwise too keeps its licence: by hand.
+    assert "src/p/shared.py" not in result.files
+    assert ("licence-default-left", "src/p/shared.py", 7) in left
     rewrote = {
         (each["file"], each["rule"], each["places"])
         for step in as_json(result)["steps"]

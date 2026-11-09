@@ -92,8 +92,26 @@ def _value(node: cst.BaseExpression) -> Any:
         if name == "Decimal" and len(node.args) == 1:
             return str(_value(node.args[0].value))
         if name == "DataEligibility":
-            return _keywords(node)
+            given = _keywords(node)
+            if set(given) - _ELIGIBILITY_ARGS:
+                raise _NotLiteral("an eligibility argument the rule does not word")
+            return given
     raise _NotLiteral(type(node).__name__)
+
+
+#: Each argument `DatasetLicence` and `DataEligibility` took, which `described`
+#: words; a licence naming any other is left by hand, never part-said.
+_LICENCE_ARGS = frozenset(
+    {
+        "kept", "retention_days", "derived_use", "derived_use_terms", "display",
+        "default_fields", "personal_use", "redistribution", "attribution_required",
+        "attribution_text", "copyright_class", "no_more_restrictive_terms",
+        "not_affiliated_notice", "eligibility", "underlying_source",
+    }
+)  # fmt: skip
+_ELIGIBILITY_ARGS = frozenset(
+    {"uses", "buyer_revenue_below", "buyer_revenue_at_least", "buyer_revenue_currency_code"}
+)
 
 
 def _keywords(call: cst.Call) -> dict[str, Any]:
@@ -164,7 +182,7 @@ def described(given: dict[str, Any]) -> str:
     if not parts:
         return ""
     said = "; ".join(parts)
-    return (said[0].upper() + said[1:] + ("" if said.endswith(".") else "."))[:MOST]
+    return said[0].upper() + said[1:] + ("" if said.endswith(".") else ".")
 
 
 def _string(text: str) -> cst.SimpleString:
@@ -181,9 +199,14 @@ def _licence_call(value: cst.BaseExpression) -> str | None:
     if (dotted(value.func) or "").rsplit(".", 1)[-1] != "DatasetLicence":
         return None
     try:
-        return described(_keywords(value))
+        given = _keywords(value)
+        if set(given) - _LICENCE_ARGS:
+            return None  # an argument it does not word: never part-said
+        text = described(given)
     except _NotLiteral:
         return None
+    # Past the field's bound it is left for a person to shorten, never cut.
+    return text if len(text) <= MOST else None
 
 
 class _Held(cst.CSTVisitor):
@@ -211,8 +234,42 @@ class _Held(cst.CSTVisitor):
                         if text is not None:
                             self.terms[target.value] = text
 
-    def held(self) -> dict[str, str]:
-        return {name: text for name, text in self.terms.items() if self.bound[name] == 1}
+    def held(self, module: cst.Module) -> dict[str, str]:
+        """Those bound once and named nowhere but as a `licence_default`: a
+        name read otherwise (`LIC.retention_days`) is left by hand, since
+        it then holds words."""
+        uses = _Uses(set(self.terms))
+        module.visit(uses)
+        return {
+            name: text
+            for name, text in self.terms.items()
+            if self.bound[name] == 1 and uses.other.get(name, 0) == 0
+        }
+
+
+class _Uses(cst.CSTVisitor):
+    """How often each name is read other than as `licence_default=NAME` or
+    as the target it is bound to."""
+
+    def __init__(self, names: set[str]) -> None:
+        super().__init__()
+        self.names = names
+        self.other: dict[str, int] = {}
+
+    def visit_Arg(self, node: cst.Arg) -> bool:
+        keyword = node.keyword.value if node.keyword is not None else ""
+        return not (
+            keyword == "licence_default"
+            and isinstance(node.value, cst.Name)
+            and node.value.value in self.names
+        )
+
+    def visit_AssignTarget(self, node: cst.AssignTarget) -> bool:
+        return False
+
+    def visit_Name(self, node: cst.Name) -> None:
+        if node.value in self.names:
+            self.other[node.value] = self.other.get(node.value, 0) + 1
 
 
 class _Licences(cst.CSTTransformer):
@@ -309,7 +366,7 @@ def _licences(path: str, text: str) -> Rewritten:
     module = cst.parse_module(text)
     found = _Held()
     module.visit(found)
-    licences = _Licences(found.held())
+    licences = _Licences(found.held(module))
     rewritten = module.visit(licences)
     unused = frozenset(name for name in RETIRED if not _named_elsewhere(rewritten, name))
     if licences.rewrote and unused:

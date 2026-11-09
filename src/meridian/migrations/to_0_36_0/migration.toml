@@ -71,7 +71,8 @@ release left as it is"""
 [[by_hand]]
 rule = "licence-default-left"
 what = """a `licence_default` the rule could not read -- a licence held in a \
-name, an argument that is not a literal, a dataset built from a mapping -- or \
+name read otherwise too, an argument that is not a literal or that the rule does \
+not word, terms past 2,000 characters in words, a dataset built from a mapping -- or \
 DatasetLicence, DataEligibility or `.licence_default` still named (a test reading \
 the declaration's licence): each is gone from 0.36.0, and the file fails where it \
 runs"""

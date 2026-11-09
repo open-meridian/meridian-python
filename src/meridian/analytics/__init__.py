@@ -772,7 +772,10 @@ class Jobs:
         `DerivedSeriesUpdated` in the job's sequence. After a gap in the
         sequence, a loss marker or a broken stream its whole answer is read
         again by `ReadJobAnswer`, figures and values; a job the component no
-        longer holds is registered again with this job. The job is held while
+        longer holds is registered again with this job. The answer names no
+        sequence, so the first update after the view first reads it starts its
+        count, unchecked; after a gap's read the count carries on from the
+        update that showed the gap. The job is held while
         the view is: `close()` it, and it is let go after the view's linger
         (30 seconds by default), its renewals then ending."""
         from ..views import LINGER_SECONDS, selector, views_of
