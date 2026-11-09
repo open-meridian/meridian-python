@@ -2834,6 +2834,9 @@ def test_a_licence_default_is_written_as_its_terms_in_words() -> None:
 
             HELD = DatasetLicence(kept=True)
 
+            def licence_for(key):
+                return DatasetLicence(kept=key == "daily")
+
             DAILY = DatasetDeclaration(
                 key="daily",
                 vendor="Coinbase",
@@ -2844,6 +2847,10 @@ def test_a_licence_default_is_written_as_its_terms_in_words() -> None:
             LIVE = DatasetDeclaration(
                 key="live", vendor="Coinbase", data_types=["meridian.v1.Price"],
                 modes=["stream"], licence_default=HELD,
+            )
+            BARS = DatasetDeclaration(
+                key="bars", vendor="Coinbase", data_types=["meridian.v1.Bar"],
+                modes=["pull"], licence_default=licence_for("bars"),
             )
             """
         ),
@@ -2897,8 +2904,13 @@ def test_a_licence_default_is_written_as_its_terms_in_words() -> None:
     assert 'terms_and_pricing="Kept by the lake; kept 2 days at most; display allowed."' in (
         declared
     )
-    assert "licence_default=HELD" in declared  # held in a name: by hand
-    assert "from meridian import DatasetDeclaration, DatasetLicence" in declared  # HELD uses it
+    # A licence shared through a module-level name bound once: the name
+    # holds the words, and each dataset names it.
+    assert 'HELD = "Kept by the lake."' in declared
+    assert 'modes=["stream"], terms_and_pricing=HELD,' in declared
+    # One made by a function is left by hand, and so its import stays.
+    assert 'licence_default=licence_for("bars")' in declared
+    assert "from meridian import DatasetDeclaration, DatasetLicence" in declared
     plain = result.files["src/p/plain.py"]
     assert "from meridian import DatasetDeclaration\n" in plain
     assert (
@@ -2906,7 +2918,7 @@ def test_a_licence_default_is_written_as_its_terms_in_words() -> None:
         'required: \\"Source: ECB\\"; eligible: personal and commercial use."'
     ) in plain
     left = {(each["rule"], each["file"], each["line"]) for each in as_json(result)["by_hand"]}
-    assert ("licence-default-left", "src/p/declared.py", 14) in left
+    assert ("licence-default-left", "src/p/declared.py", 21) in left
     assert ("licence-default-left", "tests/test_declared.py", 4) in left
     assert ("suite-cases-v30", "tests/test_suite.py", 4) in left
     assert ("measure-ref-sdk-form", "src/p/derived.py", 4) in left
@@ -2916,5 +2928,5 @@ def test_a_licence_default_is_written_as_its_terms_in_words() -> None:
         for step in as_json(result)["steps"]
         for each in step["rewrote"]
     }
-    assert ("src/p/declared.py", "licence-default-described", 1) in rewrote
+    assert ("src/p/declared.py", "licence-default-described", 2) in rewrote
     assert ("src/p/plain.py", "licence-default-described", 1) in rewrote

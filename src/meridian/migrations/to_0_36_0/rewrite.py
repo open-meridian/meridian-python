@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, cast
 
 import libcst as cst
 from libcst.metadata import MetadataWrapper, PositionProvider
@@ -47,7 +47,12 @@ MOST = 2000
 _ROLES = ("reporting", "portfolio", "compliance", "signal", "ems", "oms", "operations",
           "servicing")  # fmt: skip
 _RUN = re.compile(rf"""\brun(?:_async)?\(\s*["'](?P<role>{"|".join(_ROLES)})["']""")
-_NAMED = re.compile(rf"\b(?:{'|'.join(RETIRED)})\b|\.licence_default\b|\blicence_default\s*=")
+#: The SDK's retired names, not the wire's DatasetLicence (`ops.DatasetLicence`,
+#: a deployment admin's licence, which stays), and the field.
+_NAMED = re.compile(
+    rf"(?<!ops\.)(?<!_pb2\.)\b(?:{'|'.join(RETIRED)})\b|\.licence_default\b"
+    r"|\blicence_default\s*="
+)
 
 # ── A licence, in words ───────────────────────────────────────────────────
 
@@ -168,37 +173,87 @@ def _string(text: str) -> cst.SimpleString:
     return cst.SimpleString(f'"{escaped}"')
 
 
-class _Licences(cst.CSTTransformer):
-    """Each `licence_default=DatasetLicence(...)` of a dataset's declaration,
-    every argument a literal, rewritten to `terms_and_pricing="..."`; any
-    other left as it is, for `left` to name."""
+def _licence_call(value: cst.BaseExpression) -> str | None:
+    """A literal `DatasetLicence(...)` call's terms in words; None for any
+    other expression, or a licence with an argument that is not a literal."""
+    if not isinstance(value, cst.Call):
+        return None
+    if (dotted(value.func) or "").rsplit(".", 1)[-1] != "DatasetLicence":
+        return None
+    try:
+        return described(_keywords(value))
+    except _NotLiteral:
+        return None
+
+
+class _Held(cst.CSTVisitor):
+    """The module's own names bound once, at its top level, to a literal
+    `DatasetLicence(...)` -- a licence shared by its datasets -- each with its
+    terms in words."""
 
     def __init__(self) -> None:
         super().__init__()
+        self.terms: dict[str, str] = {}
+        self.bound: dict[str, int] = {}
+
+    def visit_Module(self, node: cst.Module) -> None:
+        for statement in node.body:
+            if not isinstance(statement, cst.SimpleStatementLine):
+                continue
+            for small in statement.body:
+                targets = (
+                    [t.target for t in small.targets] if isinstance(small, cst.Assign) else []
+                )
+                for target in targets:
+                    if isinstance(target, cst.Name):
+                        self.bound[target.value] = self.bound.get(target.value, 0) + 1
+                        text = _licence_call(cast(cst.Assign, small).value)
+                        if text is not None:
+                            self.terms[target.value] = text
+
+    def held(self) -> dict[str, str]:
+        return {name: text for name, text in self.terms.items() if self.bound[name] == 1}
+
+
+class _Licences(cst.CSTTransformer):
+    """Each `licence_default=DatasetLicence(...)` of a dataset's declaration,
+    every argument a literal, rewritten to `terms_and_pricing="..."`; one
+    naming a module-level licence bound once to a literal `DatasetLicence(...)`
+    rewritten to name it, that binding then holding the words; any other
+    left as it is, for `left` to name."""
+
+    def __init__(self, held: dict[str, str]) -> None:
+        super().__init__()
+        self.held = held
         self.rewrote = 0
 
     def leave_Arg(self, original_node: cst.Arg, updated_node: cst.Arg) -> cst.Arg:
         if updated_node.keyword is None or updated_node.keyword.value != "licence_default":
             return updated_node
         value = updated_node.value
-        name = (
-            (dotted(value.func) or "").rsplit(".", 1)[-1] if isinstance(value, cst.Call) else ""
-        )
-        if name != "DatasetLicence" or not isinstance(value, cst.Call):
-            if isinstance(value, cst.Name) and value.value == "None":
-                self.rewrote += 1
-                return updated_node.with_changes(
-                    keyword=cst.Name("terms_and_pricing"), value=_string("")
-                )
-            return updated_node
-        try:
-            text = described(_keywords(value))
-        except _NotLiteral:
+        terms = cst.Name("terms_and_pricing")
+        if isinstance(value, cst.Name) and value.value == "None":
+            self.rewrote += 1
+            return updated_node.with_changes(keyword=terms, value=_string(""))
+        if isinstance(value, cst.Name) and value.value in self.held:
+            self.rewrote += 1
+            return updated_node.with_changes(keyword=terms)
+        text = _licence_call(value)
+        if text is None:
             return updated_node
         self.rewrote += 1
-        return updated_node.with_changes(
-            keyword=cst.Name("terms_and_pricing"), value=_string(text)
-        )
+        return updated_node.with_changes(keyword=terms, value=_string(text))
+
+    def leave_Assign(self, original_node: cst.Assign, updated_node: cst.Assign) -> cst.Assign:
+        (target,) = updated_node.targets[:1] or (None,)
+        if target is None or len(updated_node.targets) != 1:
+            return updated_node
+        name = target.target
+        if isinstance(name, cst.Name) and name.value in self.held:
+            text = _licence_call(updated_node.value)
+            if text is not None:
+                return updated_node.with_changes(value=_string(self.held[name.value]))
+        return updated_node
 
 
 class _Imports(cst.CSTTransformer):
@@ -252,7 +307,9 @@ def _named_elsewhere(module: cst.Module, name: str) -> bool:
 
 def _licences(path: str, text: str) -> Rewritten:
     module = cst.parse_module(text)
-    licences = _Licences()
+    found = _Held()
+    module.visit(found)
+    licences = _Licences(found.held())
     rewritten = module.visit(licences)
     unused = frozenset(name for name in RETIRED if not _named_elsewhere(rewritten, name))
     if licences.rewrote and unused:

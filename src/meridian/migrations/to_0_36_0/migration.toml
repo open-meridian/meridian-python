@@ -52,7 +52,9 @@ rewrite = "rewrite.py"
 rule = "licence-default-described"
 what = """a dataset's `licence_default=DatasetLicence(...)`, every argument a \
 literal, rewritten to `terms_and_pricing="..."`: the terms it declared, in words, \
-each part as given (kept or served only, retention, derived use, display, default \
+each part as given; a licence shared through a module-level name bound once to such \
+a call keeps its name, which then holds the words, and each dataset names it as its \
+`terms_and_pricing` (kept or served only, retention, derived use, display, default \
 fields, one person's terms, redistribution, attribution, copyright, no more \
 restrictive terms, the not-affiliated notice, eligibility, the underlying source); \
 and DatasetLicence and DataEligibility dropped from a `from meridian import ...` \
