@@ -2582,7 +2582,11 @@ plugin. No transports package is shipped (ruling 1027).
   are opened again and caught up as after a break, so a far end restarted
   without breaking the stream -- the lake killed behind the sidecar -- never
   leaves a view frozen; each read a stream catches up by is given
-  `receive.READ_SECONDS` (60 s) to answer.
+  `receive.READ_SECONDS` (60 s) to answer. A quiet reopen catches up as a
+  broken stream does, so a class that seeds is handed the latest of what it
+  hears again, as often as every quarter hour while a market is closed: keep
+  each `on_<row>` safe to be handed a row twice, as a record's whole state
+  already is.
 - **A dataset's terms in words** (ruling 1032): `DatasetDeclaration.
   terms_and_pricing` replaces `licence_default`, and `DatasetLicence` and
   `DataEligibility` are gone; `sessions_calendar_id` names the trading-sessions

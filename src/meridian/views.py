@@ -490,53 +490,59 @@ class _Views:
         # Each read again is given READ_SECONDS; a stream carrying views and
         # silent for QUIET_SECONDS is opened again, every view read again
         # (SDK 0.36.0), as the delivery stream is.
-        READ_DEADLINE.set(READ_SECONDS)
-        quiet = QUIET_SECONDS
-        while True:
-            call = self.plugin._operations().Receive(
-                ops.ReceiveRequest(rows=[row], subjects=[])
-            )
-            pending: asyncio.Future[Any] | None = None
-            silent = False
-            try:
-                await call.initial_metadata()
-                reopened = self.opened.is_set() or bool(self.by_id)
-                self.opened.set()
-                if reopened:
-                    await self.reopened()
-                while True:
-                    pending = asyncio.ensure_future(call.read())
-                    done, _ = await asyncio.wait(
-                        {pending}, timeout=quiet if self.by_id else None
-                    )
-                    if not done:
-                        silent = True
-                        break
-                    delivery, pending = pending.result(), None
-                    if delivery is _EOF:
-                        break
-                    quiet = QUIET_SECONDS
-                    await self.delivered(delivery)
-                if silent:
-                    _log.warning(
-                        "the views' stream heard nothing for %g s; opening it again", quiet
-                    )
-                    quiet = min(quiet * 2, QUIET_MOST_SECONDS)
-                    continue
-                _log.warning("the views' stream ended; opening it again")
-            except grpc.aio.AioRpcError as failed:
-                _log.warning("the views' stream broke (%s); opening it again", failed.code())
-            except Exception as failed:  # noqa: BLE001 - said; the stream is opened again
-                _log.warning(
-                    "the views' read failed (%s: %s); opening the stream again to read again",
-                    type(failed).__name__,
-                    failed,
+        deadline = READ_DEADLINE.set(READ_SECONDS)
+        try:
+            quiet = QUIET_SECONDS
+            while True:
+                call = self.plugin._operations().Receive(
+                    ops.ReceiveRequest(rows=[row], subjects=[])
                 )
-            finally:
-                if pending is not None:
-                    pending.cancel()
-                call.cancel()
-            await asyncio.sleep(RETRY_SECONDS)
+                pending: asyncio.Future[Any] | None = None
+                silent = False
+                try:
+                    await call.initial_metadata()
+                    reopened = self.opened.is_set() or bool(self.by_id)
+                    self.opened.set()
+                    if reopened:
+                        await self.reopened()
+                    while True:
+                        pending = asyncio.ensure_future(call.read())
+                        done, _ = await asyncio.wait(
+                            {pending}, timeout=quiet if self.by_id else None
+                        )
+                        if not done:
+                            silent = True
+                            break
+                        delivery, pending = pending.result(), None
+                        if delivery is _EOF:
+                            break
+                        quiet = QUIET_SECONDS
+                        await self.delivered(delivery)
+                    if silent:
+                        _log.warning(
+                            "the views' stream heard nothing for %g s; opening it again", quiet
+                        )
+                        quiet = min(quiet * 2, QUIET_MOST_SECONDS)
+                        continue
+                    _log.warning("the views' stream ended; opening it again")
+                except grpc.aio.AioRpcError as failed:
+                    _log.warning(
+                        "the views' stream broke (%s); opening it again", failed.code()
+                    )
+                except Exception as failed:  # noqa: BLE001 - said; the stream is opened again
+                    _log.warning(
+                        "the views' read failed (%s: %s); opening the stream again "
+                        "to read again",
+                        type(failed).__name__,
+                        failed,
+                    )
+                finally:
+                    if pending is not None:
+                        pending.cancel()
+                    call.cancel()
+                await asyncio.sleep(RETRY_SECONDS)
+        finally:
+            READ_DEADLINE.reset(deadline)
 
     async def reopened(self) -> None:
         """A stream broke: each view subscribed again, on the stream open

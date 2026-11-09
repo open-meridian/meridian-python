@@ -880,7 +880,7 @@ async def follow(
     quiet = QUIET_SECONDS
     # Each read the stream catches up by is given READ_SECONDS (SDK 0.36.0);
     # a handler's own acts are not (`_handing`).
-    READ_DEADLINE.set(READ_SECONDS)
+    deadline = READ_DEADLINE.set(READ_SECONDS)
 
     def watched() -> bool:
         """Whether silence on the stream says something: it names the lake's
@@ -1046,6 +1046,7 @@ async def follow(
             await asyncio.sleep(wait)
             wait = min(wait * 2, RETRY_MOST_SECONDS)
     finally:
+        READ_DEADLINE.reset(deadline)
         if watching is not None:
             watching.cancel()
             with contextlib.suppress(asyncio.CancelledError, Exception):
