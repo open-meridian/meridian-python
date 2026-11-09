@@ -81,6 +81,7 @@ class Engine(operations_pb2_grpc.PluginOperationsServicer):
         self.reads: list[str] = []
         self.answer: dict[str, list[ops.Figure]] = {JOB: [figure("100")]}
         self.held = {JOB}
+        self.read_delay = 0.0
         self.pushed: asyncio.Queue[ops.Delivery] = asyncio.Queue()
 
     async def RunJob(self, request, context):  # noqa: N802
@@ -94,9 +95,9 @@ class Engine(operations_pb2_grpc.PluginOperationsServicer):
         self.reads.append(request.job_id)
         if request.job_id not in self.held:
             await context.abort(grpc.StatusCode.NOT_FOUND, f"{request.job_id} is not held")
-        return ops.ReadJobAnswerResult(
-            job_id=request.job_id, figures=self.answer[request.job_id]
-        )
+        answered = list(self.answer[request.job_id])  # as of the read's start
+        await asyncio.sleep(self.read_delay)
+        return ops.ReadJobAnswerResult(job_id=request.job_id, figures=answered)
 
     async def Subscribe(self, request, context):  # noqa: N802
         self.subscribed.append(request)
@@ -200,6 +201,28 @@ async def test_a_standing_job_is_a_view_of_its_figures_kept_in_its_sequence(engi
         held.update(7, "170")
         await until(lambda: value_of(view) == 180)
         assert len(held.reads) == reads + 2
+        await view.close()
+    finally:
+        await plugin.leave()
+
+
+async def test_a_gap_among_updates_held_while_it_reads_is_read_again(engine) -> None:
+    """Updates arriving while the view reads are held, then applied above
+    the read; one of them showing a gap reads the answer again."""
+    held, address = engine
+    held.read_delay = 0.5
+    plugin = await meridian.connect(address, heartbeat=False, roles=[])
+    try:
+        opening = asyncio.create_task(
+            analytics.Jobs().standing(_Acting(plugin), standing_job())
+        )
+        await until(lambda: bool(held.reads))  # the first read under way
+        held.answer[JOB] = [figure("200")]  # what a read made now answers
+        held.update(2, "120")  # held: the count's start
+        held.update(4, "140")  # held, and a gap once applied
+        view = await opening
+        await until(lambda: value_of(view) == 200)
+        assert len(held.reads) == 2
         await view.close()
     finally:
         await plugin.leave()

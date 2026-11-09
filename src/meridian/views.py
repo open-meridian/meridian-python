@@ -412,9 +412,17 @@ class _Views:
                     operations=operations,
                 )
                 await self._ensure_stream(selector.row)
-                await self._open(shared)
+                # Known before it is opened, so what is delivered to it while
+                # its snapshot is read is held for it, never dropped as no
+                # view's (SDK 0.36.0).
                 self.by_selector[selector] = shared
                 self.by_id[shared.subscription_id] = shared
+                try:
+                    await self._open(shared)
+                except BaseException:
+                    self.by_selector.pop(shared.selector, None)
+                    self.by_id.pop(shared.subscription_id, None)
+                    raise
             shared.readers += 1
             if shared.lingering is not None:
                 shared.lingering.cancel()
@@ -548,24 +556,33 @@ class _Views:
             shared.flushing = asyncio.create_task(self._flush(shared))
 
     async def _read(self, shared: _Shared) -> None:
-        shared.ready.clear()
-        shared.gap = False
-        rows, watermark = await self._snapshot(shared)
-        shared.watermark = watermark
-        fresh = {key: row for key, row in rows}
-        if shared.read_once:
-            # Read again: the pages hear what changed, as one event.
-            for key in set(shared.rows) - set(fresh):
-                shared.pending[key] = (None, time.monotonic())
-            for key, row in fresh.items():
-                shared.pending[key] = (row, time.monotonic())
-        shared.read_once = True
-        shared.rows = fresh
-        shared.order = list(fresh)
-        held, shared.held = shared.held, []
-        shared.ready.set()
-        for delivery in held:
-            self._apply(shared, delivery)
+        """The view read again, then what was held meanwhile applied above
+        it; a gap one of those shows (a standing job's) reads it again,
+        the rest held for after that read."""
+        while True:
+            shared.ready.clear()
+            shared.gap = False
+            rows, watermark = await self._snapshot(shared)
+            shared.watermark = watermark
+            fresh = {key: row for key, row in rows}
+            if shared.read_once:
+                # Read again: the pages hear what changed, as one event.
+                for key in set(shared.rows) - set(fresh):
+                    shared.pending[key] = (None, time.monotonic())
+                for key, row in fresh.items():
+                    shared.pending[key] = (row, time.monotonic())
+            shared.read_once = True
+            shared.rows = fresh
+            shared.order = list(fresh)
+            held, shared.held = shared.held, []
+            shared.ready.set()
+            for at, delivery in enumerate(held):
+                self._apply(shared, delivery)
+                if shared.gap:
+                    shared.held = held[at + 1 :] + shared.held
+                    break
+            if not shared.gap:
+                return
 
     async def _snapshot(self, shared: _Shared) -> tuple[list[tuple[str, Any]], dict[str, int]]:
         sel, table = shared.selector, shared.table
