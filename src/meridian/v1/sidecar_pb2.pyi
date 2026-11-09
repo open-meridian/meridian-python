@@ -7,6 +7,13 @@ from typing import ClassVar as _ClassVar, Iterable as _Iterable, Mapping as _Map
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
+class GapRecovery(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    GAP_RECOVERY_UNSPECIFIED: _ClassVar[GapRecovery]
+    GAP_RECOVERY_BACKFILL: _ClassVar[GapRecovery]
+    GAP_RECOVERY_STREAM_ONLY: _ClassVar[GapRecovery]
+    GAP_RECOVERY_NONE: _ClassVar[GapRecovery]
+
 class PriceSourceClass(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
     PRICE_SOURCE_CLASS_UNSPECIFIED: _ClassVar[PriceSourceClass]
@@ -284,6 +291,10 @@ class DataUse(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     DATA_USE_UNSPECIFIED: _ClassVar[DataUse]
     DATA_USE_PERSONAL: _ClassVar[DataUse]
     DATA_USE_COMMERCIAL: _ClassVar[DataUse]
+GAP_RECOVERY_UNSPECIFIED: GapRecovery
+GAP_RECOVERY_BACKFILL: GapRecovery
+GAP_RECOVERY_STREAM_ONLY: GapRecovery
+GAP_RECOVERY_NONE: GapRecovery
 PRICE_SOURCE_CLASS_UNSPECIFIED: PriceSourceClass
 PRICE_SOURCE_CLASS_TRADED: PriceSourceClass
 PRICE_SOURCE_CLASS_FIRM_QUOTE: PriceSourceClass
@@ -508,7 +519,7 @@ class ToolDeclaration(_message.Message):
     def __init__(self, name: _Optional[str] = ..., title: _Optional[str] = ..., description: _Optional[str] = ..., method: _Optional[str] = ..., path: _Optional[str] = ..., levels: _Optional[_Iterable[_Union[AccessLevel, str]]] = ..., reads: bool = ..., input_schema: _Optional[str] = ..., output_schema: _Optional[str] = ..., roles: _Optional[_Iterable[str]] = ..., checked_by: _Optional[str] = ..., accounts: _Optional[_Iterable[str]] = ..., made_on: _Optional[str] = ...) -> None: ...
 
 class PluginDeclaration(_message.Message):
-    __slots__ = ("secret_settings", "not_carried", "storage", "catalogue", "algorithms", "settings", "interface", "tools", "reads_external_accounts", "documentation", "affirmation_deadline", "pricing_models")
+    __slots__ = ("secret_settings", "not_carried", "storage", "catalogue", "algorithms", "settings", "interface", "tools", "reads_external_accounts", "documentation", "affirmation_deadline", "pricing_models", "most_shards")
     SECRET_SETTINGS_FIELD_NUMBER: _ClassVar[int]
     NOT_CARRIED_FIELD_NUMBER: _ClassVar[int]
     STORAGE_FIELD_NUMBER: _ClassVar[int]
@@ -521,6 +532,7 @@ class PluginDeclaration(_message.Message):
     DOCUMENTATION_FIELD_NUMBER: _ClassVar[int]
     AFFIRMATION_DEADLINE_FIELD_NUMBER: _ClassVar[int]
     PRICING_MODELS_FIELD_NUMBER: _ClassVar[int]
+    MOST_SHARDS_FIELD_NUMBER: _ClassVar[int]
     secret_settings: _containers.RepeatedScalarFieldContainer[str]
     not_carried: _containers.RepeatedCompositeFieldContainer[NotCarried]
     storage: StorageDeclaration
@@ -533,7 +545,8 @@ class PluginDeclaration(_message.Message):
     documentation: _containers.RepeatedCompositeFieldContainer[DocumentationSection]
     affirmation_deadline: int
     pricing_models: _containers.RepeatedCompositeFieldContainer[PricingModelDeclaration]
-    def __init__(self, secret_settings: _Optional[_Iterable[str]] = ..., not_carried: _Optional[_Iterable[_Union[NotCarried, _Mapping]]] = ..., storage: _Optional[_Union[StorageDeclaration, _Mapping]] = ..., catalogue: _Optional[_Union[Catalogue, _Mapping]] = ..., algorithms: _Optional[_Iterable[_Union[AlgorithmDeclaration, _Mapping]]] = ..., settings: _Optional[_Iterable[_Union[SettingDeclaration, _Mapping]]] = ..., interface: _Optional[_Union[InterfaceDeclaration, _Mapping]] = ..., tools: _Optional[_Iterable[_Union[ToolDeclaration, _Mapping]]] = ..., reads_external_accounts: bool = ..., documentation: _Optional[_Iterable[_Union[DocumentationSection, _Mapping]]] = ..., affirmation_deadline: _Optional[int] = ..., pricing_models: _Optional[_Iterable[_Union[PricingModelDeclaration, _Mapping]]] = ...) -> None: ...
+    most_shards: int
+    def __init__(self, secret_settings: _Optional[_Iterable[str]] = ..., not_carried: _Optional[_Iterable[_Union[NotCarried, _Mapping]]] = ..., storage: _Optional[_Union[StorageDeclaration, _Mapping]] = ..., catalogue: _Optional[_Union[Catalogue, _Mapping]] = ..., algorithms: _Optional[_Iterable[_Union[AlgorithmDeclaration, _Mapping]]] = ..., settings: _Optional[_Iterable[_Union[SettingDeclaration, _Mapping]]] = ..., interface: _Optional[_Union[InterfaceDeclaration, _Mapping]] = ..., tools: _Optional[_Iterable[_Union[ToolDeclaration, _Mapping]]] = ..., reads_external_accounts: bool = ..., documentation: _Optional[_Iterable[_Union[DocumentationSection, _Mapping]]] = ..., affirmation_deadline: _Optional[int] = ..., pricing_models: _Optional[_Iterable[_Union[PricingModelDeclaration, _Mapping]]] = ..., most_shards: _Optional[int] = ...) -> None: ...
 
 class PricingModelDeclaration(_message.Message):
     __slots__ = ("model_id", "model_version")
@@ -568,7 +581,7 @@ class Catalogue(_message.Message):
     def __init__(self, datasets: _Optional[_Iterable[_Union[DatasetDeclaration, _Mapping]]] = ...) -> None: ...
 
 class DatasetDeclaration(_message.Message):
-    __slots__ = ("key", "vendor", "aggregator", "data_types", "modes", "cadence", "history", "licence_default", "day_time_zone", "day_end_minute", "venue_id", "calendar_id", "declared_delay_ns", "price_source_class")
+    __slots__ = ("key", "vendor", "aggregator", "data_types", "modes", "cadence", "history", "day_time_zone", "day_end_minute", "venue_id", "calendar_id", "declared_delay_ns", "price_source_class", "terms_and_pricing", "sessions_calendar_id", "gap_recovery")
     KEY_FIELD_NUMBER: _ClassVar[int]
     VENDOR_FIELD_NUMBER: _ClassVar[int]
     AGGREGATOR_FIELD_NUMBER: _ClassVar[int]
@@ -576,13 +589,15 @@ class DatasetDeclaration(_message.Message):
     MODES_FIELD_NUMBER: _ClassVar[int]
     CADENCE_FIELD_NUMBER: _ClassVar[int]
     HISTORY_FIELD_NUMBER: _ClassVar[int]
-    LICENCE_DEFAULT_FIELD_NUMBER: _ClassVar[int]
     DAY_TIME_ZONE_FIELD_NUMBER: _ClassVar[int]
     DAY_END_MINUTE_FIELD_NUMBER: _ClassVar[int]
     VENUE_ID_FIELD_NUMBER: _ClassVar[int]
     CALENDAR_ID_FIELD_NUMBER: _ClassVar[int]
     DECLARED_DELAY_NS_FIELD_NUMBER: _ClassVar[int]
     PRICE_SOURCE_CLASS_FIELD_NUMBER: _ClassVar[int]
+    TERMS_AND_PRICING_FIELD_NUMBER: _ClassVar[int]
+    SESSIONS_CALENDAR_ID_FIELD_NUMBER: _ClassVar[int]
+    GAP_RECOVERY_FIELD_NUMBER: _ClassVar[int]
     key: str
     vendor: str
     aggregator: str
@@ -590,14 +605,16 @@ class DatasetDeclaration(_message.Message):
     modes: _containers.RepeatedScalarFieldContainer[ObservationMode]
     cadence: int
     history: int
-    licence_default: DatasetLicence
     day_time_zone: str
     day_end_minute: int
     venue_id: str
     calendar_id: str
     declared_delay_ns: int
     price_source_class: PriceSourceClass
-    def __init__(self, key: _Optional[str] = ..., vendor: _Optional[str] = ..., aggregator: _Optional[str] = ..., data_types: _Optional[_Iterable[str]] = ..., modes: _Optional[_Iterable[_Union[ObservationMode, str]]] = ..., cadence: _Optional[int] = ..., history: _Optional[int] = ..., licence_default: _Optional[_Union[DatasetLicence, _Mapping]] = ..., day_time_zone: _Optional[str] = ..., day_end_minute: _Optional[int] = ..., venue_id: _Optional[str] = ..., calendar_id: _Optional[str] = ..., declared_delay_ns: _Optional[int] = ..., price_source_class: _Optional[_Union[PriceSourceClass, str]] = ...) -> None: ...
+    terms_and_pricing: str
+    sessions_calendar_id: str
+    gap_recovery: GapRecovery
+    def __init__(self, key: _Optional[str] = ..., vendor: _Optional[str] = ..., aggregator: _Optional[str] = ..., data_types: _Optional[_Iterable[str]] = ..., modes: _Optional[_Iterable[_Union[ObservationMode, str]]] = ..., cadence: _Optional[int] = ..., history: _Optional[int] = ..., day_time_zone: _Optional[str] = ..., day_end_minute: _Optional[int] = ..., venue_id: _Optional[str] = ..., calendar_id: _Optional[str] = ..., declared_delay_ns: _Optional[int] = ..., price_source_class: _Optional[_Union[PriceSourceClass, str]] = ..., terms_and_pricing: _Optional[str] = ..., sessions_calendar_id: _Optional[str] = ..., gap_recovery: _Optional[_Union[GapRecovery, str]] = ...) -> None: ...
 
 class DatasetLicence(_message.Message):
     __slots__ = ("dataset", "kept", "retention_days", "derived_use", "display", "default_fields", "personal_use", "updated_by", "updated_at_ns", "acting_through_delegation", "client_name", "note", "prepared_call_id", "terms_version", "access_basis", "timeliness", "delay_minutes", "delay_label", "underlying_source", "meters", "display_terms", "non_display", "enterprise", "derived_use_terms", "derived_multi_instrument_free", "derived_creation_is_non_display", "redistribution", "outside_computation", "prohibited_uses", "attribution_required", "attribution_text", "copyright_class", "no_more_restrictive_terms", "not_affiliated_notice", "report_cadence", "report_due_day", "eligibility")

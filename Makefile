@@ -141,10 +141,10 @@ contract-diff:
 # PyPI depends on nothing by URL (PyPI refuses that) and a plugin installs one
 # thing. `make vendor-schema` moves the copy to SCHEMA_REV; `check-vendored`
 # fails when the two disagree, as core's check-codegen does for its bindings.
-# meridian-schema main at ce3a6f3 (#20; tree equal to sdk-035-b-1030's
-# 8c8ed77 -- contract v29, DESIGN29 at 17f9a78, and SDK 0.35's 58 behaviour
-# cases), its gen/ and boundaries/ vendored here byte for byte.
-SCHEMA_REV := ce3a6f33d1ce1459d71e17c3658e82d762d3e930
+# meridian-schema c30 at 64fdc41 (contract 30, DESIGN30 at 7fd2bf0 with the
+# schema step's proposed amendment; its PR open, before it lands), its gen/
+# and boundaries/ vendored here byte for byte.
+SCHEMA_REV := 64fdc41a1ebebd4e8d8de8bce567b0d7237c45c9
 SCHEMA_REPO := https://github.com/open-meridian/meridian-schema.git
 SCRATCH     := .schema-scratch
 
@@ -191,10 +191,10 @@ DESIGN ?= ../meridian-design
 # pinned here by commit as the schema is pinned in pyproject.toml. Core's own
 # interop gate overrides this with its working tree, so a change to both lands
 # without either waiting on the other's push.
-# Core's v29 protos (contract v29, fixed income; DESIGN29 at 17f9a78), the
-# branch the core stages build on, before it lands: its head after stage E,
-# ruling 1006's comments and core main merged in.
-CORE_REV   := b7d29cebcf923b78dda117bbda4daff387e17bda
+# Core's contract 30 protos (DESIGN30 at 7fd2bf0), its c30 branch the core
+# stages build on, before it lands; journal.proto moved from there into
+# meridian-schema.
+CORE_REV   := c2fda7460d65539daafdec6ae14ee49f8a3cdd44
 CORE_PROTO ?= https://github.com/open-meridian/meridian-core.git\#$(CORE_REV):proto
 # And meridian-schema's, which core's import, at the revision vendored here.
 SCHEMA_PROTO ?= https://github.com/open-meridian/meridian-schema.git\#$(SCHEMA_REV):proto

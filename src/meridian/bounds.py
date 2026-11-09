@@ -86,6 +86,23 @@ SCENARIO_AXIS_STEPS_COUNT = Count(least=1, most=32)
 SHOCK_BUCKETS_COUNT = Count(least=0, most=32)
 """meridian.v1.Shock.buckets: states a bucketed shock's values"""
 
+RENEW_JOBS_REQUEST_JOB_IDS_COUNT = Count(least=1, most=256)
+"""meridian.v1.RenewJobsRequest.job_ids: keeps a sidecar's standing jobs held
+(W12.4; approved by 1057)"""
+
+DERIVED_SERIES_UPDATED_EVENT_VALUES_COUNT = Count(least=0, most=4096)
+"""meridian.v1.DerivedSeriesUpdatedEvent.values: carries a standing job's
+recomputed figures keyed by subject and series (W12.4; approved by 1057)"""
+
+DERIVED_SERIES_UPDATED_EVENT_FIGURES_COUNT = Count(least=0, most=4096)
+"""meridian.v1.DerivedSeriesUpdatedEvent.figures: carries a standing job's
+recomputed figures over an account, a breakdown or a scenario (W12.4;
+approved 2026-11-09, step 3c's question 1)"""
+
+DERIVED_SERIES_UPDATED_EVENT_NOT_EVALUATED_COUNT = Count(least=0, most=4096)
+"""meridian.v1.DerivedSeriesUpdatedEvent.not_evaluated: says which recomputed
+figures are not evaluated, and why (W12.4; approved by 1057)"""
+
 LOT_FACTOR_MONTH_AWAITED_LENGTH = Length(least=0, most=6)
 """meridian.v1.Lot.factor_month_awaited: marks a lot whose cost is at a
 provisional factor (992)"""
@@ -180,6 +197,10 @@ EXECUTION_FACTOR_MONTH_AWAITED_LENGTH = Length(least=0, most=6)
 """meridian.v1.Execution.factor_month_awaited: marks a fill priced at a
 provisional factor (992)"""
 
+MOVE_ACCOUNT_REQUEST_REASON_LENGTH = Length(least=1, most=2000)
+"""meridian.v1.MoveAccountRequest.reason: says why an account is moved (W6.39;
+approved 2026-11-09)"""
+
 ACCOUNT_RECORD_CUSTODIAN_LENGTH = Length(least=0, most=200)
 """meridian.v1.AccountRecord.custodian: says where the account is held, for a
 person to find it by"""
@@ -233,6 +254,18 @@ change's record"""
 LINK_CONNECTIVITY_REQUEST_NOTE_LENGTH = Length(least=0, most=2000)
 """meridian.v1.LinkConnectivityRequest.note: says why, kept with the change's
 record"""
+
+READ_RESILIENCE_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=True)
+"""meridian.v1.ReadResilienceRequest.page_size: bounds a page of the history
+(W6.39; approved 2026-11-09)"""
+
+WRITER_TOOK_OVER_PARTITIONS_COUNT = Count(least=1, most=1000)
+"""meridian.v1.WriterTookOver.partitions: names the partitions taken over
+(W6.39; approved 2026-11-09)"""
+
+INTEGRITY_FINDING_DETAIL_LENGTH = Length(least=0, most=500)
+"""meridian.v1.IntegrityFinding.detail: says what was found, in a sentence
+(W6.39; approved 2026-11-09)"""
 
 TICKET_NOTE_NOTE_LENGTH = Length(least=1, most=4000)
 """meridian.v1.TicketNote.note: carries the note's text"""
@@ -734,6 +767,29 @@ LIST_FACTORS_REQUEST_SUBJECTS_COUNT = Count(least=1, most=500)
 LIST_FACTORS_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=True)
 """meridian.v1.ListFactorsRequest.page_size: bounds a page"""
 
+SOURCE_SWITCHED_SUBJECTS_COUNT = Count(least=0, most=500)
+"""meridian.v1.SourceSwitched.subjects: names the subjects a switch is for
+where it is not all of them (W10.6; approved 2026-11-09)"""
+
+LIST_SOURCE_SWITCHES_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=True)
+"""meridian.v1.ListSourceSwitchesRequest.page_size: bounds a page of switches
+(W10.6; approved 2026-11-09)"""
+
+MOVE_PARTITION_REQUEST_REASON_LENGTH = Length(least=1, most=2000)
+"""meridian.v1.MovePartitionRequest.reason: says why a partition is moved
+(W6.39; approved 2026-11-09)"""
+
+DATASET_GAP_GAP_ID_LENGTH = Length(least=1, most=64)
+"""meridian.v1.DatasetGap.gap_id: names a gap (W10.14; approved 2026-11-09)"""
+
+DATASET_GAP_SUBJECTS_COUNT = Count(least=0, most=500)
+"""meridian.v1.DatasetGap.subjects: names the subjects a gap is in (W10.14;
+approved 2026-11-09)"""
+
+LIST_DATASET_GAPS_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=True)
+"""meridian.v1.ListDatasetGapsRequest.page_size: bounds a page of gaps (W10.14;
+approved 2026-11-09)"""
+
 AS_REPORTED_SCHEME_LENGTH = Length(least=1, most=64)
 """meridian.v1.AsReported.scheme: says whose vocabulary a value as reported is
 in"""
@@ -823,6 +879,11 @@ DATASET_DECLARATION_DATA_TYPES_COUNT = Count(least=1, most=32)
 
 DATASET_DECLARATION_MODES_COUNT = Count(least=1, most=3)
 """meridian.v1.DatasetDeclaration.modes: says how a dataset's rows can arrive"""
+
+DATASET_DECLARATION_TERMS_AND_PRICING_LENGTH = Length(least=0, most=2000)
+"""meridian.v1.DatasetDeclaration.terms_and_pricing: describes a dataset's
+terms and pricing in plain words (W10.1; contract v30, ruling 1032; approved
+by 1057)"""
 
 DATASET_DECLARATION_DAY_TIME_ZONE_LENGTH = Length(least=0, most=64)
 """meridian.v1.DatasetDeclaration.day_time_zone: says the time zone a daily
@@ -987,6 +1048,10 @@ SUBSCRIBE_REQUEST_FIELDS_COUNT = Count(least=0, most=32)
 """meridian.plugin.v1.SubscribeRequest.fields: narrows what a subscription
 delivers to what a page shows (amended 2026-10-30)"""
 
+SUBSCRIBE_REQUEST_JOB_IDS_COUNT = Count(least=0, most=64)
+"""meridian.plugin.v1.SubscribeRequest.job_ids: selects a standing job's
+results (W4.3, W12.4; contract v30, approved by 1057)"""
+
 SIDECAR_SUBSCRIBE_LIMIT_RANGE = Range(least=0, most=256, capped=False)
 """SidecarSubscribe.limit: bounds what one sidecar matches for its plugin
 (amended 2026-10-30)"""
@@ -1082,6 +1147,14 @@ data-age snapshots to core's monitor (W4.16)"""
 DATA_ELIGIBILITY_BUYER_REVENUE_CURRENCY_CODE_LENGTH = Length(least=0, most=3)
 """meridian.v1.DataEligibility.buyer_revenue_currency_code: names the currency
 both buyer-revenue thresholds are in"""
+
+PLUGIN_DECLARATION_MOST_SHARDS_RANGE = Range(least=0, most=64, capped=False)
+"""meridian.v1.PluginDeclaration.most_shards: declares the most pods of one
+instance the plugin's vendor allows (W8.1; approved by 1057)"""
+
+LAUNCH_PLUGIN_REQUEST_SHARDS_RANGE = Range(least=0, most=64, capped=False)
+"""meridian.v1.LaunchPluginRequest.shards: asks for an instance's shards (W8.3;
+the launch setting approved by 1057)"""
 
 RECORD_HOLDINGS_STATEMENT_REQUEST_PROVENANCE_COUNT = Count(least=0, most=32)
 """meridian.v1.RecordHoldingsStatementRequest.provenance: says where each value

@@ -571,6 +571,36 @@
               }
             }
           ]
+        },
+        {
+          "name": "holds-a-standing-figure",
+          "about": "standing analytics",
+          "since": "v30",
+          "given": "the plugin shows a figure kept current as its inputs change, which every reader with the same key shares",
+          "expect": [
+            {
+              "row": "RunJob",
+              "fields": {
+                "job": {
+                  "standing": true
+                }
+              }
+            },
+            {
+              "row": "DerivedSeriesUpdated"
+            }
+          ]
+        },
+        {
+          "name": "reads-the-source-priorities",
+          "about": "source priorities",
+          "since": "v30",
+          "given": "the plugin shows which source a default read takes for a data type, and which it takes next",
+          "expect": [
+            {
+              "row": "ListSourcePriorities"
+            }
+          ]
         }
       ]
     },
@@ -4342,6 +4372,17 @@
               "row": "ReadStaleReferenceActionsPermitted"
             }
           ]
+        },
+        {
+          "name": "reads-the-source-priorities",
+          "about": "source priorities",
+          "since": "v30",
+          "given": "the plugin shows which source a default read takes for a data type, and which it takes next",
+          "expect": [
+            {
+              "row": "ListSourcePriorities"
+            }
+          ]
         }
       ]
     },
@@ -4964,6 +5005,17 @@
               "row": "SeriesRecorded"
             }
           ]
+        },
+        {
+          "name": "reads-the-source-priorities",
+          "about": "source priorities",
+          "since": "v30",
+          "given": "the plugin shows which source a default read takes for a data type, and which it takes next",
+          "expect": [
+            {
+              "row": "ListSourcePriorities"
+            }
+          ]
         }
       ]
     },
@@ -5460,6 +5512,17 @@
           "expect": [
             {
               "row": "FactorsRecorded"
+            }
+          ]
+        },
+        {
+          "name": "reads-the-source-priorities",
+          "about": "source priorities",
+          "since": "v30",
+          "given": "the plugin shows which source a default read takes for a data type, and which it takes next",
+          "expect": [
+            {
+              "row": "ListSourcePriorities"
             }
           ]
         }
@@ -6161,6 +6224,36 @@
           "expect": [
             {
               "row": "FactorsRecorded"
+            }
+          ]
+        },
+        {
+          "name": "holds-a-standing-figure",
+          "about": "standing analytics",
+          "since": "v30",
+          "given": "the plugin shows a figure kept current as its inputs change, which every reader with the same key shares",
+          "expect": [
+            {
+              "row": "RunJob",
+              "fields": {
+                "job": {
+                  "standing": true
+                }
+              }
+            },
+            {
+              "row": "DerivedSeriesUpdated"
+            }
+          ]
+        },
+        {
+          "name": "reads-the-source-priorities",
+          "about": "source priorities",
+          "since": "v30",
+          "given": "the plugin shows which source a default read takes for a data type, and which it takes next",
+          "expect": [
+            {
+              "row": "ListSourcePriorities"
             }
           ]
         }
@@ -6980,6 +7073,36 @@
               "row": "FactorsRecorded"
             }
           ]
+        },
+        {
+          "name": "holds-a-standing-figure",
+          "about": "standing analytics",
+          "since": "v30",
+          "given": "the plugin shows a figure kept current as its inputs change, which every reader with the same key shares",
+          "expect": [
+            {
+              "row": "RunJob",
+              "fields": {
+                "job": {
+                  "standing": true
+                }
+              }
+            },
+            {
+              "row": "DerivedSeriesUpdated"
+            }
+          ]
+        },
+        {
+          "name": "reads-the-source-priorities",
+          "about": "source priorities",
+          "since": "v30",
+          "given": "the plugin shows which source a default read takes for a data type, and which it takes next",
+          "expect": [
+            {
+              "row": "ListSourcePriorities"
+            }
+          ]
         }
       ]
     },
@@ -7135,6 +7258,17 @@
           "expect": [
             {
               "row": "FactorsRecorded"
+            }
+          ]
+        },
+        {
+          "name": "reads-the-source-priorities",
+          "about": "source priorities",
+          "since": "v30",
+          "given": "the plugin shows which source a default read takes for a data type, and which it takes next",
+          "expect": [
+            {
+              "row": "ListSourcePriorities"
             }
           ]
         }
@@ -7866,6 +8000,36 @@
           "expect": [
             {
               "row": "FactorsRecorded"
+            }
+          ]
+        },
+        {
+          "name": "holds-a-standing-figure",
+          "about": "standing analytics",
+          "since": "v30",
+          "given": "the plugin shows a figure kept current as its inputs change, which every reader with the same key shares",
+          "expect": [
+            {
+              "row": "RunJob",
+              "fields": {
+                "job": {
+                  "standing": true
+                }
+              }
+            },
+            {
+              "row": "DerivedSeriesUpdated"
+            }
+          ]
+        },
+        {
+          "name": "reads-the-source-priorities",
+          "about": "source priorities",
+          "since": "v30",
+          "given": "the plugin shows which source a default read takes for a data type, and which it takes next",
+          "expect": [
+            {
+              "row": "ListSourcePriorities"
             }
           ]
         }
