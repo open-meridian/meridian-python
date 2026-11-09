@@ -40,6 +40,15 @@ v28; a reader handles both from now (the first release's Q14), and reads an
 unset one as exact. A scenario key's kind unset is the base. What was not
 evaluated is listed with why, never as a zero.
 
+**A standing job** (contract v30, `Jobs.standing`): a job built
+`analytics.job(..., standing=True)`, each measure naming its refresh, held
+while its `LiveView` is open and kept current from the component's updates:
+
+    view = await jobs.standing(self, analytics.job(
+        analytics.measure("exposure", refresh="per_change"), accounts=["ACC-12"],
+        standing=True))
+    for key, figure in view.rows().items(): ...
+
 **Waiting for one answered later** (`Jobs`): a job the component answers
 later finishes on `job_finished`, heard by the instance that ran it alone,
 and caught up by sequence (`list_finished_jobs`) after a loss; its answer is
@@ -62,10 +71,10 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 from fractions import Fraction
-from typing import Any
+from typing import Any, cast
 
 from ..client import SCHEMA_VERSION
-from ..operations import Job, Money, WhatIf, WhatIfTrade, _decimal, as_decimal
+from ..operations import Job, MeasureRef, Money, WhatIf, WhatIfTrade, _decimal, as_decimal
 from ..plugin.v1 import operations_pb2 as ops
 from ..receive import Heard
 from ._canonical import answer_hash, canonical, decimal_text
@@ -139,12 +148,28 @@ BREAKDOWNS = ("account", "asset_class", "currency", "instrument", "sleeve", "cou
 
 
 def measure(
-    definition: str, version: int = 1, *, by: Sequence[str] = (), event_group: str = ""
+    definition: str,
+    version: int = 1,
+    *,
+    by: Sequence[str] = (),
+    event_group: str = "",
+    refresh: ops.Refresh | str | None = None,
+    cadence_ns: int = 0,
+    material_move_bp: int = 0,
 ) -> ops.MeasureRef:
     """A measure by definition and version (requirement 14), broken down by
     `by`; an event measure (`resolution_payoff`, `implied_distribution`)
     names its event group, and no other names one. Refused as it is built:
-    no definition, a version below 1, a breakdown named twice."""
+    no definition, a version below 1, a breakdown named twice.
+
+    In a standing job (contract v30, W12.1; spec/one-data-access-model,
+    section 4) each measure says when it is computed again: `refresh` is
+    `per_change` (each change of an input it reads, at once) or `cadence`
+    (every `cadence_ns`, and, where `material_move_bp` is above 0, sooner
+    on a move of the underlying's reference price by that many basis points
+    since the last fit). A cadence names its `cadence_ns`; a per-change
+    measure names neither. The component refuses a standing job's measure
+    naming no refresh where its definition states none."""
     if not definition or definition != definition.strip():
         raise ValueError(f"a measure names its definition, not {definition!r}")
     if isinstance(version, bool) or not isinstance(version, int) or version < 1:
@@ -165,9 +190,37 @@ def measure(
         raise ValueError(f"{definition} is over an event group, and names none")
     if event_group and definition in STANDARD_MEASURES and definition not in EVENT_MEASURES:
         raise ValueError(f"{definition} is not over an event group; it names {event_group}")
+    every = _refresh(definition, refresh, cadence_ns, material_move_bp)
     return ops.MeasureRef(
-        definition=definition, version=version, breakdowns=names, event_group_id=event_group
+        definition=definition,
+        version=version,
+        breakdowns=names,
+        event_group_id=event_group,
+        refresh=every,
+        cadence_ns=cadence_ns,
+        material_move_bp=material_move_bp,
     )
+
+
+def _refresh(
+    definition: str, refresh: ops.Refresh | str | None, cadence_ns: int, material_move_bp: int
+) -> ops.Refresh:
+    """A measure's refresh (contract v30) by its value or word, its cadence
+    and material move checked beside it, as the component checks them."""
+    from ..operations import _enum
+
+    every = _enum(ops.Refresh, refresh, f"{definition}'s refresh") or 0
+    for name, value in (("cadence_ns", cadence_ns), ("material_move_bp", material_move_bp)):
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise ValueError(f"{definition}'s {name} is a whole number, 0 or more")
+    if every == ops.REFRESH_CADENCE and cadence_ns <= 0:
+        raise ValueError(f"{definition} is refreshed on a cadence, and names no cadence_ns")
+    if every != ops.REFRESH_CADENCE and (cadence_ns or material_move_bp):
+        raise ValueError(
+            f"{definition} names a cadence_ns or a material_move_bp, which only a "
+            "refresh on a cadence takes"
+        )
+    return cast(ops.Refresh, every)
 
 
 def trade(
@@ -197,7 +250,7 @@ def what_if(account_id: str, *trades: WhatIfTrade) -> WhatIf:
 
 
 def job(
-    *measures: ops.MeasureRef,
+    *measures: ops.MeasureRef | MeasureRef,
     accounts: Sequence[str] = (),
     book_at: ops.Watermark | None = None,
     lake_as_of_ns: int = 0,
@@ -205,6 +258,7 @@ def job(
     what_if: WhatIf | None = None,
     business_date: str = "",
     reporting_currency: str = "",
+    standing: bool = False,
 ) -> Job:
     """A job (W12.1): its measures, the accounts it is over, and its inputs by
     reference -- the book's watermark (none for now), the lake's as-of (0
@@ -215,15 +269,25 @@ def job(
     Refused as it is built, as the component refuses it: no account (a job
     is over one account or more), an account empty or twice, no measure, a
     measure twice, a what-if on an account the job is not over, or a
-    business date beside a watermark or an as-of."""
+    business date beside a watermark or an as-of.
+
+    `standing` (contract v30) asks the component to keep the answer current
+    (`Jobs.standing`): its inputs live, so it names no watermark, as-of,
+    business date or what-if, each refused naming `standing`, as the
+    component refuses it; each measure says its refresh (`measure(...,
+    refresh=)`)."""
     if not measures:
         raise ValueError("a job asks at least one measure")
     seen: list[tuple[str, int, tuple[str, ...], str]] = []
+    asked: list[MeasureRef] = []
     for each in measures:
-        if not isinstance(each, ops.MeasureRef):
+        if isinstance(each, ops.MeasureRef):
+            each = _sdk_measure(each)
+        if not isinstance(each, MeasureRef):
             raise TypeError(
                 f"a job's measures are analytics.measure(...), not {type(each).__name__}"
             )
+        asked.append(each)
         held = (each.definition, each.version, tuple(each.breakdowns), each.event_group_id)
         if held in seen:
             raise ValueError(f"{each.definition} v{each.version} is asked twice")
@@ -244,13 +308,43 @@ def job(
         )
     if what_if is not None and what_if.account_id not in named:
         raise ValueError(f"the what-if's account {what_if.account_id} is not among the job's")
+    if standing:
+        fixed = [
+            name
+            for name, given in (
+                ("book_at", book_at is not None),
+                ("lake_as_of_ns", bool(lake_as_of_ns)),
+                ("business_date", bool(business_date)),
+                ("what_if", what_if is not None),
+            )
+            if given
+        ]
+        if fixed:
+            raise ValueError(
+                f"a standing job's inputs are live: standing names no {', '.join(fixed)}"
+            )
     return Job(
         account_ids=named,
         inputs=ops.InputRefs(book_at=book_at, lake_as_of_ns=lake_as_of_ns, sources=sources),
-        measures=list(measures),
+        measures=asked,
         what_if=what_if,
         business_date=business_date,
         reporting_currency=reporting_currency,
+        standing=standing,
+    )
+
+
+def _sdk_measure(wire: ops.MeasureRef) -> MeasureRef:
+    """A measure as the wire carries it (`analytics.measure`'s answer), in the
+    SDK's form a `Job` takes (contract v30: `MeasureRef` gained its refresh)."""
+    return MeasureRef(
+        definition=wire.definition,
+        version=int(wire.version),
+        breakdowns=tuple(wire.breakdowns),
+        event_group_id=wire.event_group_id,
+        refresh=wire.refresh or None,
+        cadence_ns=int(wire.cadence_ns),
+        material_move_bp=int(wire.material_move_bp),
     )
 
 
@@ -669,6 +763,35 @@ class Jobs:
             return Answer(reply.answer)
         return await self.wait(operations, str(reply.job_id))
 
+    async def standing(self, operations: Any, job: Job, *, linger: float | None = None) -> Any:
+        """A standing job held (contract v30; spec/one-data-access-model,
+        section 4): registered (`run_job`, the job built `standing=True`),
+        subscribed by its job ID (`SubscribeRequest.job_ids`), and answered
+        as a `LiveView` of its figures -- each `Figure`, each `DerivedSeries`
+        value and what was not evaluated, by its key -- kept current from
+        `DerivedSeriesUpdated` in the job's sequence. After a gap in the
+        sequence, a loss marker or a broken stream its whole answer is read
+        again by `ReadJobAnswer`, figures and values; a job the component no
+        longer holds is registered again with this job. The job is held while
+        the view is: `close()` it, and it is let go after the view's linger
+        (30 seconds by default), its renewals then ending."""
+        from ..views import LINGER_SECONDS, selector, views_of
+
+        if not job.standing:
+            raise ValueError("a standing job is built analytics.job(..., standing=True)")
+        reply = await operations.run_job(job=job)
+        job_id = str(reply.job_id)
+        if not job_id:
+            raise ValueError("the component answered the standing job with no job ID")
+        held = getattr(operations, "_standing_views", None)
+        views = held() if callable(held) else views_of(operations.plugin)
+        return await views.subscribe(
+            selector("DerivedSeriesUpdated", job_ids=[job_id]),
+            LINGER_SECONDS if linger is None else linger,
+            job=job,
+            operations=operations,
+        )
+
     async def wait(self, operations: Any, job_id: str) -> Answer:
         """A job answered later, once it finished: its answer, read."""
         waiting = self._waiting.setdefault(job_id, asyncio.Event())
@@ -696,7 +819,8 @@ async def _read_answer(operations: Any, job_id: str) -> ops.ReadJobAnswerResult:
     (contract v28's amendment, ruling 794). The component ends a page at about
     512 KiB, figures first and then what was not evaluated, and gives its
     provenance on every page. This reads from the first page until a page's
-    `next_cursor` is empty and joins the pages in order. A page naming
+    `next_cursor` is empty and joins the pages in order -- from contract v30
+    a standing job's `values` beside its figures. A page naming
     another job or a different provenance is refused, never joined."""
     whole = ops.ReadJobAnswerResult()
     cursor = ""
@@ -712,6 +836,8 @@ async def _read_answer(operations: Any, job_id: str) -> ops.ReadJobAnswerResult:
             )
         whole.figures.extend(page.figures)
         whole.not_evaluated.extend(page.not_evaluated)
+        # A standing job's values (contract v30, JobAnswer.values).
+        whole.values.extend(page.values)
         if not page.next_cursor:
             return whole
         if page.next_cursor == cursor:

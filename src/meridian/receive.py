@@ -82,6 +82,7 @@ import grpc
 from meridian.plugin.v1 import operations_pb2 as ops
 
 from . import bounds
+from .client import READ_DEADLINE
 from .errors import CallFailed, MeridianError, NotGranted
 from .operations import (
     CONFLATED,
@@ -96,6 +97,9 @@ from .operations import (
 
 if TYPE_CHECKING:
     from .client import Plugin
+
+#: What a stream's read answers once the stream has ended.
+_EOF: Any = grpc.aio.EOF  # type: ignore[attr-defined]
 
 _log = logging.getLogger("meridian.receive")
 
@@ -124,6 +128,21 @@ REFUSAL_WAIT_TICKS = 10
 #: How many reads one delivery may prompt before it is handed on as it is: a
 #: store changing faster than it can be read is caught up with by the next.
 CATCH_UP_TRIES = 3
+
+#: How long a stream naming the lake's rows for subjects, or carrying a
+#: view, may hear nothing before it is taken for one whose far end restarted
+#: without breaking it, and opened again (SDK 0.36.0): the lake behind the
+#: sidecar killed abruptly left a plugin's stream open and silent for six
+#: hours (2026-11-09). Each quiet reopen that hears nothing doubles the
+#: wait, to the most, and anything heard brings it back to the first, so a
+#: market closed for the weekend costs a reopen every quarter of an hour.
+QUIET_SECONDS = 60.0
+QUIET_MOST_SECONDS = 900.0
+
+#: Each read a stream catches up by is given this long to answer (SDK
+#: 0.36.0): a far end that stopped answering fails the read, and the stream
+#: is opened again, rather than holding it for ever.
+READ_SECONDS = 60.0
 
 #: The stream's statuses that say it broke rather than that it was refused.
 _BROKEN = (
@@ -168,6 +187,17 @@ class Heard(Generic[Message]):
 
 
 Handler = Callable[[Heard[Any]], Awaitable[None]]
+
+
+async def _handing(handler: Handler, heard: Heard[Any]) -> None:
+    """A handler handed one change, its own acts held to no deadline of the
+    stream's (READ_DEADLINE is the stream's reads', SDK 0.36.0)."""
+    token = READ_DEADLINE.set(None)
+    try:
+        await handler(heard)
+    finally:
+        READ_DEADLINE.reset(token)
+
 
 #: True while the stream's first seeding is handed on (SDK 0.35): a role
 #: class whose `seed` is False is not handed it, though another class
@@ -388,7 +418,8 @@ class _Follower:
         given = type(message)()
         given.CopyFrom(message)
         _without_numbers(given)
-        await self.handlers[row.name](
+        await _handing(
+            self.handlers[row.name],
             Heard(
                 row=row.name,
                 message=given,
@@ -402,7 +433,7 @@ class _Follower:
                 correlation_id=meta.correlation_id if meta is not None else "",
                 causation_id=meta.causation_id if meta is not None else "",
                 published_at_ns=meta.published_at_ns if meta is not None else 0,
-            )
+            ),
         )
 
     async def delivered(self, delivery: ops.Delivery) -> None:
@@ -585,7 +616,8 @@ class _Latest:
         )
         given = type(message)()
         given.CopyFrom(message)
-        await self.handlers[row.name](
+        await _handing(
+            self.handlers[row.name],
             Heard(
                 row=row.name,
                 message=given,
@@ -596,7 +628,7 @@ class _Latest:
                 causation_id=meta.causation_id if meta is not None else "",
                 published_at_ns=meta.published_at_ns if meta is not None else 0,
                 dataset=dataset,
-            )
+            ),
         )
 
     async def delivered(self, delivery: ops.Delivery) -> None:
@@ -736,7 +768,8 @@ class _Sequenced:
     ) -> None:
         given = type(message)()
         given.CopyFrom(message)
-        await self.handlers[row.name](
+        await _handing(
+            self.handlers[row.name],
             Heard(
                 row=row.name,
                 message=given,
@@ -746,7 +779,7 @@ class _Sequenced:
                 correlation_id=meta.correlation_id if meta is not None else "",
                 causation_id=meta.causation_id if meta is not None else "",
                 published_at_ns=meta.published_at_ns if meta is not None else 0,
-            )
+            ),
         )
 
     async def hand(
@@ -844,13 +877,27 @@ async def follow(
     watching = asyncio.create_task(_watch_scope(plugin, follower)) if rows else None
     started = opened = False
     wait = RETRY_SECONDS
+    quiet = QUIET_SECONDS
+    # Each read the stream catches up by is given READ_SECONDS (SDK 0.36.0);
+    # a handler's own acts are not (`_handing`).
+    READ_DEADLINE.set(READ_SECONDS)
+
+    def watched() -> bool:
+        """Whether silence on the stream says something: it names the lake's
+        rows for subjects, or carries a view."""
+        views = getattr(plugin, "_views_kept", None)
+        return bool((latest_rows or full_rows) and wanted) or bool(
+            views is not None and views.by_id
+        )
+
     try:
         while True:
             if opened:
                 # The subjects as they stand now, read again on every open.
                 latest.subjects = full.subjects = wanted = named()
             opened = True
-            reopening = False
+            reopening = silent = False
+            pending: asyncio.Future[Any] | None = None
             call = plugin._operations().Receive(
                 ops.ReceiveRequest(
                     rows=[
@@ -906,13 +953,29 @@ async def follow(
                                 seeding.reset(token)
                         await full.read()
                         await sequenced.read()
-                wait = RETRY_SECONDS
                 views = getattr(plugin, "_views_kept", None)
                 if again and views is not None:
                     # Subscriptions opened on this stream before it broke
                     # were dropped with it (contract v28, amended 2026-10-30).
                     await views.reopened()
-                async for delivery in call:
+                wait = RETRY_SECONDS
+                while True:
+                    if pending is None:
+                        pending = asyncio.ensure_future(call.read())
+                    done, _ = await asyncio.wait(
+                        {pending}, timeout=quiet if watched() else None
+                    )
+                    if not done:
+                        # Open, and silent past what the rows it names say
+                        # of their source: its far end may have restarted
+                        # without breaking it (SDK 0.36.0). Opened again,
+                        # caught up as after a break.
+                        silent = True
+                        break
+                    delivery, pending = pending.result(), None
+                    if delivery is _EOF:
+                        break
+                    quiet = QUIET_SECONDS
                     views = getattr(plugin, "_views_kept", None)
                     if views is not None and (
                         delivery.meta.subscription_ids or delivery.WhichOneof("item") == "lost"
@@ -940,7 +1003,13 @@ async def follow(
                             await latest.read(named_rows or None)
                             await full.read(named_rows or None)
                             await sequenced.read(named_rows or None)
-                _log.warning("the delivery stream ended; opening it again")
+                if silent:
+                    _log.warning(
+                        "the delivery stream heard nothing for %g s; opening it again", quiet
+                    )
+                    quiet = min(quiet * 2, QUIET_MOST_SECONDS)
+                else:
+                    _log.warning("the delivery stream ended; opening it again")
             except asyncio.CancelledError:
                 if not _asked_again(reopen):
                     raise
@@ -961,6 +1030,8 @@ async def follow(
                     raise
                 _log.warning("a read to catch up failed (%s); trying again", failed)
             finally:
+                if pending is not None:
+                    pending.cancel()
                 call.cancel()
                 if asked_again is not None:
                     asked_again.cancel()
@@ -969,6 +1040,8 @@ async def follow(
             if reopening and reopen is not None:
                 reopen.clear()
                 _log.info("opening the delivery stream again: its subjects changed")
+                continue
+            if silent:
                 continue
             await asyncio.sleep(wait)
             wait = min(wait * 2, RETRY_MOST_SECONDS)

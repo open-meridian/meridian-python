@@ -65,6 +65,17 @@ are taken -- `LiveValue.of(..., sessions=sessions.FX_WEEK)`,
 -- where an FX dataset names no calendar of its own
 (spec/sessions-and-data-report-their-latency-and-quality, "In session").
 
+**A dataset's trading sessions** (contract 30, ruling 455):
+`read_sessions(role, dataset)` reads the trading-sessions calendar a
+dataset's catalogue entry names (`DatasetDeclaration.sessions_calendar_id`,
+beside its settlement `calendar_id`) from the deployment's calendars, so a
+page's staleness and a session's liveness are judged within the sessions its
+source keeps rather than a copy of them. The FX week is such a calendar in
+the platform's calendar master, which FX data plugins name; `FX_WEEK` stays
+for a dataset that names none yet:
+
+    held = await sessions.read_sessions(self, "truefx-1:live") or sessions.FX_WEEK
+
 A supervisor is also `data.pairs.Streamer` (`health`, `want`, `retarget`,
 `run(once=)`, `silent_seconds`): `data.pairs.supervised` makes one for a
 pairs feed over its market's own socket, so a pairs plugin needs no stream
@@ -85,7 +96,16 @@ from typing import Any, Protocol
 
 from ..plugin.v1 import operations_pb2 as ops
 
-__all__ = ["FX_WEEK", "Backoff", "CaughtUp", "Link", "SessionState", "Silent", "Supervisor"]
+__all__ = [
+    "FX_WEEK",
+    "Backoff",
+    "CaughtUp",
+    "Link",
+    "SessionState",
+    "Silent",
+    "Supervisor",
+    "read_sessions",
+]
 
 log = logging.getLogger("meridian.helpers.sessions")
 
@@ -111,6 +131,23 @@ FX_WEEK = ops.TradingSessions(
         ops.TradingSession(weekdays=[ops.WEEKDAY_FRIDAY], start_minute=0, end_minute=17 * 60),
     ],
 )
+
+
+async def read_sessions(role: Any, dataset: str) -> ops.TradingSessions | None:
+    """The trading sessions `dataset`'s live rows follow (contract 30, ruling
+    455): its catalogue entry's `sessions_calendar_id` (`list_datasets`),
+    that calendar read (`read_calendar`) and its `trading_sessions`. None
+    where the dataset is not listed to the plugin, names no sessions
+    calendar, or the calendar is not held or keeps no sessions."""
+    listed = await role.list_datasets()
+    entry = next((each for each in listed.datasets if each.dataset == dataset), None)
+    if entry is None or not entry.declaration.sessions_calendar_id:
+        return None
+    read = await role.read_calendar(calendar_id=entry.declaration.sessions_calendar_id)
+    if not read.found or not read.HasField("trading_sessions"):
+        return None
+    held: ops.TradingSessions = read.trading_sessions
+    return held if held.sessions else None
 
 
 class Backoff:

@@ -20,7 +20,6 @@ import meridian
 from conftest import FakeSidecar, Stream, receive, row_of
 from meridian import (
     DatasetDeclaration,
-    DatasetLicence,
     Declaration,
     Eligibility,
     Money,
@@ -52,7 +51,7 @@ CATALOGUE = [
         data_types=["meridian.v1.Trade", "meridian.v1.Quote"],
         modes=["stream"],
         cadence=1,
-        licence_default=DatasetLicence(kept=False, personal_use=True),
+        terms_and_pricing="Served, not kept; one person's terms.",
         venue_id=COINBASE,
     ),
 ]
@@ -494,7 +493,9 @@ def test_the_ems_suite_is_carried_with_its_six_cases_and_v22s() -> None:
     # venue-originated fill's accept and DK, and from v24 the two every-role
     # cases and the escape hatch's read; v26 an event group heard and read, the
     # agents' guard read and its five cases, and the lake's bounded query.
-    assert len(held.cases) == 44  # v27: liveness, data age, costs, the RFQ's pick
+    # v27: liveness, data age, costs, the RFQ's pick; contract 30 the source
+    # priorities read (454).
+    assert len(held.cases) == 45
     # v28: a series asked for, an underlying's chain, the actions permitted;
     # amended 2026-10-28, an underlying's expirations (856, 858); amended
     # 2026-10-30, a listed series heard (922).

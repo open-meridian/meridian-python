@@ -367,20 +367,22 @@ async def test_warn_is_honoured_only_where_the_deployment_permits_it() -> None:
     assert ems.ReferenceCheck(action=ems.REFUSE, warn_permitted=True).refuses
 
 
-def test_a_licence_states_who_may_take_its_dataset() -> None:
-    licence = meridian.DatasetLicence(
-        eligibility=meridian.DataEligibility(
-            uses=["personal"], buyer_revenue_below=Decimal("1000000"),
-            buyer_revenue_currency_code="USD",
-        )
-    )  # fmt: skip
-    wire = licence._wire().eligibility
-    assert list(wire.uses) == [meridian.v1.sidecar_pb2.DATA_USE_PERSONAL]
-    assert wire.buyer_revenue_currency_code == "USD" and wire.buyer_revenue_below.low == 1000000
-    with pytest.raises(ValueError, match="ISO 4217"):
-        meridian.DataEligibility(buyer_revenue_at_least=1)
-    with pytest.raises(ValueError, match="personal or commercial"):
-        meridian.DataEligibility(uses=["research"])
+def test_a_licences_eligibility_is_its_words() -> None:
+    """Who may take a dataset (contract v28, ruling 491), as a licence_default
+    declared it: from contract 30 (ruling 1032) written into its
+    terms_and_pricing by `meridian plugin migrate`."""
+    from meridian.migrations.to_0_36_0.rewrite import described
+
+    said = described(
+        {
+            "eligibility": {
+                "uses": ["personal"],
+                "buyer_revenue_below": "1000000",
+                "buyer_revenue_currency_code": "USD",
+            }
+        }
+    )
+    assert said == "Eligible: personal use, a buyer's revenue below 1000000 USD."
 
 
 async def test_latency_is_reported_in_batches_and_a_refusal_kept() -> None:
@@ -415,16 +417,17 @@ def test_a_dataset_declares_its_class_of_source_and_whose_aggregate() -> None:
         data_types=["meridian.v1.Price", "meridian.v1.Price.confidence"],
         modes=["stream"],
         price_source_class="composite",
-        licence_default=meridian.DatasetLicence(
-            kept=True, underlying_source="Pyth's aggregate of its publishers"
+        terms_and_pricing=(
+            "Kept by the lake; underlying source: Pyth's aggregate of its publishers."
         ),
     )
     wire = pyth._wire()
     assert wire.price_source_class == sidecar_pb2.PRICE_SOURCE_CLASS_COMPOSITE
-    assert wire.licence_default.underlying_source == "Pyth's aggregate of its publishers"
+    # Whose aggregate it serves is in its terms' words from contract 30.
+    assert "Pyth's aggregate of its publishers" in wire.terms_and_pricing
     said = pyth._to_json()
     assert said["price_source_class"] == "composite"
-    assert said["licence_default"]["underlying_source"] == "Pyth's aggregate of its publishers"
+    assert said["terms_and_pricing"] == wire.terms_and_pricing
     # The enum's name reads as its word; not stated writes nothing new, so an
     # upload declaring neither reads as before the amendment.
     named = meridian.DatasetDeclaration(
@@ -434,11 +437,11 @@ def test_a_dataset_declares_its_class_of_source_and_whose_aggregate() -> None:
     assert named.price_source_class == "evaluated"
     plain = meridian.DatasetDeclaration(
         key="daily", vendor="v", data_types=["meridian.v1.Price"], modes=["pull"],
-        licence_default=meridian.DatasetLicence(kept=True),
+        terms_and_pricing="Kept by the lake.",
     )  # fmt: skip
     assert plain._wire().price_source_class == sidecar_pb2.PRICE_SOURCE_CLASS_UNSPECIFIED
     assert "price_source_class" not in plain._to_json()
-    assert "underlying_source" not in plain._to_json()["licence_default"]
+    assert "licence_default" not in plain._to_json()
     with pytest.raises(ValueError, match="price_source_class"):
         meridian.DatasetDeclaration(
             key="x", vendor="v", data_types=["meridian.v1.Price"], modes=["pull"],
@@ -481,7 +484,7 @@ def test_a_derived_series_says_whose_figure_it_is() -> None:
     figure = meridian.DerivedSeries(
         series="level",
         value=meridian.UnitValue(value=Decimal("16.42"), unit="percent"),
-        rule=ops.MeasureRef(definition="cboe_vix", version=1),
+        rule=meridian.MeasureRef(definition="cboe_vix", version=1),
         published_by="Cboe",
     )
     wire = _derived_series(figure, "values[0]")

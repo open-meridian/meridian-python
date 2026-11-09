@@ -717,6 +717,9 @@ class FakeLake:
     priority: dict[str, list[str]] = field(default_factory=dict)
     declined: list[object] = field(default_factory=list)
     missed_venues: list[object] = field(default_factory=list)
+    # The licences a deployment admin set, by dataset ID (from contract 30
+    # the only licences there are: a catalogue declares none, ruling 1032).
+    licences: dict[str, object] = field(default_factory=dict)
 
     def declare(self, instance_id: str, catalogue: object) -> None:
         self.instance_id = instance_id
@@ -1132,16 +1135,12 @@ class FakeLake:
         return True
 
     def listing(self) -> object:
-        licences = []
-        for dataset, held in self.datasets.items():
-            if held.HasField("licence_default"):
-                licence = operations_pb2.DatasetLicence.FromString(
-                    held.licence_default.SerializeToString()
-                )
-                licence.dataset = dataset
-                licences.append(licence)
+        # From contract 30 a catalogue declares no licence (ruling 1032): the
+        # licences answered are those a deployment admin set, as a test sets
+        # them (`licences`), each naming its dataset.
         return operations_pb2.ListDatasetsResult(
-            datasets=[self._ref(d, declared=True) for d in self.datasets], licences=licences
+            datasets=[self._ref(d, declared=True) for d in self.datasets],
+            licences=[self.licences[d] for d in self.datasets if d in self.licences],
         )
 
     def resolve_venue(self, request: object) -> object:

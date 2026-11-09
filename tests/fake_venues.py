@@ -562,7 +562,7 @@ def contracts_catalogue(*keys: str) -> list[meridian.DatasetDeclaration]:
             modes=modes,
             cadence=1,
             history=0,
-            licence_default=meridian.DatasetLicence(kept=kept),
+            terms_and_pricing="Kept by the lake." if kept else "Served, not kept.",
             day_time_zone=zone,
             day_end_minute=0,
         )  # fmt: skip

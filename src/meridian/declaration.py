@@ -46,9 +46,9 @@ behaviour before v16 under `retention_days`.
 From contract v18 a data plugin declares its catalogue (W8.1, W10.4; spec/the-lake,
 "The catalogue"): each dataset it serves the lake, by its key, with its
 vendor, the data types and optional fields it fills by their dictionary
-entries, how its rows can arrive, its cadence and history, the terms its
-vendor's standard terms impose, the day a daily value's business date is in,
-and the venue it is, where it is one venue's:
+entries, how its rows can arrive, its cadence and history, its vendor's terms
+and pricing in plain words (from contract v30, ruling 1032), the day a daily
+value's business date is in, and the venue it is, where it is one venue's:
 
     catalogue=[
         DatasetDeclaration(
@@ -57,7 +57,7 @@ and the venue it is, where it is one venue's:
             data_types=["meridian.v1.Price", "meridian.v1.Bar"],
             modes=["pull", "push"],
             cadence=86_400,
-            licence_default=DatasetLicence(kept=True, personal_use=True),
+            terms_and_pricing="Coinbase's public market data: free, no key, no redistribution.",
             day_time_zone="Etc/UTC",
             venue_id="VEN-01JA0000000000000CBEXC",
         ),
@@ -132,7 +132,6 @@ import re
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from decimal import Decimal
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, cast
 
@@ -145,14 +144,14 @@ from .bounds import (
     DATASET_DECLARATION_DAY_TIME_ZONE_LENGTH,
     DATASET_DECLARATION_KEY_LENGTH,
     DATASET_DECLARATION_MODES_COUNT,
+    DATASET_DECLARATION_TERMS_AND_PRICING_LENGTH,
     DATASET_DECLARATION_VENDOR_LENGTH,
-    DATASET_LICENCE_DEFAULT_FIELDS_COUNT,
-    DATASET_LICENCE_RETENTION_DAYS_RANGE,
     DOCUMENTATION_SECTION_BYTES_RANGE,
     NOT_CARRIED_NAME_LENGTH,
     NOT_CARRIED_ROLE_LENGTH,
     NOT_CARRIED_SCHEME_LENGTH,
     PLUGIN_DECLARATION_AFFIRMATION_DEADLINE_RANGE,
+    PLUGIN_DECLARATION_MOST_SHARDS_RANGE,
     PLUGIN_DECLARATION_NOT_CARRIED_COUNT,
     PLUGIN_DECLARATION_PRICING_MODELS_COUNT,
     PRICING_MODEL_DECLARATION_MODEL_VERSION_RANGE,
@@ -162,7 +161,6 @@ from .bounds import (
     STORAGE_DECLARATION_RECORD_KINDS_COUNT,
     STORAGE_DECLARATION_RETENTION_DAYS_RANGE,
 )
-from .operations import _decimal
 from .v1 import sidecar_pb2
 
 if TYPE_CHECKING:
@@ -331,6 +329,9 @@ _UINT32 = 2**32 - 1
 #: 28, amended 2026-10-31, ruling 906).
 _PRICE_SOURCE_CLASSES = ("traded", "firm_quote", "composite", "evaluated")
 
+#: How a gap in a dataset is recovered, by its word (contract v30, W10.14).
+_GAP_RECOVERIES = ("backfill", "stream_only", "none")
+
 
 def _entry_named(name: str) -> bool:
     """Whether `name` is a dictionary entry, or a message the dictionary has
@@ -353,222 +354,6 @@ def _zone_refused(zone: str) -> bool:
     except (zoneinfo.ZoneInfoNotFoundError, ValueError):
         return True
     return False
-
-
-@dataclass(frozen=True, kw_only=True)
-class DataEligibility:
-    """Who may take a dataset under its vendor's terms (contract v28, ruling
-    491; the data terms' statement, shown and never enforced): the uses the
-    terms allow -- `personal`, `commercial` -- and the buyer's revenue
-    bounds where the terms set them, each a Decimal with its ISO 4217 code
-    (ruling 597)."""
-
-    uses: Sequence[str] = ()
-    buyer_revenue_below: Decimal | int | None = None
-    buyer_revenue_at_least: Decimal | int | None = None
-    buyer_revenue_currency_code: str = ""
-
-    def __post_init__(self) -> None:
-        uses = tuple(str(u).strip().lower().removeprefix("data_use_") for u in self.uses)
-        unknown = [u for u in uses if u not in ("personal", "commercial")]
-        if unknown:
-            raise ValueError(f"an eligibility's uses are personal or commercial, not {unknown}")
-        object.__setattr__(self, "uses", uses)
-        bounded = (
-            self.buyer_revenue_below is not None or self.buyer_revenue_at_least is not None
-        )
-        code = self.buyer_revenue_currency_code
-        if bounded and not (len(code) == 3 and code.isalpha() and code.isupper()):
-            raise ValueError("a revenue bound names its currency by its ISO 4217 code")
-
-    def _wire(self) -> sidecar_pb2.DataEligibility:
-        def amount(value: Decimal | int | None) -> sidecar_pb2.Decimal | None:
-            if value is None:
-                return None
-            held = _decimal(Decimal(value), "eligibility.buyer_revenue")
-            return sidecar_pb2.Decimal(high=held.high, low=held.low, scale=held.scale)
-
-        return sidecar_pb2.DataEligibility(
-            uses=[
-                cast(Any, sidecar_pb2.DataUse.Value("DATA_USE_" + u.upper())) for u in self.uses
-            ],
-            buyer_revenue_below=amount(self.buyer_revenue_below),
-            buyer_revenue_at_least=amount(self.buyer_revenue_at_least),
-            buyer_revenue_currency_code=self.buyer_revenue_currency_code,
-        )
-
-    def _to_json(self) -> dict[str, Any]:
-        return {
-            "uses": list(self.uses),
-            "buyer_revenue_below": (
-                None if self.buyer_revenue_below is None else str(self.buyer_revenue_below)
-            ),
-            "buyer_revenue_at_least": (
-                None
-                if self.buyer_revenue_at_least is None
-                else str(self.buyer_revenue_at_least)
-            ),
-            "buyer_revenue_currency_code": self.buyer_revenue_currency_code,
-        }
-
-
-@dataclass(frozen=True, kw_only=True)
-class DatasetLicence:
-    """The terms a dataset's vendor's standard terms impose, as its catalogue
-    declares them (contract v18; spec/the-lake, Q8): what the deployment's
-    licence confirms or replaces. Whether the lake may keep its rows (false
-    serves them, not kept), for how many days (0 for no limit set), whether
-    derived data may be made and shown, the fields readable by default by
-    their dictionary entries (none for every field), and whether its terms
-    are one person's. Records what the vendor's terms say, never whether a
-    deployment meets them.
-
-    From 0.32.0 (contract v27, ruling 479) the derived-data answer is one of
-    three, `derived_use_terms` -- `not_restricted`, `internal_only` or
-    `redistribution_needs_licence` -- and a v27 writer sets both it and the
-    boolean `derived_use`, deprecated for one release: given the boolean
-    alone, the terms are `not_restricted` for true and `internal_only` for
-    false, as a reader reads it; given the terms alone, the boolean is true
-    but for `internal_only`; given both, they agree or the licence is
-    refused.
-
-    From 0.32.2 the attribution and redistribution terms the v27 wire
-    carries, by the wire's names: `redistribution` -- `not_allowed`,
-    `licence_required` or `allowed_with_attribution`, empty for not stated;
-    `attribution_required`, whether `attribution_text` travels with the data;
-    `attribution_text`, a template such as "Source: central bank statistics",
-    shown on every page that shows the dataset, in exports and in every MCP
-    answer carrying its fields (ruling 386); `copyright_class` --
-    `public_domain`, `copyright_citation_required` or
-    `copyright_preapproval_required`, empty for not stated, one class per
-    dataset; and `no_more_restrictive_terms`, whether the vendor forbids
-    adding restrictions downstream. From 0.32.3 `not_affiliated_notice`, the
-    notice as the vendor words it, shown with the terms. A deployment's core
-    takes a declaration setting any of these from core 0.1.311; an earlier
-    v27 core refuses its registration. From 0.33.0 (contract v28, rulings
-    491 and 597) `eligibility`, who may take the dataset (`DataEligibility`),
-    shown and never enforced. From contract 28 as amended 2026-10-31 (ruling
-    896) `underlying_source`, the source behind the vendor (ruling 387) or,
-    where the vendor serves an aggregate, whose aggregate it is, in words --
-    "Pyth's aggregate of its publishers" -- shown on the Data sources page;
-    empty for none. A core earlier than the amendment's refuses a
-    registration setting it."""
-
-    kept: bool = False
-    retention_days: int = 0
-    derived_use: bool | None = None
-    display: bool = False
-    default_fields: Sequence[str] = ()
-    personal_use: bool = False
-    derived_use_terms: str = ""
-    redistribution: str = ""
-    attribution_required: bool = False
-    attribution_text: str = ""
-    copyright_class: str = ""
-    no_more_restrictive_terms: bool = False
-    not_affiliated_notice: str = ""
-    eligibility: DataEligibility | None = None
-    underlying_source: str = ""
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "default_fields", tuple(self.default_fields))
-        if not isinstance(self.underlying_source, str):
-            raise ValueError("a licence's underlying_source is text: whose source, in words")
-        object.__setattr__(self, "underlying_source", self.underlying_source.strip())
-        for name, prefix, words in (
-            ("redistribution", "redistribution_",
-             ("not_allowed", "licence_required", "allowed_with_attribution")),
-            ("copyright_class", "copyright_class_",
-             ("public_domain", "copyright_citation_required",
-              "copyright_preapproval_required")),
-        ):  # fmt: skip
-            said = str(getattr(self, name) or "").strip().lower().removeprefix(prefix)
-            if said and said not in words:
-                raise ValueError(f"a licence's {name} is one of {', '.join(words)}")
-            object.__setattr__(self, name, said)
-        terms = str(self.derived_use_terms or "").strip().lower()
-        terms = terms.removeprefix("derived_use_")
-        words = ("not_restricted", "internal_only", "redistribution_needs_licence")
-        if terms and terms not in words:
-            raise ValueError(f"a licence's derived_use_terms is one of {', '.join(words)}")
-        if not terms:
-            terms = "not_restricted" if self.derived_use else "internal_only"
-        flag = terms != "internal_only"
-        if self.derived_use is not None and bool(self.derived_use) != flag:
-            raise ValueError(
-                f"a licence's derived_use {self.derived_use} disagrees with its "
-                f"derived_use_terms {terms}: a v27 writer sets both alike (ruling 479)"
-            )
-        object.__setattr__(self, "derived_use_terms", terms)
-        object.__setattr__(self, "derived_use", flag)
-        bound = DATASET_LICENCE_RETENTION_DAYS_RANGE
-        if not bound.admits(self.retention_days):
-            raise ValueError(f"a licence's retention_days is {bound.least} to {bound.most}")
-        if not DATASET_LICENCE_DEFAULT_FIELDS_COUNT.admits(len(self.default_fields)):
-            raise ValueError(
-                f"a licence names at most {DATASET_LICENCE_DEFAULT_FIELDS_COUNT.most} "
-                "default fields"
-            )
-        unknown = next((f for f in self.default_fields if not _entry_named(f)), None)
-        if unknown is not None:
-            raise ValueError(
-                f"a licence's default field {unknown!r} is no entry of the data dictionary"
-            )
-
-    def _wire(self) -> sidecar_pb2.DatasetLicence:
-        return sidecar_pb2.DatasetLicence(
-            kept=self.kept,
-            retention_days=self.retention_days,
-            derived_use=bool(self.derived_use),
-            derived_use_terms=cast(
-                Any,
-                sidecar_pb2.DerivedUse.Value("DERIVED_USE_" + self.derived_use_terms.upper()),
-            ),
-            display=self.display,
-            default_fields=list(self.default_fields),
-            personal_use=self.personal_use,
-            redistribution=cast(
-                Any,
-                sidecar_pb2.Redistribution.Value(
-                    "REDISTRIBUTION_" + (self.redistribution or "unspecified").upper()
-                ),
-            ),
-            attribution_required=self.attribution_required,
-            attribution_text=self.attribution_text,
-            copyright_class=cast(
-                Any,
-                sidecar_pb2.CopyrightClass.Value(
-                    "COPYRIGHT_CLASS_" + (self.copyright_class or "unspecified").upper()
-                ),
-            ),
-            no_more_restrictive_terms=self.no_more_restrictive_terms,
-            not_affiliated_notice=self.not_affiliated_notice,
-            eligibility=None if self.eligibility is None else self.eligibility._wire(),
-            underlying_source=self.underlying_source,
-        )
-
-    def _to_json(self) -> dict[str, Any]:
-        return {
-            "kept": self.kept,
-            "retention_days": self.retention_days,
-            "derived_use": self.derived_use,
-            "derived_use_terms": self.derived_use_terms,
-            "display": self.display,
-            "default_fields": list(self.default_fields),
-            "personal_use": self.personal_use,
-            "redistribution": self.redistribution,
-            "attribution_required": self.attribution_required,
-            "attribution_text": self.attribution_text,
-            "copyright_class": self.copyright_class,
-            "no_more_restrictive_terms": self.no_more_restrictive_terms,
-            "not_affiliated_notice": self.not_affiliated_notice,
-            **(
-                {} if self.eligibility is None else {"eligibility": self.eligibility._to_json()}
-            ),
-            # Written only where declared, so an upload declaring none reads
-            # as before the amendment.
-            **({"underlying_source": self.underlying_source} if self.underlying_source else {}),
-        }
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -598,8 +383,25 @@ class DatasetDeclaration:
     `traded`, `firm_quote`, `composite` or `evaluated`, empty for not stated:
     a price keeps its real kind (a composite's is `mid`), and the class says
     what stands behind it; whose aggregate a composite is goes in its
-    licence's `underlying_source`. A core earlier than the amendment's
-    refuses a registration setting it."""
+    terms and pricing (`terms_and_pricing`). A core earlier than the
+    amendment's refuses a registration setting it.
+
+    From contract v30 (ruling 1032) the catalogue declares no licence: the
+    vendor's terms and pricing are `terms_and_pricing`, plain words of at
+    most 2,000 characters -- the sources behind the vendor, what it charges
+    and on what meters, what it forbids -- shown on Data sources and in the
+    plugin's docs, read by the deployment admin's agent as data, never as a
+    licence; the deployment admin's licence is what is enforced, and a
+    dataset nobody has licensed is kept and read with each use right read
+    restrictively. `meridian plugin migrate` turns a `licence_default` into
+    this text (its rule `licence-default-described`).
+    `sessions_calendar_id` (ruling 455) is the trading-sessions calendar its
+    live rows follow, a `CAL-` ID beside `calendar_id`, the settlement
+    calendar: an FX dataset names the FX week, which the platform's calendar
+    master holds, and `helpers.sessions.read_sessions` reads it.
+    `gap_recovery` (W10.14) is how a gap in it is recovered -- `backfill`
+    (the vendor serves history: the lake asks again through the want),
+    `stream_only` or `none`, empty for not declared, read as none."""
 
     key: str
     vendor: str
@@ -608,13 +410,15 @@ class DatasetDeclaration:
     aggregator: str = ""
     cadence: int = 0
     history: int = 0
-    licence_default: DatasetLicence | None = None
+    terms_and_pricing: str = ""
     day_time_zone: str = ""
     day_end_minute: int = 0
     venue_id: str = ""
     calendar_id: str = ""
+    sessions_calendar_id: str = ""
     declared_delay_ns: int = 0
     price_source_class: str = ""
+    gap_recovery: str = ""
 
     def __post_init__(self) -> None:
         from .operations import _enum
@@ -704,6 +508,29 @@ class DatasetDeclaration:
                 f"{', '.join(_PRICE_SOURCE_CLASSES)}, or empty for not stated"
             )
         object.__setattr__(self, "price_source_class", said)
+        if self.sessions_calendar_id and not self.sessions_calendar_id.startswith("CAL-"):
+            raise ValueError(
+                f"{at}'s sessions_calendar_id {self.sessions_calendar_id!r} is no calendar's "
+                "ID (CAL-): a trading-sessions calendar of the deployment's Calendars"
+            )
+        if not isinstance(self.terms_and_pricing, str):
+            raise ValueError(f"{at}'s terms_and_pricing is text: the vendor's terms, in words")
+        terms = self.terms_and_pricing.strip()
+        if not DATASET_DECLARATION_TERMS_AND_PRICING_LENGTH.admits(len(terms)):
+            raise ValueError(
+                f"{at}'s terms_and_pricing is at most "
+                f"{DATASET_DECLARATION_TERMS_AND_PRICING_LENGTH.most} characters"
+            )
+        object.__setattr__(self, "terms_and_pricing", terms)
+        recovery = str(self.gap_recovery or "").strip().lower().removeprefix("gap_recovery_")
+        if recovery == "unspecified":
+            recovery = ""
+        if recovery and recovery not in _GAP_RECOVERIES:
+            raise ValueError(
+                f"{at}'s gap_recovery {self.gap_recovery!r} is one of "
+                f"{', '.join(_GAP_RECOVERIES)}, or empty for not declared"
+            )
+        object.__setattr__(self, "gap_recovery", recovery)
 
     def _wire(self) -> sidecar_pb2.DatasetDeclaration:
         return sidecar_pb2.DatasetDeclaration(
@@ -714,9 +541,7 @@ class DatasetDeclaration:
             modes=list(self.modes),  # type: ignore[arg-type]
             cadence=self.cadence,
             history=self.history,
-            licence_default=(
-                None if self.licence_default is None else self.licence_default._wire()
-            ),
+            terms_and_pricing=self.terms_and_pricing,
             day_time_zone=self.day_time_zone,
             day_end_minute=self.day_end_minute,
             venue_id=self.venue_id,
@@ -726,6 +551,13 @@ class DatasetDeclaration:
                 Any,
                 sidecar_pb2.PriceSourceClass.Value(
                     "PRICE_SOURCE_CLASS_" + (self.price_source_class or "unspecified").upper()
+                ),
+            ),
+            sessions_calendar_id=self.sessions_calendar_id,
+            gap_recovery=cast(
+                Any,
+                sidecar_pb2.GapRecovery.Value(
+                    "GAP_RECOVERY_" + (self.gap_recovery or "unspecified").upper()
                 ),
             ),
         )
@@ -745,9 +577,6 @@ class DatasetDeclaration:
             "modes": [words[int(mode)] for mode in self.modes],
             "cadence": self.cadence,
             "history": self.history,
-            "licence_default": (
-                None if self.licence_default is None else self.licence_default._to_json()
-            ),
             "day_time_zone": self.day_time_zone,
             "day_end_minute": self.day_end_minute,
             "venue_id": self.venue_id,
@@ -760,6 +589,14 @@ class DatasetDeclaration:
                 if self.price_source_class
                 else {}
             ),
+            # From contract v30, likewise each only where declared.
+            **({"terms_and_pricing": self.terms_and_pricing} if self.terms_and_pricing else {}),
+            **(
+                {"sessions_calendar_id": self.sessions_calendar_id}
+                if self.sessions_calendar_id
+                else {}
+            ),
+            **({"gap_recovery": self.gap_recovery} if self.gap_recovery else {}),
         }
 
 
@@ -915,7 +752,11 @@ class Declaration:
     (1 to 1440; 0 declares none).
     From contract v27 a pricing plugin's `pricing_models`
     (`PricingModelDeclaration`), each model once (SDK 0.35.3: a plugin
-    subclassed the declaration to send them)."""
+    subclassed the declaration to send them).
+    From contract v30 `most_shards`, the most pods of one instance its
+    vendor allows (0 to 64; 0 or 1 says it is not shardable): the most a
+    deployment admin may launch it with, each shard a pod of the one
+    instance."""
 
     settings: Sequence[Any] | type[Any] = ()
     not_carried: Sequence[NotCarried] = field(default=())
@@ -927,6 +768,7 @@ class Declaration:
     documentation: str | os.PathLike[str] | None = None
     affirmation_deadline: int = 0
     pricing_models: Sequence[PricingModelDeclaration] = ()
+    most_shards: int = 0
     _read: dict[str, tuple[_Section, ...]] = field(
         default_factory=dict, init=False, repr=False, compare=False
     )
@@ -959,6 +801,16 @@ class Declaration:
             raise ValueError(
                 "affirmation_deadline is minutes after midnight in the deployment's time "
                 f"zone, 1 to {bound.most}, or 0 for none; not {deadline!r}"
+            )
+        shards = self.most_shards
+        if (
+            isinstance(shards, bool)
+            or not isinstance(shards, int)
+            or not PLUGIN_DECLARATION_MOST_SHARDS_RANGE.admits(shards)
+        ):
+            raise ValueError(
+                "most_shards is the most pods of one instance its vendor allows, "
+                f"0 to {PLUGIN_DECLARATION_MOST_SHARDS_RANGE.most}; not {shards!r}"
             )
         if len(self.not_carried) > PLUGIN_DECLARATION_NOT_CARRIED_COUNT.most:
             raise ValueError(
@@ -1162,6 +1014,7 @@ class Declaration:
             ],
             affirmation_deadline=self.affirmation_deadline,
             pricing_models=[held._wire() for held in self.pricing_models],
+            most_shards=self.most_shards,
         )
 
     def to_json(self) -> dict[str, Any]:
@@ -1211,6 +1064,8 @@ class Declaration:
                 {"model_id": held.model_id, "model_version": held.model_version}
                 for held in self.pricing_models
             ]
+        if self.most_shards:
+            out["most_shards"] = self.most_shards
         return out
 
     def _texts(self) -> list[dict[str, str]]:

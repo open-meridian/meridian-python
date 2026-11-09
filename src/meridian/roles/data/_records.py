@@ -61,7 +61,9 @@ class VenueConnection(ConnectionRead):
 
 @dataclass(frozen=True)
 class Served:
-    """One dataset it serves, as its catalogue declares it ("Served")."""
+    """One dataset it serves, as its catalogue declares it ("Served"):
+    `default_terms` is, from contract v30, its vendor's terms and pricing
+    in words (`DatasetDeclaration.terms_and_pricing`; ruling 1032)."""
 
     dataset: str
     data: str = ""

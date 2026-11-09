@@ -15,18 +15,10 @@ from ._records import Served, WantHeard
 from ._wants import Venue, Wants
 
 
-def _terms(licence: Any) -> str:
-    """A dataset's default terms in words: kept or served only, for how long,
-    displayed or not, one person's."""
-    if licence is None:
-        return ""
-    said = ["kept" if licence.kept else "served, not kept"]
-    if licence.retention_days:
-        said.append(f"{licence.retention_days} days")
-    said.append("display" if licence.display else "no display")
-    if licence.personal_use:
-        said.append("one person's")
-    return ", ".join(said)
+def _terms(declared: Any) -> str:
+    """A dataset's terms and pricing as its vendor's words (contract v30,
+    ruling 1032): what the catalogue declares, never a licence."""
+    return str(getattr(declared, "terms_and_pricing", "") or "")
 
 
 def _arrives(mode: object) -> str:
@@ -53,7 +45,7 @@ def served(
                 arrives=", ".join(_arrives(m) for m in declared.modes),
                 day=f"{declared.day_time_zone}, ends {declared.day_end_minute // 60:02d}:"
                 f"{declared.day_end_minute % 60:02d}",
-                default_terms=_terms(declared.licence_default),
+                default_terms=_terms(declared),
                 entitled_at_vendor=entitled_at_vendor,
                 recorded=sent.recorded if sent else 0,
                 declined=sent.declined if sent else 0,

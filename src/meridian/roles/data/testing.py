@@ -2451,7 +2451,7 @@ class EventContractsChecks(_PageChecks):
         assert [d["dataset"] for d in datasets["served"]] == self.datasets()
         assert [d["data"] for d in datasets["served"]][:2] == ["Price, Quote", "Outcome"]
         assert [d["arrives"] for d in datasets["served"]][:2] == ["pull, stream", "push"]
-        assert datasets["served"][1]["default_terms"].startswith("kept"), "outcomes are kept"
+        assert all(isinstance(d["default_terms"], str) for d in datasets["served"]), "in words"
         assert all(d["day"] == "Etc/UTC, ends 00:00" for d in datasets["served"][:2])
         assert datasets["served"][0]["recorded"] > 0 and datasets["served"][0]["last_recorded"]
         assert datasets["served"][1]["recorded"] == 0, "no contract it serves is determined"

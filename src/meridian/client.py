@@ -23,6 +23,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import contextlib
+import contextvars
 import json
 import logging
 import os
@@ -129,9 +130,14 @@ if TYPE_CHECKING:
 #: face and percent of par, the book's coupons, redemptions, paydowns,
 #: accretions, TBA allocations, strips and reconstitutions, the factor as a
 #: dated fact, a yield beside a price, the curve and bond measures) and the
-#: queued items -- and a newer sidecar still admits it. Raised with
-#: every contract revision that adds something a plugin can depend on.
-SCHEMA_VERSION = "v29"
+#: queued items, and from contract 30 standing analytics (a job held and
+#: its figures heard), the resilience records, a dataset's terms in words
+#: (its licence_default retired), its trading-sessions calendar and gap
+#: recovery, a version's most shards, an event contract's stated terms and
+#: the source priorities read -- and a newer sidecar still admits it.
+#: Raised with every contract revision that adds something a plugin can
+#: depend on (CONTRACT_CURRENT 30).
+SCHEMA_VERSION = "v30"
 
 #: Where a sidecar listens. Loopback, always: a sidecar reachable from another
 #: host is a way around the boundary it exists to enforce.
@@ -151,6 +157,14 @@ _RETIRED_BY_026 = (
 #: stopped sending these is the more informative signal, so this is deliberately
 #: frequent enough that silence means something within seconds.
 HEARTBEAT_SECONDS = 5.0
+
+#: The deadline, in seconds, of each operation made while it is set: the
+#: reads a stream catches up by (SDK 0.36.0), so a far end that stopped
+#: answering without closing fails the read rather than holding the stream
+#: for ever. None, its default, sets none.
+READ_DEADLINE: contextvars.ContextVar[float | None] = contextvars.ContextVar(
+    "read_deadline", default=None
+)
 
 #: How long `connect` waits for a sidecar that is not answering yet. A plugin
 #: and its sidecar start together in one pod, in no promised order, so the
@@ -1576,6 +1590,7 @@ class Plugin:
         expiration_from: Any = "",
         expiration_to: Any = "",
         fields: Sequence[str] = (),
+        job_ids: Sequence[str] = (),
         linger: float = 30.0,
     ) -> Any:
         """A targeted read kept open (W4.3; contract v28, amended 2026-10-30):
@@ -1590,7 +1605,9 @@ class Plugin:
         deliveries above it are applied; a loss or a broken stream reads it
         again. Identical selectors are one subscription, shared; `close()`
         the view when a reader is done, and the subscription is dropped
-        `linger` seconds after its last reader leaves."""
+        `linger` seconds after its last reader leaves. From contract v30
+        `job_ids` names a standing job's results (`DerivedSeriesUpdated`),
+        which `analytics.Jobs.standing` registers and subscribes to."""
         from .views import selector, views_of
 
         self._check_open()
@@ -1603,6 +1620,7 @@ class Plugin:
                 expiration_from=expiration_from,
                 expiration_to=expiration_to,
                 fields=fields,
+                job_ids=job_ids,
             ),
             linger,
         )
@@ -1945,8 +1963,12 @@ class Plugin:
         self._check_open()
         operation = type(params).__name__.removesuffix("Params")
         checked(params)
+        deadline = READ_DEADLINE.get()
         try:
-            return await method(params)
+            if deadline is None:
+                return await method(params)
+            answered: _Answer = await cast(Any, method)(params, timeout=deadline)
+            return answered
         except grpc.aio.AioRpcError as failed:
             _translated(operation, failed)
 

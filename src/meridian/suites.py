@@ -428,6 +428,16 @@ class Recorder(Operations):
             return self._answers[row](params)
         return _ordinary(row, params, len(self.sent), provisional=self.provisional)
 
+    def _standing_views(self) -> Any:
+        """The views a standing job is held in here (contract v30): read
+        through this recorder and handed what it answers for their rows."""
+        from .views import _RecordedViews
+
+        held = self.__dict__.get("_views_held")
+        if held is None:
+            held = self.__dict__["_views_held"] = _RecordedViews(cast(Any, self))
+        return held
+
     def bind(self, role: _Role) -> _Role:
         """Register a plugin's role class on this recorder, as `meridian.run`
         registers it on the connection (SDK 0.35): its acts are recorded

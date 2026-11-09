@@ -43,7 +43,7 @@ AAPL = "INS-01J8XQ4M7K0000000000AAPL"
 
 
 def test_the_schema_is_contract_v26() -> None:
-    assert meridian.SCHEMA_VERSION == "v29"
+    assert meridian.SCHEMA_VERSION == "v30"
     fields = sidecar_pb2.CallerClaims.DESCRIPTOR.fields_by_name
     assert "demo_connectivity_instance_ids" in fields
     assert "model_tokens" in sidecar_pb2.HeartbeatRequest.DESCRIPTOR.fields_by_name
@@ -266,10 +266,10 @@ def test_pnl_v1_is_unrealized_alone_and_v2_adds_realized() -> None:
         ("unrealized", "market_value_less_open_lots_cost"),
     )
     assert analytics.measure("pnl", 2).version == 2
-    with pytest.raises(ValueError, match="pnl v3 is not served in contract v29; up to v2 is$"):
+    with pytest.raises(ValueError, match="pnl v3 is not served in contract v30; up to v2 is$"):
         analytics.measure("pnl", 3)
     with pytest.raises(
-        ValueError, match="exposure v2 is not served in contract v29; up to v1 is$"
+        ValueError, match="exposure v2 is not served in contract v30; up to v1 is$"
     ):
         analytics.measure("exposure", 2)
 

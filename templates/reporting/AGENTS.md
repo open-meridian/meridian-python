@@ -197,8 +197,10 @@ and subscribe to comes from the roles `pyproject.toml` declares under
   edge, and shows none.** Declare each dataset in the declaration's
   catalogue, from code: `Declaration(catalogue=[meridian.DatasetDeclaration(
   key="daily", vendor=..., data_types=["meridian.v1.Price"], modes=["pull"],
-  licence_default=meridian.DatasetLicence(...), day_time_zone="Etc/UTC",
-  venue_id=...)])`, a daily dataset and a live one apart. Resolve every
+  terms_and_pricing="...", day_time_zone="Etc/UTC", venue_id=...)])`, a
+  daily dataset and a live one apart; `terms_and_pricing` is the vendor's
+  terms and pricing in plain words (what it charges, what it forbids), never
+  a licence, which the deployment admin sets. Resolve every
   subject (`resolve_identifier`) and venue (`resolve_venue`) before recording,
   and report what does not resolve (`report_missing_instrument`,
   `report_missing_venue`); keep the vendor's product map in storage, never a
@@ -225,8 +227,8 @@ and subscribe to comes from the roles `pyproject.toml` declares under
   keeps its real kind -- a composite's is `mid`, an evaluated bond's `bid`,
   `mid` and `ask` -- never a kind made up for the class. Where the vendor
   passes on another source's data or serves an aggregate, name it in the
-  terms, `DatasetLicence(underlying_source=...)`, in words: "Pyth's aggregate
-  of its publishers". Where the source states an interval around its price,
+  dataset's `terms_and_pricing`, in words: "Pyth's aggregate of its
+  publishers". Where the source states an interval around its price,
   record it as the source states it, `Price(confidence=...)`, in the price's
   own unit, never computed, and name `meridian.v1.Price.confidence` among
   the dataset's `data_types`. A deployment admin sees the class and the

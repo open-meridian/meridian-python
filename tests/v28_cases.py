@@ -394,7 +394,7 @@ async def records_a_derived_series(recorder: Recorder) -> None:
             ),
             series="level",
             value=meridian.UnitValue(value=Decimal("16.42"), unit="percent"),
-            rule=ops.MeasureRef(definition="cboe_vix", version=1),
+            rule=meridian.MeasureRef(definition="cboe_vix", version=1),
             published_by="Cboe",
         )
         await recorder.record_derived_series(values=[figure])

@@ -1,0 +1,119 @@
+# open-meridian 0.35.5 to 0.36.0: contract 30
+# (sdk-contract/standing-analytics-and-resilience-contract; DESIGN30, the
+# rulings of 2026-11-09, 1032, 1035 and 455). Breaking: a dataset's
+# licence_default left the wire (ruling 1032), so a declaration naming it
+# no longer builds; the migration writes its terms as words instead.
+from = "0.35.5"
+to = "0.36.0"
+summary = """
+The SDK declares contract 30 (meridian.SCHEMA_VERSION "v30"): standing
+analytics, the resilience records and the items folded into it.
+
+A dataset's catalogue entry declares no licence (ruling 1032): what its vendor's
+standard terms say is DatasetDeclaration.terms_and_pricing, plain words of at
+most 2,000 characters, shown on Data sources and in the plugin's docs and read
+by the deployment admin's agent as data; the deployment admin's licence is what
+is enforced, and a dataset nobody has licensed is kept and read with each use
+right read restrictively. meridian.DatasetLicence and meridian.DataEligibility
+are gone with it. This step turns each licence_default=DatasetLicence(...) the
+plugin declares into that text, word by word, and drops the two names from its
+imports where nothing else names them.
+
+A dataset may name the trading-sessions calendar its live rows follow
+(sessions_calendar_id, a CAL- ID beside calendar_id; the FX week is one) and how
+a gap in it is recovered (gap_recovery: backfill, stream_only or none); a
+version may declare the most shards its vendor allows (Declaration.most_shards).
+helpers.sessions.read_sessions reads a dataset's trading sessions from its
+calendar. A job may be standing (analytics.job(..., standing=True), each measure
+naming its refresh: analytics.measure(..., refresh="per_change" | "cadence",
+cadence_ns=, material_move_bp=)), and analytics.Jobs().standing(role, job)
+answers a LiveView of its figures, kept current from DerivedSeriesUpdated and
+read again whole by its job ID after a gap. A Job's measures, a DerivedSeries'
+and a CorporateActionAnnounced's rule are meridian.MeasureRef, the SDK's form;
+analytics.measure still answers the wire's, which analytics.job converts.
+ResolveIdentifier takes stated_binary_event_contract, and
+event_contracts.Contract.category is stated with it (1035). The eight roles that
+read the lake read the source priorities (list_source_priorities, 454).
+
+The delivery stream and the views' stream are held to their far end: a stream
+that names lake rows and has heard nothing for a while reads the latest of what
+it names, hands on what it missed, and opens again where it missed any, so a
+far end that restarted without breaking the stream is caught up, never frozen.
+
+The suites: the reporting, portfolio, compliance and signal suites hold
+holds-a-standing-figure, and those of the eight roles that read the lake
+reads-the-source-priorities. A plugin's suite test maps each or names it not
+presented, with why: left by hand.
+"""
+breaking = true
+rewrite = "rewrite.py"
+
+[[rewrites]]
+rule = "licence-default-described"
+what = """a dataset's `licence_default=DatasetLicence(...)`, every argument a \
+literal, rewritten to `terms_and_pricing="..."`: the terms it declared, in words, \
+each part as given (kept or served only, retention, derived use, display, default \
+fields, one person's terms, redistribution, attribution, copyright, no more \
+restrictive terms, the not-affiliated notice, eligibility, the underlying source); \
+and DatasetLicence and DataEligibility dropped from a `from meridian import ...` \
+where nothing else in the file names them"""
+
+[[rewrites]]
+rule = "base-digest-dropped"
+what = """the Dockerfile's base, pinned by digest at an older release of \
+plugin-python, moved to 0.36.0 with its digest dropped: the migration runs with no \
+network, so it cannot read 0.36.0's digest, and an old digest under a new tag would \
+build the old release while saying the new one; a base at 0.36.0 or a later \
+release left as it is"""
+
+[[by_hand]]
+rule = "licence-default-left"
+what = """a `licence_default` the rule could not read -- a licence held in a \
+name, an argument that is not a literal, a dataset built from a mapping -- or \
+DatasetLicence, DataEligibility or `.licence_default` still named (a test reading \
+the declaration's licence): each is gone from 0.36.0, and the file fails where it \
+runs"""
+instead = """describe the dataset's terms in `terms_and_pricing="..."`, the \
+vendor's words -- the sources behind it, what it charges and on what meters, what it \
+forbids -- at most 2,000 characters; read them back as `.terms_and_pricing`. The \
+licence a deployment admin sets is the one enforced, and is never the plugin's"""
+
+[[by_hand]]
+rule = "measure-ref-sdk-form"
+what = """a DerivedSeries or a CorporateActionAnnounced of the SDK's (not the \
+wire's `ops.`) given the wire's MeasureRef as its `rule`: from 0.36.0 it takes \
+meridian.MeasureRef, which carries a standing measure's refresh, and refuses the \
+wire's"""
+instead = """build its rule as `meridian.MeasureRef(definition=..., version=...)`; \
+analytics.measure(...) answers the wire's, which analytics.job takes as before"""
+
+[[by_hand]]
+rule = "suite-cases-v30"
+what = """a test running a role's suite that contract 30 adds cases to: the \
+reporting, portfolio, compliance and signal suites' holds-a-standing-figure (about: \
+standing analytics), and reads-the-source-priorities (about: source priorities) in \
+those of reporting, portfolio, compliance, signal, ems, oms, operations and \
+servicing"""
+instead = """map each to the plugin's own producer -- a standing job held \
+(analytics.Jobs().standing(role, job)), the source priorities read \
+(role.list_source_priorities()) -- or, for one its work never does, name it in \
+not_presented with why"""
+
+[[by_hand]]
+rule = "core-images"
+what = """the Makefile pins core's runtime or harness image for the plugin's e2e \
+(`RUNTIME_IMAGE ?=`, `HARNESS_IMAGE ?=`) to a core below contract 30, or names no \
+contract for it: the migration runs with no network and cannot read a core's digest"""
+instead = """pin both to one core of contract 30 by digest -- \
+`ghcr.io/open-meridian/meridian-runtime:<core>@sha256:<digest>` and \
+`meridian-harness:<core>@sha256:<digest>`, the digests `docker buildx imagetools \
+inspect` names -- and say the core and its contract in the comment above them \
+(`# Core <sha>, contract v30, ...`)"""
+
+[[by_hand]]
+rule = "base-digest"
+what = """the Dockerfile's base was pinned by digest, and the digest was dropped \
+when its tag moved"""
+instead = """pin it again: `ghcr.io/open-meridian/plugin-python:0.36.0@sha256:<digest>`, \
+the digest `docker buildx imagetools inspect ghcr.io/open-meridian/plugin-python:0.36.0` \
+names"""

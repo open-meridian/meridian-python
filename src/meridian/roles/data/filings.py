@@ -42,6 +42,7 @@ from ...operations import (
     Filing,
     Holding,
     HoldingsReport,
+    MeasureRef,
     Money,
     ObservationMeta,
     RatingAction,
@@ -258,7 +259,7 @@ def dividend(
         ex_date=ex_date,
         record_date=record_date,
         payment_date=payment_date,
-        rule=ops.MeasureRef(definition=definition, version=version),
+        rule=MeasureRef(definition=definition, version=version),
         filing=filed_in,
     )  # fmt: skip
 

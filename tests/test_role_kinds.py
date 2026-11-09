@@ -405,7 +405,7 @@ CATALOGUE = [
         modes=["pull"],
         cadence=1,
         history=0,
-        licence_default=meridian.DatasetLicence(kept=True),
+        terms_and_pricing="Kept by the lake.",
         day_time_zone="Etc/UTC",
         day_end_minute=0,
     )

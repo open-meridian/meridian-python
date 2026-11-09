@@ -1689,7 +1689,7 @@ def datasets_read(
                 arrives=", ".join(_arrives(m) for m in declared.modes),
                 day=f"{declared.day_time_zone}, ends {declared.day_end_minute // 60:02d}:"
                 f"{declared.day_end_minute % 60:02d}",
-                default_terms=_terms(declared.licence_default),
+                default_terms=_terms(declared),
                 entitled_at_vendor=entitled_at_vendor,
                 recorded=counts.recorded if counts else 0,
                 declined=counts.declined if counts else 0,

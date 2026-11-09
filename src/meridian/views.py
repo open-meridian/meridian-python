@@ -14,6 +14,17 @@ per dataset for the lake's rows. On a loss marker naming the row, or a broken
 stream, it reads again for that selector alone; the sidecar is the one
 matcher, each delivery naming the subscriptions it matched.
 
+**A standing job's figures** (contract v30): a selector naming `job_ids`
+keeps the job's figures, values and what was not evaluated, each by its key,
+from `DerivedSeriesUpdated` in the job's sequence; a gap in it, a loss or a
+broken stream reads the whole answer again (`ReadJobAnswer`), and a job the
+component no longer holds is registered again (`analytics.Jobs.standing`).
+
+**Held to its far end** (SDK 0.36.0): a stream carrying a view that hears
+nothing for `receive.QUIET_SECONDS` is opened again and every view read
+again, as after a break, so a far end restarted without breaking it -- the
+lake killed behind the sidecar -- never leaves a view frozen.
+
 **Shared, ref-counted, lingering.** Identical selectors within a plugin are
 one subscription. Each `subscribe` is one reader; `close()` lets it go, and
 the subscription is dropped `linger` seconds (30 by default) after the last
@@ -48,10 +59,14 @@ from google.protobuf.json_format import MessageToDict
 
 from meridian.plugin.v1 import operations_pb2 as ops
 
+from .errors import MeridianError
 from .operations import CONFLATED, DELIVERED, UNCONFLATED, SubjectRef
 
 if TYPE_CHECKING:
     from .client import Plugin
+
+#: What a stream's read answers once the stream has ended.
+_EOF: Any = grpc.aio.EOF  # type: ignore[attr-defined]
 
 _log = logging.getLogger("meridian.views")
 
@@ -84,6 +99,8 @@ class _Selector:
     expiration_from: str
     expiration_to: str
     fields: tuple[str, ...]
+    #: A standing job's results (contract v30), by its job ID.
+    job_ids: tuple[str, ...] = ()
 
     def request(self, subscription_id: str) -> ops.SubscribeRequest:
         return ops.SubscribeRequest(
@@ -97,6 +114,7 @@ class _Selector:
             expiration_from=self.expiration_from,
             expiration_to=self.expiration_to,
             fields=list(self.fields),
+            job_ids=list(self.job_ids),
         )
 
 
@@ -255,6 +273,13 @@ class _Shared:
     )
     lingering: asyncio.Task[None] | None = None
     flushing: asyncio.Task[None] | None = None
+    #: A standing job's view (contract v30): the job, registered again
+    #: where the component no longer holds it, and what registers and
+    #: reads it -- the role object `Jobs.standing` was given.
+    job: Any = None
+    operations: Any = None
+    #: A gap in a standing job's sequence: read again whole.
+    gap: bool = False
 
 
 class LiveView:
@@ -368,8 +393,12 @@ class _Views:
 
     # ── Readers ───────────────────────────────────────────────────────────
 
-    async def subscribe(self, selector: _Selector, linger: float) -> LiveView:
+    async def subscribe(
+        self, selector: _Selector, linger: float, *, job: Any = None, operations: Any = None
+    ) -> LiveView:
         kind, table = _row(selector.row)
+        if selector.job_ids:
+            kind = "job"
         async with self.lock:
             shared = self.by_selector.get(selector)
             if shared is None:
@@ -379,6 +408,8 @@ class _Views:
                     kind=kind,
                     table=table,
                     linger=linger,
+                    job=job,
+                    operations=operations,
                 )
                 await self._ensure_stream(selector.row)
                 await self._open(shared)
@@ -408,9 +439,7 @@ class _Views:
             if shared.flushing is not None:
                 shared.flushing.cancel()
         with contextlib.suppress(grpc.aio.AioRpcError):
-            await self.plugin._operations().Unsubscribe(
-                ops.UnsubscribeRequest(subscription_id=shared.subscription_id)
-            )
+            await self._unsubscribe(shared.subscription_id)
 
     async def stop(self) -> None:
         """The plugin is leaving: every view's work stopped."""
@@ -447,18 +476,45 @@ class _Views:
         terms rather than gRPC's -- is said, and the stream opened again,
         every view subscribed and read again on it; until then a view keeps
         its rows and holds what is delivered to it."""
+        from .client import READ_DEADLINE
+        from .receive import QUIET_MOST_SECONDS, QUIET_SECONDS, READ_SECONDS
+
+        # Each read again is given READ_SECONDS; a stream carrying views and
+        # silent for QUIET_SECONDS is opened again, every view read again
+        # (SDK 0.36.0), as the delivery stream is.
+        READ_DEADLINE.set(READ_SECONDS)
+        quiet = QUIET_SECONDS
         while True:
             call = self.plugin._operations().Receive(
                 ops.ReceiveRequest(rows=[row], subjects=[])
             )
+            pending: asyncio.Future[Any] | None = None
+            silent = False
             try:
                 await call.initial_metadata()
                 reopened = self.opened.is_set() or bool(self.by_id)
                 self.opened.set()
                 if reopened:
                     await self.reopened()
-                async for delivery in call:
+                while True:
+                    pending = asyncio.ensure_future(call.read())
+                    done, _ = await asyncio.wait(
+                        {pending}, timeout=quiet if self.by_id else None
+                    )
+                    if not done:
+                        silent = True
+                        break
+                    delivery, pending = pending.result(), None
+                    if delivery is _EOF:
+                        break
+                    quiet = QUIET_SECONDS
                     await self.delivered(delivery)
+                if silent:
+                    _log.warning(
+                        "the views' stream heard nothing for %g s; opening it again", quiet
+                    )
+                    quiet = min(quiet * 2, QUIET_MOST_SECONDS)
+                    continue
                 _log.warning("the views' stream ended; opening it again")
             except grpc.aio.AioRpcError as failed:
                 _log.warning("the views' stream broke (%s); opening it again", failed.code())
@@ -469,6 +525,8 @@ class _Views:
                     failed,
                 )
             finally:
+                if pending is not None:
+                    pending.cancel()
                 call.cancel()
             await asyncio.sleep(RETRY_SECONDS)
 
@@ -484,15 +542,14 @@ class _Views:
         """Subscribe, read the snapshot at a watermark, apply it, then the
         deliveries held meanwhile above it."""
         shared.ready.clear()
-        await self.plugin._operations().Subscribe(
-            shared.selector.request(shared.subscription_id)
-        )
+        await self._subscribe(shared)
         await self._read(shared)
         if shared.flushing is None or shared.flushing.done():
             shared.flushing = asyncio.create_task(self._flush(shared))
 
     async def _read(self, shared: _Shared) -> None:
         shared.ready.clear()
+        shared.gap = False
         rows, watermark = await self._snapshot(shared)
         shared.watermark = watermark
         fresh = {key: row for key, row in rows}
@@ -512,6 +569,8 @@ class _Views:
 
     async def _snapshot(self, shared: _Shared) -> tuple[list[tuple[str, Any]], dict[str, int]]:
         sel, table = shared.selector, shared.table
+        if shared.kind == "job":
+            return await self._job_snapshot(shared), {}
         if shared.kind == "trades":
             # A tail from now: the trades heard after the subscription.
             return [], {}
@@ -565,6 +624,56 @@ class _Views:
                 break
         return rows, watermark
 
+    async def _job_snapshot(self, shared: _Shared) -> list[tuple[str, Any]]:
+        """A standing job's whole current answer, read again by its job ID
+        (`ReadJobAnswer`, in its pages: figures, values and what was not
+        evaluated). A job the component no longer holds -- its coordinator
+        lost, its renewal answered unknown -- is registered again by `RunJob`
+        with the job the view holds, and the view follows the job ID it is
+        answered (spec/one-data-access-model, section 4)."""
+        from .analytics import _read_answer
+
+        acting = shared.operations if shared.operations is not None else self.plugin._acts
+        rows: list[tuple[str, Any]] = []
+        for job_id in list(shared.selector.job_ids):
+            try:
+                answer = await _read_answer(acting, job_id)
+            except (grpc.aio.AioRpcError, MeridianError) as failed:
+                if shared.job is None or not _not_found(failed):
+                    raise
+                answer = await self._register_again(shared, job_id, acting)
+            rows.extend(job_rows(answer))
+        return rows
+
+    async def _register_again(self, shared: _Shared, job_id: str, acting: Any) -> Any:
+        from .analytics import _read_answer
+
+        _log.info("the standing job %s is not held; registering it again", job_id)
+        reply = await acting.run_job(job=shared.job)
+        again = str(reply.job_id)
+        if again and again != job_id:
+            held = shared.selector
+            ids = tuple(again if each == job_id else each for each in held.job_ids)
+            moved = _Selector(**{**held.__dict__, "job_ids": ids})
+            self.by_selector.pop(held, None)
+            shared.selector = moved
+            self.by_selector[moved] = shared
+            with contextlib.suppress(grpc.aio.AioRpcError, MeridianError):
+                await self._unsubscribe(shared.subscription_id)
+            await self._subscribe(shared)
+            shared.watermark.pop(job_id, None)
+        return await _read_answer(acting, again or job_id)
+
+    async def _subscribe(self, shared: _Shared) -> None:
+        await self.plugin._operations().Subscribe(
+            shared.selector.request(shared.subscription_id)
+        )
+
+    async def _unsubscribe(self, subscription_id: str) -> None:
+        await self.plugin._operations().Unsubscribe(
+            ops.UnsubscribeRequest(subscription_id=subscription_id)
+        )
+
     # ── Deliveries ───────────────────────────────────────────────────────
 
     async def delivered(self, delivery: ops.Delivery) -> None:
@@ -585,12 +694,19 @@ class _Views:
                 matched.held.append(delivery)
                 continue
             self._apply(matched, delivery)
+            if matched.gap:
+                # A gap in a standing job's sequence: its whole answer
+                # read again (contract v30).
+                await self._read(matched)
 
     def _apply(self, shared: _Shared, delivery: ops.Delivery) -> None:
         """One delivery above the view's watermark applied; one at or below
         it is already in the snapshot and dropped."""
         message = getattr(delivery, delivery.WhichOneof("item"))
         table = shared.table
+        if shared.kind == "job":
+            self._apply_job(shared, message)
+            return
         if shared.kind == "record":
             journal = delivery.meta.journal
             if journal.sequence and journal.sequence <= shared.watermark.get(
@@ -619,6 +735,37 @@ class _Views:
         previous = shared.pending.get(key)
         shared.pending[key] = (record, previous[1] if previous else time.monotonic())
 
+    def _apply_job(self, shared: _Shared, event: Any) -> None:
+        """A standing job's update: each figure, value and what was not
+        evaluated kept by its key, in the job's sequence. One at or below
+        the last applied is dropped; one past the next marks a gap, and
+        the whole answer is read again rather than applied."""
+        if event.job_id not in shared.selector.job_ids:
+            return
+        last = shared.watermark.get(event.job_id, 0)
+        sequence = int(event.sequence)
+        if sequence and sequence <= last:
+            return
+        if sequence and last and sequence > last + 1:
+            shared.gap = True
+            return
+        if sequence:
+            shared.watermark[event.job_id] = sequence
+        now = time.monotonic()
+        for key, row in job_rows(event):
+            if key.startswith("not_evaluated"):
+                for gone in _evaluated_keys(shared.rows, row):
+                    shared.rows.pop(gone, None)
+                    shared.pending[gone] = (None, now)
+            else:
+                cleared = _not_evaluated_key(row)
+                if cleared in shared.rows:
+                    shared.rows.pop(cleared)
+                    shared.pending[cleared] = (None, now)
+            shared.rows[key] = row
+            previous = shared.pending.get(key)
+            shared.pending[key] = (row, previous[1] if previous else now)
+
     async def _flush(self, shared: _Shared) -> None:
         """Every 250 ms, the view's changes since as one event, the latest
         whole state per key (ruling 195)."""
@@ -636,6 +783,78 @@ class _Views:
                 queue.put_nowait((shared.sequence, rows, removed, waits))
 
 
+def _measure_text(measure: Any) -> str:
+    return f"{measure.definition}\x1f{measure.version}\x1f{measure.event_group_id}"
+
+
+def _figure_key(figure: Any) -> str:
+    key = figure.scenario_key
+    return "\x1f".join(
+        [
+            "figure",
+            _measure_text(figure.measure),
+            figure.account_id,
+            "|".join(f"{b.breakdown}={b.value}" for b in figure.breakdown),
+            f"{key.kind}|{key.business_date}|{key.outcome_instrument_id}",
+        ]
+    )
+
+
+def _value_key(value: Any) -> str:
+    meta = value.meta
+    return "\x1f".join(
+        [
+            "value",
+            _measure_text(value.rule),
+            ",".join(s.entity_id for s in meta.subjects),
+            meta.source.dataset,
+            _series_text(meta),
+            value.series,
+        ]
+    )
+
+
+def _not_evaluated_key(row: Any) -> str:
+    """The key of what was not evaluated for a figure's measure and account
+    (an instrument's left apart)."""
+    measure = getattr(row, "measure", None) or getattr(row, "rule", None)
+    account = getattr(row, "account_id", "")
+    instrument = (
+        getattr(row, "instrument_id", "") if row.DESCRIPTOR.name == "NotEvaluated" else ""
+    )
+    return "\x1f".join(["not_evaluated", _measure_text(measure), account, instrument])
+
+
+def _evaluated_keys(rows: dict[str, Any], not_evaluated: Any) -> list[str]:
+    """The figures a measure not evaluated for an account replaces: never a
+    zero (requirement 9). One naming an instrument replaces none."""
+    if not_evaluated.instrument_id:
+        return []
+    head = "\x1f".join(
+        ["figure", _measure_text(not_evaluated.measure), not_evaluated.account_id]
+    )
+    return [key for key in rows if key.startswith(head + "\x1f")]
+
+
+def job_rows(answer: Any) -> list[tuple[str, Any]]:
+    """A standing job's answer or update as a view keeps it, each by its key:
+    a figure by its measure, account, breakdown and scenario; a value by its
+    rule, subjects, dataset, series key and series; what was not evaluated
+    by its measure, account and instrument (contract v30)."""
+    rows: list[tuple[str, Any]] = [(_figure_key(f), f) for f in answer.figures]
+    rows += [(_value_key(v), v) for v in answer.values]
+    rows += [(_not_evaluated_key(n), n) for n in answer.not_evaluated]
+    return rows
+
+
+def _not_found(failed: BaseException) -> bool:
+    """Whether a read was refused because the job is not held (NOT_FOUND)."""
+    if isinstance(failed, grpc.aio.AioRpcError):
+        return failed.code() is grpc.StatusCode.NOT_FOUND
+    cause = failed.__cause__
+    return isinstance(cause, grpc.aio.AioRpcError) and cause.code() is grpc.StatusCode.NOT_FOUND
+
+
 def selector(
     row: str,
     *,
@@ -645,9 +864,12 @@ def selector(
     expiration_from: date | str = "",
     expiration_to: date | str = "",
     fields: Sequence[str] = (),
+    job_ids: Sequence[str] = (),
 ) -> _Selector:
     if isinstance(subjects, str):
         raise TypeError("subjects is a sequence of entity IDs, not one string")
+    if isinstance(job_ids, str):
+        raise TypeError("job_ids is a sequence of job IDs, not one string")
     return _Selector(
         row=row,
         subjects=tuple(dict.fromkeys(subjects)),
@@ -656,6 +878,7 @@ def selector(
         expiration_from=_plain(expiration_from),
         expiration_to=_plain(expiration_to),
         fields=tuple(sorted(set(fields))),
+        job_ids=tuple(dict.fromkeys(job_ids)),
     )
 
 
@@ -665,3 +888,46 @@ def views_of(plugin: Plugin) -> _Views:
         views = _Views(plugin)
         plugin._views_kept = views  # type: ignore[attr-defined]
     return views
+
+
+class _RecordedViews(_Views):
+    """Views over a suite's `Recorder` (contract v30): no stream and no
+    subscription, each view read through the recorder and handed what the
+    recorder answers for its row, kept as heard -- so a standing job's case
+    (`holds-a-standing-figure`) runs `Jobs.standing` as a plugin does."""
+
+    async def _ensure_stream(self, row: str) -> None:
+        return None
+
+    async def _subscribe(self, shared: _Shared) -> None:
+        return None
+
+    async def _unsubscribe(self, subscription_id: str) -> None:
+        return None
+
+    async def _open(self, shared: _Shared) -> None:
+        from .suites import Sent
+
+        recorder: Any = self.plugin
+        await self._read(shared)
+        reply = recorder._answers.get(shared.selector.row)
+        if reply is None:
+            return
+        given = reply(shared.selector.request(shared.subscription_id))
+        for message in list(given) if isinstance(given, list | tuple) else [given]:
+            recorder.sent.append(Sent(shared.selector.row, message))
+            delivery = ops.Delivery(
+                meta=ops.DeliveryMeta(
+                    row=shared.selector.row, subscription_ids=[shared.subscription_id]
+                )
+            )
+            getattr(delivery, shared.table.arm).CopyFrom(message)
+            self._apply(shared, delivery)
+            if shared.gap:
+                await self._read(shared)
+
+    async def _release(self, shared: _Shared) -> None:
+        shared.readers -= 1
+        if shared.readers <= 0:
+            self.by_selector.pop(shared.selector, None)
+            self.by_id.pop(shared.subscription_id, None)
