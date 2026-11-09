@@ -4881,18 +4881,20 @@ class ReadJobAnswerParams(_message.Message):
     def __init__(self, job_id: _Optional[str] = ..., page_size: _Optional[int] = ..., cursor: _Optional[str] = ...) -> None: ...
 
 class ReadJobAnswerResult(_message.Message):
-    __slots__ = ("job_id", "figures", "not_evaluated", "provenance", "next_cursor")
+    __slots__ = ("job_id", "figures", "not_evaluated", "provenance", "next_cursor", "values")
     JOB_ID_FIELD_NUMBER: _ClassVar[int]
     FIGURES_FIELD_NUMBER: _ClassVar[int]
     NOT_EVALUATED_FIELD_NUMBER: _ClassVar[int]
     PROVENANCE_FIELD_NUMBER: _ClassVar[int]
     NEXT_CURSOR_FIELD_NUMBER: _ClassVar[int]
+    VALUES_FIELD_NUMBER: _ClassVar[int]
     job_id: str
     figures: _containers.RepeatedCompositeFieldContainer[Figure]
     not_evaluated: _containers.RepeatedCompositeFieldContainer[NotEvaluated]
     provenance: AnswerProvenance
     next_cursor: str
-    def __init__(self, job_id: _Optional[str] = ..., figures: _Optional[_Iterable[_Union[Figure, _Mapping]]] = ..., not_evaluated: _Optional[_Iterable[_Union[NotEvaluated, _Mapping]]] = ..., provenance: _Optional[_Union[AnswerProvenance, _Mapping]] = ..., next_cursor: _Optional[str] = ...) -> None: ...
+    values: _containers.RepeatedCompositeFieldContainer[DerivedSeries]
+    def __init__(self, job_id: _Optional[str] = ..., figures: _Optional[_Iterable[_Union[Figure, _Mapping]]] = ..., not_evaluated: _Optional[_Iterable[_Union[NotEvaluated, _Mapping]]] = ..., provenance: _Optional[_Union[AnswerProvenance, _Mapping]] = ..., next_cursor: _Optional[str] = ..., values: _Optional[_Iterable[_Union[DerivedSeries, _Mapping]]] = ...) -> None: ...
 
 class ReportEventGroupParams(_message.Message):
     __slots__ = ("venue_id", "venue_event_ref", "title", "member_instrument_ids", "mutually_exclusive", "exhaustive", "series_id", "valid_from_ns", "raw_record", "member_bounds", "acting_for")
@@ -9775,18 +9777,20 @@ class ScenarioRef(_message.Message):
     def __init__(self, row_key: _Optional[str] = ..., dataset: _Optional[str] = ..., version: _Optional[int] = ...) -> None: ...
 
 class JobAnswer(_message.Message):
-    __slots__ = ("job_id", "figures", "not_evaluated", "provenance", "next_cursor")
+    __slots__ = ("job_id", "figures", "not_evaluated", "provenance", "next_cursor", "values")
     JOB_ID_FIELD_NUMBER: _ClassVar[int]
     FIGURES_FIELD_NUMBER: _ClassVar[int]
     NOT_EVALUATED_FIELD_NUMBER: _ClassVar[int]
     PROVENANCE_FIELD_NUMBER: _ClassVar[int]
     NEXT_CURSOR_FIELD_NUMBER: _ClassVar[int]
+    VALUES_FIELD_NUMBER: _ClassVar[int]
     job_id: str
     figures: _containers.RepeatedCompositeFieldContainer[Figure]
     not_evaluated: _containers.RepeatedCompositeFieldContainer[NotEvaluated]
     provenance: AnswerProvenance
     next_cursor: str
-    def __init__(self, job_id: _Optional[str] = ..., figures: _Optional[_Iterable[_Union[Figure, _Mapping]]] = ..., not_evaluated: _Optional[_Iterable[_Union[NotEvaluated, _Mapping]]] = ..., provenance: _Optional[_Union[AnswerProvenance, _Mapping]] = ..., next_cursor: _Optional[str] = ...) -> None: ...
+    values: _containers.RepeatedCompositeFieldContainer[DerivedSeries]
+    def __init__(self, job_id: _Optional[str] = ..., figures: _Optional[_Iterable[_Union[Figure, _Mapping]]] = ..., not_evaluated: _Optional[_Iterable[_Union[NotEvaluated, _Mapping]]] = ..., provenance: _Optional[_Union[AnswerProvenance, _Mapping]] = ..., next_cursor: _Optional[str] = ..., values: _Optional[_Iterable[_Union[DerivedSeries, _Mapping]]] = ...) -> None: ...
 
 class Figure(_message.Message):
     __slots__ = ("measure", "account_id", "breakdown", "scenario_key", "value", "numerator", "denominator", "currency_instrument_id", "computed_as", "oldest_input_source_ns", "series_key")
@@ -9953,6 +9957,32 @@ class ConversionLeg(_message.Message):
     via_instrument_id: str
     dataset: str
     def __init__(self, from_instrument_id: _Optional[str] = ..., to_instrument_id: _Optional[str] = ..., rate: _Optional[_Union[Decimal, _Mapping]] = ..., derivation: _Optional[_Union[ConversionDerivation, str]] = ..., via_instrument_id: _Optional[str] = ..., dataset: _Optional[str] = ...) -> None: ...
+
+class DerivedSeries(_message.Message):
+    __slots__ = ("meta", "series", "value", "rule", "inputs", "published_by", "money_value")
+    META_FIELD_NUMBER: _ClassVar[int]
+    SERIES_FIELD_NUMBER: _ClassVar[int]
+    VALUE_FIELD_NUMBER: _ClassVar[int]
+    RULE_FIELD_NUMBER: _ClassVar[int]
+    INPUTS_FIELD_NUMBER: _ClassVar[int]
+    PUBLISHED_BY_FIELD_NUMBER: _ClassVar[int]
+    MONEY_VALUE_FIELD_NUMBER: _ClassVar[int]
+    meta: ObservationMeta
+    series: str
+    value: UnitValue
+    rule: MeasureRef
+    inputs: _containers.RepeatedCompositeFieldContainer[DerivedInput]
+    published_by: str
+    money_value: Money
+    def __init__(self, meta: _Optional[_Union[ObservationMeta, _Mapping]] = ..., series: _Optional[str] = ..., value: _Optional[_Union[UnitValue, _Mapping]] = ..., rule: _Optional[_Union[MeasureRef, _Mapping]] = ..., inputs: _Optional[_Iterable[_Union[DerivedInput, _Mapping]]] = ..., published_by: _Optional[str] = ..., money_value: _Optional[_Union[Money, _Mapping]] = ...) -> None: ...
+
+class DerivedInput(_message.Message):
+    __slots__ = ("dataset", "as_of_ns")
+    DATASET_FIELD_NUMBER: _ClassVar[int]
+    AS_OF_NS_FIELD_NUMBER: _ClassVar[int]
+    dataset: str
+    as_of_ns: int
+    def __init__(self, dataset: _Optional[str] = ..., as_of_ns: _Optional[int] = ...) -> None: ...
 
 class MeasureDefinition(_message.Message):
     __slots__ = ("definition", "version", "parameters", "breakdowns", "scale", "description")
@@ -10379,32 +10409,6 @@ class LifecycleDelivery(_message.Message):
     quantity: Decimal
     price: Money
     def __init__(self, instrument_id: _Optional[str] = ..., quantity: _Optional[_Union[Decimal, _Mapping]] = ..., price: _Optional[_Union[Money, _Mapping]] = ...) -> None: ...
-
-class DerivedSeries(_message.Message):
-    __slots__ = ("meta", "series", "value", "rule", "inputs", "published_by", "money_value")
-    META_FIELD_NUMBER: _ClassVar[int]
-    SERIES_FIELD_NUMBER: _ClassVar[int]
-    VALUE_FIELD_NUMBER: _ClassVar[int]
-    RULE_FIELD_NUMBER: _ClassVar[int]
-    INPUTS_FIELD_NUMBER: _ClassVar[int]
-    PUBLISHED_BY_FIELD_NUMBER: _ClassVar[int]
-    MONEY_VALUE_FIELD_NUMBER: _ClassVar[int]
-    meta: ObservationMeta
-    series: str
-    value: UnitValue
-    rule: MeasureRef
-    inputs: _containers.RepeatedCompositeFieldContainer[DerivedInput]
-    published_by: str
-    money_value: Money
-    def __init__(self, meta: _Optional[_Union[ObservationMeta, _Mapping]] = ..., series: _Optional[str] = ..., value: _Optional[_Union[UnitValue, _Mapping]] = ..., rule: _Optional[_Union[MeasureRef, _Mapping]] = ..., inputs: _Optional[_Iterable[_Union[DerivedInput, _Mapping]]] = ..., published_by: _Optional[str] = ..., money_value: _Optional[_Union[Money, _Mapping]] = ...) -> None: ...
-
-class DerivedInput(_message.Message):
-    __slots__ = ("dataset", "as_of_ns")
-    DATASET_FIELD_NUMBER: _ClassVar[int]
-    AS_OF_NS_FIELD_NUMBER: _ClassVar[int]
-    dataset: str
-    as_of_ns: int
-    def __init__(self, dataset: _Optional[str] = ..., as_of_ns: _Optional[int] = ...) -> None: ...
 
 class SavedScenario(_message.Message):
     __slots__ = ("meta", "scenario", "scenario_set", "description")
