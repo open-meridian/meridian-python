@@ -189,6 +189,17 @@ async def test_a_standing_job_is_a_view_of_its_figures_kept_in_its_sequence(engi
         held.update(4, "130")
         await until(lambda: value_of(view) == 140)
         assert len(held.reads) == reads + 1
+        # The gap's sequence is kept past the read: one held at or below it
+        # is dropped, the next applied, and a second gap read again too.
+        held.update(4, "999")
+        await asyncio.sleep(0.2)
+        assert value_of(view) == 140
+        held.update(5, "150")
+        await until(lambda: value_of(view) == 150)
+        held.answer[JOB] = [figure("180")]
+        held.update(7, "170")
+        await until(lambda: value_of(view) == 180)
+        assert len(held.reads) == reads + 2
         await view.close()
     finally:
         await plugin.leave()

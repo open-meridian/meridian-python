@@ -570,7 +570,10 @@ class _Views:
     async def _snapshot(self, shared: _Shared) -> tuple[list[tuple[str, Any]], dict[str, int]]:
         sel, table = shared.selector, shared.table
         if shared.kind == "job":
-            return await self._job_snapshot(shared), {}
+            # The answer names no sequence: the job's last one seen is kept,
+            # the one whose gap asked for this read, so what was held
+            # meanwhile at or below it is dropped and a later gap is seen.
+            return await self._job_snapshot(shared), dict(shared.watermark)
         if shared.kind == "trades":
             # A tail from now: the trades heard after the subscription.
             return [], {}
@@ -747,7 +750,9 @@ class _Views:
         if sequence and sequence <= last:
             return
         if sequence and last and sequence > last + 1:
+            # Read again whole; the answer read after this update holds it.
             shared.gap = True
+            shared.watermark[event.job_id] = sequence
             return
         if sequence:
             shared.watermark[event.job_id] = sequence
