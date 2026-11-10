@@ -1020,6 +1020,10 @@ holds"""
 RECORD_MOVE_REQUEST_RULE_LENGTH = Length(least=0, most=200)
 """meridian.v1.RecordMoveRequest.rule: names the window that moved the unit"""
 
+REFUSAL_RETRY_AFTER_SECONDS_RANGE = Range(least=0, most=300, capped=False)
+"""meridian.v1.Refusal.retry_after_seconds: says how long to wait before
+sending a request refused for load again"""
+
 SIDECAR_RECEIVE_LIMIT_RANGE = Range(least=0, most=1024, capped=True)
 """SidecarReceive.limit: bounds what the sidecar holds for a plugin that reads
 slowly"""

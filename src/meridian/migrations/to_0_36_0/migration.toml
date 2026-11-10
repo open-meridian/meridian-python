@@ -35,6 +35,11 @@ ResolveIdentifier takes stated_binary_event_contract, and
 event_contracts.Contract.category is stated with it (1035). The eight roles that
 read the lake read the source priorities (list_source_priorities, 454).
 
+An act or a read refused for load (RESOURCE_EXHAUSTED with
+REFUSAL_REASON_OVERLOADED or REFUSAL_REASON_RATE_LIMITED) is asked again after
+at least the refusal's retry_after_seconds, within its own deadline; a bare
+RESOURCE_EXHAUSTED, a count cap, is raised as before.
+
 The delivery stream and the views' stream are held to their far end: a stream
 that names lake rows and has heard nothing for a while reads the latest of what
 it names, hands on what it missed, and opens again where it missed any, so a

@@ -274,6 +274,8 @@ class RefusalReason(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     REFUSAL_REASON_ACCOUNT_NOT_INSTRUCTED: _ClassVar[RefusalReason]
     REFUSAL_REASON_LOCAL_RECORD_NOT_ALLOWED: _ClassVar[RefusalReason]
     REFUSAL_REASON_AGENT_LIVE_ORDER: _ClassVar[RefusalReason]
+    REFUSAL_REASON_OVERLOADED: _ClassVar[RefusalReason]
+    REFUSAL_REASON_RATE_LIMITED: _ClassVar[RefusalReason]
 
 class PreparedCallState(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
@@ -460,6 +462,8 @@ REFUSAL_REASON_BOOKING_UNBALANCED: RefusalReason
 REFUSAL_REASON_ACCOUNT_NOT_INSTRUCTED: RefusalReason
 REFUSAL_REASON_LOCAL_RECORD_NOT_ALLOWED: RefusalReason
 REFUSAL_REASON_AGENT_LIVE_ORDER: RefusalReason
+REFUSAL_REASON_OVERLOADED: RefusalReason
+REFUSAL_REASON_RATE_LIMITED: RefusalReason
 PREPARED_CALL_STATE_UNSPECIFIED: PreparedCallState
 PREPARED_CALL_STATE_PREPARED: PreparedCallState
 PREPARED_CALL_STATE_SHARED: PreparedCallState
@@ -1355,12 +1359,14 @@ class FiledTicket(_message.Message):
     def __init__(self, ticket_id: _Optional[str] = ..., idempotency_key: _Optional[str] = ..., state: _Optional[_Union[TicketState, str]] = ..., resolution: _Optional[_Union[TicketResolution, str]] = ..., seen_count: _Optional[int] = ..., first_seen_ns: _Optional[int] = ..., last_seen_ns: _Optional[int] = ..., answers: _Optional[_Iterable[str]] = ...) -> None: ...
 
 class Refusal(_message.Message):
-    __slots__ = ("reason", "fields")
+    __slots__ = ("reason", "fields", "retry_after_seconds")
     REASON_FIELD_NUMBER: _ClassVar[int]
     FIELDS_FIELD_NUMBER: _ClassVar[int]
+    RETRY_AFTER_SECONDS_FIELD_NUMBER: _ClassVar[int]
     reason: RefusalReason
     fields: _containers.RepeatedScalarFieldContainer[str]
-    def __init__(self, reason: _Optional[_Union[RefusalReason, str]] = ..., fields: _Optional[_Iterable[str]] = ...) -> None: ...
+    retry_after_seconds: int
+    def __init__(self, reason: _Optional[_Union[RefusalReason, str]] = ..., fields: _Optional[_Iterable[str]] = ..., retry_after_seconds: _Optional[int] = ...) -> None: ...
 
 class ReadPreparedCallRequest(_message.Message):
     __slots__ = ("prepared_call_id",)

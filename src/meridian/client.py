@@ -27,6 +27,7 @@ import contextvars
 import json
 import logging
 import os
+import random
 import re
 import warnings
 from collections.abc import (
@@ -138,6 +139,47 @@ if TYPE_CHECKING:
 #: Raised with every contract revision that adds something a plugin can
 #: depend on (CONTRACT_CURRENT 30).
 SCHEMA_VERSION = "v30"
+
+#: The most a refusal for load is waited out in all, for an act or a read
+#: with no deadline of its own (SDK 0.36.0): past it the refusal is raised.
+LOAD_WAIT_MOST_SECONDS = 300.0
+
+#: How far past core's retry-after a wait may run, a fraction of it: a fleet
+#: of plugins refused together does not ask again together.
+LOAD_WAIT_JITTER = 0.2
+
+_load_log = logging.getLogger("meridian.client")
+
+#: The refusals for load (contract v30, W4.4; the resilience spec's section
+#: 10a), each beside RESOURCE_EXHAUSTED and naming when to ask again.
+_FOR_LOAD = frozenset(
+    {sidecar_pb2.REFUSAL_REASON_OVERLOADED, sidecar_pb2.REFUSAL_REASON_RATE_LIMITED}
+)
+
+
+def load_wait(
+    refusal: sidecar_pb2.Refusal,
+    code: grpc.StatusCode,
+    left_s: float,
+    *,
+    jitter: float = LOAD_WAIT_JITTER,
+    rng: random.Random | None = None,
+) -> float | None:
+    """How long to wait before asking again after `refusal` (SDK 0.36.0;
+    W4.4, "Refused for load, and told when to ask again"), or None to raise
+    it. Only RESOURCE_EXHAUSTED with REFUSAL_REASON_OVERLOADED or
+    REFUSAL_REASON_RATE_LIMITED is waited out: at least its
+    `retry_after_seconds` (1 where it names none), up to `jitter` of it
+    more, so plugins refused together do not ask again together. A bare
+    RESOURCE_EXHAUSTED -- a count cap that waiting does not clear -- and
+    every other refusal is raised at once, and so is one whose wait would
+    run past the `left_s` seconds the act or read has left."""
+    if code is not grpc.StatusCode.RESOURCE_EXHAUSTED or refusal.reason not in _FOR_LOAD:
+        return None
+    asked = float(max(refusal.retry_after_seconds, 1))
+    wait = asked * (1 + (rng or random).uniform(0, jitter))
+    return wait if wait < left_s else None
+
 
 #: Where a sidecar listens. Loopback, always: a sidecar reachable from another
 #: host is a way around the boundary it exists to enforce.
@@ -1963,14 +2005,30 @@ class Plugin:
         self._check_open()
         operation = type(params).__name__.removesuffix("Params")
         checked(params)
-        deadline = READ_DEADLINE.get()
-        try:
-            if deadline is None:
-                return await method(params)
-            answered: _Answer = await cast(Any, method)(params, timeout=deadline)
-            return answered
-        except grpc.aio.AioRpcError as failed:
-            _translated(operation, failed)
+        given = READ_DEADLINE.get()
+        loop = asyncio.get_running_loop()
+        # The act's or read's own deadline, where it has one, held across
+        # every time it is asked (SDK 0.36.0); with none, a refusal for
+        # load is waited out at most LOAD_WAIT_MOST_SECONDS in all.
+        ends = loop.time() + (given if given is not None else LOAD_WAIT_MOST_SECONDS)
+        while True:
+            try:
+                if given is None:
+                    return await method(params)
+                left = max(ends - loop.time(), 0.001)
+                answered: _Answer = await cast(Any, method)(params, timeout=left)
+                return answered
+            except grpc.aio.AioRpcError as failed:
+                wait = load_wait(_refusal(failed), failed.code(), ends - loop.time())
+                if wait is None:
+                    _translated(operation, failed)
+                _load_log.info(
+                    "%s refused for load (%s); asked again in %.1f s",
+                    operation,
+                    sidecar_pb2.RefusalReason.Name(_refusal(failed).reason),
+                    wait,
+                )
+                await asyncio.sleep(wait)
 
     def _check_open(self) -> None:
         if self._left:

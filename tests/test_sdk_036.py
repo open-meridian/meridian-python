@@ -546,3 +546,99 @@ def test_an_event_contracts_terms_and_category_are_stated_at_its_resolve() -> No
         )
         is None
     )
+
+
+# ── Refused for load, and told when to ask again (W4.4; section 10a) ───────
+
+
+def refusal(reason: int, after: int = 0) -> sidecar_pb2.Refusal:
+    return sidecar_pb2.Refusal(reason=reason, retry_after_seconds=after)
+
+
+def test_a_refusal_for_load_is_waited_out_at_least_what_core_said() -> None:
+    import random
+
+    from meridian.client import load_wait
+
+    rng = random.Random(7)
+    exhausted = grpc.StatusCode.RESOURCE_EXHAUSTED
+    overloaded = refusal(sidecar_pb2.REFUSAL_REASON_OVERLOADED, 2)
+    waited = load_wait(overloaded, exhausted, 60, rng=rng)
+    assert waited is not None and 2 <= waited <= 2.4
+    limited = refusal(sidecar_pb2.REFUSAL_REASON_RATE_LIMITED, 5)
+    waited = load_wait(limited, exhausted, 60, rng=rng)
+    assert waited is not None and 5 <= waited <= 6
+    # None named: at least a second.
+    waited = load_wait(refusal(sidecar_pb2.REFUSAL_REASON_OVERLOADED), exhausted, 60, rng=rng)
+    assert waited is not None and 1 <= waited <= 1.2
+    # A bare RESOURCE_EXHAUSTED is a count cap that waiting does not clear.
+    assert load_wait(refusal(0), exhausted, 60) is None
+    # The reason beside another status, or a wait past the deadline: raised.
+    assert load_wait(overloaded, grpc.StatusCode.UNAVAILABLE, 60) is None
+    assert load_wait(overloaded, exhausted, 1.5) is None
+
+
+class Loaded(operations_pb2_grpc.PluginOperationsServicer):
+    """A sidecar refusing reads for load as it is told to, then answering."""
+
+    def __init__(self, refusals: list[sidecar_pb2.Refusal]) -> None:
+        self.refusals = refusals
+        self.asked: list[float] = []
+
+    async def ListDatasets(self, request, context):  # noqa: N802
+        self.asked.append(time.monotonic())
+        if self.refusals:
+            said = self.refusals.pop(0)
+            await context.abort(
+                grpc.StatusCode.RESOURCE_EXHAUSTED,
+                "refused for load",
+                trailing_metadata=(("meridian-refusal-bin", said.SerializeToString()),),
+            )
+        return ops.ListDatasetsResult(datasets=[ops.DatasetRef(dataset="oanda-1:quotes")])
+
+
+@pytest.fixture
+async def loaded() -> AsyncIterator[tuple[Loaded, meridian.Plugin]]:
+    service, held = FakeSidecar(), Loaded([])
+    service.instance_id = "signal-fx-1"
+    server = grpc.aio.server()
+    sidecar_pb2_grpc.add_SidecarServiceServicer_to_server(service, server)
+    operations_pb2_grpc.add_PluginOperationsServicer_to_server(held, server)
+    port = server.add_insecure_port("127.0.0.1:0")
+    await server.start()
+    plugin = await meridian.connect(f"127.0.0.1:{port}", heartbeat=False, roles=[])
+    try:
+        yield held, plugin
+    finally:
+        await plugin.leave()
+        await server.stop(grace=None)
+
+
+async def list_datasets(plugin: meridian.Plugin) -> Any:
+    return await plugin._operate(plugin._operations().ListDatasets, ops.ListDatasetsParams())
+
+
+async def test_a_read_refused_for_load_is_asked_again_after_its_retry_after(loaded) -> None:
+    held, plugin = loaded
+    held.refusals = [refusal(sidecar_pb2.REFUSAL_REASON_RATE_LIMITED, 1)]
+    answer = await list_datasets(plugin)
+    assert [d.dataset for d in answer.datasets] == ["oanda-1:quotes"]
+    assert len(held.asked) == 2 and held.asked[1] - held.asked[0] >= 1.0
+
+
+async def test_a_count_cap_or_a_wait_past_the_deadline_is_raised_at_once(loaded) -> None:
+    from meridian.client import READ_DEADLINE
+
+    held, plugin = loaded
+    held.refusals = [refusal(0)]  # a bare RESOURCE_EXHAUSTED: a count cap
+    with pytest.raises(meridian.CallFailed):
+        await list_datasets(plugin)
+    assert len(held.asked) == 1
+    held.refusals = [refusal(sidecar_pb2.REFUSAL_REASON_OVERLOADED, 5)]
+    token = READ_DEADLINE.set(2.0)  # a read given 2 s cannot wait 5
+    try:
+        with pytest.raises(meridian.CallFailed):
+            await list_datasets(plugin)
+    finally:
+        READ_DEADLINE.reset(token)
+    assert len(held.asked) == 2

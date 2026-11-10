@@ -2587,6 +2587,14 @@ plugin. No transports package is shipped (ruling 1027).
   hears again, as often as every quarter hour while a market is closed: keep
   each `on_<row>` safe to be handed a row twice, as a record's whole state
   already is.
+- **Refused for load, and told when to ask again** (W4.4; the resilience
+  spec's section 10a). An act or a read refused `RESOURCE_EXHAUSTED` with
+  `REFUSAL_REASON_OVERLOADED` or `REFUSAL_REASON_RATE_LIMITED` is asked again
+  after at least its `Refusal.retry_after_seconds`, up to a fifth more
+  (`client.LOAD_WAIT_JITTER`), within its own deadline, or
+  `client.LOAD_WAIT_MOST_SECONDS` (300 s) where it has none; a bare
+  `RESOURCE_EXHAUSTED`, a count cap waiting does not clear, is raised at
+  once (`client.load_wait`).
 - **A dataset's terms in words** (ruling 1032): `DatasetDeclaration.
   terms_and_pricing` replaces `licence_default`, and `DatasetLicence` and
   `DataEligibility` are gone; `sessions_calendar_id` names the trading-sessions

@@ -141,10 +141,11 @@ contract-diff:
 # PyPI depends on nothing by URL (PyPI refuses that) and a plugin installs one
 # thing. `make vendor-schema` moves the copy to SCHEMA_REV; `check-vendored`
 # fails when the two disagree, as core's check-codegen does for its bindings.
-# meridian-schema c30 at b357cf4 (contract 30, DESIGN30 at 7fd2bf0 with the
-# schema step's proposed amendment; its PR open, before it lands), its gen/
-# and boundaries/ vendored here byte for byte.
-SCHEMA_REV := b357cf45e6b26bb9d114b45239526fac1a1b5919
+# meridian-schema c30 at 770107f (contract 30, DESIGN30 at c30 7fa31e8 with
+# core's stage M: the refusals for load and Refusal.retry_after_seconds; its
+# PR open, before it lands), its gen/ and boundaries/ vendored here byte for
+# byte.
+SCHEMA_REV := 770107fbb41314c365ce0b74823d397f99aa3c30
 SCHEMA_REPO := https://github.com/open-meridian/meridian-schema.git
 SCRATCH     := .schema-scratch
 
