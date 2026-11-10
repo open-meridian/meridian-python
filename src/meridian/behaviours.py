@@ -845,6 +845,38 @@ async def _option_chains(
         await feed.on_observations_wanted(Heard(row=row, message=message))
 
 
+def _load(given: Mapping[str, Any], clock: Clock) -> Any:
+    """`client.load_wait` as its cases give it: its jitter, and a seeded
+    random source for the jitter."""
+    import random
+
+    return {"jitter": float(given.get("jitter", 0.2)), "rng": random.Random(given.get("seed"))}
+
+
+def _load_step(held: Any, name: str, args: Mapping[str, Any]) -> Mapping[str, Any]:
+    """A refusal heard (`refused`): whether it is asked again, and after how
+    long (contract v30, the resilience spec's section 10a; W4.4)."""
+    import grpc
+
+    from .client import load_wait
+    from .v1 import sidecar_pb2
+
+    if name != "refused":
+        raise AssertionError(f"client.load_wait has no step {name!r}")
+    refusal = sidecar_pb2.Refusal(
+        reason=str(args["reason"]),
+        retry_after_seconds=int(args.get("retry_after_s", 0)),
+    )
+    wait = load_wait(
+        refusal,
+        getattr(grpc.StatusCode, str(args["status"])),
+        float(args["left_s"]),
+        jitter=held["jitter"],
+        rng=held["rng"],
+    )
+    return {"asks_again": wait is not None, "wait_s": wait}
+
+
 def _views(name: str, args: Mapping[str, Any]) -> Any:
     """`views.latest_key`'s `same_key`: whether two lake rows share the key a
     view keeps the latest by (SDK 0.35.3, the cases contract 30 holds)."""
@@ -885,6 +917,7 @@ ADAPTERS: Mapping[str, Adapter] = {
     "roles.data.listings.Feed": acts_case(_listings),
     "roles.data.option_chains.Feed": acts_case(_option_chains),
     "views.latest_key": value_case(_views),
+    "client.load_wait": steps_case(_load, _load_step),
 }
 
 #: The subjects this SDK carries, which design's coverage gate reads: a
@@ -910,6 +943,7 @@ SUBJECTS: Sequence[str] = (
     "roles.data.listings.Feed",
     "roles.data.option_chains.Feed",
     "views.latest_key",
+    "client.load_wait",
 )
 
 #: The modules beside `meridian.helpers` whose helpers and common logic are

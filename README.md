@@ -2594,7 +2594,8 @@ plugin. No transports package is shipped (ruling 1027).
   (`client.LOAD_WAIT_JITTER`), within its own deadline, or
   `client.LOAD_WAIT_MOST_SECONDS` (300 s) where it has none; a bare
   `RESOURCE_EXHAUSTED`, a count cap waiting does not clear, is raised at
-  once (`client.load_wait`).
+  once (`client.load_wait`, held to the behaviour cases of the module
+  `load`).
 - **A dataset's terms in words** (ruling 1032): `DatasetDeclaration.
   terms_and_pricing` replaces `licence_default`, and `DatasetLicence` and
   `DataEligibility` are gone; `sessions_calendar_id` names the trading-sessions

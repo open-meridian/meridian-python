@@ -1968,6 +1968,152 @@
       ]
     },
     {
+      "module": "load",
+      "since": "0.36.0",
+      "says": "An SDK waits out a refusal for load as these cases say: at least the retry-after core names, within its jitter, never past the act's or read's own deadline, and never for a count cap, which it raises at once.\n",
+      "cases": [
+        {
+          "name": "load-wait-waits-out-an-overload-at-least-its-retry-after",
+          "subject": "client.load_wait",
+          "kind": "steps",
+          "given": {
+            "jitter": 0.2,
+            "seed": 7
+          },
+          "steps": [
+            {
+              "call": "refused",
+              "args": {
+                "status": "RESOURCE_EXHAUSTED",
+                "reason": "REFUSAL_REASON_OVERLOADED",
+                "retry_after_s": 2,
+                "left_s": 60
+              },
+              "expect": {
+                "asks_again": true,
+                "wait_s": {
+                  "at_least": 2,
+                  "at_most": 2.4
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "load-wait-waits-out-a-rate-limit-at-least-its-retry-after",
+          "subject": "client.load_wait",
+          "kind": "steps",
+          "given": {
+            "jitter": 0.2,
+            "seed": 7
+          },
+          "steps": [
+            {
+              "call": "refused",
+              "args": {
+                "status": "RESOURCE_EXHAUSTED",
+                "reason": "REFUSAL_REASON_RATE_LIMITED",
+                "retry_after_s": 5,
+                "left_s": 60
+              },
+              "expect": {
+                "asks_again": true,
+                "wait_s": {
+                  "at_least": 5,
+                  "at_most": 6
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "load-wait-waits-a-second-where-none-is-named",
+          "subject": "client.load_wait",
+          "kind": "steps",
+          "given": {
+            "jitter": 0,
+            "seed": 7
+          },
+          "steps": [
+            {
+              "call": "refused",
+              "args": {
+                "status": "RESOURCE_EXHAUSTED",
+                "reason": "REFUSAL_REASON_OVERLOADED",
+                "retry_after_s": 0,
+                "left_s": 60
+              },
+              "expect": {
+                "asks_again": true,
+                "wait_s": {
+                  "at_least": 1,
+                  "at_most": 1
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "load-wait-raises-a-count-cap-at-once",
+          "subject": "client.load_wait",
+          "kind": "steps",
+          "given": {
+            "jitter": 0.2,
+            "seed": 7
+          },
+          "steps": [
+            {
+              "call": "refused",
+              "args": {
+                "status": "RESOURCE_EXHAUSTED",
+                "reason": "REFUSAL_REASON_UNSPECIFIED",
+                "retry_after_s": 0,
+                "left_s": 60
+              },
+              "expect": {
+                "asks_again": false
+              }
+            },
+            {
+              "call": "refused",
+              "args": {
+                "status": "UNAVAILABLE",
+                "reason": "REFUSAL_REASON_OVERLOADED",
+                "retry_after_s": 2,
+                "left_s": 60
+              },
+              "expect": {
+                "asks_again": false
+              }
+            }
+          ]
+        },
+        {
+          "name": "load-wait-raises-a-wait-past-its-deadline",
+          "subject": "client.load_wait",
+          "kind": "steps",
+          "given": {
+            "jitter": 0.2,
+            "seed": 7
+          },
+          "steps": [
+            {
+              "call": "refused",
+              "args": {
+                "status": "RESOURCE_EXHAUSTED",
+                "reason": "REFUSAL_REASON_OVERLOADED",
+                "retry_after_s": 5,
+                "left_s": 2
+              },
+              "expect": {
+                "asks_again": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
       "module": "sessions",
       "since": "0.35.0",
       "says": "An SDK carrying helpers.sessions.Backoff waits as these cases say after each failure of a long-running work: doubling within its jitter to its most, and from its first again once the work ran steadily. One carrying helpers.sessions.Supervisor keeps a session as these cases say: its waits, its state, its subscriptions and its catch-up after a reopen.\n",
