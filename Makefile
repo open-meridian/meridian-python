@@ -195,7 +195,7 @@ DESIGN ?= ../meridian-design
 # Core's contract 30 protos (DESIGN30 at 7fd2bf0), its c30 branch the core
 # stages build on, before it lands; journal.proto moved from there into
 # meridian-schema.
-CORE_REV   := 793bd22798caebe51581f8c6b5c9d09e1900ace1
+CORE_REV   := 6cc48301312809fa85058fcffd2a1ede4618f103
 CORE_PROTO ?= https://github.com/open-meridian/meridian-core.git\#$(CORE_REV):proto
 # And meridian-schema's, which core's import, at the revision vendored here.
 SCHEMA_PROTO ?= https://github.com/open-meridian/meridian-schema.git\#$(SCHEMA_REV):proto
