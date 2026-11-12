@@ -243,3 +243,65 @@ async def test_another_refusal_of_a_series_is_raised() -> None:
             frozenset({dt.date(2026, 11, 20)}), frozenset(), "WNT-1",
         )  # fmt: skip
     assert feed.first_times.get("chains-1:options", OSI) is None, "staged, not kept"
+
+
+# ── 3. event_contracts.Feed.outcome: the first determination's valid time ─
+
+
+async def test_an_amended_outcome_keeps_its_first_determinations_valid_time() -> None:
+    """Proposed, then determined, an amendment, a dispute and final: each a
+    new version of `<code>:outcome`, every one valid from the first
+    determination, each its own determination's time as its event time."""
+    from fake_venues import NOW_NS, ContractsMarket, contracts_venue
+    from meridian.roles.data import event_contracts as ec
+    from meridian.roles.data.testing import Lake
+
+    first, amended = NOW_NS - 3600 * NS, NOW_NS - 600 * NS
+    yes = ("fakev:result", "yes", "Yes")
+    stages = [
+        ec.Resolution(ec.PROPOSED, Decimal(1), *yes, determined_at_ns=first),
+        ec.Resolution(ec.DETERMINED, Decimal(1), *yes, determined_at_ns=first),
+        ec.Resolution(
+            ec.DETERMINED, Decimal(0), "fakev:result", "no", "No", determined_at_ns=amended
+        ),
+        ec.Resolution(ec.DISPUTED, None),
+        ec.Resolution(ec.FINAL, Decimal(0), "fakev:result", "no", "No"),
+    ]
+
+    class Staged(ContractsMarket):
+        def _resolved(self) -> ec.Resolution:
+            return stages[0]
+
+    lake = Lake(contracts_venue.VENUE)
+    market = Staged(NOW_NS)
+    feed = lake.bind(ec.Feed(market, ec.ContractMap(), clock_ns=lambda: NOW_NS))
+    subject = await lake.held(feed, "RESOLVED-1")
+    await feed.record_live([subject], data_type="meridian.v1.Price")
+    while len(stages) > 1:
+        stages.pop(0)
+        assert await feed.watch_outcomes() == 1
+    rows = lake.rows("RecordOutcomes")
+    assert [ops.OutcomeStage.Name(r.stage)[14:] for r in rows] == [
+        "PROPOSED", "DETERMINED", "DETERMINED", "DISPUTED", "FINAL",
+    ]  # fmt: skip
+    assert {r.meta.row_key for r in rows} == {"RESOLVED-1:outcome"}
+    assert {r.meta.valid_from_ns for r in rows} == {first}, "the first determination's"
+    events = [[t.at_ns for t in r.meta.source_times] for r in rows]
+    assert events == [[first], [first], [amended], [amended], [amended]]
+    held = feed.contracts.outcomes["RESOLVED-1"]
+    assert (held.valid_from_ns, held.determined_at_ns) == (first, amended)
+
+
+def test_an_outcome_map_kept_before_0362_still_loads(tmp_path: Any) -> None:
+    import json
+
+    from meridian.roles.data import event_contracts as ec
+
+    path = tmp_path / "contracts-live.json"
+    before = {
+        "stage": "final", "value": "1", "scheme": "s", "word": "yes", "text": "Yes",
+        "settled_at_ns": 0, "valid_from_ns": 5, "stated": True, "raw_key": "r",
+    }  # fmt: skip
+    path.write_text(json.dumps({"outcomes": {"C-1": before}}), encoding="utf-8")
+    kept = ec.ContractMap(path)
+    assert kept.load() and kept.outcomes["C-1"].determined_at_ns == 0
