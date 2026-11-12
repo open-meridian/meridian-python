@@ -858,7 +858,8 @@ class Feed(Role):
             batch = list(rows[start : start + BATCH])
             done: Any
             if data_type == SERIES:
-                done = await self._record_series(batch, want_id)
+                # A copy: a row taken as recorded leaves it, and is kept too.
+                done = await self._record_series(list(batch), want_id)
                 self._first_times.commit(batch, self._today())
             elif data_type == STATISTIC:
                 done = await self.record_statistics(statistics=batch, want_id=want_id)

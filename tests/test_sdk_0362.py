@@ -222,6 +222,10 @@ async def test_a_resend_refused_for_its_valid_time_is_taken_as_recorded(caplog: 
         await feed.on_observations_wanted(_want(option_chains.SERIES))
     assert answered == [[OSI, other], [other], [OSI, other], [other]]
     assert feed.counts.unchanged == 2 and feed.counts.recorded == 2
+    # Taken as recorded, it is kept: not sent again unasked (the review of #51).
+    assert feed._first_times.get("chains-1:options", OSI) is not None
+    await feed.on_observations_wanted(_want(option_chains.SERIES, want_id=""))
+    assert len(answered) == 4
     said = [r for r in caplog.records if "taken as recorded" in r.getMessage()]
     assert len(said) == 1, "said once per series"
 
