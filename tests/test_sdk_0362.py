@@ -305,3 +305,86 @@ def test_an_outcome_map_kept_before_0362_still_loads(tmp_path: Any) -> None:
     path.write_text(json.dumps({"outcomes": {"C-1": before}}), encoding="utf-8")
     kept = ec.ContractMap(path)
     assert kept.load() and kept.outcomes["C-1"].determined_at_ns == 0
+
+
+# ── 4. listings.Feed.trade_row: a withdrawal keeps its trade's valid time ─
+
+
+def _listings() -> tuple[Any, Recorder]:
+    from meridian.roles.data import listings
+
+    class Lake(listings.Feed):
+        source_name = "brokerage"
+
+        def attributes(self, stated: Any) -> Any:
+            return listings.Attributes((), (True,) * 4, (True,) * 4)
+
+    recorder = Recorder("brokerage-1")
+    feed = recorder.bind(Lake(None, listings.Listings(None), clock_ns=lambda: AFTERNOON))
+    return feed, recorder
+
+
+SPY_ID = "INS-01J8XQ4M7K00000000000SPY"
+#: 14:00 New York on 2026-11-12 (EST), in ns.
+AFTERNOON = NOV_11_NY + 38 * 3600 * NS
+
+
+def _withdrawal(at_ns: int) -> Any:
+    from types import SimpleNamespace
+
+    return SimpleNamespace(
+        symbol="SPY", at_ns=at_ns, venue_code="", price=Decimal(1), quantity=Decimal(1),
+        cancelled=True, raw_key="stream/9", unconverted=(), row_key="SPY:t:7",
+    )  # fmt: skip
+
+
+async def test_a_withdrawal_of_a_trade_not_held_takes_the_trades_valid_time() -> None:
+    """The trade printed at 13:20, recorded before a restart; its withdrawal
+    heard at 14:00 is sent valid from 13:20, read from the lake by its key,
+    the reads narrowed back from the withdrawal within one business day."""
+    feed, recorder = _listings()
+    printed = AFTERNOON - 40 * 60 * NS
+    key = f"SPY:t:7@{SPY_ID}"
+    others = [ops.Trade(meta=ops.ObservationMeta(row_key=f"SPY:t:{n}@{SPY_ID}")) for n in "12"]
+
+    def held(params: Any) -> Any:
+        if params.valid_from_ns <= printed < params.valid_until_ns:
+            if not params.cursor:
+                return ops.ListTradesResult(trades=others, next_cursor="2")
+            found = ops.Trade(meta=ops.ObservationMeta(row_key=key, valid_from_ns=printed))
+            return ops.ListTradesResult(trades=[found])
+        return ops.ListTradesResult()
+
+    recorder.answer("ListTrades", held)
+    row = await feed.trade_row(_withdrawal(AFTERNOON), SPY_ID)
+    assert row is not None and row.cancelled
+    assert row.meta.valid_from_ns == printed, "the trade's, never the withdrawal's"
+    asked = recorder.on("ListTrades")
+    assert [a.valid_until_ns - a.valid_from_ns for a in asked[:2]] == [60 * NS + 1, 3540 * NS]
+    assert list(asked[0].sources.named) == ["brokerage-1:trades"]
+    assert all(a.valid_until_ns - a.valid_from_ns <= 24 * 3600 * NS for a in asked)
+
+
+async def test_a_withdrawal_of_a_trade_the_lake_does_not_hold_is_unmatched() -> None:
+    """Nothing is restated under a new valid time: the lake answering no
+    such trade back to the business day before, or refusing the read, the
+    withdrawal is counted unmatched and not sent."""
+    from meridian.errors import CallFailed
+    from meridian.roles.data import listings
+
+    feed, recorder = _listings()
+    assert await feed.trade_row(_withdrawal(AFTERNOON), SPY_ID) is None
+    asked = recorder.on("ListTrades")
+    earliest = min(a.valid_from_ns for a in asked)
+    assert earliest == listings.previous_close_of(dt.date(2026, 11, 11))
+    for a in asked:
+        day = listings.previous_close_of(listings._business_date(a.valid_until_ns - 1))
+        assert a.valid_from_ns >= day, "each read within one business day"
+
+    def refuse(params: Any) -> Any:
+        raise CallFailed("ListTrades", "refused", "not entitled")
+
+    recorder.answer("ListTrades", refuse)
+    assert await feed.trade_row(_withdrawal(AFTERNOON), SPY_ID) is None
+    assert feed.counts[listings.TRADES].unmatched == 2
+    assert recorder.on("RecordTrades") == []

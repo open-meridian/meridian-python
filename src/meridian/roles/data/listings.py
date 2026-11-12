@@ -62,21 +62,23 @@ resolved by the code the source prints, as a `symbol` at this source; a
 venue the deployment does not hold is reported (W3.15), and the row is
 recorded with no venue and the code as reported beside it.
 
-**What the plugin supplies**: a `Source` (its broker's client, blocking calls
-run in a thread) answering daily bars, live prices and latest quotes, and
-optionally its trade history; and, overriding `Feed`'s methods, what is its
-broker's alone -- a trade's attributes from its conditions (`attributes`),
-what a withdrawal of a trade not recorded here becomes
-(`withdrawn_unrecorded`), a quote's characteristics
-(`quote_characteristics`) and a trade's sequence number (`sequence_of`).
-The values it reads its broker's answers into carry these fields, each
-number a `Decimal` read from the broker's own text: a daily bar (symbol,
-business_date, open, high, low, close, volume, vwap, trade_count, raw_key,
-unconverted, row_key, complete), a live price (symbol, kind, amount, at_ns,
-venue_code, raw_key, unconverted, row_key), a trade (symbol, at_ns,
-venue_code, price, quantity, cancelled, raw_key, unconverted, row_key) and a
-quote (symbol, at_ns, bid, ask, bid_size, ask_size, raw_key, unconverted,
-row_key, and a venue_code where it names one).
+**What the plugin supplies**: a `Source` (its broker's client, blocking
+calls run in a thread) answering daily bars, live prices and latest quotes,
+and optionally its trade history; and, overriding `Feed`'s methods, what is
+its broker's alone -- a trade's attributes from its conditions
+(`attributes`), what a withdrawal of a trade not recorded here becomes
+(`withdrawn_unrecorded`; from 0.36.2 sent under the trade's own valid time,
+read from the lake by its key, and unmatched where the lake holds none), a
+quote's characteristics (`quote_characteristics`) and a trade's sequence
+number (`sequence_of`). The values it reads its broker's answers into carry
+these fields, each number a `Decimal` read from the broker's own text: a
+daily bar (symbol, business_date, open, high, low, close, volume, vwap,
+trade_count, raw_key, unconverted, row_key, complete), a live price (symbol,
+kind, amount, at_ns, venue_code, raw_key, unconverted, row_key), a trade
+(symbol, at_ns, venue_code, price, quantity, cancelled, raw_key,
+unconverted, row_key) and a quote (symbol, at_ns, bid, ask, bid_size,
+ask_size, raw_key, unconverted, row_key, and a venue_code where it names
+one).
 
 What it recorded, declined and could not convert is counted here for the
 Datasets page (`Feed.counts`).
@@ -253,6 +255,18 @@ def close_of(day: dt.date) -> int:
 def previous_close_of(day: dt.date) -> int:
     """The previous calendar day's 16:00, where the business date begins."""
     return close_of(day - dt.timedelta(days=1))
+
+
+def _business_date(at_ns: int) -> dt.date:
+    """The business date a moment counts to: New York's, from 16:00."""
+    day = new_york_date(at_ns)
+    return day + dt.timedelta(days=1) if at_ns >= close_of(day) else day
+
+
+#: How far back from a withdrawal the lake is read for the trade it names,
+#: in turn: a minute, an hour, then to the start of the business day before
+#: the withdrawal's (None).
+_WITHDRAWN_REACH_NS = (60 * NS, 3600 * NS, None)
 
 
 @dataclass(frozen=True)
@@ -1410,7 +1424,10 @@ class Feed(Role):
         """A trade as recorded for one record of its listing: the venue it printed
         on, its price and size, its attributes from its conditions, and no
         aggressor, which a broker's stock trades never state. A withdrawal of a
-        trade recorded is that trade again, withdrawn."""
+        trade recorded is that trade again, withdrawn. A withdrawal of one no
+        longer held here keeps the trade's valid time, read from the lake by
+        its key (`_recorded_valid_time`), never the withdrawal's own time;
+        where the lake answers none it is counted unmatched and not sent."""
         counts = self.counts[TRADES]
         key = row_key(stated.row_key, subject)
         if stated.cancelled:
@@ -1422,13 +1439,20 @@ class Feed(Role):
         if stated.price is None or stated.quantity is None:
             counts.unconverted += len(stated.unconverted) or 1
             return None
+        at = stated.at_ns
         if stated.cancelled:
-            # A withdrawal of a trade not recorded here.
+            # A withdrawal of a trade not held here: the trade's own valid
+            # time, read from the lake by its key, since a row key fixes its
+            # valid time (the-lake rule 5; SDK 0.36.2); unmatched, nothing
+            # sent, where the lake holds no such trade or could not be read.
             unrecorded = self.withdrawn_unrecorded(stated)
-            if unrecorded is None:
+            recorded = None
+            if unrecorded is not None:
+                recorded = await self._recorded_valid_time(key, subject, stated.at_ns)
+            if unrecorded is None or recorded is None:
                 counts.unmatched += 1
                 return None
-            said = unrecorded
+            said, at = unrecorded, recorded
         else:
             said = self.attributes(stated)
         venue, reported = await self.venue_of(stated.venue_code)
@@ -1438,7 +1462,7 @@ class Feed(Role):
                 row_key=key,
                 subjects=[SubjectRef(entity_id=subject)],
                 source=ops.Source(dataset=self.dataset(TRADES), venue_id=venue),
-                valid_from_ns=stated.at_ns,
+                valid_from_ns=at,
                 source_times=_clocks(stated),
                 raw=self.plugin.raw_record(stated.raw_key[:256]),
                 unconverted=[*reported, *said.unconverted, *stated.unconverted],
@@ -1453,6 +1477,48 @@ class Feed(Role):
             cancelled=stated.cancelled,
             source_sequence=self.sequence_of(stated) or 0,
         )
+
+    async def _recorded_valid_time(self, key: str, subject: str, at_ns: int) -> int | None:
+        """The valid time the lake holds the trade `key` of `subject` at, read
+        back from a withdrawal at `at_ns` (`_WITHDRAWN_REACH_NS`), each read
+        within one business day of the trades dataset; None where it holds
+        none there, or the read was refused, which is said."""
+        dataset = self.dataset(TRADES)
+        floor = previous_close_of(_business_date(at_ns) - dt.timedelta(days=1))
+        until = at_ns + 1
+        try:
+            for reach in _WITHDRAWN_REACH_NS:
+                begin = floor if reach is None else max(at_ns - reach, floor)
+                while until > begin:
+                    lo = max(begin, previous_close_of(_business_date(until - 1)))
+                    found = await self._held_between(key, subject, dataset, lo, until)
+                    if found is not None:
+                        return found
+                    until = lo
+        except MeridianError as refused:
+            log.warning("%s's withdrawn trade %s not read from the lake: %s", subject, key,
+                        refused)  # fmt: skip
+        return None
+
+    async def _held_between(
+        self, key: str, subject: str, dataset: str, from_ns: int, until_ns: int
+    ) -> int | None:
+        cursor = ""
+        while True:
+            page = await self.list_trades(
+                subjects=[SubjectRef(entity_id=subject)],
+                sources=ops.SourceChoice(named=[dataset]),
+                valid_from_ns=from_ns,
+                valid_until_ns=until_ns,
+                fields=["meridian.v1.Trade.cancelled"],
+                cursor=cursor,
+            )
+            for trade in page.trades:
+                if trade.meta.row_key == key:
+                    return int(trade.meta.valid_from_ns)
+            cursor = page.next_cursor
+            if not cursor:
+                return None
 
     async def quote_row(self, stated: Any, subject: str) -> Quote | None:
         """A quote as recorded for one record of its listing: the venue it names, if

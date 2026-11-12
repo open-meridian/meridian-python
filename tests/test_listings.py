@@ -175,7 +175,11 @@ async def test_a_symbol_the_source_cannot_take_is_declined_not_covered() -> None
 
 async def test_a_trade_withdrawn_unrecorded_is_sent_not_known_or_counted() -> None:
     gone = Tick("SPY", EVENING, "", Decimal("1"), Decimal("1"), 7, cancelled=True)
-    feed, _ = lake(Broker())
+    feed, recorder = lake(Broker())
+    # The trade it names as the lake holds it (0.36.2: its valid time kept).
+    meta = ops.ObservationMeta(row_key=f"SPY:t:7@{SPY}", valid_from_ns=EVENING - 5)
+    held = ops.Trade(meta=meta)
+    recorder.answer("ListTrades", lambda _: ops.ListTradesResult(trades=[held]))
     row = await feed.trade_row(gone, SPY)
     assert row is not None and row.cancelled
     assert row.attributes is not None and row.attributes.consolidated is not None
