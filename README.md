@@ -2,7 +2,7 @@
 
 The Python SDK for building [Open Meridian](https://open-meridian.com) plugins:
 the tools a trader has an AI agent build, and the bots and analytics a
-developer writes. Python 3.11 or newer. This is release 0.36.1; its reference
+developer writes. Python 3.11 or newer. This is release 0.36.2; its reference
 is at [open-meridian.dev](https://open-meridian.dev/api/python-sdk/).
 
 ## Start here
@@ -2560,7 +2560,7 @@ plugin. No transports package is shipped (ruling 1027).
 
   **Run 0.35.0 to 0.35.5 on a core of contract v29**: no contract changed.
 
-### Standing analytics and a stream held to its far end (contract 30; 0.36.0 to 0.36.1)
+### Standing analytics and a stream held to its far end (contract 30; 0.36.0 to 0.36.2)
 
 - **The SDK declares contract 30** (`meridian.SCHEMA_VERSION` "v30").
 - **A standing job** (spec/one-data-access-model, section 4): built
@@ -2636,8 +2636,30 @@ plugin. No transports package is shipped (ruling 1027).
   list. The 0.35.5 to 0.36.0 step names by hand a `meridian.Job` built with
   measures that are not each a `meridian.MeasureRef`, and a test's stand-in
   for a `Receive` call with no `read()`.
+- **0.36.2, the row-key rule in the helpers**, with no contract change: a
+  row key fixes its valid time and its first subject (spec/the-lake rule 5,
+  ruled 2026-11-12), which core refuses a restatement of from contract 30's
+  stage H. `helpers.chains.statistic` is valid from the start of the day it
+  describes, in the dataset's day (`day_clock=`, a `DayClock`; New York's,
+  OPRA's and the OCC's, where none is given), never when it was read or
+  published; its `valid_from_ns` is no longer read. `option_series` keeps a
+  series' terms under their key's first valid time (`valid_from_ns`, the
+  plugin's to hold), and an adjustment -- a corporate action changing the
+  deliverable -- is a new key from its date (`adjusted_on=`:
+  `<OSI>:<YYYY-MM-DD>:ADJ`, valid from that day's start).
+  `option_chains.Feed` holds each series' first valid time, in the plugin's
+  storage where it is given `series_path` (a JSON file), sends terms changed
+  since under the adjustment key, and takes a re-send the lake refuses for
+  its valid time, its terms unchanged, as recorded, said once. An event
+  contract's outcome keeps its first determination's valid time: each later
+  stage, amendment, dispute or re-proposal is a new version with its own
+  determination's time as its `event` source time. A listings feed's
+  withdrawal of a trade it no longer holds keeps the trade's valid time,
+  read from the lake by its key, and is counted unmatched where the lake
+  holds none. A replaced or merged record is not a first-subject change:
+  the lake follows the old ID to its survivor.
 
-  **Run 0.36.0 and 0.36.1 on a core of contract 30.**
+  **Run 0.36.0 to 0.36.2 on a core of contract 30.**
 
 ## Moving a plugin to a new release
 
@@ -2730,6 +2752,7 @@ carries libcst.
 | 0.35.4 to 0.35.5: additive (ruling 1072): `helpers.sessions.FX_WEEK`, the FX week's trading sessions, Sunday 17:00 to Friday 17:00 New York, the 17:00 roll in New York's own time on both sides of daylight saving, usable wherever sessions are taken (`LiveValue.of`, `ems.ReferenceCheck.stale`, `roles.in_session`); the base template links kit 0.16.0 (`pages.KIT`) | only the pins move | an FX week of the plugin's own (a `TradingSessions` for Sunday to Friday 17:00 New York, the samples' `FX_WEEK`), replaced by `helpers.sessions.FX_WEEK`; by behaviour, a page on the base template loads kit 0.16.0 where the deployment carries it |
 | 0.35.5 to 0.36.0: the SDK declares contract 30: a standing job (`analytics.job(..., standing=True)`, `analytics.measure(..., refresh=, cadence_ns=, material_move_bp=)`, `analytics.Jobs().standing(self, job)` answering a `LiveView`, `plugin.subscribe(..., job_ids=)`, `meridian.MeasureRef`); a stream that names the lake's rows or carries a view, silent past `receive.QUIET_SECONDS`, opened again and caught up, each catch-up read given `receive.READ_SECONDS`; `DatasetDeclaration.terms_and_pricing` (ruling 1032; `licence_default`, `DatasetLicence` and `DataEligibility` gone), `sessions_calendar_id` (`helpers.sessions.read_sessions`), `gap_recovery`; `Declaration(most_shards=)`; an event contract's terms and `Contract.category` stated at its resolve (1035); the suites' `holds-a-standing-figure` and `reads-the-source-priorities` | `licence-default-described`: each literal `licence_default=DatasetLicence(...)` written as `terms_and_pricing="..."`, the retired names dropped from the import; `base-digest-dropped` | a licence the rule could not read, or `DatasetLicence`, `DataEligibility` or `.licence_default` still named (`licence-default-left`); an SDK `DerivedSeries` or `CorporateActionAnnounced` given the wire's `MeasureRef`, or a `meridian.Job` built by hand whose `measures` are not each a `meridian.MeasureRef` (`measure-ref-sdk-form`); the suites contract 30 grew (`suite-cases-v30`); a test's stand-in for a `Receive` call iterated with `async for` and no `read()`, which the hearing loop and the views now call (`receive-stand-in-read`); core's images below contract 30 (`core-images`); the base's digest (`base-digest`) |
 | 0.36.0 to 0.36.1: fixes, with no contract change: an event-contract feed states a contract's payout in a cash with no ISO 4217 code by the cash's resolved instrument once held (its category alone before), where 0.36.0 refused every such `ResolveIdentifier`; a range market's bounds stated only with their unit, left out where the venue states none; `EventContractsChecks` admits the contract's own event and its series asked by reference, and still refuses any list; the 0.35.5 to 0.36.0 step names by hand a `meridian.Job` whose measures are not each a `meridian.MeasureRef` and a `Receive` stand-in with no `read()` | only the pins move | nothing; by behaviour, a token venue's contracts resolve and are priced, a range market with no unit is answered, and a check against a venue reading the contract's event or series passes |
+| 0.36.1 to 0.36.2: fixes, with no contract change: the row-key rule (spec/the-lake rule 5) in the helpers: `helpers.chains.statistic` valid from the start of its day (`day_clock=`), its `valid_from_ns` no longer read; `option_series` under its key's first valid time, an adjustment a new key (`adjusted_on=`, `<OSI>:<date>:ADJ`); `option_chains.Feed(series_path=)` holding each series' first valid time, a re-send refused for its valid time taken as recorded; an event contract's outcome keeping its first determination's valid time; a listings withdrawal of a trade not held keeping the trade's valid time, read from the lake | only the pins move | nothing; by behaviour, a statistic, a series' terms, an outcome and a withdrawal each keep one valid time per row key, and a chains feed given no `series_path` sends its series' terms again after a restart (taken as recorded where the lake refuses them) |
 
 `tests/migrations/` holds the plugins the migrations are recorded for, as
 written and as their migration leaves them, and `make check-migrations` holds
