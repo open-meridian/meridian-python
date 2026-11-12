@@ -558,63 +558,50 @@ async def test_a_wants_rows_carry_their_edge_age_and_a_heartbeat_its_liveness() 
     )
 
 
-def test_a_licence_writes_its_attribution_and_redistribution_terms() -> None:
-    """0.32.2: the v27 wire's attribution, redistribution, copyright class and
-    no-more-restrictive-terms answers, by the wire's names."""
-    from meridian.v1 import sidecar_pb2
+def test_a_licences_attribution_and_redistribution_terms_are_its_words() -> None:
+    """0.32.2's attribution, redistribution, copyright class and
+    no-more-restrictive-terms answers, and 0.32.3's notice: from contract 30
+    (ruling 1032) a dataset declares no licence, and `meridian plugin
+    migrate` writes what one declared into its terms_and_pricing, word by
+    word (`licence-default-described`)."""
+    from meridian.migrations.to_0_36_0.rewrite import described
 
-    cited = meridian.DatasetLicence(
-        kept=True,
-        redistribution="allowed_with_attribution",
-        attribution_required=True,
-        attribution_text="Source: Federal Reserve Bank of New York",
-        copyright_class="COPYRIGHT_CLASS_COPYRIGHT_CITATION_REQUIRED",
-        no_more_restrictive_terms=True,
-    )
-    wire = cited._wire()
-    assert wire.redistribution == sidecar_pb2.REDISTRIBUTION_ALLOWED_WITH_ATTRIBUTION
-    assert wire.copyright_class == sidecar_pb2.COPYRIGHT_CLASS_COPYRIGHT_CITATION_REQUIRED
-    assert wire.attribution_required and wire.no_more_restrictive_terms
-    assert wire.attribution_text == "Source: Federal Reserve Bank of New York"
-    said = cited._to_json()
-    assert (said["redistribution"], said["copyright_class"]) == (
-        "allowed_with_attribution", "copyright_citation_required",
-    )  # fmt: skip
-    plain = meridian.DatasetLicence(kept=True)._wire()
-    assert (plain.redistribution, plain.copyright_class, plain.attribution_required) == (
-        sidecar_pb2.REDISTRIBUTION_UNSPECIFIED, sidecar_pb2.COPYRIGHT_CLASS_UNSPECIFIED, False,
-    )  # fmt: skip
     notice = "This product uses the vendor's data but is not endorsed by it."
-    noticed = meridian.DatasetLicence(not_affiliated_notice=notice)
-    assert noticed._wire().not_affiliated_notice == notice  # 0.32.3
-    assert noticed._to_json()["not_affiliated_notice"] == notice
-    assert meridian.DatasetLicence()._wire().not_affiliated_notice == ""
-    with pytest.raises(ValueError, match="redistribution is one of"):
-        meridian.DatasetLicence(redistribution="sometimes")
-    with pytest.raises(ValueError, match="copyright_class is one of"):
-        meridian.DatasetLicence(copyright_class="private")
+    said = described(
+        {
+            "kept": True,
+            "redistribution": "allowed_with_attribution",
+            "attribution_required": True,
+            "attribution_text": "Source: Federal Reserve Bank of New York",
+            "copyright_class": "COPYRIGHT_CLASS_COPYRIGHT_CITATION_REQUIRED",
+            "no_more_restrictive_terms": True,
+            "not_affiliated_notice": notice,
+        }
+    )
+    assert said == (
+        "Kept by the lake; redistribution allowed with attribution; attribution "
+        'required: "Source: Federal Reserve Bank of New York"; copyright: citation '
+        "required; no more restrictive terms may be added downstream; " + notice
+    )
+    assert described({}) == ""
     declared = meridian.DatasetDeclaration(
         key="sofr", vendor="NY Fed", data_types=["meridian.v1.Rate"], modes=["pull"],
-        licence_default=meridian.DatasetLicence(copyright_class="public_domain"),
+        terms_and_pricing="Copyright: public domain.",
     )  # fmt: skip
-    assert declared._wire().licence_default.copyright_class == (
-        sidecar_pb2.COPYRIGHT_CLASS_PUBLIC_DOMAIN
+    assert declared._wire().terms_and_pricing == "Copyright: public domain."
+    assert "licence_default" not in declared._wire().DESCRIPTOR.fields_by_name
+
+
+def test_a_licences_derived_use_is_its_words_and_a_dataset_has_its_delay() -> None:
+    from meridian.migrations.to_0_36_0.rewrite import described
+
+    assert described({"derived_use": True}) == "Derived use not restricted."
+    assert described({"kept": True, "derived_use": False}) == (
+        "Kept by the lake; derived use internal only."
     )
-
-
-def test_a_licence_sets_both_derived_use_answers_and_a_dataset_its_delay() -> None:
-    from meridian.v1 import sidecar_pb2
-
-    assert meridian.DatasetLicence(derived_use=True)._wire().derived_use_terms == (
-        sidecar_pb2.DERIVED_USE_NOT_RESTRICTED
+    assert described({"derived_use_terms": "redistribution_needs_licence"}) == (
+        "Derived use redistribution needs a licence."
     )
-    plain = meridian.DatasetLicence(kept=True)
-    assert (plain.derived_use, plain.derived_use_terms) == (False, "internal_only")
-    licensed = meridian.DatasetLicence(derived_use_terms="redistribution_needs_licence")
-    assert licensed.derived_use is True
-    assert licensed._to_json()["derived_use_terms"] == "redistribution_needs_licence"
-    with pytest.raises(ValueError, match="disagrees"):
-        meridian.DatasetLicence(derived_use=False, derived_use_terms="not_restricted")
     delayed = meridian.DatasetDeclaration(
         key="delayed",
         vendor="Tiingo",

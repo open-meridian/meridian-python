@@ -398,7 +398,7 @@ class _SupervisorHarness:
         from .helpers.sessions import Supervisor
 
         self.clock = clock
-        self.opens: asyncio.Queue[str] = asyncio.Queue()
+        self.opens: asyncio.Queue[tuple[str, Any]] = asyncio.Queue()
         self.received: asyncio.Queue[list[Any]] = asyncio.Queue()
         self.waits: list[float] = []
         self.caught: dict[str, int] | None = None
@@ -410,11 +410,18 @@ class _SupervisorHarness:
             name = "behaviour"
 
             async def open(self) -> None:
-                said = await harness.opens.get()
+                said, asked = await harness.opens.get()
+                failed: Exception | None = None
                 if said == "fail":
-                    raise ConnectionError("the source did not answer")
-                if said == "refuse":
-                    raise _Refused("the key was refused")
+                    failed = ConnectionError("the source did not answer")
+                elif said == "refuse":
+                    failed = _Refused("the key was refused")
+                if failed is not None:
+                    if asked is not None:
+                        # A source's Retry-After, as the failure carries it
+                        # (0.35.3): a value that is no number is ignored.
+                        failed.retry_after = asked  # type: ignore[attr-defined]
+                    raise failed
 
             async def subscribe(self, wanted: Sequence[str]) -> None:
                 return None
@@ -450,6 +457,7 @@ class _SupervisorHarness:
             refused_seconds=float(given["refused_s"]),
             flush_seconds=0.001,
             backoff=_backoff_of(given, clock),
+            reopen_on_want=bool(given.get("reopen_on_want")),
             clock_ns=lambda: int(clock.now * 1_000_000_000),
             sleep=sleep,
             clock=clock,
@@ -476,7 +484,8 @@ class _SupervisorHarness:
         if name in ("open_fails", "opens", "open_refused"):
             if self.sleeping:
                 self.release.set()
-            await self.opens.put({"open_fails": "fail", "opens": "ok"}.get(name, "refuse"))
+            said = {"open_fails": "fail", "opens": "ok"}.get(name, "refuse")
+            await self.opens.put((said, args.get("retry_after_s")))
             if name == "opens":
                 done = lambda: state.opened > opened and state.state == "open"  # noqa: E731
             else:
@@ -484,10 +493,16 @@ class _SupervisorHarness:
         elif name == "hears":
             await self.received.put([_Statement(str(args["subject"]))])
             done = lambda: state.messages > heard  # noqa: E731
+        elif name == "hears_nothing":
+            # A receive stating nothing (a heartbeat): a sign of life (0.35.3).
+            await self.received.put([])
+            done = lambda: state.messages > heard  # noqa: E731
         elif name == "want":
             wanted = tuple(args.get("wanted") or [])
             self.supervisor.want(wanted)
-            done = lambda: state.subscribed == wanted or state.state in ("off", "no key")  # noqa: E731
+            done = lambda: (  # noqa: E731
+                state.subscribed == wanted or state.state in ("off", "no key", "connecting")
+            )
         elif name == "goes_silent":
             done = lambda: len(self.waits) > waited  # noqa: E731
         elif name == "idles":
@@ -830,6 +845,56 @@ async def _option_chains(
         await feed.on_observations_wanted(Heard(row=row, message=message))
 
 
+def _load(given: Mapping[str, Any], clock: Clock) -> Any:
+    """`client.load_wait` as its cases give it: its jitter, and a seeded
+    random source for the jitter."""
+    import random
+
+    return {"jitter": float(given.get("jitter", 0.2)), "rng": random.Random(given.get("seed"))}
+
+
+def _load_step(held: Any, name: str, args: Mapping[str, Any]) -> Mapping[str, Any]:
+    """A refusal heard (`refused`): whether it is asked again, and after how
+    long (contract v30, the resilience spec's section 10a; W4.4)."""
+    import grpc
+
+    from .client import load_wait
+    from .v1 import sidecar_pb2
+
+    if name != "refused":
+        raise AssertionError(f"client.load_wait has no step {name!r}")
+    refusal = sidecar_pb2.Refusal(
+        reason=str(args["reason"]),
+        retry_after_seconds=int(args.get("retry_after_s", 0)),
+    )
+    wait = load_wait(
+        refusal,
+        getattr(grpc.StatusCode, str(args["status"])),
+        float(args["left_s"]),
+        jitter=held["jitter"],
+        rng=held["rng"],
+    )
+    return {"asks_again": wait is not None, "wait_s": wait}
+
+
+def _views(name: str, args: Mapping[str, Any]) -> Any:
+    """`views.latest_key`'s `same_key`: whether two lake rows share the key a
+    view keeps the latest by (SDK 0.35.3, the cases contract 30 holds)."""
+    from .operations import CONFLATED
+    from .views import _latest_key
+
+    if name != "same_key":
+        raise AssertionError(f"views.latest_key has no call {name!r}")
+    keys = []
+    for given in (args["one"], args["other"]):
+        row = next(each for each in CONFLATED if each.name == given["row"])
+        event = json_format.ParseDict(
+            {k: v for k, v in given.items() if k != "row"}, row.message()
+        )
+        keys.append(_latest_key(getattr(event, row.within)))
+    return keys[0] == keys[1]
+
+
 #: This SDK's adapter for each subject it carries.
 ADAPTERS: Mapping[str, Adapter] = {
     "helpers.sessions.Backoff": _backoff_adapter,
@@ -851,6 +916,8 @@ ADAPTERS: Mapping[str, Adapter] = {
     "roles.data.api_key": value_case(_api_key),
     "roles.data.listings.Feed": acts_case(_listings),
     "roles.data.option_chains.Feed": acts_case(_option_chains),
+    "views.latest_key": value_case(_views),
+    "client.load_wait": steps_case(_load, _load_step),
 }
 
 #: The subjects this SDK carries, which design's coverage gate reads: a
@@ -875,6 +942,8 @@ SUBJECTS: Sequence[str] = (
     "roles.data.api_key",
     "roles.data.listings.Feed",
     "roles.data.option_chains.Feed",
+    "views.latest_key",
+    "client.load_wait",
 )
 
 #: The modules beside `meridian.helpers` whose helpers and common logic are
@@ -897,6 +966,8 @@ NOT_HELD: Mapping[str, str] = {
     "helpers.sessions.Link": "a type: the plugin's session, scripted by Supervisor's cases",
     "helpers.sessions.SessionState": "a type: Supervisor's state, which its cases read",
     "helpers.sessions.Silent": "a type: a session gone silent, as Supervisor's cases see it",
+    "helpers.sessions.read_sessions": "a read the sidecar answers (contract 30, ruling 455), "
+    "held by tests/test_sdk_036.py",
     "helpers.debt.CouponSplit": "a type: a coupon's split, which coupon_split answers",
     "helpers.packages.LegFill": "a type: a leg's fill, which report_fill takes",
     "roles.data.option_chains.ChainOption": "a type: a series as the source states it",

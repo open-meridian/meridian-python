@@ -543,6 +543,60 @@ def _custodial_activity(value: CustodialActivity, name: str) -> ops.CustodialAct
 
 
 @dataclass(frozen=True, kw_only=True)
+class BinaryEventContract:
+    """A binary event contract's attributes (contract v19; plans/the-lake-
+    prices- the-book, Q38): what it pays and when trading in it closes.
+
+    The SDK's form of the wire's BinaryEventContract: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    payout: Money | None = None
+    closes_at_ns: int = 0
+    floor: EventContractBound | None = None
+    cap: EventContractBound | None = None
+    bound_unit: str = ""
+    category: str = ""
+
+
+def _binary_event_contract(value: BinaryEventContract, name: str) -> ops.BinaryEventContract:
+    """A BinaryEventContract as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, BinaryEventContract):
+        raise TypeError(f"{name} is a meridian.BinaryEventContract, not {type(value).__name__}")
+    return ops.BinaryEventContract(
+        payout=None if value.payout is None else _money(value.payout, f"{name}.payout"),
+        closes_at_ns=value.closes_at_ns,
+        floor=None if value.floor is None else _event_contract_bound(value.floor, f"{name}.floor"),
+        cap=None if value.cap is None else _event_contract_bound(value.cap, f"{name}.cap"),
+        bound_unit=value.bound_unit,
+        category=value.category,
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class EventContractBound:
+    """One bound of a range market (A4): Kalshi's `greater` and
+    `greater_or_equal` are inclusive false and true.
+
+    The SDK's form of the wire's EventContractBound: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    value: Decimal | int
+    inclusive: bool = False
+
+
+def _event_contract_bound(value: EventContractBound, name: str) -> ops.EventContractBound:
+    """A EventContractBound as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, EventContractBound):
+        raise TypeError(f"{name} is a meridian.EventContractBound, not {type(value).__name__}")
+    return ops.EventContractBound(
+        value=_decimal(value.value, f"{name}.value"),
+        inclusive=value.inclusive,
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
 class OpeningSource:
     """OpeningSource.
 
@@ -2248,13 +2302,14 @@ class Job:
 
     account_ids: Sequence[str] = ()
     inputs: ops.InputRefs | None = None
-    measures: Sequence[ops.MeasureRef] = ()
+    measures: Sequence[MeasureRef] = ()
     what_if: WhatIf | None = None
     business_date: date | str = ""
     reporting_currency: str = ""
     chains: Sequence[ops.ChainRef] = ()
     scenario_set: ScenarioSet | None = None
     scenario_ref: ops.ScenarioRef | None = None
+    standing: bool = False
 
 
 def _job(value: Job, name: str) -> ops.Job:
@@ -2264,13 +2319,46 @@ def _job(value: Job, name: str) -> ops.Job:
     return ops.Job(
         account_ids=list(value.account_ids),
         inputs=value.inputs,
-        measures=list(value.measures),
+        measures=[_measure_ref(each, f"{name}.measures[{i}]") for i, each in enumerate(value.measures)],
         what_if=None if value.what_if is None else _what_if(value.what_if, f"{name}.what_if"),
         business_date=_date(value.business_date, f"{name}.business_date"),
         reporting_currency=value.reporting_currency,
         chains=list(value.chains),
         scenario_set=None if value.scenario_set is None else _scenario_set(value.scenario_set, f"{name}.scenario_set"),
         scenario_ref=value.scenario_ref,
+        standing=value.standing,
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class MeasureRef:
+    """A measure, by definition and version (requirement 14).
+
+    The SDK's form of the wire's MeasureRef: a number as a Decimal, an amount
+    as a Money, an enum as its value or name, each converted and refused
+    naming its path, as a request's own field is."""
+
+    definition: str = ""
+    version: int = 0
+    breakdowns: Sequence[str] = ()
+    event_group_id: str = ""
+    refresh: ops.Refresh | str | None = None
+    cadence_ns: int = 0
+    material_move_bp: int = 0
+
+
+def _measure_ref(value: MeasureRef, name: str) -> ops.MeasureRef:
+    """A MeasureRef as the wire carries it, or refused naming `name`."""
+    if not isinstance(value, MeasureRef):
+        raise TypeError(f"{name} is a meridian.MeasureRef, not {type(value).__name__}")
+    return ops.MeasureRef(
+        definition=value.definition,
+        version=value.version,
+        breakdowns=list(value.breakdowns),
+        event_group_id=value.event_group_id,
+        refresh=_enum(ops.Refresh, value.refresh, f"{name}.refresh"),
+        cadence_ns=value.cadence_ns,
+        material_move_bp=value.material_move_bp,
     )
 
 
@@ -2550,29 +2638,6 @@ def _event_group_member_bound(value: EventGroupMemberBound, name: str) -> ops.Ev
         floor=None if value.floor is None else _event_contract_bound(value.floor, f"{name}.floor"),
         cap=None if value.cap is None else _event_contract_bound(value.cap, f"{name}.cap"),
         bound_unit=value.bound_unit,
-    )
-
-
-@dataclass(frozen=True, kw_only=True)
-class EventContractBound:
-    """One bound of a range market (A4): Kalshi's `greater` and
-    `greater_or_equal` are inclusive false and true.
-
-    The SDK's form of the wire's EventContractBound: a number as a Decimal, an amount
-    as a Money, an enum as its value or name, each converted and refused
-    naming its path, as a request's own field is."""
-
-    value: Decimal | int
-    inclusive: bool = False
-
-
-def _event_contract_bound(value: EventContractBound, name: str) -> ops.EventContractBound:
-    """A EventContractBound as the wire carries it, or refused naming `name`."""
-    if not isinstance(value, EventContractBound):
-        raise TypeError(f"{name} is a meridian.EventContractBound, not {type(value).__name__}")
-    return ops.EventContractBound(
-        value=_decimal(value.value, f"{name}.value"),
-        inclusive=value.inclusive,
     )
 
 
@@ -2868,7 +2933,7 @@ class DerivedSeries:
     meta: ObservationMeta | None = None
     series: str = ""
     value: UnitValue | None = None
-    rule: ops.MeasureRef | None = None
+    rule: MeasureRef | None = None
     inputs: Sequence[ops.DerivedInput] = ()
     published_by: str = ""
     money_value: Money | None = None
@@ -2882,7 +2947,7 @@ def _derived_series(value: DerivedSeries, name: str) -> ops.DerivedSeries:
         meta=None if value.meta is None else _observation_meta(value.meta, f"{name}.meta"),
         series=value.series,
         value=None if value.value is None else _unit_value(value.value, f"{name}.value"),
-        rule=value.rule,
+        rule=None if value.rule is None else _measure_ref(value.rule, f"{name}.rule"),
         inputs=list(value.inputs),
         published_by=value.published_by,
         money_value=None if value.money_value is None else _money(value.money_value, f"{name}.money_value"),
@@ -3055,7 +3120,7 @@ class CorporateActionAnnounced:
     ex_date: date | str = ""
     record_date: date | str = ""
     payment_date: date | str = ""
-    rule: ops.MeasureRef | None = None
+    rule: MeasureRef | None = None
     filing: ops.FilingRef | None = None
 
 
@@ -3071,7 +3136,7 @@ def _corporate_action_announced(value: CorporateActionAnnounced, name: str) -> o
         ex_date=_date(value.ex_date, f"{name}.ex_date"),
         record_date=_date(value.record_date, f"{name}.record_date"),
         payment_date=_date(value.payment_date, f"{name}.payment_date"),
-        rule=value.rule,
+        rule=None if value.rule is None else _measure_ref(value.rule, f"{name}.rule"),
         filing=value.filing,
     )
 
@@ -3474,6 +3539,7 @@ class Operations:
         stated_description: str = "",
         stated_instrument_type: ops.InstrumentType | str | None = None,
         provenance: Sequence[Provenance] = (),
+        stated_binary_event_contract: BinaryEventContract | None = None,
     ) -> ops.ResolveIdentifierResult:
         """W3.1: Reverse resolution: identifiers to an instrument, as of a date. Answered (stable)."""
         params = ops.ResolveIdentifierParams(
@@ -3486,6 +3552,7 @@ class Operations:
             stated_description=stated_description,
             stated_instrument_type=_enum(ops.InstrumentType, stated_instrument_type, "stated_instrument_type"),
             provenance=[_provenance(each, f"provenance[{i}]") for i, each in enumerate(provenance)],
+            stated_binary_event_contract=None if stated_binary_event_contract is None else _binary_event_contract(stated_binary_event_contract, "stated_binary_event_contract"),
         )
         return await self._operate(self._operations().ResolveIdentifier, params)
 
@@ -4841,6 +4908,14 @@ class Operations:
             template_version=template_version,
         )
         return await self._operate(self._operations().ReadTemplate, params)
+
+    async def list_source_priorities(
+        self: _Acting,
+    ) -> ops.ListSourcePrioritiesResult:
+        """W10.2: Read by a deployment admin, and from contract v30 by the eight roles that (preview)."""
+        params = ops.ListSourcePrioritiesParams(
+        )
+        return await self._operate(self._operations().ListSourcePriorities, params)
 
     async def record_prices(
         self: _Acting,
@@ -6299,7 +6374,9 @@ class ConflatedRow:
     """A row a plugin's roles may hear latest value first per key (contract
     v18), as matrix/scoped.tsv declares it: the Delivery's arm carrying it,
     its message, and the query reading it again by subject, empty where none
-    does."""
+    does; for a standing job's figures (contract v30) the query reading the
+    job's answer again whole by its job ID, `records` and `within` then
+    empty."""
 
     name: str
     step: str
@@ -6401,6 +6478,15 @@ CONFLATED: tuple[ConflatedRow, ...] = (
         caught_up_by="list_series",
         records="series",
         within="series",
+    ),
+    ConflatedRow(
+        name="DerivedSeriesUpdated",
+        step="W12.4",
+        arm="derived_series_updated",
+        message=ops.DerivedSeriesUpdatedEvent,
+        caught_up_by="read_job_answer",
+        records="",
+        within="",
     ),
 )
 

@@ -1968,6 +1968,152 @@
       ]
     },
     {
+      "module": "load",
+      "since": "0.36.0",
+      "says": "An SDK waits out a refusal for load as these cases say: at least the retry-after core names, within its jitter, never past the act's or read's own deadline, and never for a count cap, which it raises at once.\n",
+      "cases": [
+        {
+          "name": "load-wait-waits-out-an-overload-at-least-its-retry-after",
+          "subject": "client.load_wait",
+          "kind": "steps",
+          "given": {
+            "jitter": 0.2,
+            "seed": 7
+          },
+          "steps": [
+            {
+              "call": "refused",
+              "args": {
+                "status": "RESOURCE_EXHAUSTED",
+                "reason": "REFUSAL_REASON_OVERLOADED",
+                "retry_after_s": 2,
+                "left_s": 60
+              },
+              "expect": {
+                "asks_again": true,
+                "wait_s": {
+                  "at_least": 2,
+                  "at_most": 2.4
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "load-wait-waits-out-a-rate-limit-at-least-its-retry-after",
+          "subject": "client.load_wait",
+          "kind": "steps",
+          "given": {
+            "jitter": 0.2,
+            "seed": 7
+          },
+          "steps": [
+            {
+              "call": "refused",
+              "args": {
+                "status": "RESOURCE_EXHAUSTED",
+                "reason": "REFUSAL_REASON_RATE_LIMITED",
+                "retry_after_s": 5,
+                "left_s": 60
+              },
+              "expect": {
+                "asks_again": true,
+                "wait_s": {
+                  "at_least": 5,
+                  "at_most": 6
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "load-wait-waits-a-second-where-none-is-named",
+          "subject": "client.load_wait",
+          "kind": "steps",
+          "given": {
+            "jitter": 0,
+            "seed": 7
+          },
+          "steps": [
+            {
+              "call": "refused",
+              "args": {
+                "status": "RESOURCE_EXHAUSTED",
+                "reason": "REFUSAL_REASON_OVERLOADED",
+                "retry_after_s": 0,
+                "left_s": 60
+              },
+              "expect": {
+                "asks_again": true,
+                "wait_s": {
+                  "at_least": 1,
+                  "at_most": 1
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "load-wait-raises-a-count-cap-at-once",
+          "subject": "client.load_wait",
+          "kind": "steps",
+          "given": {
+            "jitter": 0.2,
+            "seed": 7
+          },
+          "steps": [
+            {
+              "call": "refused",
+              "args": {
+                "status": "RESOURCE_EXHAUSTED",
+                "reason": "REFUSAL_REASON_UNSPECIFIED",
+                "retry_after_s": 0,
+                "left_s": 60
+              },
+              "expect": {
+                "asks_again": false
+              }
+            },
+            {
+              "call": "refused",
+              "args": {
+                "status": "UNAVAILABLE",
+                "reason": "REFUSAL_REASON_OVERLOADED",
+                "retry_after_s": 2,
+                "left_s": 60
+              },
+              "expect": {
+                "asks_again": false
+              }
+            }
+          ]
+        },
+        {
+          "name": "load-wait-raises-a-wait-past-its-deadline",
+          "subject": "client.load_wait",
+          "kind": "steps",
+          "given": {
+            "jitter": 0.2,
+            "seed": 7
+          },
+          "steps": [
+            {
+              "call": "refused",
+              "args": {
+                "status": "RESOURCE_EXHAUSTED",
+                "reason": "REFUSAL_REASON_OVERLOADED",
+                "retry_after_s": 5,
+                "left_s": 2
+              },
+              "expect": {
+                "asks_again": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
       "module": "sessions",
       "since": "0.35.0",
       "says": "An SDK carrying helpers.sessions.Backoff waits as these cases say after each failure of a long-running work: doubling within its jitter to its most, and from its first again once the work ran steadily. One carrying helpers.sessions.Supervisor keeps a session as these cases say: its waits, its state, its subscriptions and its catch-up after a reopen.\n",
@@ -2281,6 +2427,325 @@
               }
             }
           ]
+        },
+        {
+          "name": "supervisor-takes-an-empty-receive-as-a-sign-of-life",
+          "subject": "helpers.sessions.Supervisor",
+          "kind": "steps",
+          "given": {
+            "first_s": 1,
+            "most_s": 60,
+            "jitter": 0,
+            "steady_s": 60,
+            "silent_s": 30,
+            "refused_s": 300,
+            "wanted": [
+              "AAA"
+            ]
+          },
+          "steps": [
+            {
+              "call": "opens",
+              "expect": {
+                "state": "open",
+                "opened": 1,
+                "subscribed": [
+                  "AAA"
+                ]
+              }
+            },
+            {
+              "clock": 20,
+              "call": "hears_nothing",
+              "expect": {
+                "state": "open",
+                "messages": 1
+              }
+            },
+            {
+              "clock": 45,
+              "call": "hears_nothing",
+              "expect": {
+                "state": "open",
+                "dropped": 0,
+                "messages": 2
+              }
+            }
+          ]
+        },
+        {
+          "name": "supervisor-waits-no-shorter-than-a-retry-after",
+          "subject": "helpers.sessions.Supervisor",
+          "kind": "steps",
+          "given": {
+            "first_s": 1,
+            "most_s": 60,
+            "jitter": 0,
+            "steady_s": 60,
+            "silent_s": 30,
+            "refused_s": 300,
+            "wanted": [
+              "AAA"
+            ]
+          },
+          "steps": [
+            {
+              "call": "open_fails",
+              "args": {
+                "retry_after_s": 42
+              },
+              "expect": {
+                "state": "waiting",
+                "dropped": 1,
+                "wait_s": 42
+              }
+            },
+            {
+              "call": "open_fails",
+              "args": {
+                "retry_after_s": 0.5
+              },
+              "expect": {
+                "state": "waiting",
+                "dropped": 2,
+                "wait_s": 2
+              }
+            },
+            {
+              "call": "open_fails",
+              "args": {
+                "retry_after_s": "soon"
+              },
+              "expect": {
+                "state": "waiting",
+                "dropped": 3,
+                "wait_s": 4
+              }
+            },
+            {
+              "call": "open_refused",
+              "args": {
+                "retry_after_s": 900
+              },
+              "expect": {
+                "state": "refused",
+                "wait_s": 900
+              }
+            }
+          ]
+        },
+        {
+          "name": "supervisor-reopens-when-the-wanted-set-changes",
+          "subject": "helpers.sessions.Supervisor",
+          "kind": "steps",
+          "given": {
+            "first_s": 1,
+            "most_s": 60,
+            "jitter": 0,
+            "steady_s": 60,
+            "silent_s": 30,
+            "refused_s": 300,
+            "wanted": [
+              "AAA"
+            ],
+            "reopen_on_want": true
+          },
+          "steps": [
+            {
+              "call": "opens",
+              "expect": {
+                "state": "open",
+                "opened": 1,
+                "subscribed": [
+                  "AAA"
+                ]
+              }
+            },
+            {
+              "call": "want",
+              "args": {
+                "wanted": [
+                  "AAA",
+                  "BBB"
+                ]
+              }
+            },
+            {
+              "call": "opens",
+              "expect": {
+                "state": "open",
+                "opened": 2,
+                "dropped": 0,
+                "subscribed": [
+                  "AAA",
+                  "BBB"
+                ],
+                "wait_s": null
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "views",
+      "since": "0.35.3",
+      "says": "An SDK carrying views keys each lake row a view holds latest first as the readers' sidecars conflate it, so a curve's points, a chain's series and one subject's prices in two assets are each kept apart, and a row of the same key supersedes the one before.\n",
+      "cases": [
+        {
+          "name": "latest-key-keeps-a-curves-points-apart",
+          "subject": "views.latest_key",
+          "kind": "value",
+          "call": "same_key",
+          "args": {
+            "one": {
+              "row": "RatesRecorded",
+              "rate": {
+                "meta": {
+                  "subjects": [
+                    {
+                      "entity_id": "INS-UST-PAR"
+                    }
+                  ],
+                  "source": {
+                    "dataset": "us-treasury-1:par"
+                  }
+                },
+                "kind": "RATE_KIND_PAR_YIELD",
+                "tenor": {
+                  "count": 1,
+                  "unit": "TENOR_UNIT_MONTH"
+                }
+              }
+            },
+            "other": {
+              "row": "RatesRecorded",
+              "rate": {
+                "meta": {
+                  "subjects": [
+                    {
+                      "entity_id": "INS-UST-PAR"
+                    }
+                  ],
+                  "source": {
+                    "dataset": "us-treasury-1:par"
+                  }
+                },
+                "kind": "RATE_KIND_PAR_YIELD",
+                "tenor": {
+                  "count": 3,
+                  "unit": "TENOR_UNIT_MONTH"
+                }
+              }
+            }
+          },
+          "expect": {
+            "value": false
+          }
+        },
+        {
+          "name": "latest-key-keeps-a-chains-series-apart",
+          "subject": "views.latest_key",
+          "kind": "value",
+          "call": "same_key",
+          "args": {
+            "one": {
+              "row": "QuotesRecorded",
+              "quote": {
+                "meta": {
+                  "subjects": [
+                    {
+                      "entity_id": "INS-AAPL"
+                    }
+                  ],
+                  "source": {
+                    "dataset": "tradier-1:options"
+                  },
+                  "series_key": [
+                    {
+                      "scheme": "occ_osi",
+                      "value": "AAPL  261120P00230000"
+                    }
+                  ]
+                }
+              }
+            },
+            "other": {
+              "row": "QuotesRecorded",
+              "quote": {
+                "meta": {
+                  "subjects": [
+                    {
+                      "entity_id": "INS-AAPL"
+                    }
+                  ],
+                  "source": {
+                    "dataset": "tradier-1:options"
+                  },
+                  "series_key": [
+                    {
+                      "scheme": "occ_osi",
+                      "value": "AAPL  261120C00235000"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "expect": {
+            "value": false
+          }
+        },
+        {
+          "name": "latest-key-keeps-two-assets-apart",
+          "subject": "views.latest_key",
+          "kind": "value",
+          "call": "same_key",
+          "args": {
+            "one": {
+              "row": "PricesRecorded",
+              "price": {
+                "meta": {
+                  "subjects": [
+                    {
+                      "entity_id": "INS-BTC"
+                    }
+                  ],
+                  "source": {
+                    "dataset": "coinbase-1:live",
+                    "venue_id": "VEN-CB"
+                  }
+                },
+                "kind": "PRICE_KIND_LAST",
+                "price": {
+                  "currency_code": "USD"
+                }
+              }
+            },
+            "other": {
+              "row": "PricesRecorded",
+              "price": {
+                "meta": {
+                  "subjects": [
+                    {
+                      "entity_id": "INS-BTC"
+                    }
+                  ],
+                  "source": {
+                    "dataset": "coinbase-1:live",
+                    "venue_id": "VEN-CB"
+                  }
+                },
+                "kind": "PRICE_KIND_LAST",
+                "price": {
+                  "currency_code": "USDC"
+                }
+              }
+            }
+          },
+          "expect": {
+            "value": false
+          }
         }
       ]
     }

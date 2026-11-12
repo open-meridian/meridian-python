@@ -38,6 +38,7 @@ from meridian.testing import caller_header
 from meridian.v1 import sidecar_pb2
 from v28_cases import PRODUCERS as V28_PRODUCERS
 from v29_cases import PRODUCERS as V29_PRODUCERS
+from v30_cases import PRODUCERS as V30_PRODUCERS
 
 Producer = Callable[[Recorder], Awaitable[None]]
 
@@ -1568,4 +1569,7 @@ PRODUCERS: dict[str, Producer] = {
     **V28_PRODUCERS,
     # Contract v29: a pool's factors read and heard (tests/v29_cases.py).
     **V29_PRODUCERS,
+    # Contract 30: a standing figure held, the source priorities read
+    # (tests/v30_cases.py).
+    **V30_PRODUCERS,
 }

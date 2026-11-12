@@ -27,7 +27,7 @@ from pathlib import Path
 import pytest
 
 from meridian import migrations
-from meridian.migrations import NoMigration, chain, migrate, recorded
+from meridian.migrations import NoMigration, as_json, chain, migrate, recorded
 
 ROOT = Path(__file__).parents[1]
 FIXTURES = Path(__file__).parent / "migrations"
@@ -103,7 +103,7 @@ def test_every_release_since_the_first_recorded_has_its_step() -> None:
         ("0.6.0", "0.6.1"),
         ("0.6.1", "0.7.0"),
     ]
-    assert (steps[-1].source, steps[-1].target) == ("0.35.4", "0.35.5")
+    assert (steps[-1].source, steps[-1].target) == ("0.35.5", "0.36.0")
     # A release that moves the version records its step, if only the pins.
     assert steps[-1].target == SDK
 
@@ -417,9 +417,14 @@ def test_each_role_shape_passes_its_own_tests_once_its_findings_are_done(
     tmp_path: Path, name: str
 ) -> None:
     """With the work the findings name done, each passes its own tests
-    against this SDK."""
+    against this SDK: migrated on from 0.35.0 to it, as `meridian plugin
+    migrate` would take it (from 0.36.0 a licence_default is its terms in
+    words, ruling 1032)."""
     migrated(f"{name}-0.34.0", "0.34.0", "0.35.0", tmp_path)
     by_hand_done(name, tmp_path)
+    onward = migrate(plugin_files(tmp_path), "0.35.0", SDK)
+    for path, text in onward.files.items():
+        (tmp_path / path).write_text(text)
     own_tests_pass(tmp_path)
 
 
@@ -638,6 +643,11 @@ def test_each_migrated_plugin_passes_plugin_check(
     migrated(fixture, source, target, tmp_path)
     if target == "0.35.0":
         by_hand_done(fixture.rsplit("-", 1)[0], tmp_path)
+        # On to this SDK, as `meridian plugin migrate` takes it: its tests
+        # run against this SDK (from 0.36.0 a licence_default is words).
+        onward = migrate(plugin_files(tmp_path), "0.35.0", SDK)
+        for path, text in onward.files.items():
+            (tmp_path / path).write_text(text)
     ran = subprocess.run(
         [meridian, "plugin", "check", "--run-tests", "--dir", str(tmp_path)],
         env={**os.environ, "PYTHONPATH": str(tmp_path / "src"), "PYTHONDONTWRITEBYTECODE": "1"},
@@ -2804,3 +2814,151 @@ def test_0353_names_a_base_by_tag_where_the_plugin_pins_by_digest() -> None:
     assert _left_0353({"Dockerfile": base}) == []
     by_digest = base.replace("0.35.3", f"0.35.3@{_DIGEST}")
     assert _left_0353({"Dockerfile": by_digest, "Makefile": pinned}) == []
+
+
+# ── 0.35.5 to 0.36.0: contract 30 ────────────────────────────────────────
+
+
+def test_a_licence_default_is_written_as_its_terms_in_words() -> None:
+    """Ruling 1032: `licence-default-described` turns each literal
+    `licence_default=DatasetLicence(...)` into `terms_and_pricing="..."`,
+    drops the retired names from the import where nothing else names them,
+    and leaves by hand a licence it cannot read word for word, a test
+    reading `.licence_default`, a suite contract 30 grew and an SDK
+    DerivedSeries given the wire's MeasureRef."""
+    files = {
+        "pyproject.toml": '[tool.meridian]\nroles = ["data"]\n',
+        "src/p/declared.py": textwrap.dedent(
+            """\
+            from meridian import DatasetDeclaration, DatasetLicence
+
+            HELD = DatasetLicence(kept=True)
+
+            def licence_for(key):
+                return DatasetLicence(kept=key == "daily")
+
+            DAILY = DatasetDeclaration(
+                key="daily",
+                vendor="Coinbase",
+                data_types=["meridian.v1.Price"],
+                modes=["pull"],
+                licence_default=DatasetLicence(kept=True, retention_days=2, display=True),
+            )
+            LIVE = DatasetDeclaration(
+                key="live", vendor="Coinbase", data_types=["meridian.v1.Price"],
+                modes=["stream"], licence_default=HELD,
+            )
+            BARS = DatasetDeclaration(
+                key="bars", vendor="Coinbase", data_types=["meridian.v1.Bar"],
+                modes=["pull"], licence_default=licence_for("bars"),
+            )
+            ODD = DatasetDeclaration(
+                key="odd", vendor="Coinbase", data_types=["meridian.v1.Bar"],
+                modes=["pull"], licence_default=DatasetLicence(kept=True, meters="display"),
+            )
+            LONG = DatasetDeclaration(
+                key="long", vendor="Coinbase", data_types=["meridian.v1.Bar"],
+                modes=["pull"], licence_default=DatasetLicence(attribution_text=LONGTEXT),
+            )
+            """
+        ),
+        "src/p/plain.py": textwrap.dedent(
+            """\
+            import meridian
+            from meridian import DataEligibility, DatasetDeclaration, DatasetLicence
+
+            DAILY = DatasetDeclaration(
+                key="daily",
+                vendor="ECB",
+                data_types=["meridian.v1.Rate"],
+                modes=["pull"],
+                licence_default=meridian.DatasetLicence(
+                    kept=True,
+                    derived_use_terms="not_restricted",
+                    attribution_text="Source: ECB",
+                    eligibility=DataEligibility(uses=["personal", "commercial"]),
+                ),
+            )
+            """
+        ),
+        "src/p/shared.py": textwrap.dedent(
+            """\
+            from meridian import DatasetDeclaration, DatasetLicence
+
+            LIC = DatasetLicence(kept=True, retention_days=2)
+            DAYS = LIC.retention_days
+            D = DatasetDeclaration(
+                key="d", vendor="v", data_types=["meridian.v1.Bar"], modes=["pull"],
+                licence_default=LIC,
+            )
+            """
+        ),
+        "src/p/derived.py": textwrap.dedent(
+            """\
+            import meridian
+            from meridian.plugin.v1 import operations_pb2 as ops
+
+            VIX = meridian.DerivedSeries(series="level", rule=ops.MeasureRef(definition="v"))
+            WIRE = ops.DerivedSeries(series="level", rule=ops.MeasureRef(definition="v"))
+            """
+        ),
+        "tests/test_suite.py": textwrap.dedent(
+            """\
+            from meridian.suites import run
+
+            def test_suite():
+                assert run("signal", {}).passed
+            """
+        ),
+        "tests/test_declared.py": textwrap.dedent(
+            """\
+            from p.declared import DAILY
+
+            def test_kept():
+                assert DAILY._wire().licence_default.kept
+            """
+        ),
+    }
+    # Terms past the field's 2,000 characters, in words: left, never cut.
+    files["src/p/declared.py"] = files["src/p/declared.py"].replace(
+        "LONGTEXT", '"' + "x" * 2001 + '"'
+    )
+    result = migrate(files, "0.35.5", "0.36.0")
+    declared = result.files["src/p/declared.py"]
+    # An argument the rule does not word, and terms too long: by hand.
+    assert 'licence_default=DatasetLicence(kept=True, meters="display")' in declared
+    assert "licence_default=DatasetLicence(attribution_text=" in declared
+    assert 'terms_and_pricing="Kept by the lake; kept 2 days at most; display allowed."' in (
+        declared
+    )
+    # A licence shared through a module-level name bound once: the name
+    # holds the words, and each dataset names it.
+    assert 'HELD = "Kept by the lake."' in declared
+    assert 'modes=["stream"], terms_and_pricing=HELD,' in declared
+    # One made by a function is left by hand, and so its import stays.
+    assert 'licence_default=licence_for("bars")' in declared
+    assert "from meridian import DatasetDeclaration, DatasetLicence" in declared
+    plain = result.files["src/p/plain.py"]
+    assert "from meridian import DatasetDeclaration\n" in plain
+    assert (
+        'terms_and_pricing="Kept by the lake; derived use not restricted; attribution '
+        'required: \\"Source: ECB\\"; eligible: personal and commercial use."'
+    ) in plain
+    left = {(each["rule"], each["file"], each["line"]) for each in as_json(result)["by_hand"]}
+    assert ("licence-default-left", "src/p/declared.py", 21) in left
+    assert ("licence-default-left", "src/p/declared.py", 25) in left
+    assert ("licence-default-left", "src/p/declared.py", 29) in left
+    assert ("licence-default-left", "tests/test_declared.py", 4) in left
+    assert ("suite-cases-v30", "tests/test_suite.py", 4) in left
+    assert ("measure-ref-sdk-form", "src/p/derived.py", 4) in left
+    assert not any(f == "src/p/derived.py" and n == 5 for _, f, n in left)
+    # A shared licence read otherwise too keeps its licence: by hand.
+    assert "src/p/shared.py" not in result.files
+    assert ("licence-default-left", "src/p/shared.py", 7) in left
+    rewrote = {
+        (each["file"], each["rule"], each["places"])
+        for step in as_json(result)["steps"]
+        for each in step["rewrote"]
+    }
+    assert ("src/p/declared.py", "licence-default-described", 2) in rewrote
+    assert ("src/p/plain.py", "licence-default-described", 1) in rewrote

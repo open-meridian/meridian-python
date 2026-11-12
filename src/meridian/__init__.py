@@ -91,9 +91,10 @@ is mounted. What each kind holds in storage goes on its heartbeat
 From contract v18 the lake holds what sources say about prices. A data plugin
 declares its catalogue in its declaration
 (`Declaration(catalogue=[DatasetDeclaration(...)])`: each dataset's key,
-vendor, data types, modes, cadence, the terms its vendor imposes
-(`DatasetLicence`), the day its business dates are in -- `day_time_zone`,
-`day_end_minute` -- and the venue it is, `venue_id`), and records prices and
+vendor, data types, modes, cadence, its vendor's terms and pricing in plain
+words (`terms_and_pricing`, from contract v30), the day its business dates
+are in -- `day_time_zone`, `day_end_minute` -- and the venue it is,
+`venue_id`), and records prices and
 bars in batches of 1 to 500 (`role.record_prices`, `role.record_bars`,
 each a `Price` or `Bar` under an `ObservationMeta` naming its dataset, its
 subjects, its business date and its raw record), every subject resolved
@@ -379,9 +380,7 @@ from .client import (
 )
 from .declaration import (
     AlgorithmDeclaration,
-    DataEligibility,
     DatasetDeclaration,
-    DatasetLicence,
     Declaration,
     NotCarried,
     PricingModelDeclaration,
@@ -414,6 +413,7 @@ from .operations import (
     AllocationLine,
     Bar,
     BasisAdjustment,
+    BinaryEventContract,
     BreakCause,
     BreakDifference,
     BreakValue,
@@ -441,6 +441,7 @@ from .operations import (
     LocateAnswer,
     LocateUse,
     LotTerms,
+    MeasureRef,
     Money,
     MovementLine,
     ObservationMeta,
@@ -608,6 +609,7 @@ __all__ = [
     "Backfill",
     "Bar",
     "BasisAdjustment",
+    "BinaryEventContract",
     "BookingCorrectionKind",
     "BookingState",
     "BreakCategory",
@@ -632,9 +634,7 @@ __all__ = [
     "CurrentIdMap",
     "CustodialActivity",
     "DEFAULT_ADDRESS",
-    "DataEligibility",
     "DatasetDeclaration",
-    "DatasetLicence",
     "DatasetRef",
     "DateBasis",
     "DateCheck",
@@ -683,6 +683,7 @@ __all__ = [
     "LotSource",
     "LotTerms",
     "MarginAgreementRef",
+    "MeasureRef",
     "MeridianError",
     "MissReason",
     "Money",
@@ -842,4 +843,11 @@ def __getattr__(name: str) -> object:
     own generic ones."""
     if name == "TagAccess":
         raise ImportError(_RETIRED_BY_026, name=__name__)
+    if name in ("DatasetLicence", "DataEligibility"):
+        raise ImportError(
+            f"{name} was retired by contract 30 (ruling 1032): a dataset describes its "
+            "vendor's terms and pricing in words, DatasetDeclaration(terms_and_pricing=...), "
+            "and `meridian plugin migrate` writes them from a licence_default",
+            name=__name__,
+        )
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

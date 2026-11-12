@@ -384,6 +384,11 @@ class PluginOperationsStub(object):
                 request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadTemplateParams.SerializeToString,
                 response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadTemplateResult.FromString,
                 _registered_method=True)
+        self.ListSourcePriorities = channel.unary_unary(
+                '/meridian.plugin.v1.PluginOperations/ListSourcePriorities',
+                request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListSourcePrioritiesParams.SerializeToString,
+                response_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListSourcePrioritiesResult.FromString,
+                _registered_method=True)
         self.RecordPrices = channel.unary_unary(
                 '/meridian.plugin.v1.PluginOperations/RecordPrices',
                 request_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.RecordPricesParams.SerializeToString,
@@ -1189,6 +1194,13 @@ class PluginOperationsServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def ListSourcePriorities(self, request, context):
+        """W10.2: platform.lake.query.list-source-priorities (query; preview).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def RecordPrices(self, request, context):
         """W10.4: platform.lake.command.record-prices (command; preview).
         """
@@ -1976,6 +1988,11 @@ def add_PluginOperationsServicer_to_server(servicer, server):
                     servicer.ReadTemplate,
                     request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadTemplateParams.FromString,
                     response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadTemplateResult.SerializeToString,
+            ),
+            'ListSourcePriorities': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListSourcePriorities,
+                    request_deserializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListSourcePrioritiesParams.FromString,
+                    response_serializer=meridian_dot_plugin_dot_v1_dot_operations__pb2.ListSourcePrioritiesResult.SerializeToString,
             ),
             'RecordPrices': grpc.unary_unary_rpc_method_handler(
                     servicer.RecordPrices,
@@ -4178,6 +4195,33 @@ class PluginOperations(object):
             '/meridian.plugin.v1.PluginOperations/ReadTemplate',
             meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadTemplateParams.SerializeToString,
             meridian_dot_plugin_dot_v1_dot_operations__pb2.ReadTemplateResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListSourcePriorities(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/meridian.plugin.v1.PluginOperations/ListSourcePriorities',
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListSourcePrioritiesParams.SerializeToString,
+            meridian_dot_plugin_dot_v1_dot_operations__pb2.ListSourcePrioritiesResult.FromString,
             options,
             channel_credentials,
             insecure,

@@ -160,7 +160,7 @@ def test_a_day_clock_is_read_from_a_datasets_declaration() -> None:
         vendor="Fake",
         data_types=["meridian.v1.Price"],
         modes=["pull"],
-        licence_default=meridian.DatasetLicence(redistribution="not_allowed"),
+        terms_and_pricing="Redistribution not allowed.",
         day_time_zone="America/New_York",
         day_end_minute=1020,
     )
@@ -217,7 +217,7 @@ def test_a_listings_sources_pages_draw_its_plan_its_streams_and_its_counts() -> 
             vendor="Fake",
             data_types=["meridian.v1.Price"],
             modes=["pull"],
-            licence_default=meridian.DatasetLicence(redistribution="not_allowed"),
+            terms_and_pricing="Redistribution not allowed.",
             day_time_zone="America/New_York",
             day_end_minute=960,
         )

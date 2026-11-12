@@ -27,7 +27,6 @@ from meridian import (
     Bar,
     CallFailed,
     DatasetDeclaration,
-    DatasetLicence,
     Declaration,
     Money,
     ObservationMeta,
@@ -84,7 +83,7 @@ CATALOGUE = [
         modes=["pull", "push"],
         cadence=86_400,
         history=3650,
-        licence_default=DatasetLicence(kept=True, personal_use=True),
+        terms_and_pricing="Kept by the lake; one person's terms.",
         day_time_zone="Etc/UTC",
         venue_id=COINBASE,
     ),
@@ -94,7 +93,7 @@ CATALOGUE = [
         data_types=["meridian.v1.Price"],
         modes=["stream"],
         cadence=1,
-        licence_default=DatasetLicence(kept=False, personal_use=True),
+        terms_and_pricing="Served, not kept; one person's terms.",
         venue_id=COINBASE,
     ),
 ]
@@ -152,11 +151,12 @@ async def test_a_data_plugin_declares_its_catalogue_from_code(sidecar) -> None:
     assert list(daily.modes) == [meridian.ObservationMode.Value("OBSERVATION_MODE_PULL"), 2]
     assert daily.day_time_zone == "Etc/UTC" and daily.day_end_minute == 0
     assert daily.venue_id == COINBASE
-    assert daily.licence_default.kept and daily.licence_default.personal_use
-    assert not daily.licence_default.dataset  # empty in a catalogue's default
+    # From contract 30 its terms in words, and no licence (ruling 1032).
+    assert daily.terms_and_pricing == "Kept by the lake; one person's terms."
     upload = Declaration(catalogue=CATALOGUE).to_json()["catalogue"]["datasets"][0]
     assert upload["modes"] == ["pull", "push"]
-    assert upload["licence_default"]["personal_use"] is True
+    assert upload["terms_and_pricing"] == daily.terms_and_pricing
+    assert "licence_default" not in upload
     # A version declaring none uploads what it did before v18.
     assert "catalogue" not in Declaration().to_json()
 
@@ -177,6 +177,9 @@ async def test_a_data_plugin_declares_its_catalogue_from_code(sidecar) -> None:
         ({"day_end_minute": 1440}, "0 to 1439"),
         ({"venue_id": "XNAS"}, "no venue master ID"),
         ({"cadence": -1}, "0 or more"),
+        ({"terms_and_pricing": "x" * 2001}, "at most 2000"),
+        ({"sessions_calendar_id": "FX"}, "no calendar's ID"),
+        ({"gap_recovery": "sometimes"}, "backfill, stream_only, none"),
     ],
 )
 def test_a_dataset_past_the_dictionarys_bounds_is_refused_here(change, said) -> None:
@@ -194,8 +197,8 @@ def test_a_dataset_past_the_dictionarys_bounds_is_refused_here(change, said) -> 
 def test_a_catalogue_holds_each_key_once_and_only_a_data_plugin_declares_one() -> None:
     with pytest.raises(ValueError, match="declared twice"):
         Declaration(catalogue=[CATALOGUE[0], CATALOGUE[0]])
-    with pytest.raises(ValueError, match="no entry of the data dictionary"):
-        DatasetLicence(default_fields=["meridian.v1.Bar.nothing"])
+    with pytest.raises(ImportError, match="ruling 1032"):
+        from meridian import DatasetLicence  # noqa: F401
     declared = Declaration(catalogue=CATALOGUE)
     assert declared.refused_for(["data"]) is None
     assert "only a data plugin" in (declared.refused_for(["custody"]) or "")
@@ -485,15 +488,21 @@ async def test_a_read_as_of_a_recorded_time_answers_what_the_lake_knew_then(side
 async def test_a_reader_learns_the_datasets_it_may_read_with_their_catalogue_entries(
     sidecar,
 ) -> None:
+    service, _ = sidecar
     plugin = await data_plugin(sidecar)
     try:
         listed = await plugin._acts.list_datasets()
         assert [d.dataset for d in listed.datasets] == [DAILY, LIVE]
         assert listed.datasets[0].declaration.day_time_zone == "Etc/UTC"
-        assert {licence.dataset: licence.kept for licence in listed.licences} == {
-            DAILY: True,
-            LIVE: False,
-        }
+        # Contract 30 (ruling 1032): each entry's terms in words, and only
+        # the licences a deployment admin set -- none yet.
+        assert listed.datasets[1].declaration.terms_and_pricing == (
+            "Served, not kept; one person's terms."
+        )
+        assert list(listed.licences) == []
+        service.operations.lake.licences[DAILY] = ops.DatasetLicence(dataset=DAILY, kept=True)
+        listed = await plugin._acts.list_datasets()
+        assert {licence.dataset: licence.kept for licence in listed.licences} == {DAILY: True}
     finally:
         await plugin.leave()
 
@@ -1141,7 +1150,7 @@ async def publishers_figure(recorder: Recorder) -> None:
                 ),
                 series="level",
                 value=meridian.UnitValue(value=Decimal("16.42"), unit="percent"),
-                rule=ops.MeasureRef(definition="cboe_vix", version=1),
+                rule=meridian.MeasureRef(definition="cboe_vix", version=1),
                 published_by="Cboe",
             )
         ]
@@ -1559,6 +1568,10 @@ def test_a_reading_role_hears_and_reads_as_its_suite_asks() -> None:
                     # A pool's factors read and heard (contract v29).
                     "reads-a-pools-factors",
                     "hears-a-factor-recorded",
+                    # A standing figure held and the source priorities
+                    # read (contract 30).
+                    "holds-a-standing-figure",
+                    "reads-the-source-priorities",
                 )
             },
         },

@@ -33,6 +33,7 @@ from typing import Any
 
 from ..operations import (
     DerivedSeries,
+    MeasureRef,
     Money,
     ObservationMeta,
     SavedScenario,
@@ -97,7 +98,7 @@ def derived(
         series=series,
         value=None if isinstance(value, Money) else UnitValue(value=value, unit=unit),
         money_value=value if isinstance(value, Money) else None,
-        rule=ops.MeasureRef(definition=definition, version=version),
+        rule=MeasureRef(definition=definition, version=version),
         inputs=read,
     )
 

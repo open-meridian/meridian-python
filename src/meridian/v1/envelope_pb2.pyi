@@ -1,8 +1,9 @@
+from meridian.v1 import journal_pb2 as _journal_pb2
 from google.protobuf.internal import containers as _containers
 from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
-from typing import ClassVar as _ClassVar, Iterable as _Iterable, Optional as _Optional, Union as _Union
+from typing import ClassVar as _ClassVar, Iterable as _Iterable, Mapping as _Mapping, Optional as _Optional, Union as _Union
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
@@ -14,7 +15,7 @@ SUBJECT_KIND_UNSPECIFIED: SubjectKind
 SUBJECT_KIND_SERVICE_ACCOUNT: SubjectKind
 
 class MessageMeta(_message.Message):
-    __slots__ = ("message_id", "correlation_id", "causation_id", "publisher_instance_id", "topic", "schema_version", "published_at_ns", "acting_for_subject", "acting_for_kind", "owner_subject", "algorithm_id", "acting_through_delegation", "acting_through_client", "prepared_call_id", "account_scope", "account_scope_applies", "connectivity_allowed", "connectivity_demo", "on_behalf_of_instance_id")
+    __slots__ = ("message_id", "correlation_id", "causation_id", "publisher_instance_id", "topic", "schema_version", "published_at_ns", "acting_for_subject", "acting_for_kind", "owner_subject", "algorithm_id", "acting_through_delegation", "acting_through_client", "prepared_call_id", "account_scope", "account_scope_applies", "connectivity_allowed", "connectivity_demo", "on_behalf_of_instance_id", "read_after")
     MESSAGE_ID_FIELD_NUMBER: _ClassVar[int]
     CORRELATION_ID_FIELD_NUMBER: _ClassVar[int]
     CAUSATION_ID_FIELD_NUMBER: _ClassVar[int]
@@ -34,6 +35,7 @@ class MessageMeta(_message.Message):
     CONNECTIVITY_ALLOWED_FIELD_NUMBER: _ClassVar[int]
     CONNECTIVITY_DEMO_FIELD_NUMBER: _ClassVar[int]
     ON_BEHALF_OF_INSTANCE_ID_FIELD_NUMBER: _ClassVar[int]
+    READ_AFTER_FIELD_NUMBER: _ClassVar[int]
     message_id: str
     correlation_id: str
     causation_id: str
@@ -53,4 +55,5 @@ class MessageMeta(_message.Message):
     connectivity_allowed: bool
     connectivity_demo: bool
     on_behalf_of_instance_id: str
-    def __init__(self, message_id: _Optional[str] = ..., correlation_id: _Optional[str] = ..., causation_id: _Optional[str] = ..., publisher_instance_id: _Optional[str] = ..., topic: _Optional[str] = ..., schema_version: _Optional[str] = ..., published_at_ns: _Optional[int] = ..., acting_for_subject: _Optional[str] = ..., acting_for_kind: _Optional[_Union[SubjectKind, str]] = ..., owner_subject: _Optional[str] = ..., algorithm_id: _Optional[str] = ..., acting_through_delegation: _Optional[str] = ..., acting_through_client: _Optional[str] = ..., prepared_call_id: _Optional[str] = ..., account_scope: _Optional[_Iterable[str]] = ..., account_scope_applies: bool = ..., connectivity_allowed: bool = ..., connectivity_demo: bool = ..., on_behalf_of_instance_id: _Optional[str] = ...) -> None: ...
+    read_after: _journal_pb2.Watermark
+    def __init__(self, message_id: _Optional[str] = ..., correlation_id: _Optional[str] = ..., causation_id: _Optional[str] = ..., publisher_instance_id: _Optional[str] = ..., topic: _Optional[str] = ..., schema_version: _Optional[str] = ..., published_at_ns: _Optional[int] = ..., acting_for_subject: _Optional[str] = ..., acting_for_kind: _Optional[_Union[SubjectKind, str]] = ..., owner_subject: _Optional[str] = ..., algorithm_id: _Optional[str] = ..., acting_through_delegation: _Optional[str] = ..., acting_through_client: _Optional[str] = ..., prepared_call_id: _Optional[str] = ..., account_scope: _Optional[_Iterable[str]] = ..., account_scope_applies: bool = ..., connectivity_allowed: bool = ..., connectivity_demo: bool = ..., on_behalf_of_instance_id: _Optional[str] = ..., read_after: _Optional[_Union[_journal_pb2.Watermark, _Mapping]] = ...) -> None: ...

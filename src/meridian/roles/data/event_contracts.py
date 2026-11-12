@@ -127,6 +127,7 @@ from ...errors import NotGranted
 from ...figures import Figure
 from ...operations import (
     Bar,
+    BinaryEventContract,
     EventContractBound,
     EventGroupMemberBound,
     Money,
@@ -325,6 +326,11 @@ class Contract:
     #: `index_points`, `percent`), or an instrument's ID where a bound is a
     #: price; empty where neither is set.
     bound_unit: str = ""
+    #: The venue's category for it, in its word (`economics`, `weather`):
+    #: stated with its terms at ResolveIdentifier from contract 30 (1035),
+    #: which the instrument store records the first time it sees the
+    #: contract; empty where the venue states none.
+    category: str = ""
 
 
 @dataclass(frozen=True)
@@ -526,7 +532,12 @@ def _contract(held: dict[str, Any]) -> Contract:
         floor=_bound(held.get("floor")),
         cap=_bound(held.get("cap")),
         bound_unit=held.get("bound_unit", ""),
+        category=held.get("category", ""),
     )
+
+
+def _stated_bound(bound: Bound) -> EventContractBound:
+    return EventContractBound(value=bound.value, inclusive=bound.inclusive)
 
 
 def _bound(held: dict[str, Any] | None) -> Bound | None:
@@ -753,6 +764,7 @@ class Feed(Role):
             stated_instrument_type="binary_event_contract",
             stated_currency=self.market.cash.currency_code,
             stated_description=contract.title[:MOST_DESCRIPTION],
+            stated_binary_event_contract=self.stated_terms(contract),
         )
         return str(found.instrument_id) if found.found and found.instrument_id else ""
 
@@ -929,6 +941,28 @@ class Feed(Role):
             "",
         )
 
+    def stated_terms(self, contract: Contract) -> BinaryEventContract | None:
+        """The contract's terms as the venue states them, stated at
+        ResolveIdentifier (contract 30, 1035): what it pays, in the venue's
+        cash, when trading in it closes, a range market's bounds and unit, and
+        its category, which the instrument store records the first time it
+        sees the contract. Where the venue's statement gives no payout, its
+        category alone (the contract's `BinaryEventContract.payout` is
+        optional on a statement: unset is not stated), so the store still
+        records it; None where it gives neither."""
+        if contract.payout is None:
+            if not contract.category:
+                return None
+            return BinaryEventContract(category=contract.category)
+        return BinaryEventContract(
+            payout=Money(contract.payout, self.market.cash.currency_code),
+            closes_at_ns=contract.closes_at_ns,
+            floor=None if contract.floor is None else _stated_bound(contract.floor),
+            cap=None if contract.cap is None else _stated_bound(contract.cap),
+            bound_unit=contract.bound_unit,
+            category=contract.category,
+        )
+
     async def stated_identifiers(self, contract: Contract) -> list[ops.Identifier]:
         """What the plugin sends for a contract (0.31.0, ruling 312): its
         symbol at the venue and, where the venue is known, its ticker
@@ -1016,6 +1050,7 @@ class Feed(Role):
             stated_instrument_type="binary_event_contract",
             stated_currency=self.market.cash.currency_code,
             stated_description=contract.title[:MOST_DESCRIPTION],
+            stated_binary_event_contract=self.stated_terms(contract),
         )
         if found.found and found.instrument_id == subject:
             return
