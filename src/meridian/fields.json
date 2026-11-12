@@ -329,6 +329,14 @@
           "intent": "a dataset's or a book partition's writing moved to another writer group, by a changed count or by hand, in its store's control partition (contract v30, W6.39)"
         },
         {
+          "message": "meridian.v1.PartitionMoveAborted",
+          "intent": "a move of a partition that did not switch, the source still owning, and its cause: lag, timeout or digest, in its store's control partition (contract v30, W6.39)"
+        },
+        {
+          "message": "meridian.v1.PartitionSplit",
+          "intent": "a lake range halved at its midpoint by a deployment admin: the parent closed at a sequence and its two children opened after it, in the lake's control partition (contract v30, W6.39)"
+        },
+        {
           "message": "meridian.v1.DatasetGap",
           "intent": "rows the lake's write-ahead stream dropped before the lake committed them: the dataset, subjects and valid-time range, why and where its recovery stands, each change of state its own record in the lake's control partition (contract v30, W10.14)"
         }
@@ -3427,7 +3435,7 @@
       "unit": "events in the job's sequence",
       "empty": "never zero",
       "intent": "numbers the job's events, so a reader sees a gap (W12.4; approved by 1057)",
-      "meaning": "the job's own sequence, the same for every holder; after a gap or a loss marker the reader reads the job's whole current answer again by ReadJobAnswer and applies events above it",
+      "meaning": "the job's sequence for one holding instance, dense per holder; after a gap or a loss marker the reader reads the job's whole current answer again by ReadJobAnswer and applies events above it",
       "not_meaning": "a lake row's sequence",
       "filled": "decided",
       "filled_by": "analytics",
@@ -25737,6 +25745,33 @@
       "store": "conductor"
     },
     {
+      "name": "meridian.v1.ReadComponentHealthReply.members",
+      "type": "repeated message ComponentReport",
+      "empty": "never empty: the conductor reports itself",
+      "intent": "answers each member's latest health (W6.40; approved 2026-11-09)",
+      "meaning": "the latest report of each member the conductor holds: its memory against its budget and limit with its peak, what it reserved, its refusals for load by reason, its sheds, and its restarts with the last's reason and time",
+      "not_meaning": "a record, or a history: the dashboard's judge keeps 24 hours of it",
+      "filled": "decided",
+      "filled_by": "conductor",
+      "since": "v30",
+      "stability": "preview",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.ReadComponentHealthReply.read_at_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "never zero",
+      "intent": "states when the conductor read its members' reports (W6.40; approved 2026-11-09)",
+      "meaning": "by the conductor's clock",
+      "not_meaning": "when any member reported",
+      "filled": "derived",
+      "filled_by": "conductor",
+      "since": "v30",
+      "stability": "preview",
+      "store": "conductor"
+    },
+    {
       "name": "meridian.v1.ReadResilienceReply.members",
       "type": "repeated message ComponentReport",
       "empty": "never empty",
@@ -25767,7 +25802,7 @@
       "type": "repeated message ResilienceHistoryItem",
       "empty": "none: nothing has happened",
       "intent": "answers the recent takeovers, moves, switches and findings (W6.39; approved 2026-11-09)",
-      "meaning": "newest first, paged: takeovers, partitions' and accounts' moves, source switches and findings",
+      "meaning": "newest first, paged: takeovers, partitions' and accounts' moves, moves that did not switch, lake ranges' splits, source switches and findings",
       "not_meaning": "every record of every store",
       "filled": "decided",
       "filled_by": "conductor",
@@ -25806,7 +25841,7 @@
       "type": "text",
       "empty": "never empty",
       "intent": "names the partition (W6.39; approved 2026-11-09)",
-      "meaning": "a dataset's ID, a book partition, control, or a store's one partition",
+      "meaning": "a lake range, by its dataset's ID while it is the full range or <dataset>/<lo>-<hi> once split (lowercase hex, hi inclusive); a book partition, control, or a store's one partition",
       "not_meaning": "an account",
       "filled": "decided",
       "filled_by": "conductor",
@@ -25921,6 +25956,32 @@
       "store": "conductor"
     },
     {
+      "name": "meridian.v1.ResilienceHistoryItem.partition_move_aborted",
+      "type": "message PartitionMoveAborted",
+      "empty": "unset unless the item is a move that did not switch",
+      "intent": "carries a move that did not switch in the history (W6.39; the record approved 2026-11-12)",
+      "meaning": "the record as the lake or the book keeps it, with its cause",
+      "not_meaning": "a refusal of a move's request, which its answer gives",
+      "filled": "decided",
+      "filled_by": "conductor",
+      "since": "v30",
+      "stability": "preview",
+      "store": "conductor"
+    },
+    {
+      "name": "meridian.v1.ResilienceHistoryItem.partition_split",
+      "type": "message PartitionSplit",
+      "empty": "unset unless the item is a lake range's split",
+      "intent": "carries a lake range's split in the history (W6.39; the record approved 2026-11-12)",
+      "meaning": "the record as the lake keeps it, naming who split it",
+      "not_meaning": "a partition's move",
+      "filled": "decided",
+      "filled_by": "conductor",
+      "since": "v30",
+      "stability": "preview",
+      "store": "conductor"
+    },
+    {
       "name": "meridian.v1.WriterTookOver.component",
       "type": "text",
       "empty": "never empty",
@@ -26011,11 +26072,15 @@
         {
           "value": "TAKEOVER_REASON_MOVED",
           "meaning": "a partition moved to this member's group"
+        },
+        {
+          "value": "TAKEOVER_REASON_DATABASE_TIMELINE",
+          "meaning": "the writer found its database on a new timeline or system identifier, after a failover or a restore that can have lost a committed tail, and raised the epoch (approved 2026-11-11)"
         }
       ],
       "empty": "never unspecified",
       "intent": "says why the writer was taken over (W6.39; approved 2026-11-09)",
-      "meaning": "the lease lapsed, the writer stepped down, or a move",
+      "meaning": "the lease lapsed, the writer stepped down, a move, or a new database timeline",
       "not_meaning": "a pod's exit code",
       "filled": "decided",
       "filled_by": "conductor",
@@ -27579,7 +27644,7 @@
       "type": "message Watermark",
       "empty": "unset: the nearest member answers, eventually consistent, its watermark saying how current",
       "intent": "names the watermark a read must not be answered behind (W4.4; approved by 1057)",
-      "meaning": "the highest watermark the plugin's sidecar has seen for that instance on the store's partitions, from its own acknowledged writes and the deliveries it passed on, stamped by the sidecar, never by the plugin (approved 2026-11-09): session consistency, read-your-writes and monotonic reads for the instance; a member behind it waits up to its bound, then hands the read to the writer, and never answers from behind it",
+      "meaning": "the highest watermark the plugin's sidecar has seen for that instance on the store's partitions, from its own acknowledged writes, the deliveries it passed on and the watermark each of its reads was answered at, stamped by the sidecar, never by the plugin (approved 2026-11-09 and 2026-11-10): session consistency, read-your-writes and monotonic reads for the instance; a member behind it waits up to its bound or the call's remaining deadline, whichever is sooner, then answers from the store's primary database; a writer still behind it refuses UNAVAILABLE; no member answers from behind it",
       "not_meaning": "a point in time to read as of, which as_of_ns and book_at name; a plugin-facing field; or a demand to read from the writer: a member at or past it answers",
       "filled": "stamped",
       "filled_by": "sidecar",
@@ -40042,13 +40107,20 @@
     {
       "name": "meridian.v1.ListSourcePrioritiesReply.priorities",
       "type": "repeated message SourcePriority",
-      "empty": "none set",
+      "empty": "none set, or none naming a dataset the asker may read",
       "intent": "lists the deployment's priorities",
-      "meaning": "each with who set it and when",
+      "meaning": "each with who set it and when: to the dashboard every one whole; from v30 to a plugin of the eight roles that read the lake, each with only the datasets it is entitled to read, a priority with none left not answered (W10.2; ruling 454; step 3c's question 7)",
       "not_meaning": "the datasets themselves",
       "filled": "decided",
       "filled_by": "lake",
       "since": "v18",
+      "changes": [
+        {
+          "version": "v30",
+          "kind": "clarified",
+          "what": "read by the eight roles that read the lake too, each answered within its entitlements (ruling 454)"
+        }
+      ],
       "stability": "preview",
       "store": "lake"
     },
@@ -47138,7 +47210,7 @@
       "type": "text",
       "empty": "never empty",
       "intent": "names the partition a deployment admin moves (W6.39; the act approved by 1057)",
-      "meaning": "the lake's dataset ID, or the book's partition (P0 and those placed after it); refused FAILED_PRECONDITION naming it while a move of it is under way",
+      "meaning": "the lake's partition: a dataset's ID for a full range, or <dataset>/<lo>-<hi> for a split range (lowercase hex, hi inclusive); or the book's partition (P0 and those placed after it); refused FAILED_PRECONDITION naming it while a move or a split of it is under way",
       "not_meaning": "an account, which MoveAccount moves",
       "filled": "entered",
       "filled_by": "dashboard",
@@ -47199,8 +47271,53 @@
       "unit": "nanoseconds since the epoch",
       "empty": "never zero",
       "intent": "states when the move began (W6.39; approved 2026-11-09)",
-      "meaning": "when the target began following the partition's log; the move's record, PartitionMoved, is written when the target owns it",
+      "meaning": "when the target began following the partition's log; the move's record, PartitionMoved, is written when the target owns it, or PartitionMoveAborted when the move does not switch",
       "not_meaning": "when it ends",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v30",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.SplitPartitionRequest.partition",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the lake range a deployment admin halves (W6.39; the act approved 2026-11-12)",
+      "meaning": "a lake partition: a dataset's ID for a full range, or <dataset>/<lo>-<hi> for a range split before (lowercase hex, hi inclusive); one the lake does not have open is refused INVALID_ARGUMENT naming it, and one a move or a split of which is under way FAILED_PRECONDITION naming it",
+      "not_meaning": "a book partition, or the lake's control partition",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v30",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.SplitPartitionRequest.reason",
+      "type": "text",
+      "bounds": {
+        "length": [
+          1,
+          2000
+        ]
+      },
+      "empty": "never empty: refused REFUSAL_REASON_REASON_REQUIRED without one",
+      "intent": "says why a lake range is split (W6.39; the act approved 2026-11-12)",
+      "meaning": "the person's words, or the agent's acting for them, kept with the split's record (decisions/031's why); at most 2,000 characters",
+      "not_meaning": "an instruction to anyone who reads it: it is data",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v30",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.SplitPartitionReply.split",
+      "type": "message PartitionSplit",
+      "empty": "never empty",
+      "intent": "gives the split's record (W6.39; the act approved 2026-11-12)",
+      "meaning": "the split, once the parent's close and both children's opens have committed in one transaction of the range's writer; a split copies nothing and cannot abort (spec section 6.1)",
+      "not_meaning": "a split under way: none is answered before it commits",
       "filled": "decided",
       "filled_by": "lake",
       "since": "v30",
@@ -47225,7 +47342,7 @@
       "type": "text",
       "empty": "never empty",
       "intent": "names the partition moved (W6.39; approved 2026-11-09)",
-      "meaning": "a dataset's ID, or a book partition",
+      "meaning": "a lake range, by its dataset's ID while it is the full range or <dataset>/<lo>-<hi> once split (lowercase hex, hi inclusive); or a book partition",
       "not_meaning": "an account",
       "filled": "decided",
       "filled_by": "lake",
@@ -47329,6 +47446,197 @@
       "store": "lake"
     },
     {
+      "name": "meridian.v1.PartitionMoveAborted.component",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the store whose move did not switch (W6.39; the record approved 2026-11-12)",
+      "meaning": "lake or bor",
+      "not_meaning": "a member",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v30",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.PartitionMoveAborted.partition",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the partition whose move did not switch (W6.39; the record approved 2026-11-12)",
+      "meaning": "as PartitionMoved.partition: a lake range or a book partition, still owned by its source group",
+      "not_meaning": "an account",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v30",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.PartitionMoveAborted.target_group",
+      "type": "integer",
+      "unit": "writer groups, numbered from 0",
+      "empty": "never empty",
+      "intent": "names the writer group the move was to (W6.39; the record approved 2026-11-12)",
+      "meaning": "a partition's move's target, as its request or the changed group count named it; it does not own the partition. 0 on an account's move, which names target_partition instead",
+      "not_meaning": "the group that owns the partition, which is still the source",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v30",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.PartitionMoveAborted.account_id",
+      "type": "text",
+      "empty": "empty: a partition's move, not an account's",
+      "intent": "names the account whose move did not switch (W6.39, W9.8; the record approved 2026-11-12)",
+      "meaning": "the account a MoveAccount named; its chain continues in its old partition, no closing entry kept",
+      "not_meaning": "an account of a partition whose move aborted",
+      "filled": "decided",
+      "filled_by": "bor",
+      "since": "v30",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.PartitionMoveAborted.target_partition",
+      "type": "text",
+      "empty": "empty: a partition's move, which names target_group",
+      "intent": "names the book partition an account's move was to (W6.39, W9.8; the record approved 2026-11-12)",
+      "meaning": "as the MoveAccount request named it; the account is not in it",
+      "not_meaning": "the account's partition, which is still its old one",
+      "filled": "decided",
+      "filled_by": "bor",
+      "since": "v30",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.PartitionMoveAborted.cause",
+      "type": "enum MoveAbortCause",
+      "allowed": [
+        {
+          "value": "MOVE_ABORT_CAUSE_UNSPECIFIED",
+          "meaning": "not known; never sent"
+        },
+        {
+          "value": "MOVE_ABORT_CAUSE_LAG",
+          "meaning": "the gate did not open within moves.switchSeconds, the target's lag still above <store>.readyLagMs; nothing was held"
+        },
+        {
+          "value": "MOVE_ABORT_CAUSE_TIMEOUT",
+          "meaning": "the switch started but did not finish within moves.switchSeconds of its start"
+        },
+        {
+          "value": "MOVE_ABORT_CAUSE_DIGEST",
+          "meaning": "the target's digest at the source's closing sequence differed from the source's; an IntegrityFinding is recorded beside it"
+        }
+      ],
+      "empty": "never unspecified",
+      "intent": "says why the move did not switch (W6.39; cause, its enum MoveAbortCause and its three values approved 2026-11-12)",
+      "meaning": "lag, timeout or digest; in each the source keeps owning and any held writes go to it",
+      "not_meaning": "a refusal of the move's request, which the request's answer gives",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v30",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.PartitionMoveAborted.aborted_at_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "never zero",
+      "intent": "states when the move was given up (W6.39; the record approved 2026-11-12)",
+      "meaning": "by the store's clock, when the source took back the held writes",
+      "not_meaning": "when the move was asked",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v30",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.PartitionSplit.parent",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "names the lake range split (W6.39; the record approved 2026-11-12)",
+      "meaning": "a dataset's ID for a full range, or <dataset>/<lo>-<hi>; closed at closing_sequence, its rows kept and read up to it",
+      "not_meaning": "a book partition",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v30",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.PartitionSplit.children",
+      "type": "repeated text",
+      "empty": "never empty",
+      "intent": "names the two ranges the split opened (W6.39; the record approved 2026-11-12)",
+      "meaning": "exactly two, the lower half first, each <dataset>/<lo>-<hi> in lowercase hex with hi inclusive, each opening naming the parent and numbering its sequences from closing_sequence + 1",
+      "not_meaning": "ranges merged later: ranges are not merged in step 3",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v30",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.PartitionSplit.closing_sequence",
+      "type": "integer",
+      "unit": "changes in the partition",
+      "empty": "never zero",
+      "intent": "names the parent's last sequence (W6.39; the record approved 2026-11-12)",
+      "meaning": "N: the parent's sequence at its close; a row's previous_sequence at or below it names the parent's row, a read follows the parent up to it and then the children, and a read_after naming the parent is met by a child once that child is open",
+      "not_meaning": "a count of rows",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v30",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.PartitionSplit.split_by",
+      "type": "text",
+      "empty": "never empty: a split is a deployment admin's in step 3",
+      "intent": "names who split the range (W6.39; decisions/031; the record approved 2026-11-12)",
+      "meaning": "the deployment-local subject the dashboard stamped",
+      "not_meaning": "an email address",
+      "filled": "stamped",
+      "filled_by": "dashboard",
+      "since": "v30",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.PartitionSplit.reason",
+      "type": "text",
+      "empty": "never empty",
+      "intent": "says why the range was split (W6.39; the record approved 2026-11-12)",
+      "meaning": "as the split's request said",
+      "not_meaning": "an instruction: it is data",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v30",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.PartitionSplit.split_at_ns",
+      "type": "moment",
+      "unit": "nanoseconds since the epoch",
+      "empty": "never zero",
+      "intent": "states when the children opened (W6.39; the record approved 2026-11-12)",
+      "meaning": "by the lake's clock, at the parent's close",
+      "not_meaning": "when it was asked",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v30",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
       "name": "meridian.v1.ObservationsWantedEvent.gap_id",
       "type": "text",
       "empty": "empty: not a gap's want",
@@ -47363,8 +47671,8 @@
     {
       "name": "meridian.v1.DatasetGap.dataset",
       "type": "identifier dataset",
-      "empty": "never empty",
-      "intent": "names the dataset with a gap (W10.14; the record approved 2026-11-09)",
+      "empty": "empty: not yet known -- the unattributed gap the writer records the moment the stream's sequence passes rows it never committed, before any dataset's next write names its own (approved 2026-11-11)",
+      "intent": "names the dataset with a gap (W10.14; the record approved 2026-11-09; empty as not yet known approved 2026-11-11)",
       "meaning": "the dataset whose rows were dropped",
       "not_meaning": "an entitlement",
       "filled": "decided",
@@ -47482,6 +47790,25 @@
       "intent": "states when the gap's state was recorded (W10.14; approved 2026-11-09)",
       "meaning": "by the lake's clock, for this state",
       "not_meaning": "when the rows were dropped",
+      "filled": "decided",
+      "filled_by": "lake",
+      "since": "v30",
+      "stability": "preview",
+      "store": "lake"
+    },
+    {
+      "name": "meridian.v1.DatasetGap.found_in_gap_id",
+      "type": "text",
+      "bounds": {
+        "length": [
+          0,
+          64
+        ]
+      },
+      "empty": "empty: the unattributed gap itself, or a gap found before an unattributed gap was recorded",
+      "intent": "links a dataset's gap to the unattributed gap it was found from (the resilience spec's section 4, \"A gap is found when the stream skips\"; approved 2026-11-11)",
+      "meaning": "the gap_id of the gap whose dataset is empty, recorded when the stream skipped, that this dataset's gap was named from as its next write arrived",
+      "not_meaning": "a want's ID, or a gap of the same dataset recorded earlier",
       "filled": "decided",
       "filled_by": "lake",
       "since": "v30",
@@ -57895,7 +58222,7 @@
       "unit": "pods of one instance",
       "empty": "0: one pod, as 1 is",
       "intent": "asks for an instance's shards (W8.3; the launch setting approved by 1057)",
-      "meaning": "the pods of the instance that share its subjects by rendezvous hashing, at most the version's most_shards; one more is refused INVALID_ARGUMENT naming shards; built with 3d",
+      "meaning": "the pods of the instance that share its subjects by rendezvous hashing, at most the version's most_shards; one more is refused INVALID_ARGUMENT naming shards; kept on the launch from 3c, the pods built with 3d",
       "not_meaning": "separate instances: a shard is a pod of the one instance",
       "filled": "entered",
       "filled_by": "dashboard",
@@ -57908,7 +58235,7 @@
       "type": "boolean",
       "empty": "false: no standby pod",
       "intent": "asks for an instance's standby pod (W8.3; the launch setting approved by 1057)",
-      "meaning": "true: a second pod whose sidecar holds no lease and whose role classes' run() starts only when it takes the instance's Lease; recommended for oms, ems, connectivity and live data instances; built with 3d",
+      "meaning": "true: a second pod whose sidecar holds no lease and whose role classes' run() starts only when it takes the instance's Lease; recommended for oms, ems, connectivity and live data instances; kept on the launch from 3c, the pod built with 3d",
       "not_meaning": "a second instance, or a shard: a standby shares nothing until it takes over",
       "filled": "entered",
       "filled_by": "dashboard",
@@ -57939,6 +58266,101 @@
       "not_meaning": "which pod holds the lease now",
       "filled": "decided",
       "filled_by": "conductor",
+      "since": "v30",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.LaunchPluginRequest.limits",
+      "type": "message SidecarLimits",
+      "empty": "unset: every limit the chart's sidecar.limits",
+      "intent": "asks for an instance's own share at its sidecar (W8.3; approved 2026-11-11)",
+      "meaning": "the instance's limits over the chart's sidecar.limits, each field 0 taking the chart's; past any of them only that plugin is refused, RESOURCE_EXHAUSTED with REFUSAL_REASON_RATE_LIMITED and a retry-after; answers in flight that would leave the sidecar nothing of its own budget are refused naming limits.answer_mib",
+      "not_meaning": "a limit on another plugin, or the deployment's sidecar.limits, which the chart sets",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v30",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.PluginLaunch.limits",
+      "type": "message SidecarLimits",
+      "empty": "unset where the launch asked none, and on every launch before it",
+      "intent": "records the share at its sidecar an instance was launched with (W8.3; approved 2026-11-11)",
+      "meaning": "as the launch asked; a version's move and a restart for an archive carry the instance's own",
+      "not_meaning": "what the sidecar holds now, which the member's report says",
+      "filled": "decided",
+      "filled_by": "conductor",
+      "since": "v30",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.CreatePluginRequest.limits",
+      "type": "message SidecarLimits",
+      "empty": "unset: every limit the chart's sidecar.limits",
+      "intent": "tells the launcher an instance's own share at its sidecar (W8.3; approved 2026-11-11)",
+      "meaning": "as the instance's launch asked: the launcher writes each field set into the sidecar's environment over the chart's sidecar.limits",
+      "not_meaning": "a change to a running sidecar: it takes effect as the pod starts",
+      "filled": "decided",
+      "filled_by": "conductor",
+      "since": "v30",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.SidecarLimits.in_flight",
+      "type": "integer",
+      "unit": "requests",
+      "empty": "0: the chart's sidecar.limits.inFlight",
+      "intent": "sets the most requests a plugin has in flight at its sidecar at once (W8.3; spec section 10a; approved 2026-11-11)",
+      "meaning": "past it the plugin's next request is refused, RESOURCE_EXHAUSTED with REFUSAL_REASON_RATE_LIMITED and a retry-after; a bulk act counts as one request",
+      "not_meaning": "a limit on another plugin, or on the requests the sidecar delivers to it",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v30",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.SidecarLimits.requests_per_second",
+      "type": "integer",
+      "unit": "requests a second",
+      "empty": "0: the chart's sidecar.limits.requestsPerSecond",
+      "intent": "sets the most requests a second a plugin makes at its sidecar (W8.3; spec section 10a; approved 2026-11-11)",
+      "meaning": "a rate with a burst of a second's worth; past it the plugin is refused, RESOURCE_EXHAUSTED with REFUSAL_REASON_RATE_LIMITED and a retry-after",
+      "not_meaning": "a vendor's rate limit, which the plugin keeps itself",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v30",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.SidecarLimits.answer_mib",
+      "type": "integer",
+      "unit": "MiB",
+      "empty": "0: the chart's sidecar.limits.answerMiB",
+      "intent": "sets how much of the answers a plugin waits for its sidecar holds or pages in flight (W8.3; spec section 10a; approved 2026-11-11)",
+      "meaning": "MiB of answers held or paged in flight for the plugin; past it the plugin is refused, RESOURCE_EXHAUSTED with REFUSAL_REASON_RATE_LIMITED and a retry-after; one that would leave the sidecar nothing of its own budget is refused at launch naming limits.answer_mib",
+      "not_meaning": "the size of one answer, which its pages bound",
+      "filled": "entered",
+      "filled_by": "dashboard",
+      "since": "v30",
+      "stability": "preview",
+      "store": "sidecar"
+    },
+    {
+      "name": "meridian.v1.SidecarLimits.write_mib_per_second",
+      "type": "integer",
+      "unit": "MiB a second",
+      "empty": "0: the chart's sidecar.limits.writeMiBPerSecond",
+      "intent": "sets a data plugin's lake write share at its sidecar (W8.3; spec section 6.9; approved 2026-11-12)",
+      "meaning": "MiB a second of the plugin's lake writes; past its share the sidecar delays the acknowledgement up to the caller's deadline, then refuses RATE_LIMITED with a retry-after, keeping order, other plugins' writes untouched; kept on the launch from 3c, held to from 3d",
+      "not_meaning": "a cap on the plugin's reads, or on another plugin's writes",
+      "filled": "entered",
+      "filled_by": "dashboard",
       "since": "v30",
       "stability": "preview",
       "store": "sidecar"

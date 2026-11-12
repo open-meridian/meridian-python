@@ -779,12 +779,21 @@ MOVE_PARTITION_REQUEST_REASON_LENGTH = Length(least=1, most=2000)
 """meridian.v1.MovePartitionRequest.reason: says why a partition is moved
 (W6.39; approved 2026-11-09)"""
 
+SPLIT_PARTITION_REQUEST_REASON_LENGTH = Length(least=1, most=2000)
+"""meridian.v1.SplitPartitionRequest.reason: says why a lake range is split
+(W6.39; the act approved 2026-11-12)"""
+
 DATASET_GAP_GAP_ID_LENGTH = Length(least=1, most=64)
 """meridian.v1.DatasetGap.gap_id: names a gap (W10.14; approved 2026-11-09)"""
 
 DATASET_GAP_SUBJECTS_COUNT = Count(least=0, most=500)
 """meridian.v1.DatasetGap.subjects: names the subjects a gap is in (W10.14;
 approved 2026-11-09)"""
+
+DATASET_GAP_FOUND_IN_GAP_ID_LENGTH = Length(least=0, most=64)
+"""meridian.v1.DatasetGap.found_in_gap_id: links a dataset's gap to the
+unattributed gap it was found from (the resilience spec's section 4, "A gap
+is found when the stream skips"; approved 2026-11-11)"""
 
 LIST_DATASET_GAPS_REQUEST_PAGE_SIZE_RANGE = Range(least=0, most=500, capped=True)
 """meridian.v1.ListDatasetGapsRequest.page_size: bounds a page of gaps (W10.14;
