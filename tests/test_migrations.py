@@ -3045,3 +3045,45 @@ def test_a_receive_stand_in_with_no_read_is_left_by_hand() -> None:
         if each["rule"] == "receive-stand-in-read"
     }
     assert left == {("tests/sidecar_stream.py", 4)}
+
+
+# ── 0.36.1 to 0.36.2: a row's valid time from the clock, left by hand ────
+
+
+def test_0362_names_a_rows_valid_time_taken_from_the_clock() -> None:
+    """The plugin step's chains plugins (databento, massive, tradier,
+    unusual-whales): a series' terms and a statistic given the read's time
+    as their valid time, under a key recorded again (the-lake rule 5). A
+    source's own time, a key naming its moment's own value, and a test, are
+    not named."""
+    files = {
+        "src/p/chains.py": textwrap.dedent(
+            """\
+            import time
+            from meridian import helpers
+
+            def rows(self, held, contract, now, at):
+                series = helpers.option_series(
+                    held, contract.osi, template_id="T", template_version="1",
+                    dataset="d", currency="USD", exercise_style="E",
+                    settlement_method="S", valid_from_ns=self.now(),
+                )
+                stat = helpers.statistic(held, [], "volume", 1, "2026-11-11",
+                                         dataset="d", valid_from_ns=now)
+                quote = Quote(meta=meta(row_key=f"{contract.osi}:q:{at}", valid_from_ns=at))
+                published = helpers.statistic(held, [], "volume", 1, "2026-11-11",
+                                              dataset="d", valid_from_ns=contract.published_ns)
+                return series, stat, quote, published, meta(valid_from_ns=time.time_ns())
+            """
+        ),
+        "tests/test_chains.py": "row = meta(valid_from_ns=self.now())\n",
+    }
+    result = migrate(files, "0.36.1", "0.36.2")
+    assert result.files == {}, "nothing rewritten: only the pins move"
+    assert left_by_hand(result) == [
+        ("valid-time-from-the-clock", "src/p/chains.py", 8),
+        ("valid-time-from-the-clock", "src/p/chains.py", 11),
+        ("valid-time-from-the-clock", "src/p/chains.py", 15),
+    ]
+    (step,) = result.steps
+    assert not step.migration.breaking
