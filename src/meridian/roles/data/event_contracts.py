@@ -950,18 +950,22 @@ class Feed(Role):
         its cash has no ISO 4217 code and the cash's record is not held yet,
         its category alone (the contract's `BinaryEventContract.payout` is
         optional on a statement: unset is not stated), so the store still
-        records it; None where it gives neither."""
+        records it; None where it gives neither. A range market's bounds are
+        stated only with their unit (0.36.1): core refuses bounds naming
+        none, and with them the whole ResolveIdentifier, so where the venue
+        states no unit the bounds are left out and the rest stated."""
         payout = self._stated_payout(contract)
         if payout is None:
             if not contract.category:
                 return None
             return BinaryEventContract(category=contract.category)
+        unit = contract.bound_unit
         return BinaryEventContract(
             payout=payout,
             closes_at_ns=contract.closes_at_ns,
-            floor=None if contract.floor is None else _stated_bound(contract.floor),
-            cap=None if contract.cap is None else _stated_bound(contract.cap),
-            bound_unit=contract.bound_unit,
+            floor=None if contract.floor is None or not unit else _stated_bound(contract.floor),
+            cap=None if contract.cap is None or not unit else _stated_bound(contract.cap),
+            bound_unit=unit,
             category=contract.category,
         )
 

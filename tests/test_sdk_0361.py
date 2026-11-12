@@ -6,6 +6,8 @@
 - The event-contract check admits the contract's own event and series
   (Kalshi states a market's category only on its series, reached through its
   event), and still refuses a venue-wide list.
+- A range market's bounds stated only with their unit: where the venue states
+  none, the bounds are left out and the payout, close and category stated.
 """
 
 from __future__ import annotations
@@ -167,3 +169,35 @@ async def test_the_check_admits_the_contracts_own_event_and_series() -> None:
 async def test_the_check_still_refuses_a_venue_wide_list(extra: tuple[str, ...]) -> None:
     with pytest.raises(AssertionError):
         await _asking(extra).test_only_the_contracts_wanted_are_read_never_the_venues_list()
+
+
+# ── A range market's bounds stated only with their unit ─────────────────
+
+FLOOR = ec.Bound(Decimal("3.0"), inclusive=False)
+CAP = ec.Bound(Decimal("3.5"), inclusive=True)
+
+
+def test_a_range_markets_bounds_with_no_unit_are_left_out_of_its_terms() -> None:
+    """Core refuses a range market's bounds naming no unit, and with them the
+    whole ResolveIdentifier, so the want is never answered: the bounds are
+    stated only with their unit; the payout, close and category still are."""
+    feed = ec.Feed(ContractsMarket(), ec.ContractMap(), clock_ns=lambda: NOW_NS)
+    terms = feed.stated_terms(_contract(floor=FLOOR, cap=CAP, bound_unit=""))
+    assert terms is not None
+    assert terms.floor is None and terms.cap is None and not terms.bound_unit
+    assert terms.payout == meridian.Money(Decimal("1.0000"), "USD")
+    assert (terms.closes_at_ns, terms.category) == (NOW_NS, "politics")
+    wire = _binary_event_contract(terms, "stated_binary_event_contract")
+    assert not wire.HasField("floor") and not wire.HasField("cap")
+    # An open tail with no unit, the same.
+    tail = feed.stated_terms(_contract(floor=FLOOR, bound_unit=""))
+    assert tail is not None and tail.floor is None and tail.payout is not None
+
+
+def test_a_range_markets_bounds_with_their_unit_are_stated() -> None:
+    feed = ec.Feed(ContractsMarket(), ec.ContractMap(), clock_ns=lambda: NOW_NS)
+    terms = feed.stated_terms(_contract(floor=FLOOR, cap=CAP, bound_unit="percent"))
+    assert terms is not None and terms.bound_unit == "percent"
+    wire = _binary_event_contract(terms, "stated_binary_event_contract")
+    assert wire.HasField("floor") and wire.HasField("cap") and wire.bound_unit == "percent"
+    assert not wire.floor.inclusive and wire.cap.inclusive
