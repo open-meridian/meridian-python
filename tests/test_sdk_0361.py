@@ -3,18 +3,25 @@
 - A binary event contract's payout stated at ResolveIdentifier when the
   venue's cash has no ISO 4217 code (Polymarket's pUSD): by the cash's
   resolved instrument where its record is held, else the category alone.
+- The event-contract check admits the contract's own event and series
+  (Kalshi states a market's category only on its series, reached through its
+  event), and still refuses a venue-wide list.
 """
 
 from __future__ import annotations
 
+from dataclasses import replace
 from decimal import Decimal
+from types import SimpleNamespace
 from typing import Any
+
+import pytest
 
 import meridian
 from fake_venues import NOW_NS, ContractsMarket, contracts_venue
 from meridian.operations import _binary_event_contract
 from meridian.roles.data import event_contracts as ec
-from meridian.roles.data.testing import Lake
+from meridian.roles.data.testing import EventContractsChecks, Lake
 
 PRICE = "meridian.v1.Price"
 
@@ -92,3 +99,71 @@ async def test_a_token_venues_contract_resolves_and_is_priced() -> None:
     # Stated again now the cash is held, the payout names its instrument.
     terms = feed.stated_terms(feed.contracts.contracts["BASE-1"])
     assert terms is not None and terms.payout.instrument_id == cash
+
+
+# ── The check admits the contract's own event and series ────────────────
+
+BASE_EVENT, BASE_SERIES = "FAKEV-EV-26DEC", "FAKEV-SER"
+
+
+class AskedMarket(ContractsMarket):
+    """The made-up venue, keeping the URLs it was asked, as a plugin's raw
+    records do: each contract by its code and, for BASE-1's category, its
+    event and that event's series (as Kalshi's), plus whatever `extra`
+    names."""
+
+    extra: tuple[str, ...] = ()
+    root = "https://fakev.invalid/v2"
+
+    def __init__(self, now_ns: int = NOW_NS, directory: Any = None) -> None:
+        super().__init__(now_ns, directory)
+        self.asked: list[str] = []
+
+    def contract(self, code: str, watching: bool = False) -> ec.Contract | None:
+        self.asked.append(f"{self.root}/markets/{code}")
+        read = super().contract(code, watching)
+        if read is None or code != "BASE-1":
+            return read
+        self.asked.append(f"{self.root}/events/{BASE_EVENT}?with_nested_markets=true")
+        self.asked.append(f"{self.root}/series/{BASE_SERIES}")
+        self.asked.extend(f"{self.root}{path}" for path in self.extra)
+        return replace(read, market=BASE_EVENT, category="economics")
+
+    def event(self, ref: str) -> ec.Event | None:
+        if ref != BASE_EVENT:
+            return None
+        return ec.Event(ref=ref, title="An event", members=("BASE-1",), series=BASE_SERIES)
+
+
+def _asking(extra: tuple[str, ...] = ()) -> EventContractsChecks:
+    market = type("Asked", (AskedMarket,), {"extra": extra})
+    checks = EventContractsChecks()
+    checks.venue = SimpleNamespace(
+        **{
+            **vars(contracts_venue),
+            "market": lambda now_ns=NOW_NS, directory=None: market(now_ns, directory),
+            "calls": lambda market: list(market.asked),
+        }
+    )
+    return checks
+
+
+async def test_the_check_admits_the_contracts_own_event_and_series() -> None:
+    await _asking().test_only_the_contracts_wanted_are_read_never_the_venues_list()
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        ("/markets",),  # the venue's whole list
+        ("/markets?status=open",),
+        ("/events",),
+        ("/series",),
+        ("/events?series_ticker=FAKEV-SER",),  # a list of the series' events
+        ("/events/FAKEV-EV-OTHER",),  # another contract's event
+        ("/series/FAKEV-OTHER",),  # another series
+    ],
+)
+async def test_the_check_still_refuses_a_venue_wide_list(extra: tuple[str, ...]) -> None:
+    with pytest.raises(AssertionError):
+        await _asking(extra).test_only_the_contracts_wanted_are_read_never_the_venues_list()
