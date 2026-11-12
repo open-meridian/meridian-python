@@ -226,6 +226,41 @@ async def test_a_resend_refused_for_its_valid_time_is_taken_as_recorded(caplog: 
     assert len(said) == 1, "said once per series"
 
 
+async def test_a_batch_the_lake_has_keeps_its_times_when_a_later_one_fails(
+    monkeypatch: Any,
+) -> None:
+    """The review of #51: series sent in two batches, the second failing.
+    The first batch's first valid times are kept, the lake having them; the
+    second's are not, so its series are first seen again next pass."""
+    from meridian.errors import CallFailed
+
+    monkeypatch.setattr(option_chains, "BATCH", 1)
+    source = _Chain()
+    other = "SPY   261120P00500000"
+    source.options = [*source.options, option_chains.ChainOption(other, dt.date(2026, 11, 20))]
+    clock = [NOV_11_NY + 34 * 3600 * NS]
+    feed, recorder = _feed(clock, source)
+    calls: list[list[str]] = []
+
+    def second_fails(params: Any) -> Any:
+        calls.append([s.meta.row_key for s in params.series])
+        if len(calls) == 2:
+            raise CallFailed("RecordSeries", "unavailable", "the lake is restarting")
+        return ops.RecordSeriesResult(recorded=len(params.series))
+
+    recorder.answer("RecordSeries", second_fails)
+    import pytest
+
+    with pytest.raises(CallFailed):
+        await feed.on_observations_wanted(_want(option_chains.SERIES, want_id=""))
+    kept = feed._first_times
+    assert kept.get("chains-1:options", OSI)["valid_from_ns"] == clock[0]
+    assert kept.get("chains-1:options", other) is None and not kept.staged
+    clock[0] += 3600 * NS
+    await feed.on_observations_wanted(_want(option_chains.SERIES, want_id=""))
+    assert calls[2:] == [[other]], "only the series the lake did not have"
+
+
 async def test_another_refusal_of_a_series_is_raised() -> None:
     from meridian.errors import CallFailed
 

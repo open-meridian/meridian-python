@@ -232,8 +232,8 @@ class _FirstTimes:
     where the feed is given `series_path`, so a restart keeps them too, as
     JSON: `{"series": {"<dataset>": {"<OSI>": {"adjusted_on": "",
     "terms": "<hex>", "valid_from_ns": <ns>}}}}`. A change is staged until
-    the lake has it (`commit`), and a series past its expiration is let go
-    when the map is saved."""
+    the lake has the batch holding it (`commit`), and a series past its
+    expiration is let go when the map is saved."""
 
     def __init__(self, path: Path | None) -> None:
         self.path = path
@@ -256,14 +256,19 @@ class _FirstTimes:
     def discard(self) -> None:
         self.staged.clear()
 
-    def commit(self, today: dt.date) -> None:
-        """What was staged kept, every series expired let go, and the map
-        written where it has a path."""
-        if not self.staged:
+    def commit(self, rows: Sequence[Any], today: dt.date) -> None:
+        """What was staged for `rows`, a batch the lake has, kept; every
+        series expired let go, and the map written where it has a path."""
+        done = [
+            (row.meta.source.dataset, row.meta.series_key[0].value)
+            for row in rows
+            if row.meta is not None and row.meta.series_key
+        ]
+        kept = {each: self.staged.pop(each) for each in done if each in self.staged}
+        if not kept:
             return
-        for (dataset, osi), kept in self.staged.items():
-            self.held.setdefault(dataset, {})[osi] = kept
-        self.staged.clear()
+        for (dataset, osi), held in kept.items():
+            self.held.setdefault(dataset, {})[osi] = held
         for by in self.held.values():
             for osi in [o for o in by if _expiration(o) < today]:
                 del by[osi]
@@ -644,10 +649,9 @@ class Feed(Role):
             rows = [r for o in chosen if (r := self._series(held, o, want_id)) is not None]
             try:
                 await self.send(SERIES, rows, want_id)
-            except BaseException:
+            finally:
+                # What no batch the lake has holds is staged no longer.
                 self._first_times.discard()
-                raise
-            self._first_times.commit(self._today())
         elif data_type == STATISTIC:
             stats = await self._statistics(held, chosen, want_id)
             if stats is None:
@@ -855,6 +859,7 @@ class Feed(Role):
             done: Any
             if data_type == SERIES:
                 done = await self._record_series(batch, want_id)
+                self._first_times.commit(batch, self._today())
             elif data_type == STATISTIC:
                 done = await self.record_statistics(statistics=batch, want_id=want_id)
             elif data_type == QUOTE:
