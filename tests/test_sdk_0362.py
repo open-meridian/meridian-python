@@ -242,7 +242,7 @@ async def test_another_refusal_of_a_series_is_raised() -> None:
             await feed.underlying("INS-SPY"), option_chains.SERIES,
             frozenset({dt.date(2026, 11, 20)}), frozenset(), "WNT-1",
         )  # fmt: skip
-    assert feed.first_times.get("chains-1:options", OSI) is None, "staged, not kept"
+    assert feed._first_times.get("chains-1:options", OSI) is None, "staged, not kept"
 
 
 # ── 3. event_contracts.Feed.outcome: the first determination's valid time ─

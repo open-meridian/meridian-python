@@ -345,10 +345,10 @@ class Feed(Role):
         self.stream_limit = stream_limit
         self.sent = SentRows(remembered)
         #: Each series' first valid time and terms as sent (SDK 0.36.2).
-        self.first_times = _FirstTimes(series_path)
+        self._first_times = _FirstTimes(series_path)
         #: The series a refusal of their first valid time was taken as
         #: recorded for, each said once.
-        self.taken_as_recorded: set[tuple[str, str]] = set()
+        self._taken_as_recorded: set[tuple[str, str]] = set()
         self._symbol_of = symbol_of
         self.clock_ns = clock_ns
         self.counts = Counts()
@@ -645,9 +645,9 @@ class Feed(Role):
             try:
                 await self.send(SERIES, rows, want_id)
             except BaseException:
-                self.first_times.discard()
+                self._first_times.discard()
                 raise
-            self.first_times.commit(self._today())
+            self._first_times.commit(self._today())
         elif data_type == STATISTIC:
             stats = await self._statistics(held, chosen, want_id)
             if stats is None:
@@ -669,7 +669,7 @@ class Feed(Role):
     def _series(self, held: _Underlying, option: ChainOption, want_id: str) -> Any | None:
         """A series' terms to send, or None where they are as last sent and
         no reader waits. A row key fixes its valid time (the-lake rule 5):
-        a series' terms keep their key's first valid time (`first_times`);
+        a series' terms keep their key's first valid time (`_first_times`);
         terms changed since are an adjustment, a new key effective from
         today (`helpers.chains.option_series`' `adjusted_on`)."""
         from ...helpers import chains
@@ -700,16 +700,16 @@ class Feed(Role):
             self.counts.unconverted += 1
             return None
         terms = _digest([(f.path, f.value) for f in row.fields]).hex()
-        kept = self.first_times.get(dataset, option.osi)
+        kept = self._first_times.get(dataset, option.osi)
         if kept is None:
-            self.first_times.stage(dataset, option.osi, row.meta.valid_from_ns, terms, "")
+            self._first_times.stage(dataset, option.osi, row.meta.valid_from_ns, terms, "")
             return row
         if kept["terms"] == terms:
             if not want_id:
                 return None
             return built(int(kept["valid_from_ns"]), kept["adjusted_on"] or None)
         row = built(0, self._today().isoformat())
-        self.first_times.stage(
+        self._first_times.stage(
             dataset, option.osi, row.meta.valid_from_ns, terms, self._today().isoformat()
         )
         return row
@@ -757,8 +757,8 @@ class Feed(Role):
 
     def _take_as_recorded(self, row: Any) -> None:
         dataset, osi = row.meta.source.dataset, row.meta.row_key
-        if (dataset, osi) not in self.taken_as_recorded:
-            self.taken_as_recorded.add((dataset, osi))
+        if (dataset, osi) not in self._taken_as_recorded:
+            self._taken_as_recorded.add((dataset, osi))
             log.warning(
                 "%s's terms are held in %s under another first valid time; taken as recorded",
                 osi,
