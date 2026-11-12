@@ -124,3 +124,122 @@ async def test_the_chains_feed_dates_a_statistic_by_its_day_never_its_read() -> 
         f"{OSI}:2026-11-12:VOL": NOV_11_NY + 24 * 3600 * NS,
     }
     assert {s.meta.row_key: s.meta.valid_from_ns for s in sent[2:]} == starts
+
+
+# ── 2. helpers.option_series: terms keep their first valid time ─────────
+
+
+def _series(**more: Any) -> Any:
+    return chains.option_series(
+        "INS-SPY", OSI, template_id="TPL-listed-option", template_version="1",
+        dataset="chains-1:options", currency="USD", exercise_style="EXERCISE_STYLE_AMERICAN",
+        settlement_method="SETTLEMENT_METHOD_PHYSICAL", **more,
+    )  # fmt: skip
+
+
+def test_an_adjusted_series_is_a_new_key_from_its_date() -> None:
+    first = _series(valid_from_ns=7, deliverable=[("INS-SPY", 100)])
+    adjusted = _series(
+        valid_from_ns=99, deliverable=[("INS-SPY", 150)], adjusted_on=dt.date(2026, 11, 11)
+    )
+    assert first.meta is not None and adjusted.meta is not None
+    assert (first.meta.row_key, first.meta.valid_from_ns) == (OSI, 7)
+    assert adjusted.meta.row_key == f"{OSI}:2026-11-11:ADJ"
+    assert adjusted.meta.valid_from_ns == NOV_11_NY, "the date's start, never the time passed"
+    assert adjusted.meta.series_key == first.meta.series_key
+    tokyo = _series(adjusted_on="2026-11-11", day_clock=DayClock("Asia/Tokyo"))
+    assert tokyo.meta is not None and tokyo.meta.valid_from_ns == NOV_11_NY - 14 * 3600 * NS
+
+
+def _sent_series(recorder: Recorder) -> list[Any]:
+    return [s for call in recorder.on("RecordSeries") for s in call.series]
+
+
+async def test_a_series_sent_again_after_a_restart_keeps_its_first_valid_time(
+    tmp_path: Any,
+) -> None:
+    kept = tmp_path / "series.json"
+    clock = [NOV_11_NY + 34 * 3600 * NS]
+    feed, recorder = _feed(clock, series_path=kept)
+    await feed.on_observations_wanted(_want(option_chains.SERIES))
+    first = clock[0]
+    # Restarted the next day: nothing sent unasked, a reader waiting answered
+    # under the first valid time.
+    clock[0] += 24 * 3600 * NS
+    again, recorder2 = _feed(clock, series_path=kept)
+    await again.on_observations_wanted(_want(option_chains.SERIES, want_id=""))
+    assert _sent_series(recorder2) == [], "the terms as last sent"
+    await again.on_observations_wanted(_want(option_chains.SERIES))
+    (sent,) = _sent_series(recorder2)
+    assert (sent.meta.row_key, sent.meta.valid_from_ns) == (OSI, first)
+    assert [s.meta.valid_from_ns for s in _sent_series(recorder)] == [first]
+
+
+async def test_a_series_whose_terms_change_is_adjusted_under_a_new_key(tmp_path: Any) -> None:
+    source = _Chain()
+    clock = [NOV_11_NY + 34 * 3600 * NS]
+    feed, recorder = _feed(clock, source, series_path=tmp_path / "series.json")
+    await feed.on_observations_wanted(_want(option_chains.SERIES))
+    from dataclasses import replace
+
+    clock[0] += 24 * 3600 * NS
+    source.options = [replace(source.options[0], standard=False, multiplier=Decimal(150))]
+    await feed.on_observations_wanted(_want(option_chains.SERIES, want_id=""))
+    first, adjusted = _sent_series(recorder)
+    assert first.meta.row_key == OSI
+    assert adjusted.meta.row_key == f"{OSI}:2026-11-13:ADJ"
+    assert adjusted.meta.valid_from_ns == NOV_11_NY + 2 * 24 * 3600 * NS
+    # Read again, the adjusted terms are as last sent.
+    await feed.on_observations_wanted(_want(option_chains.SERIES, want_id=""))
+    assert len(_sent_series(recorder)) == 2
+
+
+async def test_a_resend_refused_for_its_valid_time_is_taken_as_recorded(caplog: Any) -> None:
+    """The plugin's storage lost: the lake holds the series under another
+    first valid time and refuses the re-send naming it (stage H); the feed
+    takes it as recorded, says so once and sends the rest of the batch."""
+    from meridian.errors import CallFailed
+
+    source = _Chain()
+    other = "SPY   261120P00500000"
+    source.options = [*source.options, option_chains.ChainOption(other, dt.date(2026, 11, 20))]
+    feed, recorder = _feed([NOV_11_NY + 34 * 3600 * NS], source)
+    answered: list[list[str]] = []
+
+    def refuse(params: Any) -> Any:
+        keys = [s.meta.row_key for s in params.series]
+        answered.append(keys)
+        if OSI in keys:
+            at = keys.index(OSI)
+            raise CallFailed(
+                "RecordSeries", "invalid", "a row key fixes its valid time",
+                fields=(f"series[{at}].meta.valid_from_ns",),
+            )  # fmt: skip
+        return ops.RecordSeriesResult(recorded=len(keys))
+
+    recorder.answer("RecordSeries", refuse)
+    for _ in range(2):
+        await feed.on_observations_wanted(_want(option_chains.SERIES))
+    assert answered == [[OSI, other], [other], [OSI, other], [other]]
+    assert feed.counts.unchanged == 2 and feed.counts.recorded == 2
+    said = [r for r in caplog.records if "taken as recorded" in r.getMessage()]
+    assert len(said) == 1, "said once per series"
+
+
+async def test_another_refusal_of_a_series_is_raised() -> None:
+    from meridian.errors import CallFailed
+
+    feed, recorder = _feed([NOV_11_NY + 34 * 3600 * NS])
+
+    def refuse(params: Any) -> Any:
+        raise CallFailed("RecordSeries", "invalid", "no", fields=("series[0].template_id",))
+
+    recorder.answer("RecordSeries", refuse)
+    import pytest
+
+    with pytest.raises(CallFailed):
+        await feed.record(
+            await feed.underlying("INS-SPY"), option_chains.SERIES,
+            frozenset({dt.date(2026, 11, 20)}), frozenset(), "WNT-1",
+        )  # fmt: skip
+    assert feed.first_times.get("chains-1:options", OSI) is None, "staged, not kept"
