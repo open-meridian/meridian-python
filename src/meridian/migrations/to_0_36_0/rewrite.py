@@ -15,8 +15,9 @@ its digest dropped, as 0.34.0's did (this runs with no network).
 
 Left by hand besides: the suites contract 30 grew (`suite-cases-v30`), an
 SDK DerivedSeries or CorporateActionAnnounced given the wire's MeasureRef as
-its rule (`measure-ref-sdk-form`), and core's images pinned below contract
-30 (`core-images`). migration.toml, beside this, records the rules.
+its rule, or (0.36.1) an SDK Job built by hand whose measures are not each
+the SDK's MeasureRef (`measure-ref-sdk-form`), and core's images pinned
+below contract 30 (`core-images`). migration.toml, beside this, records the rules.
 """
 
 from __future__ import annotations
@@ -406,7 +407,10 @@ def _at(text: str, offset: int) -> int:
 
 class _WireRules(cst.CSTVisitor):
     """An SDK DerivedSeries or CorporateActionAnnounced given the wire's
-    MeasureRef as its `rule`."""
+    MeasureRef as its `rule`, and (0.36.1) an SDK Job built by hand whose
+    `measures` are not each the SDK's MeasureRef: the wire's, or whatever
+    `analytics.measure` or a list built elsewhere answers, which 0.36.0's
+    Job refuses."""
 
     METADATA_DEPENDENCIES = (PositionProvider,)
 
@@ -415,10 +419,30 @@ class _WireRules(cst.CSTVisitor):
         self.wire = tuple(wire)
         self.lines: list[int] = []
 
+    def _sdk_ref(self, node: cst.BaseExpression) -> bool:
+        """Whether `node` builds the SDK's MeasureRef (`meridian.MeasureRef(...)`)."""
+        if not isinstance(node, cst.Call):
+            return False
+        base, _, called = (dotted(node.func) or "").rpartition(".")
+        return called == "MeasureRef" and base not in self.wire
+
     def visit_Call(self, node: cst.Call) -> None:
         name = dotted(node.func) or ""
         head, _, last = name.rpartition(".")
-        if last not in ("DerivedSeries", "CorporateActionAnnounced") or head in self.wire:
+        if head in self.wire:
+            return
+        if last == "Job":
+            for arg in node.args:
+                if arg.keyword is None or arg.keyword.value != "measures":
+                    continue
+                listed = arg.value
+                if isinstance(listed, (cst.List, cst.Tuple)) and all(
+                    self._sdk_ref(each.value) for each in listed.elements
+                ):
+                    continue
+                self.lines.append(self.get_metadata(PositionProvider, node).start.line)
+            return
+        if last not in ("DerivedSeries", "CorporateActionAnnounced"):
             return
         for arg in node.args:
             if arg.keyword is None or arg.keyword.value != "rule":
@@ -453,7 +477,9 @@ def left(path: str, text: str) -> list[Finding]:
             found.append(Finding("suite-cases-v30", path, line, line_of(text, line)))
     for line in sorted({_at(text, match.start()) for match in _NAMED.finditer(text)}):
         found.append(Finding(LEFT, path, line, line_of(text, line)))
-    if "MeasureRef" not in text or "rule" not in text:
+    if not ("MeasureRef" in text and "rule" in text) and not (
+        "Job(" in text and "measures" in text
+    ):
         return found
     wire = ["operations_pb2", "meridian.plugin.v1.operations_pb2"]
     wire += [m.group("alias") for m in _WIRE.finditer(text) if m.group("alias")]

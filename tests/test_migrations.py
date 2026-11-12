@@ -2962,3 +2962,37 @@ def test_a_licence_default_is_written_as_its_terms_in_words() -> None:
     }
     assert ("src/p/declared.py", "licence-default-described", 2) in rewrote
     assert ("src/p/plain.py", "licence-default-described", 1) in rewrote
+
+
+def test_a_hand_built_jobs_wire_measures_are_left_by_hand() -> None:
+    """0.36.1: `measure-ref-sdk-form` also names an SDK Job built by hand
+    whose `measures` are not each a `meridian.MeasureRef` as written -- the
+    wire's, `analytics.measure`'s answer, or a list built elsewhere -- which
+    0.36.0's Job refuses (a TypeError; sample-options' 74 tests). A Job of
+    the wire's, `analytics.job`, and a Job of SDK refs are not named."""
+    files = {
+        "pyproject.toml": '[tool.meridian]\nroles = ["signal"]\n',
+        "src/p/jobs.py": textwrap.dedent(
+            """\
+            import meridian
+            from meridian import Job, analytics
+            from meridian.plugin.v1 import operations_pb2 as ops
+
+            A = meridian.Job(account_ids=["ACC-1"], measures=[ops.MeasureRef(definition="v")])
+            B = Job(measures=[analytics.measure("exposure", 1)])
+            def c(measures):
+                return meridian.Job(measures=list(measures))
+            D = meridian.Job(measures=[meridian.MeasureRef(definition="v", version=1)])
+            E = ops.Job(measures=[ops.MeasureRef(definition="v")])
+            F = analytics.job(measures=[analytics.measure("exposure", 1)])
+            G = meridian.Job(account_ids=["ACC-1"])
+            """
+        ),
+    }
+    result = migrate(files, "0.35.5", "0.36.0")
+    left = {
+        (each["file"], each["line"])
+        for each in as_json(result)["by_hand"]
+        if each["rule"] == "measure-ref-sdk-form"
+    }
+    assert left == {("src/p/jobs.py", 5), ("src/p/jobs.py", 6), ("src/p/jobs.py", 8)}
