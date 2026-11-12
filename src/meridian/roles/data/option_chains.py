@@ -47,7 +47,9 @@ quotes records the dataset's liveness.
 **Dated by the market's days** (`helpers.calendars.MarketDays`): open
 interest is the market day before today's, volume today's once it is a
 market day; where the calendar does not answer, none is recorded rather
-than misdated.
+than misdated. Each is valid from the start of the day it describes, in the
+calendar's `day_clock` (New York's where it has none), never when it was
+read (SDK 0.36.2, the-lake rule 5).
 
 **Timeliness**: on a plan not real time, quotes and trades are declined,
 not covered; a range of trades is read only where the source states its
@@ -617,8 +619,8 @@ class Feed(Role):
                     value,
                     day,
                     dataset=dataset,
-                    valid_from_ns=self._now(),
                     raw=self._raw(option.raw_key),
+                    day_clock=getattr(self.market_days, "day_clock", None),
                 )
                 assert stat.meta is not None
                 if self.sent.changed(STATISTIC, dataset, stat.meta.row_key, value) or want_id:

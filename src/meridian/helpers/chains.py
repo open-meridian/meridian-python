@@ -18,7 +18,8 @@ statistics never resolves a series (`a-chain-row-is-never-resolved`).
   (`option_series`, `ListedSeries`), an adjustment the next version of the
   same row key;
 - each series' open interest and volume per trading date
-  (`RecordStatistics`; `statistic`), contracts for an option or a future;
+  (`RecordStatistics`; `statistic`), contracts for an option or a future,
+  valid from the start of the day it describes (SDK 0.36.2);
 - its quotes and trades of a series under the underlying with the series'
   key on the envelope (`series_meta`).
 
@@ -57,6 +58,7 @@ from ..operations import (
     UnitValue,
 )
 from ..plugin.v1 import operations_pb2 as ops
+from .calendars import DayClock
 
 #: The OCC's Options Symbology Initiative symbol's scheme (W1.26, 573).
 OCC_OSI = "occ_osi"
@@ -189,6 +191,10 @@ def option_series(
 _SUFFIX = {"open_interest": "OI", "volume": "VOL"}
 
 
+#: The day OPRA and the OCC date a statistic in: New York's, from midnight.
+OPRA_DAY = DayClock("America/New_York")
+
+
 def statistic(
     underlying_id: str,
     series_key: Sequence[ops.Identifier],
@@ -200,18 +206,28 @@ def statistic(
     unit: str = "contracts",
     valid_from_ns: int = 0,
     raw: ops.RawRecordRef | None = None,
+    day_clock: DayClock | None = None,
 ) -> Statistic:
     """One series' statistic for a trading date -- `open_interest` or
-    `volume` -- in contracts, keyed by its series and the date."""
+    `volume` -- in contracts, keyed by its series and the date.
+
+    Its valid time is the start of the day it describes, in the dataset's
+    day (`day_clock`; OPRA's and the OCC's, New York's from midnight, where
+    none is given), never when it was read or published: a row key fixes
+    its valid time (spec/the-lake rule 5, ruled 2026-11-12), so a re-read or
+    a republication restates the value alone. `valid_from_ns` is not read
+    (SDK 0.36.2); it is kept so a plugin passing it still runs."""
+    del valid_from_ns  # the day's start, never a moment the plugin read
     day = business_date if isinstance(business_date, str) else business_date.isoformat()
     key = series_key[0].value if series_key else underlying_id
+    began = (day_clock or OPRA_DAY).opened_at(date.fromisoformat(day))
     return Statistic(
         meta=series_meta(
             underlying_id,
             series_key,
             row_key=f"{key}:{day}:{_SUFFIX.get(kind, kind)}",
             dataset=dataset,
-            valid_from_ns=valid_from_ns,
+            valid_from_ns=began,
             business_date=day,
             raw=raw,
         ),  # fmt: skip
