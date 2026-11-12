@@ -16,8 +16,11 @@ its digest dropped, as 0.34.0's did (this runs with no network).
 Left by hand besides: the suites contract 30 grew (`suite-cases-v30`), an
 SDK DerivedSeries or CorporateActionAnnounced given the wire's MeasureRef as
 its rule, or (0.36.1) an SDK Job built by hand whose measures are not each
-the SDK's MeasureRef (`measure-ref-sdk-form`), and core's images pinned
-below contract 30 (`core-images`). migration.toml, beside this, records the rules.
+the SDK's MeasureRef (`measure-ref-sdk-form`), core's images pinned below
+contract 30 (`core-images`), and (0.36.1) a test's stand-in for a Receive
+call iterated with `async for` and no `read`, which 0.36.0's hearing loop
+and views call (`receive-stand-in-read`). migration.toml, beside this,
+records the rules.
 """
 
 from __future__ import annotations
@@ -455,6 +458,30 @@ class _WireRules(cst.CSTVisitor):
                 self.lines.append(self.get_metadata(PositionProvider, node).start.line)
 
 
+class _StandIns(cst.CSTVisitor):
+    """(0.36.1) A class standing in for a Receive call that a test hands
+    the SDK -- one iterated with `async for` (`__aiter__` or `__anext__`)
+    -- with no `read`: 0.36.0's hearing loop and views read the call with
+    `call.read()`, `grpc.aio.EOF` at its end."""
+
+    METADATA_DEPENDENCIES = (PositionProvider,)
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.lines: list[int] = []
+
+    def visit_ClassDef(self, node: cst.ClassDef) -> None:
+        defined = {
+            each.name.value for each in node.body.body if isinstance(each, cst.FunctionDef)
+        }
+        if defined & {"__aiter__", "__anext__"} and "read" not in defined:
+            self.lines.append(self.get_metadata(PositionProvider, node).start.line)
+
+
+#: A file handing the SDK a Receive call of its own: a stub's `Receive`.
+_RECEIVE = re.compile(r"\bdef\s+Receive\s*\(|\.Receive\b")
+
+
 #: The names a plugin binds the wire's bindings to, as written.
 _WIRE = re.compile(
     r"^\s*from\s+meridian\.plugin\.v1\s+import\s+operations_pb2(?:\s+as\s+(?P<alias>\w+))?",
@@ -477,18 +504,26 @@ def left(path: str, text: str) -> list[Finding]:
             found.append(Finding("suite-cases-v30", path, line, line_of(text, line)))
     for line in sorted({_at(text, match.start()) for match in _NAMED.finditer(text)}):
         found.append(Finding(LEFT, path, line, line_of(text, line)))
-    if not ("MeasureRef" in text and "rule" in text) and not (
+    measures = ("MeasureRef" in text and "rule" in text) or (
         "Job(" in text and "measures" in text
-    ):
+    )
+    receive = bool(_RECEIVE.search(text))
+    if not measures and not receive:
         return found
     wire = ["operations_pb2", "meridian.plugin.v1.operations_pb2"]
     wire += [m.group("alias") for m in _WIRE.finditer(text) if m.group("alias")]
     try:
-        module = cst.parse_module(text)
+        wrapper = MetadataWrapper(cst.parse_module(text))
     except cst.ParserSyntaxError:
         return found
-    rules = _WireRules(wire)
-    MetadataWrapper(module).visit(rules)
-    for line in rules.lines:
-        found.append(Finding("measure-ref-sdk-form", path, line, line_of(text, line)))
+    if measures:
+        rules = _WireRules(wire)
+        wrapper.visit(rules)
+        for line in rules.lines:
+            found.append(Finding("measure-ref-sdk-form", path, line, line_of(text, line)))
+    if receive:
+        stand_ins = _StandIns()
+        wrapper.visit(stand_ins)
+        for line in stand_ins.lines:
+            found.append(Finding("receive-stand-in-read", path, line, line_of(text, line)))
     return found

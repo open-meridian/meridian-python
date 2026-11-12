@@ -101,6 +101,18 @@ event_group_id); analytics.measure(...) answers the wire's, which analytics.job 
 takes as before"""
 
 [[by_hand]]
+rule = "receive-stand-in-read"
+what = """a test's stand-in for a Receive call -- a class iterated with \
+`async for` (`__aiter__` or `__anext__`) in a file whose stub answers `Receive` -- \
+with no `read`: from 0.36.0 the hearing loop (`meridian.receive.follow`) and the \
+views (`plugin.subscribe`) read the call with `await call.read()`, and stop at \
+`grpc.aio.EOF`, so such a stand-in fails with an AttributeError"""
+instead = """give the stand-in `async def read(self)`, answering the next delivery \
+as `__anext__` does and `grpc.aio.EOF` where it would raise StopAsyncIteration \
+(a cancelled or ended call); `initial_metadata`, `done` and `cancel` are read as \
+before"""
+
+[[by_hand]]
 rule = "suite-cases-v30"
 what = """a test running a role's suite that contract 30 adds cases to: the \
 reporting, portfolio, compliance and signal suites' holds-a-standing-figure (about: \

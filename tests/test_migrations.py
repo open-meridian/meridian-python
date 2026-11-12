@@ -2996,3 +2996,52 @@ def test_a_hand_built_jobs_wire_measures_are_left_by_hand() -> None:
         if each["rule"] == "measure-ref-sdk-form"
     }
     assert left == {("src/p/jobs.py", 5), ("src/p/jobs.py", 6), ("src/p/jobs.py", 8)}
+
+
+def test_a_receive_stand_in_with_no_read_is_left_by_hand() -> None:
+    """0.36.1: `receive-stand-in-read` names a test's stand-in for a Receive
+    call iterated with `async for` and no `read()`, which 0.36.0's hearing
+    loop and views call (sample-fx, -options and -reporting's
+    tests/sidecar_stream.py: an AttributeError). One with `read`, or an
+    async iterator in a file handing the SDK no Receive call, is not named."""
+    files = {
+        "pyproject.toml": '[tool.meridian]\nroles = ["reporting"]\n',
+        "tests/sidecar_stream.py": textwrap.dedent(
+            """\
+            import asyncio
+            import grpc
+
+            class _Call:
+                def __aiter__(self):
+                    return self
+
+                async def __anext__(self):
+                    raise StopAsyncIteration
+
+            class _Read:
+                def __aiter__(self):
+                    return self
+
+                async def read(self):
+                    return grpc.aio.EOF
+
+            class _Stub:
+                def Receive(self, request):
+                    return _Call()
+            """
+        ),
+        "tests/other.py": textwrap.dedent(
+            """\
+            class Ticks:
+                def __aiter__(self):
+                    return self
+            """
+        ),
+    }
+    result = migrate(files, "0.35.5", "0.36.0")
+    left = {
+        (each["file"], each["line"])
+        for each in as_json(result)["by_hand"]
+        if each["rule"] == "receive-stand-in-read"
+    }
+    assert left == {("tests/sidecar_stream.py", 4)}
