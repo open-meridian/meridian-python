@@ -58,7 +58,9 @@ async def holds_a_standing_figure(recorder: Recorder) -> None:
 
 
 async def reads_the_source_priorities(recorder: Recorder) -> None:
-    """Which source a default read takes for a data type, and which next."""
+    """Which source a default read takes for a data type, and which next,
+    as answered to the plugin: within its entitlements (454), never assumed
+    to be every priority the deployment set."""
     recorder.answer(
         "ListSourcePriorities",
         lambda _: ops.ListSourcePrioritiesResult(
@@ -70,7 +72,9 @@ async def reads_the_source_priorities(recorder: Recorder) -> None:
         ),
     )
     read = await recorder.list_source_priorities()
-    assert list(read.priorities[0].datasets) == ["truefx-1:live", "oanda-1:quotes"]
+    assert {p.data_type: list(p.datasets) for p in read.priorities} == {
+        "meridian.v1.Quote": ["truefx-1:live", "oanda-1:quotes"]
+    }
 
 
 PRODUCERS: dict[str, Producer] = {

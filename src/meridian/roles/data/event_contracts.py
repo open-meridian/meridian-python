@@ -946,9 +946,14 @@ class Feed(Role):
         ResolveIdentifier (contract 30, 1035): what it pays, in the venue's
         cash, when trading in it closes, a range market's bounds and unit, and
         its category, which the instrument store records the first time it
-        sees the contract. None where the venue states no payout."""
+        sees the contract. Where the venue's statement gives no payout, its
+        category alone (the contract's `BinaryEventContract.payout` is
+        optional on a statement: unset is not stated), so the store still
+        records it; None where it gives neither."""
         if contract.payout is None:
-            return None
+            if not contract.category:
+                return None
+            return BinaryEventContract(category=contract.category)
         return BinaryEventContract(
             payout=Money(contract.payout, self.market.cash.currency_code),
             closes_at_ns=contract.closes_at_ns,

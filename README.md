@@ -2606,7 +2606,19 @@ plugin. No transports package is shipped (ruling 1027).
   instance its vendor allows.
 - **An event contract's terms stated** (1035): an event-contract feed states
   each contract's payout, close, bounds and `Contract.category` at
-  `ResolveIdentifier` (`stated_binary_event_contract`).
+  `ResolveIdentifier` (`stated_binary_event_contract`); where the venue's
+  statement gives no payout, its category alone.
+- **A bond's terms, a yield and a benchmark** (433, 431): a bond's terms are a
+  value of the record like any other, offered as `InstrumentValue.bond` and
+  named under `INSTRUMENT_FIELD_BOND` once put in force, both read from the
+  record (`resolve_instrument`); `debt.quoted_yield(...)` with no `day_count`
+  leaves it unstated, kept as quoted and never computed with; and
+  `benchmark_yield` is a rate kind (`rates.Feed.rate(..., "benchmark_yield",
+  ...)`), an on-the-run benchmark's yield as its publisher states it.
+- **The source priorities, as a plugin reads them** (454):
+  `role.list_source_priorities()` answers each priority with only the
+  datasets the plugin is entitled to read, and a priority naming none of them
+  not at all: what it answers is the whole of what the plugin may use.
 - **The suites**: `holds-a-standing-figure` (reporting, portfolio,
   compliance, signal) and `reads-the-source-priorities` (the eight roles that
   read the lake, `role.list_source_priorities()`); the behaviour cases of

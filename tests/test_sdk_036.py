@@ -546,6 +546,129 @@ def test_an_event_contracts_terms_and_category_are_stated_at_its_resolve() -> No
         )
         is None
     )
+    # A statement whose payout did not read still states the category, alone
+    # (the payout optional on a statement from contract 30): the store records
+    # it the first time it sees the contract.
+    alone = feed.stated_terms(
+        event_contracts.Contract(
+            code="x",
+            title="x",
+            binary=True,
+            payout=None,
+            closes_at_ns=NOW_NS,
+            category="weather",
+        )
+    )
+    assert alone == meridian.BinaryEventContract(category="weather")
+    wire = meridian.operations._binary_event_contract(alone, "stated_binary_event_contract")
+    assert not wire.HasField("payout") and wire.category == "weather"
+
+
+# ── Track 6's folded items: bond terms, an unstated day count, a benchmark's
+#    yield and the source priorities as a plugin reads them ──────────────────
+
+
+async def test_a_bonds_terms_offered_are_read_beside_the_record() -> None:
+    """433 (W3.10): a bond's terms are a value of the record like any other,
+    offered as `InstrumentValue.bond` and named under `INSTRUMENT_FIELD_BOND`
+    once a person puts them in force; a plugin reads both from the record."""
+    terms = ops.Bond(
+        security_type=ops.DEBT_SECURITY_TYPE_TNOTE,
+        issue_date="2026-08-15",
+        maturity_date="2036-08-15",
+        coupon_rate=_decimal(Decimal("4.25"), "coupon_rate"),
+        coupon_frequency=2,
+        day_count=ops.DAY_COUNT_ACT_ACT_ICMA,
+    )
+    recorder = Recorder("reporting-1")
+    recorder.answer(
+        "ResolveInstrument",
+        lambda asked: ops.ResolveInstrumentResult(
+            found=True,
+            instrument=ops.InstrumentRecord(
+                instrument_id=asked.instrument_id,
+                instrument_type=ops.INSTRUMENT_TYPE_BOND,
+                bond=terms,
+                sources=[
+                    ops.InstrumentValueSource(
+                        field=ops.INSTRUMENT_FIELD_BOND, source="the platform's term offer"
+                    )
+                ],
+                offers=[
+                    ops.OfferedValue(
+                        value=ops.InstrumentValue(
+                            bond=ops.Bond(maturity_date="2036-08-15", coupon_frequency=2),
+                            source="a reference plugin's terms",
+                        ),
+                        instance_id="reference-1",
+                    )
+                ],
+            ),
+        ),
+    )
+    read = await recorder.resolve_instrument(instrument_id="INS-01JC30BOND0000000000000001")
+    assert read.instrument.bond == terms
+    assert [s.field for s in read.instrument.sources] == [ops.INSTRUMENT_FIELD_BOND]
+    (offered,) = read.instrument.offers
+    assert offered.value.WhichOneof("value") == "bond"
+    assert offered.value.bond.maturity_date == "2036-08-15"
+
+
+def test_a_yield_whose_day_count_is_unstated_is_kept_as_quoted() -> None:
+    """433: a source stating no day count leaves it unstated, and the yield
+    reaches the wire with `DAY_COUNT_UNSPECIFIED`, kept as quoted."""
+    from meridian.helpers import debt
+
+    quoted = debt.quoted_yield("4.312", "to_maturity")
+    wire = meridian.operations._quoted_yield(quoted, "yield")
+    assert wire.convention.day_count == ops.DAY_COUNT_UNSPECIFIED
+    assert (wire.convention.compounding, wire.convention.periods_per_year) == (
+        ops.COMPOUNDING_COMPOUNDED, 2,
+    )  # fmt: skip
+    assert wire.value.value == _decimal(Decimal("4.312"), "value")
+
+
+def test_a_benchmarks_yield_is_a_rate_kind() -> None:
+    """431: an on-the-run benchmark's yield as its publisher states it."""
+    from meridian.roles.data import rates
+
+    feed = rates.Feed(Recorder("rates-1"), "ust", clock_ns=lambda: 1)
+    row = feed.rate(
+        "INS-01JC30BENCH000000000000010Y", "ust_benchmarks", "benchmark_yield", "4.21",
+        tenor="10Y", business_date="2026-11-11", convention=rates.BOND_EQUIVALENT,
+    )  # fmt: skip
+    assert meridian.operations._rate(row, "rate").kind == ops.RATE_KIND_BENCHMARK_YIELD
+    assert ":benchmark_yield:10Y:" in row.meta.row_key
+    by_name = meridian.operations.Rate(kind="RATE_KIND_BENCHMARK_YIELD")
+    assert meridian.operations._rate(by_name, "rate").kind == ops.RATE_KIND_BENCHMARK_YIELD
+
+
+async def test_the_source_priorities_read_answers_only_what_the_plugin_may_read() -> None:
+    """454: to a plugin, each priority carries only the datasets it is
+    entitled to read, and one with none left is not answered: the read takes
+    what is answered as the whole of what the plugin may use."""
+    deployment = {
+        "meridian.v1.Quote": ["truefx-1:live", "oanda-1:quotes", "lseg-1:ticks"],
+        "meridian.v1.Bar": ["lseg-1:bars"],
+    }
+    entitled = {"truefx-1:live", "oanda-1:quotes"}
+
+    def answered(_: Any) -> ops.ListSourcePrioritiesResult:
+        kept = (
+            ops.SourcePriority(data_type=kind, datasets=[d for d in sets if d in entitled])
+            for kind, sets in deployment.items()
+        )
+        return ops.ListSourcePrioritiesResult(priorities=[p for p in kept if p.datasets])
+
+    recorder = Recorder("signal-fx-1")
+    recorder.answer("ListSourcePriorities", answered)
+    read = await recorder.list_source_priorities()
+    assert {p.data_type: list(p.datasets) for p in read.priorities} == {
+        "meridian.v1.Quote": ["truefx-1:live", "oanda-1:quotes"],
+    }
+    # Entitled to none of them: none answered, which is no error.
+    entitled = set()
+    assert list((await recorder.list_source_priorities()).priorities) == []
 
 
 # ── Refused for load, and told when to ask again (W4.4; section 10a) ───────

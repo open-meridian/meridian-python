@@ -499,7 +499,10 @@ def quoted_yield(
     """A yield as its source quotes it, beside a price (W10.4, 987): in
     percent (4.312, never 0.04312), semi-annual bond-equivalent by default
     on the instrument's day count, its kind after FIX YieldType (235) and,
-    to a call or a put, the date it is to. Never computed by the plugin."""
+    to a call or a put, the date it is to. Never computed by the plugin.
+    From contract 30 (ruling 433) a source stating no day count leaves
+    `day_count` None, DAY_COUNT_UNSPECIFIED on the wire: the yield is kept
+    as quoted and never computed with."""
     kinds = {"to_call", "to_put", "YIELD_KIND_TO_CALL", "YIELD_KIND_TO_PUT"}
     if kind in kinds and not to_date:
         raise ValueError(f"a yield {kind} names the date it is to")

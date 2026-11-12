@@ -350,10 +350,12 @@ class Feed:
     ) -> Rate:
         """One rate for `subject` under the dataset `key`: its kind (`fixing`,
         `average`, `index_level`, `par_yield`, `zero`, `discount`,
-        `coupon_equivalent`), its value (a bare number is a percent), its
-        business date and, where the publisher states them, its published
-        time, convention, tenor or maturity, whether it is preliminary, its
-        volume, transaction count and percentiles. Its convention is never
+        `coupon_equivalent`, and from contract 30 `benchmark_yield`, an
+        on-the-run benchmark's yield as its publisher states it), its value
+        (a bare number is a percent), its business date and, where the
+        publisher states them, its published time, convention, tenor or
+        maturity, whether it is preliminary, its volume, transaction count
+        and percentiles. Its convention is never
         unset: a rate with none is refused here, before the lake refuses it
         (0.32.3) -- an index level takes the convention of the rate it
         compounds."""
