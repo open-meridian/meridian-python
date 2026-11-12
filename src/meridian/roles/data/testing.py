@@ -38,12 +38,14 @@ float may reach; and `page`, its page module (`pages`, `hold`,
 `EXACT_LAST`, `ONE_SIDED`, `NOT_BINARY`, `STABLE`; `RESOLVED`,
 `RESOLVED_STAGE`, `WORD`, `RESOLVED_LOSER`, `PARTIAL`, `PARTIAL_VALUE`,
 `PENDING`, `LATER`, `DETERMINED`, `DISPUTED`; `NOT_PRESENTED`;
-`market(now_ns, directory=None)`; `calls(market)`, the URLs asked; and
-`page` as above, with `datasets_now`. From 0.31.0 (contract v26) also
-`EVENT` and `EVENT_PLACEHOLDERS`, two of the venue's events as its
-conversion reads them (`event_contracts.Event`): one whose members the
-venue states mutually exclusive and exhaustive, and one adding outcomes
-named later, which states no exhaustiveness. A venue whose module names
+`market(now_ns, directory=None)`; `calls(market)`, the URLs asked, each
+naming the contract's code or (0.36.1) asking for its own event or that
+event's series by reference, never a list; and `page` as above, with
+`datasets_now`. From 0.31.0 (contract v26) also `EVENT` and
+`EVENT_PLACEHOLDERS`, two of the venue's events as its conversion reads
+them (`event_contracts.Event`): one whose members the venue states
+mutually exclusive and exhaustive, and one adding outcomes named later,
+which states no exhaustiveness. A venue whose module names
 neither leaves `reports-an-event-group` and
 `reports-a-flag-the-venue-does-not-state` to its own producers or to
 `NOT_PRESENTED`, with why. From 0.33.1 a venue whose `Market` keeps bars
@@ -67,6 +69,7 @@ import contextlib
 import re
 import sys
 import time
+import urllib.parse
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import replace
 from datetime import date, timedelta
@@ -354,6 +357,29 @@ def _contracts_feed(venue: Any, recorder: Recorder, **kw: Any) -> event_contract
         venue.market(venue.NOW_NS, **kw), event_contracts.ContractMap(),
         clock_ns=lambda: venue.NOW_NS,
     ))  # fmt: skip
+
+
+async def _own_event_and_series(feed: event_contracts.Feed, code: str) -> set[str]:
+    """A contract's own event and that event's series, by the venue's
+    references for them (0.36.1): the contract's `market`, and the series
+    the venue's event states, asked of its `Market.event` where it answers
+    one. Empty where the contract names no event."""
+    contract = feed.contracts.contracts.get(code)
+    ref = contract.market if contract is not None else ""
+    if not ref:
+        return set()
+    read = getattr(feed.market, "event", None)
+    event = await asyncio.to_thread(read, ref) if callable(read) else None
+    series = event.series if event is not None and event.ref == ref else ""
+    return {ref, series} - {""}
+
+
+def _asks_for(url: str) -> str:
+    """What a URL asks for by its reference: its path's last segment,
+    unquoted (`/events/KXCPI-26NOV` asks for `KXCPI-26NOV`; `/events` and
+    `/events?series_ticker=KXCPI`, lists, for `events`)."""
+    path = urllib.parse.urlsplit(url).path.rstrip("/")
+    return urllib.parse.unquote(path.rsplit("/", 1)[-1])
 
 
 def _mutated(feed: Any, mutations: dict[str, Any]) -> Any:
@@ -2038,7 +2064,16 @@ class EventContractsChecks(_PageChecks):
         subject = await lake.held(feed, v.BASE)
         await feed.record_live([subject])
         asked = v.calls(feed.market)
-        assert asked and all(v.BASE in url for url in asked), asked
+        assert asked, "the venue was asked for the contract"
+        # Every URL names the contract's code, or (0.36.1) asks for the
+        # contract's own event or that event's series by its reference alone:
+        # Kalshi states a market's category only on its series, reached
+        # through its event. A list -- the venue's, an event's or a series'
+        # -- is never asked.
+        others = [url for url in asked if v.BASE not in url]
+        if others:
+            own = await _own_event_and_series(feed, v.BASE)
+            assert all(_asks_for(url) in own for url in others), asked
         assert not lake.instruments.records.keys() - {subject, feed.contracts.cash_id}, (
             "no record minted but the cash's"
         )

@@ -89,11 +89,28 @@ licence a deployment admin sets is the one enforced, and is never the plugin's""
 [[by_hand]]
 rule = "measure-ref-sdk-form"
 what = """a DerivedSeries or a CorporateActionAnnounced of the SDK's (not the \
-wire's `ops.`) given the wire's MeasureRef as its `rule`: from 0.36.0 it takes \
+wire's `ops.`) given the wire's MeasureRef as its `rule`, or a Job of the SDK's \
+built by hand (`meridian.Job(measures=...)`) whose measures are not each a \
+meridian.MeasureRef as written -- the wire's `ops.MeasureRef`, what \
+analytics.measure(...) answers, or a list built elsewhere: from 0.36.0 each takes \
 meridian.MeasureRef, which carries a standing measure's refresh, and refuses the \
-wire's"""
-instead = """build its rule as `meridian.MeasureRef(definition=..., version=...)`; \
-analytics.measure(...) answers the wire's, which analytics.job takes as before"""
+wire's (a TypeError naming the field)"""
+instead = """build each as `meridian.MeasureRef(definition=..., version=...)`, or \
+convert the wire's field by field (definition, version, breakdowns, \
+event_group_id); analytics.measure(...) answers the wire's, which analytics.job \
+takes as before"""
+
+[[by_hand]]
+rule = "receive-stand-in-read"
+what = """a test's stand-in for a Receive call -- a class iterated with \
+`async for` (`__aiter__` or `__anext__`) in a file whose stub answers `Receive` -- \
+with no `read`: from 0.36.0 the hearing loop (`meridian.receive.follow`) and the \
+views (`plugin.subscribe`) read the call with `await call.read()`, and stop at \
+`grpc.aio.EOF`, so such a stand-in fails with an AttributeError"""
+instead = """give the stand-in `async def read(self)`, answering the next delivery \
+as `__anext__` does and `grpc.aio.EOF` where it would raise StopAsyncIteration \
+(a cancelled or ended call); `initial_metadata`, `done` and `cancel` are read as \
+before"""
 
 [[by_hand]]
 rule = "suite-cases-v30"

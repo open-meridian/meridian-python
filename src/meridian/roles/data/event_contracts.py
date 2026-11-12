@@ -946,22 +946,42 @@ class Feed(Role):
         ResolveIdentifier (contract 30, 1035): what it pays, in the venue's
         cash, when trading in it closes, a range market's bounds and unit, and
         its category, which the instrument store records the first time it
-        sees the contract. Where the venue's statement gives no payout, its
-        category alone (the contract's `BinaryEventContract.payout` is
+        sees the contract. Where the venue's statement gives no payout, or
+        its cash has no ISO 4217 code and the cash's record is not held yet,
+        its category alone (the contract's `BinaryEventContract.payout` is
         optional on a statement: unset is not stated), so the store still
-        records it; None where it gives neither."""
-        if contract.payout is None:
+        records it; None where it gives neither. A range market's bounds are
+        stated only with their unit (0.36.1): core refuses bounds naming
+        none, and with them the whole ResolveIdentifier, so where the venue
+        states no unit the bounds are left out and the rest stated."""
+        payout = self._stated_payout(contract)
+        if payout is None:
             if not contract.category:
                 return None
             return BinaryEventContract(category=contract.category)
+        unit = contract.bound_unit
         return BinaryEventContract(
-            payout=Money(contract.payout, self.market.cash.currency_code),
+            payout=payout,
             closes_at_ns=contract.closes_at_ns,
-            floor=None if contract.floor is None else _stated_bound(contract.floor),
-            cap=None if contract.cap is None else _stated_bound(contract.cap),
-            bound_unit=contract.bound_unit,
+            floor=None if contract.floor is None or not unit else _stated_bound(contract.floor),
+            cap=None if contract.cap is None or not unit else _stated_bound(contract.cap),
+            bound_unit=unit,
             category=contract.category,
         )
+
+    def _stated_payout(self, contract: Contract) -> Money | None:
+        """What one contract pays, in the venue's cash (0.36.1): a currency by
+        its ISO 4217 code; a cash with none (the venue's own token) by its
+        resolved instrument, where its record is held; None where the payout
+        did not read, or the token's record is not held yet."""
+        if contract.payout is None:
+            return None
+        code = self.market.cash.currency_code
+        if code:
+            return Money(contract.payout, code)
+        if self.contracts.cash_id:
+            return Money(contract.payout, instrument_id=self.contracts.cash_id)
+        return None
 
     async def stated_identifiers(self, contract: Contract) -> list[ops.Identifier]:
         """What the plugin sends for a contract (0.31.0, ruling 312): its

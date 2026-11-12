@@ -103,7 +103,7 @@ def test_every_release_since_the_first_recorded_has_its_step() -> None:
         ("0.6.0", "0.6.1"),
         ("0.6.1", "0.7.0"),
     ]
-    assert (steps[-1].source, steps[-1].target) == ("0.35.5", "0.36.0")
+    assert (steps[-1].source, steps[-1].target) == ("0.36.0", "0.36.1")
     # A release that moves the version records its step, if only the pins.
     assert steps[-1].target == SDK
 
@@ -2962,3 +2962,86 @@ def test_a_licence_default_is_written_as_its_terms_in_words() -> None:
     }
     assert ("src/p/declared.py", "licence-default-described", 2) in rewrote
     assert ("src/p/plain.py", "licence-default-described", 1) in rewrote
+
+
+def test_a_hand_built_jobs_wire_measures_are_left_by_hand() -> None:
+    """0.36.1: `measure-ref-sdk-form` also names an SDK Job built by hand
+    whose `measures` are not each a `meridian.MeasureRef` as written -- the
+    wire's, `analytics.measure`'s answer, or a list built elsewhere -- which
+    0.36.0's Job refuses (a TypeError; sample-options' 74 tests). A Job of
+    the wire's, `analytics.job`, and a Job of SDK refs are not named."""
+    files = {
+        "pyproject.toml": '[tool.meridian]\nroles = ["signal"]\n',
+        "src/p/jobs.py": textwrap.dedent(
+            """\
+            import meridian
+            from meridian import Job, analytics
+            from meridian.plugin.v1 import operations_pb2 as ops
+
+            A = meridian.Job(account_ids=["ACC-1"], measures=[ops.MeasureRef(definition="v")])
+            B = Job(measures=[analytics.measure("exposure", 1)])
+            def c(measures):
+                return meridian.Job(measures=list(measures))
+            D = meridian.Job(measures=[meridian.MeasureRef(definition="v", version=1)])
+            E = ops.Job(measures=[ops.MeasureRef(definition="v")])
+            F = analytics.job(measures=[analytics.measure("exposure", 1)])
+            G = meridian.Job(account_ids=["ACC-1"])
+            """
+        ),
+    }
+    result = migrate(files, "0.35.5", "0.36.0")
+    left = {
+        (each["file"], each["line"])
+        for each in as_json(result)["by_hand"]
+        if each["rule"] == "measure-ref-sdk-form"
+    }
+    assert left == {("src/p/jobs.py", 5), ("src/p/jobs.py", 6), ("src/p/jobs.py", 8)}
+
+
+def test_a_receive_stand_in_with_no_read_is_left_by_hand() -> None:
+    """0.36.1: `receive-stand-in-read` names a test's stand-in for a Receive
+    call iterated with `async for` and no `read()`, which 0.36.0's hearing
+    loop and views call (sample-fx, -options and -reporting's
+    tests/sidecar_stream.py: an AttributeError). One with `read`, or an
+    async iterator in a file handing the SDK no Receive call, is not named."""
+    files = {
+        "pyproject.toml": '[tool.meridian]\nroles = ["reporting"]\n',
+        "tests/sidecar_stream.py": textwrap.dedent(
+            """\
+            import asyncio
+            import grpc
+
+            class _Call:
+                def __aiter__(self):
+                    return self
+
+                async def __anext__(self):
+                    raise StopAsyncIteration
+
+            class _Read:
+                def __aiter__(self):
+                    return self
+
+                async def read(self):
+                    return grpc.aio.EOF
+
+            class _Stub:
+                def Receive(self, request):
+                    return _Call()
+            """
+        ),
+        "tests/other.py": textwrap.dedent(
+            """\
+            class Ticks:
+                def __aiter__(self):
+                    return self
+            """
+        ),
+    }
+    result = migrate(files, "0.35.5", "0.36.0")
+    left = {
+        (each["file"], each["line"])
+        for each in as_json(result)["by_hand"]
+        if each["rule"] == "receive-stand-in-read"
+    }
+    assert left == {("tests/sidecar_stream.py", 4)}
