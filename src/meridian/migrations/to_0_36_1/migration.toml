@@ -1,0 +1,20 @@
+# open-meridian 0.36.0 to 0.36.1: fixes, with no contract change: nothing a
+# plugin calls changed shape, so only the pins move.
+from = "0.36.0"
+to = "0.36.1"
+summary = """
+Fixes, with no contract change. An event-contract feed states a contract's
+payout at ResolveIdentifier in a cash with no ISO 4217 code (a venue's own
+token) by the cash's resolved instrument once its record is held, and its
+category alone before then, where 0.36.0 refused every such statement
+("payout names no asset"); and states a range market's bounds only with their
+unit, leaving them out where the venue states none, which core refused whole.
+EventContractsChecks admits a plugin asking for the contract's own event and
+that event's series by reference (a venue stating a market's category only on
+its series), and still refuses any list. The 0.35.5 to 0.36.0 step names two
+more things by hand: a meridian.Job built with measures that are not each a
+meridian.MeasureRef (measure-ref-sdk-form), and a test's stand-in for a
+Receive call with no read() (receive-stand-in-read). Nothing a plugin calls
+changed shape: `meridian plugin migrate` moves the pins and changes no code.
+"""
+breaking = false

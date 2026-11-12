@@ -2,7 +2,7 @@
 
 The Python SDK for building [Open Meridian](https://open-meridian.com) plugins:
 the tools a trader has an AI agent build, and the bots and analytics a
-developer writes. Python 3.11 or newer. This is release 0.36.0; its reference
+developer writes. Python 3.11 or newer. This is release 0.36.1; its reference
 is at [open-meridian.dev](https://open-meridian.dev/api/python-sdk/).
 
 ## Start here
@@ -2560,7 +2560,7 @@ plugin. No transports package is shipped (ruling 1027).
 
   **Run 0.35.0 to 0.35.5 on a core of contract v29**: no contract changed.
 
-### Standing analytics and a stream held to its far end (contract 30; 0.36.0)
+### Standing analytics and a stream held to its far end (contract 30; 0.36.0 to 0.36.1)
 
 - **The SDK declares contract 30** (`meridian.SCHEMA_VERSION` "v30").
 - **A standing job** (spec/one-data-access-model, section 4): built
@@ -2623,8 +2623,21 @@ plugin. No transports package is shipped (ruling 1027).
   compliance, signal) and `reads-the-source-priorities` (the eight roles that
   read the lake, `role.list_source_priorities()`); the behaviour cases of
   0.35.3's `Supervisor` and of `views.latest_key`.
+- **0.36.1, fixes** for the event-contract plugins, with no contract change.
+  A contract's payout in a cash with no ISO 4217 code (a venue's own token)
+  is stated by the cash's resolved instrument once its record is held, and
+  the category alone before then: 0.36.0 refused every such
+  `ResolveIdentifier` ("payout names no asset"). A range market's bounds are
+  stated only with their unit; where the venue states none they are left out
+  and the payout, close and category stated, where core refused the whole
+  statement. `EventContractsChecks` admits a plugin asking for the
+  contract's own event and that event's series by reference -- a venue
+  stating a market's category only on its series -- and still refuses any
+  list. The 0.35.5 to 0.36.0 step names by hand a `meridian.Job` built with
+  measures that are not each a `meridian.MeasureRef`, and a test's stand-in
+  for a `Receive` call with no `read()`.
 
-  **Run 0.36.0 on a core of contract 30.**
+  **Run 0.36.0 and 0.36.1 on a core of contract 30.**
 
 ## Moving a plugin to a new release
 
@@ -2716,6 +2729,7 @@ carries libcst.
 | 0.35.3 to 0.35.4: a fix and an addition (ruling 1070): a book record's view keyed by its entity (`views.ENTITY_KEYS`), an order whose venue's ID is set later held once; a quote stating no source time timed by its `valid_from_ns` (`roles.source_ns`, `confirmed_ns`), so `ems.ReferenceCheck` no longer judges it stale; the views' stream surviving a read again that fails outside gRPC; `pages.live_values` and `LiveValue.of`, a page's values worked out from its views with source, age and staleness counted only in session, served by `pages.live` to the kit's `<om-live cells>`; every template's AGENTS.md says so | only the pins move | a live module of the plugin's own, its cells worked out from views (`live.py`'s `Board`), moved onto `pages.live_values` and `LiveValue.of`, and its page script onto `<om-live cells>`; by behaviour, a book view's row keyed `order_id=<id>` alone (a key built from every identifier no longer matches), and a quote with no source time no longer stale by the pre-trade check |
 | 0.35.4 to 0.35.5: additive (ruling 1072): `helpers.sessions.FX_WEEK`, the FX week's trading sessions, Sunday 17:00 to Friday 17:00 New York, the 17:00 roll in New York's own time on both sides of daylight saving, usable wherever sessions are taken (`LiveValue.of`, `ems.ReferenceCheck.stale`, `roles.in_session`); the base template links kit 0.16.0 (`pages.KIT`) | only the pins move | an FX week of the plugin's own (a `TradingSessions` for Sunday to Friday 17:00 New York, the samples' `FX_WEEK`), replaced by `helpers.sessions.FX_WEEK`; by behaviour, a page on the base template loads kit 0.16.0 where the deployment carries it |
 | 0.35.5 to 0.36.0: the SDK declares contract 30: a standing job (`analytics.job(..., standing=True)`, `analytics.measure(..., refresh=, cadence_ns=, material_move_bp=)`, `analytics.Jobs().standing(self, job)` answering a `LiveView`, `plugin.subscribe(..., job_ids=)`, `meridian.MeasureRef`); a stream that names the lake's rows or carries a view, silent past `receive.QUIET_SECONDS`, opened again and caught up, each catch-up read given `receive.READ_SECONDS`; `DatasetDeclaration.terms_and_pricing` (ruling 1032; `licence_default`, `DatasetLicence` and `DataEligibility` gone), `sessions_calendar_id` (`helpers.sessions.read_sessions`), `gap_recovery`; `Declaration(most_shards=)`; an event contract's terms and `Contract.category` stated at its resolve (1035); the suites' `holds-a-standing-figure` and `reads-the-source-priorities` | `licence-default-described`: each literal `licence_default=DatasetLicence(...)` written as `terms_and_pricing="..."`, the retired names dropped from the import; `base-digest-dropped` | a licence the rule could not read, or `DatasetLicence`, `DataEligibility` or `.licence_default` still named (`licence-default-left`); an SDK `DerivedSeries` or `CorporateActionAnnounced` given the wire's `MeasureRef`, or a `meridian.Job` built by hand whose `measures` are not each a `meridian.MeasureRef` (`measure-ref-sdk-form`); the suites contract 30 grew (`suite-cases-v30`); a test's stand-in for a `Receive` call iterated with `async for` and no `read()`, which the hearing loop and the views now call (`receive-stand-in-read`); core's images below contract 30 (`core-images`); the base's digest (`base-digest`) |
+| 0.36.0 to 0.36.1: fixes, with no contract change: an event-contract feed states a contract's payout in a cash with no ISO 4217 code by the cash's resolved instrument once held (its category alone before), where 0.36.0 refused every such `ResolveIdentifier`; a range market's bounds stated only with their unit, left out where the venue states none; `EventContractsChecks` admits the contract's own event and its series asked by reference, and still refuses any list; the 0.35.5 to 0.36.0 step names by hand a `meridian.Job` whose measures are not each a `meridian.MeasureRef` and a `Receive` stand-in with no `read()` | only the pins move | nothing; by behaviour, a token venue's contracts resolve and are priced, a range market with no unit is answered, and a check against a venue reading the contract's event or series passes |
 
 `tests/migrations/` holds the plugins the migrations are recorded for, as
 written and as their migration leaves them, and `make check-migrations` holds
