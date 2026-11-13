@@ -609,10 +609,12 @@ class Feed(Role):
         return int(self.clock_ns())
 
     def _today(self) -> dt.date:
-        clock = getattr(self.market_days, "day_clock", None)
-        if clock is not None:
-            return dt.datetime.fromtimestamp(self._now() / NS, clock.zone).date()
-        return dt.datetime.fromtimestamp(self._now() / NS, dt.UTC).date()
+        """Today in the chain's day: its calendar's day clock's, New York's
+        (OPRA's and the OCC's) where it names none (SDK 0.36.3)."""
+        from ...helpers import chains
+
+        clock = getattr(self.market_days, "day_clock", None) or chains._OPRA_DAY
+        return dt.datetime.fromtimestamp(self._now() / NS, clock.zone).date()
 
     async def _fetch(self, call: Callable[[], Any]) -> Any:
         """A blocking call to the source, in a thread; None where it failed."""

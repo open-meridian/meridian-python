@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+from dataclasses import replace
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -332,6 +334,20 @@ def _feed(clock: list[int], source: Any = None, **more: Any) -> tuple[Any, Recor
 
 def _sent(recorder: Recorder) -> list[Any]:
     return [s for call in recorder.on("RecordSeries") for s in call.series]
+
+
+async def test_the_feeds_day_is_new_yorks_where_its_calendar_names_none() -> None:
+    """At 02:00 UTC on 2026-11-13 it is still 2026-11-12 in New York (OPRA's
+    day): an adjustment then is from the 12th, not UTC's 13th."""
+    source = _Chain()
+    clock = [NOV_11_NY + 12 * 3600 * NS]
+    feed, recorder = _feed(clock, source)
+    await feed.on_observations_wanted(_want(want_id=""))
+    source.options = [replace(source.options[0], standard=False, multiplier=Decimal(150))]
+    clock[0] = int(dt.datetime(2026, 11, 13, 2, tzinfo=dt.UTC).timestamp()) * NS
+    await feed.on_observations_wanted(_want(want_id=""))
+    _, adjusted = _sent(recorder)
+    assert adjusted.meta.row_key == f"{OSI}:2026-11-12:ADJ"
 
 
 async def test_the_feed_sends_no_series_under_another_first_subject() -> None:
