@@ -2073,7 +2073,11 @@ class EventContractsChecks(_PageChecks):
         others = [url for url in asked if v.BASE not in url]
         if others:
             own = await _own_event_and_series(feed, v.BASE)
-            assert all(_asks_for(url) in own for url in others), asked
+            refused = [url for url in others if _asks_for(url) not in own]
+            assert not refused, (
+                f"asked beyond the contract {v.BASE}, its event and its series: "
+                + ", ".join(refused)
+            )
         assert not lake.instruments.records.keys() - {subject, feed.contracts.cash_id}, (
             "no record minted but the cash's"
         )
