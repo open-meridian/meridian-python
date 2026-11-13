@@ -35,8 +35,11 @@ one contract settles at and the venue's own word kept as reported. One row
 key per contract (`<code>:outcome`); each change of stage (proposed,
 determined, disputed, final) or of its determination is a new version, and
 nothing is sent while the venue's statement is unchanged. Its valid time is
-the determination's: the venue's own where it states one, else when the
-answer first stating it arrived. It answers no want: it is recorded, unasked,
+its first determination's: the venue's own where it states one, else when
+the answer first stating it arrived; a row key fixes its valid time
+(spec/the-lake rule 5; SDK 0.36.2), so every later version keeps it, its own
+determination's time its `event` source time where the venue states it.
+It answers no want: it is recorded, unasked,
 for each contract a subject the lake asked for is, and each minute for a
 contract past its close until its final stage is recorded.
 
@@ -478,10 +481,16 @@ class Recorded:
     word: str
     text: str
     settled_at_ns: int
-    #: Its valid time, the determination's, and whether the venue stated it.
+    #: Its valid time: its first determination's, which every later version
+    #: of its key keeps (the-lake rule 5; SDK 0.36.2).
     valid_from_ns: int
+    #: Whether the venue stated the latest determination's time.
     stated: bool
     raw_key: str
+    #: The latest determination's time, carried in each version's event
+    #: source time where the venue stated it; 0, for a map kept before
+    #: 0.36.2, read as the valid time.
+    determined_at_ns: int = 0
 
     def says(self) -> tuple[str, Decimal, str, str, str, int]:
         """What the venue stated, which a new version changes."""
@@ -1339,17 +1348,22 @@ class Feed(Role):
         if said.determined_at_ns:
             at, stated = said.determined_at_ns, True
         elif held is not None and (Decimal(held.value), held.word) == (value, word):
-            at, stated = held.valid_from_ns, held.stated
+            at, stated = held.determined_at_ns or held.valid_from_ns, held.stated
         else:
             at, stated = contract.read_at_ns or self.clock_ns(), False
-        kept = Recorded(said.stage, str(value), scheme, word, text, said.settled_at_ns, at,
-                        stated, contract.raw_key)  # fmt: skip
+        # A row key fixes its valid time (the-lake rule 5, ruled 2026-11-12):
+        # every later stage, amendment, dispute or re-proposal is a new
+        # version valid from the first determination, its own determination's
+        # time its event source time.
+        valid = held.valid_from_ns if held is not None else at
+        kept = Recorded(said.stage, str(value), scheme, word, text, said.settled_at_ns, valid,
+                        stated, contract.raw_key, determined_at_ns=at)  # fmt: skip
         row = Outcome(
             meta=ObservationMeta(
                 row_key=f"{contract.code}:outcome"[:128],
                 subjects=[SubjectRef(entity_id=mapped.subject)],
                 source=ops.Source(dataset=self.dataset(OUTCOMES), venue_id=self.venue.venue_id),
-                valid_from_ns=at,
+                valid_from_ns=valid,
                 source_times=[SourceTime(kind="event", at_ns=at)] if stated else [],
                 raw=self.plugin.raw_record(contract.raw_key),
                 unconverted=self._unconverted(said.unread),

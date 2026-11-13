@@ -44,10 +44,21 @@ by `run()`. Only what changed is sent again (`SentRows`): a series' terms,
 a quote's prices and sizes, a statistic's value. Each pass that read
 quotes records the dataset's liveness.
 
+**A row key fixes its valid time** (spec/the-lake rule 5; SDK 0.36.2): a
+series' terms are sent again under their key's first valid time, kept with
+a digest of the terms in the plugin's storage where the feed is given
+`series_path` (a JSON file, `series.json` beside its raw records), in memory
+otherwise; terms changed since are an adjustment, a new key
+(`<OSI>:<date>:ADJ`) valid from the start of today. A re-send the lake
+refuses naming its valid time, the terms unchanged (the storage lost), is
+taken as recorded, said once per series.
+
 **Dated by the market's days** (`helpers.calendars.MarketDays`): open
 interest is the market day before today's, volume today's once it is a
 market day; where the calendar does not answer, none is recorded rather
-than misdated.
+than misdated. Each is valid from the start of the day it describes, in the
+calendar's `day_clock` (New York's where it has none), never when it was
+read (SDK 0.36.2, the-lake rule 5).
 
 **Timeliness**: on a plan not real time, quotes and trades are declined,
 not covered; a range of trades is read only where the source states its
@@ -68,20 +79,24 @@ from __future__ import annotations
 
 import asyncio
 import datetime as dt
+import json
 import logging
+import os
+import re
 import time
 from collections import OrderedDict, deque
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from decimal import Decimal
+from pathlib import Path
 from typing import Any, Protocol
 
-from ...errors import MeridianError
+from ...errors import CallFailed, MeridianError
 from ...operations import Money, ObservationMeta, Quote, SourceTime, SubjectRef, Trade
 from ...plugin.v1 import operations_pb2 as ops
 from ...receive import Heard
 from .._generated.data import Role
-from ._rows import SentRows
+from ._rows import SentRows, _digest
 from ._settings import REAL_TIME
 
 __all__ = [
@@ -116,6 +131,8 @@ BATCH = 500
 TRADE_EVERY_NS = NS // 2
 #: How many trades recorded are remembered, so none is sent twice.
 RECENT_TRADES = 50_000
+#: A refusal's path to the row it is about, in a batch of series.
+_ROW = re.compile(r"(?:^|\.)series\[(\d+)\]")
 
 
 @dataclass(frozen=True)
@@ -206,6 +223,87 @@ class Counts:
     last_declined: str = ""
 
 
+class _FirstTimes:
+    """Each series' terms as last sent, by dataset and OSI symbol: the
+    valid time of their key's first record, a digest of the terms, and the
+    date they were adjusted from ("" for the series' own key). A row key
+    fixes its valid time (spec/the-lake rule 5), so terms are sent again
+    under that time, never a later read's; kept in the plugin's storage
+    where the feed is given `series_path`, so a restart keeps them too, as
+    JSON: `{"series": {"<dataset>": {"<OSI>": {"adjusted_on": "",
+    "terms": "<hex>", "valid_from_ns": <ns>}}}}`. A change is staged until
+    the lake has the batch holding it (`commit`), and a series past its
+    expiration is let go when the map is saved."""
+
+    def __init__(self, path: Path | None) -> None:
+        self.path = path
+        self.held: dict[str, dict[str, dict[str, Any]]] = {}
+        self.staged: dict[tuple[str, str], dict[str, Any]] = {}
+        if path is not None and path.is_file():
+            body = json.loads(path.read_text(encoding="utf-8"))
+            self.held = {d: dict(by) for d, by in body.get("series", {}).items()}
+
+    def get(self, dataset: str, osi: str) -> dict[str, Any] | None:
+        return self.staged.get((dataset, osi)) or self.held.get(dataset, {}).get(osi)
+
+    def stage(
+        self, dataset: str, osi: str, valid_from_ns: int, terms: str, adjusted_on: str
+    ) -> None:
+        self.staged[(dataset, osi)] = {
+            "adjusted_on": adjusted_on, "terms": terms, "valid_from_ns": valid_from_ns,
+        }  # fmt: skip
+
+    def discard(self) -> None:
+        self.staged.clear()
+
+    def commit(self, rows: Sequence[Any], today: dt.date) -> None:
+        """What was staged for `rows`, a batch the lake has, kept; every
+        series expired let go, and the map written where it has a path."""
+        done = [
+            (row.meta.source.dataset, row.meta.series_key[0].value)
+            for row in rows
+            if row.meta is not None and row.meta.series_key
+        ]
+        kept = {each: self.staged.pop(each) for each in done if each in self.staged}
+        if not kept:
+            return
+        for (dataset, osi), held in kept.items():
+            self.held.setdefault(dataset, {})[osi] = held
+        for by in self.held.values():
+            for osi in [o for o in by if _expiration(o) < today]:
+                del by[osi]
+        if self.path is None:
+            return
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        written = self.path.with_suffix(".tmp")
+        body = {"series": {d: dict(sorted(by.items())) for d, by in sorted(self.held.items())}}
+        written.write_text(json.dumps(body, indent=1, sort_keys=True), encoding="utf-8")
+        os.replace(written, self.path)
+
+
+def _expiration(osi: str) -> dt.date:
+    from ...helpers import chains
+
+    try:
+        return chains.osi_terms(osi)[1]
+    except ValueError:
+        return dt.date.max
+
+
+@dataclass
+class _Done:
+    """What a batch of series sent in parts did, as one answer."""
+
+    recorded: int = 0
+    restated: int = 0
+    unchanged: int = 0
+
+    def add(self, answer: Any) -> None:
+        self.recorded += int(getattr(answer, "recorded", 0))
+        self.restated += int(getattr(answer, "restated", 0))
+        self.unchanged += int(getattr(answer, "unchanged", 0))
+
+
 def _window(want: Any) -> tuple[dt.date | None, dt.date | None]:
     first = dt.date.fromisoformat(want.expiration_from) if want.expiration_from else None
     last = dt.date.fromisoformat(want.expiration_to) if want.expiration_to else None
@@ -234,6 +332,7 @@ class Feed(Role):
         remembered: int = 200_000,
         symbol_of: Callable[[str], Any] | None = None,
         clock_ns: Callable[[], int] = time.time_ns,
+        series_path: Path | None = None,
     ) -> None:
         if reads_per_minute < 1 or cadence_seconds < 1 or stream_limit < 0:
             raise ValueError("reads_per_minute and cadence_seconds are at least 1")
@@ -250,6 +349,11 @@ class Feed(Role):
         self.cadence_ns = cadence_seconds * NS
         self.stream_limit = stream_limit
         self.sent = SentRows(remembered)
+        #: Each series' first valid time and terms as sent (SDK 0.36.2).
+        self._first_times = _FirstTimes(series_path)
+        #: The series a refusal of their first valid time was taken as
+        #: recorded for, each said once.
+        self._taken_as_recorded: set[tuple[str, str]] = set()
         self._symbol_of = symbol_of
         self.clock_ns = clock_ns
         self.counts = Counts()
@@ -543,7 +647,11 @@ class Feed(Role):
         chosen = [o for o in options if not keys or o.osi in keys]
         if data_type == SERIES:
             rows = [r for o in chosen if (r := self._series(held, o, want_id)) is not None]
-            await self.send(SERIES, rows, want_id)
+            try:
+                await self.send(SERIES, rows, want_id)
+            finally:
+                # What no batch the lake has holds is staged no longer.
+                self._first_times.discard()
         elif data_type == STATISTIC:
             stats = await self._statistics(held, chosen, want_id)
             if stats is None:
@@ -559,12 +667,21 @@ class Feed(Role):
     def _raw(self, key: str) -> Any:
         return self.plugin.raw_record(key[:256]) if key else None
 
+    def _day_clock(self) -> Any:
+        return getattr(self.market_days, "day_clock", None)
+
     def _series(self, held: _Underlying, option: ChainOption, want_id: str) -> Any | None:
+        """A series' terms to send, or None where they are as last sent and
+        no reader waits. A row key fixes its valid time (the-lake rule 5):
+        a series' terms keep their key's first valid time (`_first_times`);
+        terms changed since are an adjustment, a new key effective from
+        today (`helpers.chains.option_series`' `adjusted_on`)."""
         from ...helpers import chains
 
         dataset = self.dataset()
-        try:
-            row = chains.option_series(
+
+        def built(valid_from_ns: int, adjusted_on: str | None) -> Any:
+            return chains.option_series(
                 held.subject,
                 option.osi,
                 template_id=TEMPLATE_ID,
@@ -575,16 +692,82 @@ class Feed(Role):
                 settlement_method=option.settlement_method,
                 contract_multiplier=option.multiplier,
                 deliverable=[(held.subject, option.multiplier)] if option.standard else (),
-                valid_from_ns=self._now(),
+                valid_from_ns=valid_from_ns,
                 raw=self._raw(option.raw_key),
+                adjusted_on=adjusted_on,
+                day_clock=self._day_clock(),
             )
+
+        try:
+            row = built(self._now(), None)
         except ValueError:
             self.counts.unconverted += 1
             return None
-        said = [(f.path, f.value) for f in row.fields]
-        if self.sent.changed(SERIES, dataset, option.osi, said) or want_id:
+        terms = _digest([(f.path, f.value) for f in row.fields]).hex()
+        kept = self._first_times.get(dataset, option.osi)
+        if kept is None:
+            self._first_times.stage(dataset, option.osi, row.meta.valid_from_ns, terms, "")
             return row
-        return None
+        if kept["terms"] == terms:
+            if not want_id:
+                return None
+            return built(int(kept["valid_from_ns"]), kept["adjusted_on"] or None)
+        row = built(0, self._today().isoformat())
+        self._first_times.stage(
+            dataset, option.osi, row.meta.valid_from_ns, terms, self._today().isoformat()
+        )
+        return row
+
+    async def _record_series(self, rows: list[Any], want_id: str) -> _Done:
+        """Series recorded; a series' terms the lake refuses naming their
+        valid time -- held under another first valid time, as after the
+        plugin's storage was lost -- taken as recorded where the feed has not
+        changed them (its own key, never an adjustment's): said once per
+        series, never sent again for it."""
+        done = _Done()
+        while rows:
+            try:
+                answer = await self.record_series(series=rows, want_id=want_id)
+            except CallFailed as refused:
+                at = self._held_already(refused, rows)
+                if at is None:
+                    raise
+                if at < 0:
+                    for row in rows:
+                        done.add(await self._record_series([row], want_id))
+                    return done
+                self._take_as_recorded(rows.pop(at))
+                done.unchanged += 1
+                continue
+            done.add(answer)
+            break
+        return done
+
+    @staticmethod
+    def _held_already(refused: CallFailed, rows: Sequence[Any]) -> int | None:
+        """Which row a refusal naming a series' valid time is about, where
+        it is a series' own key: its index, -1 where the refusal names no
+        row of several, or None where it is another refusal."""
+        named = [f for f in refused.fields if f.endswith("valid_from_ns")]
+        if refused.kind != "invalid" or not named:
+            return None
+        found = _ROW.search(named[0])
+        if found is None and len(rows) > 1:
+            return -1
+        at = int(found.group(1)) if found is not None else 0
+        if at >= len(rows) or rows[at].meta.row_key.endswith(":ADJ"):
+            return None
+        return at
+
+    def _take_as_recorded(self, row: Any) -> None:
+        dataset, osi = row.meta.source.dataset, row.meta.row_key
+        if (dataset, osi) not in self._taken_as_recorded:
+            self._taken_as_recorded.add((dataset, osi))
+            log.warning(
+                "%s's terms are held in %s under another first valid time; taken as recorded",
+                osi,
+                dataset,
+            )
 
     async def _statistics(
         self, held: _Underlying, options: Sequence[ChainOption], want_id: str
@@ -617,8 +800,8 @@ class Feed(Role):
                     value,
                     day,
                     dataset=dataset,
-                    valid_from_ns=self._now(),
                     raw=self._raw(option.raw_key),
+                    day_clock=getattr(self.market_days, "day_clock", None),
                 )
                 assert stat.meta is not None
                 if self.sent.changed(STATISTIC, dataset, stat.meta.row_key, value) or want_id:
@@ -675,7 +858,9 @@ class Feed(Role):
             batch = list(rows[start : start + BATCH])
             done: Any
             if data_type == SERIES:
-                done = await self.record_series(series=batch, want_id=want_id)
+                # A copy: a row taken as recorded leaves it, and is kept too.
+                done = await self._record_series(list(batch), want_id)
+                self._first_times.commit(batch, self._today())
             elif data_type == STATISTIC:
                 done = await self.record_statistics(statistics=batch, want_id=want_id)
             elif data_type == QUOTE:

@@ -15,10 +15,11 @@ statistics never resolves a series (`a-chain-row-is-never-resolved`).
 
 - each series of an underlying it lists (`RecordSeries`), its terms as the
   `listed_option`, `future` or `future_option` template's fields
-  (`option_series`, `ListedSeries`), an adjustment the next version of the
-  same row key;
+  (`option_series`, `ListedSeries`), keeping the valid time of the key's
+  first record; an adjustment a new key from its date (SDK 0.36.2);
 - each series' open interest and volume per trading date
-  (`RecordStatistics`; `statistic`), contracts for an option or a future;
+  (`RecordStatistics`; `statistic`), contracts for an option or a future,
+  valid from the start of the day it describes (SDK 0.36.2);
 - its quotes and trades of a series under the underlying with the series'
   key on the envelope (`series_meta`).
 
@@ -57,6 +58,7 @@ from ..operations import (
     UnitValue,
 )
 from ..plugin.v1 import operations_pb2 as ops
+from .calendars import DayClock
 
 #: The OCC's Options Symbology Initiative symbol's scheme (W1.26, 573).
 OCC_OSI = "occ_osi"
@@ -133,6 +135,18 @@ def series_meta(
     )
 
 
+#: The day OPRA and the OCC date a statistic and an adjustment in: New
+#: York's, from midnight.
+_OPRA_DAY = DayClock("America/New_York")
+
+
+def _adjusted_key(symbol: str, adjusted_on: date) -> str:
+    """The row key of a series' terms adjusted from `adjusted_on`: its OSI
+    symbol, the date and `ADJ`, as a statistic's key is its symbol, its date
+    and its kind."""
+    return f"{symbol}:{adjusted_on.isoformat()}:ADJ"
+
+
 def option_series(
     underlying_id: str,
     symbol: str,
@@ -148,12 +162,25 @@ def option_series(
     settlement_time: str = "",
     valid_from_ns: int = 0,
     raw: ops.RawRecordRef | None = None,
+    adjusted_on: date | str | None = None,
+    day_clock: DayClock | None = None,
 ) -> ListedSeries:
     """One option series as the `listed_option` template's fields, from its
     OSI symbol: `exercise_style` and `settlement_method` by the template's
     values (EXERCISE_STYLE_AMERICAN, SETTLEMENT_METHOD_PHYSICAL), the strike
     in `currency`, and each deliverable component an instrument and its
-    quantity (100 shares of the underlying for a standard contract)."""
+    quantity (100 shares of the underlying for a standard contract).
+
+    A row key fixes its valid time (spec/the-lake rule 5, ruled
+    2026-11-12), so a series' terms keep the valid time of their key's first
+    record: `valid_from_ns` is that time, the same on every record of the
+    key, which the plugin holds (as `option_chains.Feed` does), never the
+    time of a later read. A terms adjustment -- a corporate action changing
+    the deliverable -- is a new key effective from its date, `adjusted_on`:
+    keyed `<OSI>:<date>:ADJ` under the same series key, valid from the start
+    of that day in the dataset's day (`day_clock`; OPRA's and the OCC's, New
+    York's from midnight, where none is given), `valid_from_ns` not read.
+    The original key is never restated under another valid time."""
     root, expiration, right, strike = osi_terms(symbol)
     fields = [
         ("underlying_instrument_id", underlying_id),
@@ -170,11 +197,17 @@ def option_series(
     for n, (instrument_id, quantity) in enumerate(deliverable):
         fields.append((f"deliverable[{n}].instrument_id", instrument_id))
         fields.append((f"deliverable[{n}].quantity", str(quantity)))
+    row_key = symbol
+    if adjusted_on is not None:
+        if isinstance(adjusted_on, str):
+            adjusted_on = date.fromisoformat(adjusted_on)
+        row_key = _adjusted_key(symbol, adjusted_on)
+        valid_from_ns = (day_clock or _OPRA_DAY).opened_at(adjusted_on)
     return ListedSeries(
         meta=series_meta(
             underlying_id,
             osi_key(symbol),
-            row_key=symbol,
+            row_key=row_key,
             dataset=dataset,
             valid_from_ns=valid_from_ns,
             raw=raw,
@@ -200,18 +233,28 @@ def statistic(
     unit: str = "contracts",
     valid_from_ns: int = 0,
     raw: ops.RawRecordRef | None = None,
+    day_clock: DayClock | None = None,
 ) -> Statistic:
     """One series' statistic for a trading date -- `open_interest` or
-    `volume` -- in contracts, keyed by its series and the date."""
+    `volume` -- in contracts, keyed by its series and the date.
+
+    Its valid time is the start of the day it describes, in the dataset's
+    day (`day_clock`; OPRA's and the OCC's, New York's from midnight, where
+    none is given), never when it was read or published: a row key fixes
+    its valid time (spec/the-lake rule 5, ruled 2026-11-12), so a re-read or
+    a republication restates the value alone. `valid_from_ns` is not read
+    (SDK 0.36.2); it is kept so a plugin passing it still runs."""
+    del valid_from_ns  # the day's start, never a moment the plugin read
     day = business_date if isinstance(business_date, str) else business_date.isoformat()
     key = series_key[0].value if series_key else underlying_id
+    began = (day_clock or _OPRA_DAY).opened_at(date.fromisoformat(day))
     return Statistic(
         meta=series_meta(
             underlying_id,
             series_key,
             row_key=f"{key}:{day}:{_SUFFIX.get(kind, kind)}",
             dataset=dataset,
-            valid_from_ns=valid_from_ns,
+            valid_from_ns=began,
             business_date=day,
             raw=raw,
         ),  # fmt: skip

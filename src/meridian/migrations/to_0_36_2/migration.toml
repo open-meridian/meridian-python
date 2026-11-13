@@ -1,0 +1,46 @@
+# open-meridian 0.36.1 to 0.36.2: fixes, with no contract change. Nothing a
+# plugin calls changed shape, so only the pins move; a row a plugin builds
+# itself under a clock's valid time is named, to do by hand.
+from = "0.36.1"
+to = "0.36.2"
+summary = """
+Fixes, with no contract change: the row-key rule in the SDK's helpers, before
+core enforces it (spec/the-lake rule 5, ruled 2026-11-12: a row key fixes its
+valid time and its first subject, and a restatement changing either is
+refused naming the field). helpers.chains.statistic is valid from the start
+of the day it describes, in the dataset's day (day_clock; New York's, OPRA's
+and the OCC's, by default), its valid_from_ns no longer read, so a re-read or
+a republication restates the value alone. helpers.chains.option_series keeps
+a series' terms under their key's first valid time (valid_from_ns, the
+plugin's to hold), and an adjustment is a new key from its date
+(adjusted_on: <OSI>:<date>:ADJ, valid from that day's start);
+option_chains.Feed holds each series' first valid time, in the plugin's
+storage where it is given series_path, and takes a re-send refused for its
+valid time, its terms unchanged, as recorded. An event contract's outcome
+keeps its first determination's valid time, each later stage, amendment or
+dispute a new version with its own determination's time as its event time.
+A listings feed's withdrawal of a trade it no longer holds keeps the trade's
+valid time, read from the lake by its key, and is counted unmatched where the
+lake holds none. Nothing a plugin calls changed shape: `meridian plugin
+migrate` moves the pins and changes no code, and names a row built under a
+clock's valid time, left by hand.
+"""
+breaking = false
+rewrite = "rewrite.py"
+
+[[by_hand]]
+rule = "valid-time-from-the-clock"
+what = """a row's `valid_from_ns` given the plugin's clock -- `now`, `now_ns`, \
+`self.now()`, `self._now()`, `self.clock_ns()`, `time.time_ns()` -- the time it was \
+read, not when its value became true: where the same row key is recorded again (a \
+re-read, a reader waiting, a restart, a republication), each sending restates the \
+key under a new valid time, which core refuses from contract 30's stage H, naming \
+`valid_from_ns` (spec/the-lake rule 5; the plugin step's databento, massive, tradier \
+and unusual-whales). A key that names the moment itself (`<osi>:q:<at>`) is not this"""
+instead = """give every record of a key one valid time: a daily value the start of \
+the day it describes (`helpers.calendars.DayClock(...).opened_at(day)`; \
+`helpers.chains.statistic` does it, so drop its `valid_from_ns`); a series' terms \
+their key's first record's time, held by the plugin across restarts \
+(`option_chains.Feed(series_path=...)` keeps it), an adjustment `adjusted_on=` its \
+date, a new key; an observation of a moment the source's own time. Where a value's \
+valid time really changes, cancel the old key and record a new one"""
