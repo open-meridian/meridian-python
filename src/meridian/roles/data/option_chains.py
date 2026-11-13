@@ -269,8 +269,10 @@ class SeriesTimes:
     time taken as recorded (`record`).
 
     `series()` decides each series' row and stages it; `record()` sends the
-    rows and keeps what the lake has. The plugin never clears it, on a reset
-    or a switch of source: it persists only through its file."""
+    rows and keeps what the lake has. Every row `series()` answers goes to
+    the next `record()`: one dropped stays staged, so its terms read as
+    sent until a `record()` raises. The plugin never clears the holder, on
+    a reset or a switch of source: it persists only through its file."""
 
     def __init__(self, path: Path | None = None) -> None:
         self.path = path
@@ -326,8 +328,11 @@ class SeriesTimes:
         if kept is None:
             self._stage(dataset, osi, row, terms, "", subject)
             return row
-        # A map written before 0.36.3 names no subject: the first seen holds.
-        first = kept["subject"] = kept.get("subject") or subject
+        first = kept.get("subject") or subject
+        if not kept.get("subject"):
+            # A map written before 0.36.3 names none: the first seen holds,
+            # written with the next batch the lake has.
+            kept["subject"] = first
         if subject != first:
             self.other_subjects += 1
             return None
