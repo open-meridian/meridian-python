@@ -3087,3 +3087,37 @@ def test_0362_names_a_rows_valid_time_taken_from_the_clock() -> None:
     ]
     (step,) = result.steps
     assert not step.migration.breaking
+
+
+# ── 0.36.2 to 0.36.3: a series built outside the holder, left by hand ───
+
+
+def test_0363_names_a_series_built_outside_the_holder() -> None:
+    """The plugin step's chains plugins (databento, massive, tradier,
+    unusual-whales) build a chain's series themselves: pointed at
+    `option_chains.SeriesTimes`. A module holding one, the SDK's own feed,
+    and a test, are not named."""
+    built = textwrap.dedent(
+        """\
+        from meridian import helpers
+
+        def row(self, held, contract):
+            return helpers.option_series(
+                held, contract.osi, template_id="T", template_version="1",
+                dataset="d", currency="USD", exercise_style="E",
+                settlement_method="S", valid_from_ns=self.now(),
+            )
+        """
+    )
+    files = {
+        "src/p/chains.py": built,
+        "src/p/held.py": "from meridian.roles.data.option_chains import SeriesTimes\n" + built,
+        "src/p/feed.py": "from meridian.roles.data import option_chains\n"
+        "chains = option_chains.Feed(Source())\n",
+        "tests/test_chains.py": built,
+    }
+    result = migrate(files, "0.36.2", "0.36.3")
+    assert result.files == {}, "nothing rewritten: only the pins move"
+    assert left_by_hand(result) == [("series-without-a-holder", "src/p/chains.py", 4)]
+    (step,) = result.steps
+    assert not step.migration.breaking

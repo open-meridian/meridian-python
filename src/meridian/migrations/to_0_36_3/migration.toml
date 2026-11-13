@@ -1,5 +1,6 @@
 # open-meridian 0.36.2 to 0.36.3: fixes, with no contract change. Nothing a
-# plugin calls changed shape, so only the pins move.
+# plugin calls changed shape, so only the pins move; a plugin building a
+# chain's series itself is pointed at the holder, to do by hand.
 from = "0.36.2"
 to = "0.36.3"
 summary = """
@@ -18,6 +19,26 @@ series let go and the file written whole. option_chains.Feed is built on it
 and holds each series' first subject too; its day is New York's (OPRA's)
 where its calendar names none. EventContractsChecks names the URL it refuses.
 Nothing a plugin calls changed shape: `meridian plugin migrate` moves the
-pins and changes no code.
+pins and changes no code, and names a series built outside the holder, left
+by hand.
 """
 breaking = false
+rewrite = "rewrite.py"
+
+[[by_hand]]
+rule = "series-without-a-holder"
+what = """a series' terms built by the plugin itself -- `helpers.chains.option_series(...)` \
+in a module that holds no `option_chains.SeriesTimes` -- in a chain machine of its \
+own: each record of the series' key must keep its first record's valid time and its \
+first subject, across restarts too, which core enforces from contract 30's stage H \
+(spec/the-lake rule 5; the plugin step's databento, massive, tradier and \
+unusual-whales). A plugin whose chain is `option_chains.Feed`'s is not this"""
+instead = """hold the series with `option_chains.SeriesTimes(edge.storage_dir() / \
+"series.json")`, kept for the plugin's life and never cleared on a reset or a source \
+switch: build each series through `times.series(build, dataset=..., osi=..., \
+subject=..., now_ns=..., today=..., waiting=...)`, `build(valid_from_ns, adjusted_on)` \
+calling `option_series` with both, and send them with `await times.record(send_batch, \
+rows, today)`, `send_batch` the plugin's own `record_series` call and counting; \
+`today` the plugin's New York date. Drop the plugin's own digest of a series' terms \
+(`sent.changed(SERIES, ...)`): the holder sends only what changed, or what a reader \
+waits for"""
