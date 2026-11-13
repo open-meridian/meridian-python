@@ -974,6 +974,8 @@ NOT_HELD: Mapping[str, str] = {
     "roles.data.option_chains.SourceTrade": "a type: an option trade, as the source says",
     "roles.data.option_chains.ChainSource": "a type: the source, faked by its cases",
     "roles.data.option_chains.Counts": "a type: the Datasets page's counts",
+    "roles.data.option_chains.SeriesTimes": "0.36.3, the Feed's own holder made public: "
+    "held by tests/test_sdk_0363.py and the Feed's cases",
     "helpers.chains.osi_key": "before 0.35: its cases are owed",
     "helpers.chains.series_meta": "before 0.35: its cases are owed",
     "helpers.chains.option_series": "before 0.35: its cases are owed",

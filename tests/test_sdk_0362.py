@@ -223,7 +223,7 @@ async def test_a_resend_refused_for_its_valid_time_is_taken_as_recorded(caplog: 
     assert answered == [[OSI, other], [other], [OSI, other], [other]]
     assert feed.counts.unchanged == 2 and feed.counts.recorded == 2
     # Taken as recorded, it is kept: not sent again unasked (the review of #51).
-    assert feed._first_times.get("chains-1:options", OSI) is not None
+    assert feed._first_times._get("chains-1:options", OSI) is not None
     await feed.on_observations_wanted(_want(option_chains.SERIES, want_id=""))
     assert len(answered) == 4
     said = [r for r in caplog.records if "taken as recorded" in r.getMessage()]
@@ -258,8 +258,8 @@ async def test_a_batch_the_lake_has_keeps_its_times_when_a_later_one_fails(
     with pytest.raises(CallFailed):
         await feed.on_observations_wanted(_want(option_chains.SERIES, want_id=""))
     kept = feed._first_times
-    assert kept.get("chains-1:options", OSI)["valid_from_ns"] == clock[0]
-    assert kept.get("chains-1:options", other) is None and not kept.staged
+    assert kept._get("chains-1:options", OSI)["valid_from_ns"] == clock[0]
+    assert kept._get("chains-1:options", other) is None and not kept._staged
     clock[0] += 3600 * NS
     await feed.on_observations_wanted(_want(option_chains.SERIES, want_id=""))
     assert calls[2:] == [[other]], "only the series the lake did not have"
@@ -281,7 +281,7 @@ async def test_another_refusal_of_a_series_is_raised() -> None:
             await feed.underlying("INS-SPY"), option_chains.SERIES,
             frozenset({dt.date(2026, 11, 20)}), frozenset(), "WNT-1",
         )  # fmt: skip
-    assert feed._first_times.get("chains-1:options", OSI) is None, "staged, not kept"
+    assert feed._first_times._get("chains-1:options", OSI) is None, "staged, not kept"
 
 
 # ── 3. event_contracts.Feed.outcome: the first determination's valid time ─
