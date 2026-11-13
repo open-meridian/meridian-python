@@ -1,0 +1,23 @@
+# open-meridian 0.36.2 to 0.36.3: fixes, with no contract change. Nothing a
+# plugin calls changed shape, so only the pins move.
+from = "0.36.2"
+to = "0.36.3"
+summary = """
+Fixes, with no contract change. option_chains.SeriesTimes, the holder of each
+series' first valid time that option_chains.Feed keeps internally from 0.36.2,
+is public, so a plugin running its own chain machine keeps the row-key rule
+(spec/the-lake rule 5: a row key fixes its valid time and its first subject)
+without copying it: SeriesTimes(path) loads its JSON file (a file that does
+not read is said and started empty), series() decides each series' row -- its
+first valid time held, its terms as held sent again only to a reader waiting,
+changed terms an adjustment from today, an underlying other than the key's
+first not sent and counted -- and record() sends the rows in the lake's
+batches through the plugin's own call, takes a refusal of a series' own
+key's valid time as recorded, and keeps each batch the lake has, expired
+series let go and the file written whole. option_chains.Feed is built on it
+and holds each series' first subject too; its day is New York's (OPRA's)
+where its calendar names none. EventContractsChecks names the URL it refuses.
+Nothing a plugin calls changed shape: `meridian plugin migrate` moves the
+pins and changes no code.
+"""
+breaking = false
