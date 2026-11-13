@@ -2,7 +2,7 @@
 
 The Python SDK for building [Open Meridian](https://open-meridian.com) plugins:
 the tools a trader has an AI agent build, and the bots and analytics a
-developer writes. Python 3.11 or newer. This is release 0.36.2; its reference
+developer writes. Python 3.11 or newer. This is release 0.36.3; its reference
 is at [open-meridian.dev](https://open-meridian.dev/api/python-sdk/).
 
 ## Start here
@@ -2560,7 +2560,7 @@ plugin. No transports package is shipped (ruling 1027).
 
   **Run 0.35.0 to 0.35.5 on a core of contract v29**: no contract changed.
 
-### Standing analytics and a stream held to its far end (contract 30; 0.36.0 to 0.36.2)
+### Standing analytics and a stream held to its far end (contract 30; 0.36.0 to 0.36.3)
 
 - **The SDK declares contract 30** (`meridian.SCHEMA_VERSION` "v30").
 - **A standing job** (spec/one-data-access-model, section 4): built
@@ -2660,8 +2660,32 @@ plugin. No transports package is shipped (ruling 1027).
   the lake follows the old ID to its survivor. The 0.36.1 to 0.36.2 step
   names by hand a row a plugin builds itself whose `valid_from_ns` is its
   clock's (`valid-time-from-the-clock`).
+- **0.36.3, a series' first valid time held by a plugin's own chain**, with
+  no contract change: `option_chains.SeriesTimes`, the holder
+  `option_chains.Feed` is built on, is public, so a plugin running its own
+  chain machine keeps the row-key rule without copying the SDK's code.
+  `SeriesTimes(edge.storage_dir() / "series.json")` (in memory where the path
+  is None) loads its file; one that does not read is said and started
+  empty, never a failed start. `series(build, *, dataset, osi, subject,
+  now_ns, today, waiting)` decides each series' row, `build(valid_from_ns,
+  adjusted_on)` the plugin's `option_series` call: first seen, built now and
+  its subject held; its terms as held, nothing, unless a reader waits, then
+  under the held time; changed terms, an adjustment from `today`; an
+  underlying other than the key's first subject, nothing, counted
+  (`other_subjects`), the lake following a replaced or merged record by
+  alias. `await record(send_batch, rows, today)` sends them in the lake's
+  batches through the plugin's own `record_series` call and counting, takes
+  a refusal of a series' own key's valid time as recorded (said once, its
+  count returned), and keeps each batch the lake has, expired series let go
+  and the file written whole; nothing staged is kept on a raise. `today` is
+  the plugin's New York date, and the holder is never cleared on a reset or
+  a source switch. `option_chains.Feed` holds each series' first subject
+  too, and its day is New York's where its calendar names none.
+  `EventContractsChecks` names the URL it refuses. The 0.36.2 to 0.36.3
+  step names by hand a series' terms a plugin builds itself in a module
+  holding no `SeriesTimes` (`series-without-a-holder`).
 
-  **Run 0.36.0 to 0.36.2 on a core of contract 30.**
+  **Run 0.36.0 to 0.36.3 on a core of contract 30.**
 
 ## Moving a plugin to a new release
 
@@ -2755,6 +2779,7 @@ carries libcst.
 | 0.35.5 to 0.36.0: the SDK declares contract 30: a standing job (`analytics.job(..., standing=True)`, `analytics.measure(..., refresh=, cadence_ns=, material_move_bp=)`, `analytics.Jobs().standing(self, job)` answering a `LiveView`, `plugin.subscribe(..., job_ids=)`, `meridian.MeasureRef`); a stream that names the lake's rows or carries a view, silent past `receive.QUIET_SECONDS`, opened again and caught up, each catch-up read given `receive.READ_SECONDS`; `DatasetDeclaration.terms_and_pricing` (ruling 1032; `licence_default`, `DatasetLicence` and `DataEligibility` gone), `sessions_calendar_id` (`helpers.sessions.read_sessions`), `gap_recovery`; `Declaration(most_shards=)`; an event contract's terms and `Contract.category` stated at its resolve (1035); the suites' `holds-a-standing-figure` and `reads-the-source-priorities` | `licence-default-described`: each literal `licence_default=DatasetLicence(...)` written as `terms_and_pricing="..."`, the retired names dropped from the import; `base-digest-dropped` | a licence the rule could not read, or `DatasetLicence`, `DataEligibility` or `.licence_default` still named (`licence-default-left`); an SDK `DerivedSeries` or `CorporateActionAnnounced` given the wire's `MeasureRef`, or a `meridian.Job` built by hand whose `measures` are not each a `meridian.MeasureRef` (`measure-ref-sdk-form`); the suites contract 30 grew (`suite-cases-v30`); a test's stand-in for a `Receive` call iterated with `async for` and no `read()`, which the hearing loop and the views now call (`receive-stand-in-read`); core's images below contract 30 (`core-images`); the base's digest (`base-digest`) |
 | 0.36.0 to 0.36.1: fixes, with no contract change: an event-contract feed states a contract's payout in a cash with no ISO 4217 code by the cash's resolved instrument once held (its category alone before), where 0.36.0 refused every such `ResolveIdentifier`; a range market's bounds stated only with their unit, left out where the venue states none; `EventContractsChecks` admits the contract's own event and its series asked by reference, and still refuses any list; the 0.35.5 to 0.36.0 step names by hand a `meridian.Job` whose measures are not each a `meridian.MeasureRef` and a `Receive` stand-in with no `read()` | only the pins move | nothing; by behaviour, a token venue's contracts resolve and are priced, a range market with no unit is answered, and a check against a venue reading the contract's event or series passes |
 | 0.36.1 to 0.36.2: fixes, with no contract change: the row-key rule (spec/the-lake rule 5) in the helpers: `helpers.chains.statistic` valid from the start of its day (`day_clock=`), its `valid_from_ns` no longer read; `option_series` under its key's first valid time, an adjustment a new key (`adjusted_on=`, `<OSI>:<date>:ADJ`); `option_chains.Feed(series_path=)` holding each series' first valid time, a re-send refused for its valid time taken as recorded; an event contract's outcome keeping its first determination's valid time; a listings withdrawal of a trade not held keeping the trade's valid time, read from the lake | only the pins move | a row's `valid_from_ns` given the plugin's clock (`now`, `self.now()`, `time.time_ns()`), whose key is recorded again (`valid-time-from-the-clock`); by behaviour, a statistic, a series' terms, an outcome and a withdrawal each keep one valid time per row key, and a chains feed given no `series_path` sends its series' terms again after a restart (taken as recorded where the lake refuses them) |
+| 0.36.2 to 0.36.3: fixes, with no contract change: `option_chains.SeriesTimes`, the series' first-valid-time holder, public (`series()`, `record()`, `other_subjects`), `option_chains.Feed` built on it and holding each series' first subject, its day New York's where its calendar names none; `EventContractsChecks` naming the URL it refuses | only the pins move | a series' terms built by the plugin (`helpers.chains.option_series`) in a module holding no `option_chains.SeriesTimes` (`series-without-a-holder`); by behaviour, a chains feed sends no series under an underlying other than its key's first subject, and a series file that does not read starts empty |
 
 `tests/migrations/` holds the plugins the migrations are recorded for, as
 written and as their migration leaves them, and `make check-migrations` holds

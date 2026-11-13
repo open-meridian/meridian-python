@@ -167,8 +167,13 @@ async def test_the_check_admits_the_contracts_own_event_and_series() -> None:
     ],
 )
 async def test_the_check_still_refuses_a_venue_wide_list(extra: tuple[str, ...]) -> None:
-    with pytest.raises(AssertionError):
+    with pytest.raises(AssertionError) as refused:
         await _asking(extra).test_only_the_contracts_wanted_are_read_never_the_venues_list()
+    # SDK 0.36.3 (0.36.1's review): the check names the URL it refuses, and
+    # only that one.
+    said = str(refused.value)
+    assert f"{AskedMarket.root}{extra[0]}" in said
+    assert said.count(AskedMarket.root) == 1, said
 
 
 # ── A range market's bounds stated only with their unit ─────────────────
