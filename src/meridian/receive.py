@@ -18,6 +18,17 @@ row's own query (matrix/scoped.tsv's `caught_up_by`), handed on marked
 change once and in order, or is told it was caught up, and never sees a
 number: the journal is taken off what it is handed.
 
+From step 3d the book has several partitions, and a number is compared
+within its partition only. An account's own read is answered at its own
+partition's head; a watermark naming several partitions places no account
+by itself, so an account nothing says the partition of is had nowhere until
+it is heard of. An account moved to another partition (`MoveAccount`, W9.8)
+is numbered afresh there: a delivery, or a record read, in a partition the
+account is not had in is never taken for one had already. It prompts the
+account's read, the account is had in the new partition from where that
+read was answered, and what it was had to in the partition it left is kept
+for the reads after.
+
 A record carries its whole new state (Q2), so handing one on twice changes
 nothing a handler keeps, and where reading a page at a time cannot say
 exactly where the store was, a change may be handed on twice rather than
@@ -74,7 +85,7 @@ import contextlib
 import contextvars
 import logging
 from collections.abc import Awaitable, Callable, Collection, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 import grpc
@@ -209,15 +220,34 @@ seeding: contextvars.ContextVar[bool] = contextvars.ContextVar("seeding", defaul
 @dataclass
 class _Point:
     """Where a row's changes for one account are had to: everything numbered
-    at or below `floor` was read, and `last` is the last heard above it."""
+    at or below `floor` in `partition` was read, and `last` is the last heard
+    above it. `left` is where it was had to in each partition the account
+    was in before (step 3d: an account moves between the book's partitions,
+    W9.8, and its records there keep their numbers)."""
 
     partition: str
     floor: int
     last: int
+    left: dict[str, int] = field(default_factory=dict)
 
     @property
     def had(self) -> int:
         return max(self.floor, self.last)
+
+    def marks(self) -> dict[str, int]:
+        """What is had, by partition: what a read since it asks after."""
+        return {**self.left, self.partition: self.had}
+
+    def has(self, journal: Any) -> bool:
+        """Whether a change numbered so was had already. One in a partition
+        the account was never had in was not: a number of one partition says
+        nothing of another's."""
+        return bool(journal.sequence <= self.marks().get(journal.partition, -1))
+
+    def moved(self, partition: str, floor: int) -> _Point:
+        """The point in the partition the account continues in."""
+        left = {held: had for held, had in self.marks().items() if held != partition}
+        return _Point(partition, floor, floor, left)
 
     def continues(self, previous: int) -> bool:
         """Whether a change whose previous change for the account is
@@ -258,6 +288,32 @@ def _sequence_of(watermark: ops.Watermark, partition: str) -> int:
     return next(
         (held.sequence for held in watermark.partitions if held.partition == partition), 0
     )
+
+
+def _partition_of(
+    answered: Mapping[str, int], heard_in: str, recorded: set[str], point: _Point | None
+) -> str | None:
+    """The partition an account's changes are numbered in, as a read says
+    it, or None where it does not: never a guess (step 3d).
+
+    A read answered at one partition names it: an account's own read is
+    answered at its partition's head alone, and a store of one partition has
+    no other. A watermark naming several does not say which is the
+    account's, so it is the one the delivery that prompted the read named,
+    else the one every record read of the account is in, else the one it was
+    had in. With none of those the account is left with no point: its next
+    delivery names its partition, and is read for. Taking the watermark's
+    first partition had an account in `P1` had to `P0`'s head, and its first
+    changes passed over for good (e2e-orders, 2026-11-14)."""
+    if len(answered) == 1:
+        return next(iter(answered))
+    if heard_in:
+        return heard_in
+    if len(recorded) == 1:
+        return next(iter(recorded))
+    if point is not None:
+        return point.partition
+    return None
 
 
 class _Follower:
@@ -332,39 +388,51 @@ class _Follower:
         answered: dict[str, int],
         accounts: set[str] | None,
         handing: bool = True,
+        heard_in: str = "",
     ) -> None:
         """Records read, handed on and had: every account they name, and each
-        of `accounts`, is had to where the read was answered."""
+        of `accounts`, is had to where the read was answered in its own
+        partition. `heard_in` is the partition a delivery that prompted the
+        read named for its account."""
         named = {_at(record, row.record_account) for record in records}
-        # What each account was had to before: a record at or below it was
-        # handed on already, by a read or as heard.
+        # What each account was had to before: a record at or below it in
+        # its partition was handed on already, by a read or as heard.
         had = {
-            account: point.had
-            for (name, account), point in self.points.items()
-            if name == row.name
+            account: point for (name, account), point in self.points.items() if name == row.name
         }
         for account in named | (accounts or set()):
             point = self.points.get((row.name, account))
-            journals = [
-                getattr(record, row.record_journal)
-                for record in records
-                if _at(record, row.record_account) == account
-            ]
-            partition = (
-                journals[0].partition
-                if journals
-                else point.partition
-                if point
-                else next(iter(answered), "")
+            partition = _partition_of(
+                answered,
+                heard_in,
+                {
+                    getattr(record, row.record_journal).partition
+                    for record in records
+                    if _at(record, row.record_account) == account
+                },
+                point,
             )
+            if partition is None:
+                continue
             floor = answered.get(partition, 0)
-            if point is None or floor > point.had:
+            if point is None:
                 self.points[(row.name, account)] = _Point(partition, floor, floor)
+            elif point.partition != partition:
+                self.points[(row.name, account)] = point.moved(partition, floor)
+            elif floor > point.had:
+                self.points[(row.name, account)] = _Point(partition, floor, floor, point.left)
+            # And in each partition it left, to where this read was answered
+            # there: a read of the whole scope names them.
+            placed = self.points[(row.name, account)]
+            placed.left = {
+                held: max(had, answered.get(held, 0)) for held, had in placed.left.items()
+            }
         if not handing:
             return
         for record in records:
-            account = _at(record, row.record_account)
-            if getattr(record, row.record_journal).sequence <= had.get(account, -1):
+            journal = getattr(record, row.record_journal)
+            before = had.get(_at(record, row.record_account))
+            if before is not None and before.has(journal):
                 continue
             await self._hand(row, self._as_message(row, record), caught_up=True)
 
@@ -378,12 +446,13 @@ class _Follower:
             hands = handing if isinstance(handing, bool) else row.name in handing
             await self._apply(row, records, answered, None, hands)
 
-    async def catch_up(self, row: DeliveredRow, account: str) -> None:
-        """One account's changes since the last it had, handed on."""
+    async def catch_up(self, row: DeliveredRow, account: str, heard_in: str = "") -> None:
+        """One account's changes since the last it had, handed on; `heard_in`
+        the partition of the delivery that prompted it, where one did."""
         point = self.points.get((row.name, account))
-        since = None if point is None else {point.partition: point.had}
+        since = None if point is None else point.marks()
         records, answered = await self._read(row, account, since)
-        await self._apply(row, records, answered, {account})
+        await self._apply(row, records, answered, {account}, heard_in=heard_in)
 
     async def catch_up_all(self, names: set[str] | None = None) -> None:
         """Every account's changes since the least any has, for the rows
@@ -394,9 +463,8 @@ class _Follower:
             since = dict(self.read_to[row.name])
             for (name, _), point in self.points.items():
                 if name == row.name:
-                    since[point.partition] = min(
-                        since.get(point.partition, point.had), point.had
-                    )
+                    for partition, mark in point.marks().items():
+                        since[partition] = min(since.get(partition, mark), mark)
             records, answered = await self._read(row, "", since)
             self.read_to[row.name] = answered
             had = {account for (name, account) in self.points if name == row.name}
@@ -461,19 +529,26 @@ class _Follower:
             if point is None and journal.previous_sequence == 0:
                 # The first change this row ever made for the account.
                 point = self.points[key] = _Point(journal.partition, 0, 0)
-            if point is not None:
+            # Numbers are compared within a partition only: an account moved
+            # to another (step 3d, W9.8) is numbered afresh there, so a
+            # delivery in a partition its point does not name is read for.
+            if point is not None and point.partition == journal.partition:
                 if journal.sequence <= point.had:
                     return
                 if point.continues(journal.previous_sequence):
                     break
-            await self.catch_up(row, account)
+            await self.catch_up(row, account, journal.partition)
         else:
             _log.warning(
                 "%s for %s changed faster than it could be read; handing it on as heard",
                 row.name,
                 account or "no account",
             )
-        point = self.points.setdefault(key, _Point(journal.partition, 0, 0))
+        point = self.points.get(key)
+        if point is None:
+            point = self.points[key] = _Point(journal.partition, 0, 0)
+        elif point.partition != journal.partition:
+            point = self.points[key] = point.moved(journal.partition, 0)
         if journal.sequence <= point.had:
             return
         point.last = journal.sequence

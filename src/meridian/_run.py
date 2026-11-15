@@ -13,7 +13,8 @@
 
 `run` handles SIGTERM and SIGINT, connects (`meridian.connect`, the
 declaration registered and the classes whose roles the instance holds
-registered on it), and then:
+registered on it), waiting for its sidecar for as long as it takes, and
+then:
 
 1. delivers the settings to `on_settings`, now and on every change, each an
    instance of the declaration's `@meridian.settings` class where it has
@@ -37,6 +38,21 @@ registered on it), and then:
 
 and, when it is stopped, cancels the `run()`s and the stream, calls each
 class's `on_stop()` and leaves. `run_async` is the same as a coroutine.
+
+A standby pod (step 3d; the resilience spec's section 7) is the same plugin
+beside a sidecar that holds no Lease yet, and that sidecar serves its plugin
+only once it takes the instance's. So nothing of the plugin starts before
+its sidecar answers -- no settings, no `on_start()`, no stream, no `run()`,
+no page -- and a standby opens no session with its vendor while another pod
+holds the instance. A sidecar not answering is waited for without limit,
+said once a minute, where `connect` alone gives up (`NoSidecar`).
+
+A holder that loses the Lease stops: its sidecar stops serving it, and once
+the sidecar has left two heartbeats in a row unanswered the classes are
+stopped as for any stop -- the `run()`s and the stream cancelled, each
+`on_stop()` called -- and `run_async` raises `NoSidecar`; `run` leaves the
+process with status 1, so the pod starts it again as a standby. What stops a
+deposed holder's writes is its sidecar; this stops its work.
 """
 
 from __future__ import annotations
@@ -48,6 +64,7 @@ import signal
 from collections.abc import Awaitable, Callable, Sequence
 from typing import TYPE_CHECKING, Any
 
+from .errors import NoSidecar
 from .helpers.sessions import Backoff
 
 if TYPE_CHECKING:
@@ -65,6 +82,12 @@ log = logging.getLogger("meridian.run")
 #: How often the figures `figures()` answers are set: each heartbeat's.
 FIGURES_SECONDS = 10.0
 
+#: How long one attempt to reach the sidecar waits for it, and so how often
+#: the wait is said; and the pause before the next, for a sidecar that
+#: answered at once that it is not serving.
+_ATTEMPT_SECONDS = 60.0
+_ATTEMPT_PAUSE_SECONDS = 1.0
+
 
 def run(
     declaration: Declaration,
@@ -75,17 +98,22 @@ def run(
     on_settings: Callable[[Any], Awaitable[None] | None] | None = None,
     figures: Callable[[], Sequence[Figure]] | None = None,
 ) -> None:
-    """The plugin's process, until it is stopped (see the module)."""
-    asyncio.run(
-        run_async(
-            declaration,
-            roles,
-            pages=pages,
-            port=port,
-            on_settings=on_settings,
-            figures=figures,
+    """The plugin's process, until it is stopped (see the module). Left
+    with status 1 where its sidecar was lost."""
+    try:
+        asyncio.run(
+            run_async(
+                declaration,
+                roles,
+                pages=pages,
+                port=port,
+                on_settings=on_settings,
+                figures=figures,
+            )
         )
-    )
+    except NoSidecar as lost:
+        log.error("%s; leaving", lost)
+        raise SystemExit(1) from lost
 
 
 async def run_async(
@@ -98,8 +126,7 @@ async def run_async(
     figures: Callable[[], Sequence[Figure]] | None = None,
 ) -> None:
     """`run`, as a coroutine: until it is cancelled, or the process is sent
-    SIGTERM or SIGINT."""
-    from .client import connect
+    SIGTERM or SIGINT; `NoSidecar` once its sidecar is lost."""
 
     # Before anything else: a stop that arrives while connecting is still a
     # stop, and without these the default handler kills the process before
@@ -112,7 +139,10 @@ async def run_async(
             loop.add_signal_handler(stop, stopped.set)
             handled.append(stop)
     try:
-        async with await connect(declaration=declaration, roles=roles) as plugin:
+        connected = await _connected(declaration, roles, stopped)
+        if connected is None:
+            return
+        async with connected as plugin:
             log.info(
                 "registered as %s, roles %s",
                 plugin.identity.instance_id,
@@ -126,10 +156,58 @@ async def run_async(
                 on_settings=on_settings,
                 figures=figures,
             ).until(stopped)
+            if plugin._sidecar_lost.is_set() and not stopped.is_set():
+                from .client import _LOST_BEATS, HEARTBEAT_SECONDS
+
+                raise NoSidecar(plugin._address, _LOST_BEATS * HEARTBEAT_SECONDS)
     finally:
         for stop in handled:
             with contextlib.suppress(Exception):
                 loop.remove_signal_handler(stop)
+
+
+async def _connected(
+    declaration: Declaration, roles: Sequence[RoleBase], stopped: asyncio.Event
+) -> Plugin | None:
+    """The plugin registered with its sidecar, however long the sidecar
+    takes to answer: a standby pod's answers once it takes the instance's
+    Lease (see the module). None where the process was stopped first. A
+    refusal is raised as `connect` raises it: asking again changes nothing."""
+    from .client import connect
+
+    while True:
+        attempt = asyncio.ensure_future(
+            connect(declaration=declaration, roles=roles, wait=_ATTEMPT_SECONDS)
+        )
+        stopping = asyncio.ensure_future(stopped.wait())
+        try:
+            await asyncio.wait({attempt, stopping}, return_when=asyncio.FIRST_COMPLETED)
+        finally:
+            stopping.cancel()
+            if not attempt.done():
+                attempt.cancel()
+                with contextlib.suppress(asyncio.CancelledError, Exception):
+                    await attempt
+        if attempt.cancelled():
+            return None
+        waited = attempt.exception()
+        if waited is None:
+            if stopped.is_set():
+                await attempt.result().leave("stopping")
+                return None
+            return attempt.result()
+        if not isinstance(waited, NoSidecar):
+            raise waited
+        log.info(
+            "waiting for the sidecar at %s; a standby pod waits here for its lease",
+            waited.address,
+        )
+        # One that answered at once that it is not serving is not asked in
+        # a tight loop.
+        with contextlib.suppress(asyncio.TimeoutError):
+            await asyncio.wait_for(stopped.wait(), _ATTEMPT_PAUSE_SECONDS)
+        if stopped.is_set():
+            return None
 
 
 class _Hearing:
@@ -236,8 +314,13 @@ class _Running:
                 served = self.pages.serve(plugin, port)
                 log.info("serving its pages on 127.0.0.1:%d", port)
             await plugin.report(healthy=True, detail="started")
-            await stopped.wait()
-            log.info("stopping")
+            if await _either(stopped, plugin._sidecar_lost):
+                log.info("stopping")
+            else:
+                log.error(
+                    "the sidecar stopped answering: it is gone, or it lost the "
+                    "instance's lease; stopping"
+                )
         finally:
             for task in tasks:
                 task.cancel()
