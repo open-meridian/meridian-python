@@ -171,6 +171,51 @@ async def test_a_holder_whose_sidecar_stops_serving_stops_its_classes_and_leaves
     assert session.cancelled and session.stopped == 1
 
 
+async def test_a_sidecar_that_exits_ends_the_stream_and_the_watch_and_the_plugin_leaves(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Core's sidecar exits when it loses the Lease, so the plugin's stream
+    and its settings watch end with it. Each is opened again, as for any
+    break, until the heartbeats say the sidecar is lost; then the plugin
+    stops once and leaves, whatever the stream and the watch were doing."""
+    from meridian.v1 import sidecar_pb2
+
+    port = _free_port()
+    monkeypatch.setenv("MERIDIAN_SIDECAR_ADDRESS", f"127.0.0.1:{port}")
+    monkeypatch.setattr(client, "HEARTBEAT_SECONDS", 0.2)
+    service = FakeSidecar()
+    service.roles = ("custody",)
+    service.settings = [sidecar_pb2.SettingsDelivery()]
+    server = await _serving(service, port)
+    applied: list[object] = []
+
+    class Hearing(_Session):
+        async def on_replace_merged_instrument(self, heard: object) -> None:
+            return None
+
+    session = Hearing()
+    assert Hearing.heard_rows()
+    task = asyncio.create_task(
+        meridian.run_async(meridian.Declaration(), [session], on_settings=applied.append)
+    )
+    try:
+        await asyncio.wait_for(session.running.wait(), timeout=5)
+        for _ in range(200):
+            if service.operations.received:
+                break
+            await asyncio.sleep(0.01)
+        assert service.operations.received and applied
+        await server.stop(grace=None)
+        with pytest.raises(meridian.NoSidecar):
+            await asyncio.wait_for(task, timeout=10)
+    finally:
+        if not task.done():
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+    assert session.cancelled and session.started == 1 and session.stopped == 1
+
+
 async def test_one_heartbeat_unanswered_is_not_a_sidecar_lost(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

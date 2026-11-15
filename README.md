@@ -76,6 +76,16 @@ plugin reports, with its detail, stands on every heartbeat after, as its
 figures do: `report(healthy=False, detail="...")` keeps it not healthy
 until it reports `healthy=True`.
 
+`meridian.run` waits for its sidecar for as long as it takes, and starts
+nothing of the plugin until the sidecar admits it: no settings, no
+`on_start()`, no stream, no `run()`, no page. That is what holds a standby
+pod (`meridian plugin launch --standby`): its sidecar serves the plugin once
+it takes over the instance, so a standby opens no session with its vendor
+while another pod runs. A sidecar that stops answering -- two heartbeats in
+a row -- stops the plugin as any stop does, `on_stop()` called, and `run`
+leaves with status 1, so the pod starts it again. `meridian.connect`, for a
+script or a test, still gives up after its `wait` (`NoSidecar`).
+
 The steps a role may take -- its acts -- are typed methods on its class,
 generated from the contract: a custody class's `report_external_accounts`,
 `report_sync_status`, `record_holdings_statement`, `record_holding`,
