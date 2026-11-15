@@ -214,6 +214,18 @@ READ_DEADLINE: contextvars.ContextVar[float | None] = contextvars.ContextVar(
 #: the orchestrator restart it with a growing backoff, for no fault of either.
 SIDECAR_WAIT_SECONDS = 60.0
 
+#: How many heartbeats in a row the sidecar may leave unanswered, not being
+#: there to answer, before it is taken for lost (step 3d; the resilience
+#: spec's section 7): a sidecar that lost its instance's Lease stops serving
+#: its plugin, and `meridian.run` then stops the plugin's classes and leaves.
+_LOST_BEATS = 2
+
+#: How soon a channel to a sidecar not serving is tried again, at most: a
+#: standby pod's sidecar serves its plugin once it takes the Lease, and gRPC's
+#: own backoff, growing to two minutes, would leave it unasked for most of
+#: one.
+_RECONNECT_MOST_MS = 1000
+
 # A typed operation's refusal, by the status the sidecar chose for it
 # (spec/typed-sidecar-operations): each asks something different of the caller.
 _OPERATION_FAILURES = {
@@ -1345,6 +1357,10 @@ class Plugin:
     _operations_stub: operations_pb2_grpc.PluginOperationsStub
     _heartbeat: asyncio.Task[None] | None = field(default=None, repr=False)
     _left: bool = field(default=False, repr=False)
+    # Set once the sidecar left `_LOST_BEATS` heartbeats in a row unanswered
+    # (step 3d): `meridian.run` stops on it.
+    _sidecar_lost: asyncio.Event = field(default_factory=asyncio.Event, repr=False)
+    _address: str = field(default="", repr=False)
 
     _declared: tuple[Setting, ...] = field(default=(), repr=False)
     _figures: tuple[Figure, ...] = field(default=(), repr=False)
@@ -2035,13 +2051,24 @@ class Plugin:
             raise NotRegistered("this plugin has left; nothing more may be done on it")
 
     async def _beat(self) -> None:
+        unanswered = 0
         while True:
             await asyncio.sleep(HEARTBEAT_SECONDS)
             # A sidecar that has gone away is not this loop's problem to solve.
             # The next real operation surfaces it with context; failing here
-            # would raise from a background task nobody awaited.
-            with contextlib.suppress(grpc.aio.AioRpcError):
+            # would raise from a background task nobody awaited. It is
+            # counted, though: one not there for `_LOST_BEATS` beats in a row
+            # is said lost, for `meridian.run` to stop on (step 3d).
+            try:
                 await self._stub.Heartbeat(self._heartbeat_request())
+                unanswered = 0
+            except grpc.aio.AioRpcError as failed:
+                if failed.code() == grpc.StatusCode.UNAVAILABLE:
+                    unanswered += 1
+                    if unanswered >= _LOST_BEATS:
+                        self._sidecar_lost.set()
+                else:
+                    unanswered = 0
             if self._storage is not None and self._storage.kinds:
                 # Restored units past the restore period, returned (W4.13);
                 # tried again on the next beat where it fails.
@@ -2205,7 +2232,14 @@ async def connect(
         if interface is not None and isinstance(interface.pages, _Pages):
             _restore_route(interface.pages, edge)
     target = address or os.environ.get("MERIDIAN_SIDECAR_ADDRESS") or DEFAULT_ADDRESS
-    channel = grpc.aio.insecure_channel(target)
+    channel = grpc.aio.insecure_channel(
+        target,
+        options=[
+            ("grpc.initial_reconnect_backoff_ms", _RECONNECT_MOST_MS),
+            ("grpc.min_reconnect_backoff_ms", _RECONNECT_MOST_MS),
+            ("grpc.max_reconnect_backoff_ms", _RECONNECT_MOST_MS),
+        ],
+    )
     stub = sidecar_pb2_grpc.SidecarServiceStub(channel)
 
     try:
@@ -2253,6 +2287,7 @@ async def connect(
         _storage=storage,
         _algorithms=tuple(held.algorithm_id for held in declaration.algorithms),
         _declaration=declaration,
+        _address=target,
     )
     held_roles = []
     for role in given:
