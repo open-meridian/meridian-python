@@ -82,9 +82,13 @@ nothing of the plugin until the sidecar admits it: no settings, no
 pod (`meridian plugin launch --standby`): its sidecar serves the plugin once
 it takes over the instance, so a standby opens no session with its vendor
 while another pod runs. A sidecar that stops answering -- two heartbeats in
-a row -- stops the plugin as any stop does, `on_stop()` called, and `run`
-leaves with status 1, so the pod starts it again. `meridian.connect`, for a
-script or a test, still gives up after its `wait` (`NoSidecar`).
+a row -- stops the plugin's classes as any stop does, `on_stop()` called,
+and the plugin waits for its sidecar again in the same process, as a
+standby: served again, it registers again and its classes start again from
+the first settings. `run` leaves only when it is stopped, or on a fault of
+the plugin's own (a refusal, or an exception from `on_start()` or from
+serving the pages). `meridian.connect`, for a script or a test, still gives
+up after its `wait` (`NoSidecar`).
 
 The steps a role may take -- its acts -- are typed methods on its class,
 generated from the contract: a custody class's `report_external_accounts`,
@@ -2329,7 +2333,8 @@ writes from the matrix and the suites into
   stream opens; `run()`, its long-running work, started after every class's
   `on_start` and restarted after a backoff when it fails
   (`meridian.helpers.sessions.Backoff`), the failure logged and said on the
-  plugin's health; `on_stop()` when the plugin stops;
+  plugin's health; `on_stop()` when the plugin stops or its sidecar is lost,
+  and `on_start()` again on the same class when it registers again;
 - **its hearing**: `seed` (False where its `on_start` reads the store
   itself), `subjects()`, the lake's subjects it hears, read when the stream
   opens, and `self.hear_again()` when they change, which opens the one

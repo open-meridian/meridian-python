@@ -47,12 +47,19 @@ no page -- and a standby opens no session with its vendor while another pod
 holds the instance. A sidecar not answering is waited for without limit,
 said once a minute, where `connect` alone gives up (`NoSidecar`).
 
-A holder that loses the Lease stops: its sidecar stops serving it, and once
-the sidecar has left two heartbeats in a row unanswered the classes are
-stopped as for any stop -- the `run()`s and the stream cancelled, each
-`on_stop()` called -- and `run_async` raises `NoSidecar`; `run` leaves the
-process with status 1, so the pod starts it again as a standby. What stops a
-deposed holder's writes is its sidecar; this stops its work.
+A holder that loses the Lease stops its work and stays as a standby: its
+sidecar stops serving it, and once the sidecar has left two heartbeats in a
+row unanswered the classes are stopped as for any stop -- the `run()`s, the
+stream and the settings watch cancelled, the pages no longer served, each
+`on_stop()` called -- and the plugin, in the same process, waits for its
+sidecar again as a standby does, without limit. Admitted again, it starts
+again from the first settings. So a pod that lost its shard keeps its
+plugin's process, and takes the next one with no restart to wait out. What
+stops a deposed holder's writes is its sidecar; this stops its work.
+
+The process leaves only when it is stopped, or on a fault of its own: a
+refusal (`Refused`), or an exception from a class's `on_start()` or from
+serving the pages, raised as it is.
 """
 
 from __future__ import annotations
@@ -63,6 +70,8 @@ import logging
 import signal
 from collections.abc import Awaitable, Callable, Sequence
 from typing import TYPE_CHECKING, Any
+
+import grpc
 
 from .errors import NoSidecar
 from .helpers.sessions import Backoff
@@ -98,22 +107,17 @@ def run(
     on_settings: Callable[[Any], Awaitable[None] | None] | None = None,
     figures: Callable[[], Sequence[Figure]] | None = None,
 ) -> None:
-    """The plugin's process, until it is stopped (see the module). Left
-    with status 1 where its sidecar was lost."""
-    try:
-        asyncio.run(
-            run_async(
-                declaration,
-                roles,
-                pages=pages,
-                port=port,
-                on_settings=on_settings,
-                figures=figures,
-            )
+    """The plugin's process, until it is stopped (see the module)."""
+    asyncio.run(
+        run_async(
+            declaration,
+            roles,
+            pages=pages,
+            port=port,
+            on_settings=on_settings,
+            figures=figures,
         )
-    except NoSidecar as lost:
-        log.error("%s; leaving", lost)
-        raise SystemExit(1) from lost
+    )
 
 
 async def run_async(
@@ -126,7 +130,8 @@ async def run_async(
     figures: Callable[[], Sequence[Figure]] | None = None,
 ) -> None:
     """`run`, as a coroutine: until it is cancelled, or the process is sent
-    SIGTERM or SIGINT; `NoSidecar` once its sidecar is lost."""
+    SIGTERM or SIGINT. A sidecar lost stops the classes, and the plugin
+    waits for it again (see the module)."""
 
     # Before anything else: a stop that arrives while connecting is still a
     # stop, and without these the default handler kills the process before
@@ -139,27 +144,26 @@ async def run_async(
             loop.add_signal_handler(stop, stopped.set)
             handled.append(stop)
     try:
-        connected = await _connected(declaration, roles, stopped)
-        if connected is None:
-            return
-        async with connected as plugin:
-            log.info(
-                "registered as %s, roles %s",
-                plugin.identity.instance_id,
-                ", ".join(plugin.identity.roles) or "none",
-            )
-            await _Running(
-                plugin,
-                declaration,
-                pages=pages,
-                port=port,
-                on_settings=on_settings,
-                figures=figures,
-            ).until(stopped)
-            if plugin._sidecar_lost.is_set() and not stopped.is_set():
-                from .client import _LOST_BEATS, HEARTBEAT_SECONDS
-
-                raise NoSidecar(plugin._address, _LOST_BEATS * HEARTBEAT_SECONDS)
+        while True:
+            connected = await _connected(declaration, roles, stopped)
+            if connected is None:
+                return
+            async with connected as plugin:
+                log.info(
+                    "registered as %s, roles %s",
+                    plugin.identity.instance_id,
+                    ", ".join(plugin.identity.roles) or "none",
+                )
+                await _Running(
+                    plugin,
+                    declaration,
+                    pages=pages,
+                    port=port,
+                    on_settings=on_settings,
+                    figures=figures,
+                ).until(stopped)
+            if stopped.is_set() or not plugin._sidecar_lost.is_set():
+                return
     finally:
         for stop in handled:
             with contextlib.suppress(Exception):
@@ -293,7 +297,7 @@ class _Running:
                     )
                 )
                 # The first settings applied before any class starts.
-                if not await _either(first, stopped):
+                if not await _either(first, stopped, plugin._sidecar_lost):
                     return
             for role in roles:
                 await role.on_start()
@@ -313,22 +317,30 @@ class _Running:
                     raise ValueError("pages are given and no port: name the port they serve on")
                 served = self.pages.serve(plugin, port)
                 log.info("serving its pages on 127.0.0.1:%d", port)
-            await plugin.report(healthy=True, detail="started")
-            if await _either(stopped, plugin._sidecar_lost):
+            # Said on every heartbeat from here on; a sidecar not there to
+            # answer this one is a heartbeat unanswered, which the beats
+            # count, not a fault of the plugin's.
+            with contextlib.suppress(grpc.aio.AioRpcError):
+                await plugin.report(healthy=True, detail="started")
+            await _either(stopped, plugin._sidecar_lost)
+        finally:
+            if stopped.is_set():
                 log.info("stopping")
-            else:
+            elif plugin._sidecar_lost.is_set():
                 log.error(
                     "the sidecar stopped answering: it is gone, or it lost the "
-                    "instance's lease; stopping"
+                    "instance's lease; stopping the plugin's classes and waiting "
+                    "for it to serve the plugin again"
                 )
-        finally:
             for task in tasks:
                 task.cancel()
             for task in tasks:
                 with contextlib.suppress(asyncio.CancelledError, Exception):
                     await task
             if served is not None:
+                # Its port free for the next serving.
                 served.shutdown()
+                served.server_close()
             for role in reversed(started):
                 try:
                     await role.on_stop()
@@ -402,9 +414,9 @@ class _Running:
                 await self.plugin.report(healthy=True, detail="started")
 
 
-async def _either(wanted: asyncio.Event, stopped: asyncio.Event) -> bool:
-    """Whether `wanted` was set before `stopped`."""
-    waiting = {asyncio.ensure_future(wanted.wait()), asyncio.ensure_future(stopped.wait())}
+async def _either(wanted: asyncio.Event, *ending: asyncio.Event) -> bool:
+    """Whether `wanted` was set before any of `ending`."""
+    waiting = {asyncio.ensure_future(each.wait()) for each in (wanted, *ending)}
     try:
         await asyncio.wait(waiting, return_when=asyncio.FIRST_COMPLETED)
     finally:

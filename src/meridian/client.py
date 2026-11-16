@@ -217,7 +217,10 @@ SIDECAR_WAIT_SECONDS = 60.0
 #: How many heartbeats in a row the sidecar may leave unanswered, not being
 #: there to answer, before it is taken for lost (step 3d; the resilience
 #: spec's section 7): a sidecar that lost its instance's Lease stops serving
-#: its plugin, and `meridian.run` then stops the plugin's classes and leaves.
+#: its plugin, and `meridian.run` then stops the plugin's classes and waits
+#: for the sidecar to serve it again, as a standby does. A heartbeat answered
+#: FAILED_PRECONDITION -- a sidecar that holds no registration of this
+#: plugin's -- is a sidecar lost at once.
 _LOST_BEATS = 2
 
 #: How soon a channel to a sidecar not serving is tried again, at most: a
@@ -2058,7 +2061,10 @@ class Plugin:
             # The next real operation surfaces it with context; failing here
             # would raise from a background task nobody awaited. It is
             # counted, though: one not there for `_LOST_BEATS` beats in a row
-            # is said lost, for `meridian.run` to stop on (step 3d).
+            # is said lost, for `meridian.run` to stop on (step 3d). So is
+            # one that answers holding no registration of this plugin's: a
+            # sidecar serving anew, having lost its instance's Lease and
+            # taken one again between two beats.
             try:
                 await self._stub.Heartbeat(self._heartbeat_request())
                 unanswered = 0
@@ -2067,6 +2073,8 @@ class Plugin:
                     unanswered += 1
                     if unanswered >= _LOST_BEATS:
                         self._sidecar_lost.set()
+                elif failed.code() == grpc.StatusCode.FAILED_PRECONDITION:
+                    self._sidecar_lost.set()
                 else:
                     unanswered = 0
             if self._storage is not None and self._storage.kinds:
