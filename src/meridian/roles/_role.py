@@ -16,7 +16,9 @@ generate:
 - the lifecycle: `on_start()`, called once the plugin has registered;
   `run()`, its long-running work, started after every class's `on_start`,
   restarted after a backoff when it fails and cancelled at stop; and
-  `on_stop()` (ruling 1012);
+  `on_stop()` (ruling 1012). A plugin whose sidecar is lost stops its
+  classes and, registered again, starts the same ones again: `on_start()`
+  follows each `on_stop()` there;
 - hearing: `seed`, whether the SDK hands the class what the store holds on
   start; `subjects()`, the lake's subjects it hears, read at start; and
   `hear_again()`, which reopens the one stream when they change, catching
@@ -124,7 +126,10 @@ class RoleBase(ABC):  # noqa: B024 - abstract through each role's required event
     async def on_start(self) -> None:  # noqa: B027 - optional by design
         """Once the plugin has registered and, where `meridian.run` is given
         `on_settings`, applied its first settings, before the stream opens:
-        read what the class needs to start."""
+        read what the class needs to start. Called again, on the same
+        object, each time the plugin registers again after its sidecar was
+        lost: set here, afresh, what the class holds for a serving, since
+        what an earlier serving left in it is not to be trusted."""
 
     async def run(self) -> None:  # noqa: B027 - optional by design
         """The class's long-running work -- a poll, a stream -- started after
@@ -133,7 +138,8 @@ class RoleBase(ABC):  # noqa: B024 - abstract through each role's required event
         when the plugin stops. Returning ends it."""
 
     async def on_stop(self) -> None:  # noqa: B027 - optional by design
-        """When the plugin stops, after its `run` is cancelled."""
+        """When the plugin stops, or its sidecar is lost, after its `run` is
+        cancelled."""
 
     # ── Hearing ───────────────────────────────────────────────────────────
 
