@@ -97,6 +97,15 @@ FIGURES_SECONDS = 10.0
 _ATTEMPT_SECONDS = 60.0
 _ATTEMPT_PAUSE_SECONDS = 1.0
 
+#: What a call answers when its sidecar went while it was asked.
+_GONE = frozenset(
+    {
+        grpc.StatusCode.UNAVAILABLE,
+        grpc.StatusCode.CANCELLED,
+        grpc.StatusCode.FAILED_PRECONDITION,
+    }
+)
+
 
 def run(
     declaration: Declaration,
@@ -317,11 +326,16 @@ class _Running:
                     raise ValueError("pages are given and no port: name the port they serve on")
                 served = self.pages.serve(plugin, port)
                 log.info("serving its pages on 127.0.0.1:%d", port)
-            # Said on every heartbeat from here on; a sidecar not there to
-            # answer this one is a heartbeat unanswered, which the beats
-            # count, not a fault of the plugin's.
-            with contextlib.suppress(grpc.aio.AioRpcError):
+            # Said on every heartbeat from here on. A sidecar gone while this
+            # one was asked (not there, its call cancelled as it stopped, or
+            # serving anew without this registration) is not a fault of the
+            # plugin's: the heartbeats find it lost, or the next carries the
+            # report. Any other refusal is raised.
+            try:
                 await plugin.report(healthy=True, detail="started")
+            except grpc.aio.AioRpcError as failed:
+                if failed.code() not in _GONE:
+                    raise
             await _either(stopped, plugin._sidecar_lost)
         finally:
             if stopped.is_set():

@@ -383,7 +383,7 @@ async def test_a_sidecar_serving_again_within_two_heartbeats_is_registered_with_
         await server.stop(grace=None)
         second = _custody()
         server = await _serving(second, port)
-        await _until(lambda: session.started == 2 or task.done())
+        await _until(lambda: (session.started == 2 and session.running.is_set()) or task.done())
         assert not task.done(), task.exception()
         assert len(second.registered) == 1
         assert session.said == ["start", "run", "stop", "start", "run"]
@@ -486,6 +486,33 @@ async def test_the_started_report_unanswered_is_carried_by_the_next_heartbeat(
         assert session.started == 1 and session.stopped == 0
     finally:
         await _ended(task, server)
+
+
+async def test_the_started_report_refused_is_raised(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Only a sidecar not there to answer is waited out: a sidecar that
+    answers the report and refuses it has said something about the plugin,
+    and that is raised as before."""
+    port = _free_port()
+    monkeypatch.setenv("MERIDIAN_SIDECAR_ADDRESS", f"127.0.0.1:{port}")
+    monkeypatch.setattr(client, "HEARTBEAT_SECONDS", 5.0)
+
+    class Refusing(FakeSidecar):
+        async def Heartbeat(self, request, context):  # noqa: N802
+            await context.abort(grpc.StatusCode.PERMISSION_DENIED, "no")
+
+    service = Refusing()
+    service.roles = ("custody",)
+    server = await _serving(service, port)
+    session = _Session()
+    try:
+        with pytest.raises(grpc.aio.AioRpcError) as raised:
+            await asyncio.wait_for(
+                meridian.run_async(meridian.Declaration(), [session]), timeout=5
+            )
+        assert raised.value.code() == grpc.StatusCode.PERMISSION_DENIED
+    finally:
+        await server.stop(grace=None)
+    assert session.started == 1 and session.stopped == 1
 
 
 async def test_one_heartbeat_unanswered_is_not_a_sidecar_lost(
