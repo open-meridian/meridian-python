@@ -171,7 +171,7 @@ async def place_once(
                 code=(refused.code or "?")[:128],
                 text=(refused.text or "the venue refused the order")[:256],
             ),
-            raw_record=role.plugin.raw_record(refused.raw_key or "unkept"),
+            raw_record=raw_or_unkept(role.plugin, refused.raw_key),
         )
         return Placed("rejected", raw_key=refused.raw_key)
     except VenueUnanswered as lost:
@@ -179,10 +179,21 @@ async def place_once(
             placement_id=placement_id,
             event=ops.PLACEMENT_EVENT_OUTCOME_UNKNOWN,
             unknown_reason=ops.UNKNOWN_REASON_REQUEST_UNANSWERED,
-            raw_record=role.plugin.raw_record(lost.raw_key or "unkept"),
+            raw_record=raw_or_unkept(role.plugin, lost.raw_key),
         )
         return Placed("unknown", raw_key=lost.raw_key)
     return Placed("placed", answer, raw_key)
+
+
+def raw_or_unkept(plugin: Any, key: str) -> Any:
+    """The raw record a key names, or "unkept" where the venue's exchange
+    was kept nowhere: a name for no record, which no shard's prefix is put
+    on (step 3d, item 30)."""
+    if key:
+        return plugin.raw_record(key)
+    reference = plugin.raw_record("unkept")
+    reference.key = "unkept"
+    return reference
 
 
 def resolve_unanswered(
@@ -210,7 +221,7 @@ async def report_status_not_mapped(
             code=status[:128] or "?",
             text=status[:256] or "?",
         ),  # fmt: skip
-        raw_record=role.plugin.raw_record(raw_key or "unkept"),
+        raw_record=raw_or_unkept(role.plugin, raw_key),
     )
 
 

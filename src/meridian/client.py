@@ -1359,6 +1359,8 @@ class Plugin:
     _stub: sidecar_pb2_grpc.SidecarServiceStub
     _operations_stub: operations_pb2_grpc.PluginOperationsStub
     _heartbeat: asyncio.Task[None] | None = field(default=None, repr=False)
+    # The heartbeat's returns of restored units, run beside it (`_return_due`).
+    _returning: asyncio.Task[None] | None = field(default=None, repr=False)
     _left: bool = field(default=False, repr=False)
     # Set once the sidecar left `_LOST_BEATS` heartbeats in a row unanswered
     # (step 3d): `meridian.run` stops on it.
@@ -1988,10 +1990,11 @@ class Plugin:
         global _registered
         if _registered is self:
             _registered = None
-        if self._heartbeat is not None:
-            self._heartbeat.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await self._heartbeat
+        for beside in (self._heartbeat, self._returning):
+            if beside is not None:
+                beside.cancel()
+                with contextlib.suppress(asyncio.CancelledError, Exception):
+                    await beside
         views = getattr(self, "_views_kept", None)
         if views is not None:
             await views.stop()
@@ -2077,12 +2080,33 @@ class Plugin:
                     self._sidecar_lost.set()
                 else:
                     unanswered = 0
-            if self._storage is not None and self._storage.kinds:
-                # Restored units past the restore period, returned (W4.13);
-                # tried again on the next beat where it fails.
-                with contextlib.suppress(Exception):
-                    async with self._moves().lock:
-                        await self._moves().return_due()
+            # Restored units past the restore period, returned (W4.13),
+            # beside the beats, never in their way: tried again on the next
+            # beat where it fails or the index is held.
+            if (
+                self._storage is not None
+                and self._storage.kinds
+                and (self._returning is None or self._returning.done())
+            ):
+                self._returning = asyncio.create_task(self._return_due())
+
+    async def _return_due(self) -> None:
+        """The heartbeat's returns of restored units past the restore
+        period, made only where the shard's index is free now: a move here
+        or in another pod holding it, however long, is left to, and the
+        returns wait for a later beat."""
+        from .edge import log as edge_log
+        from .edge import storage_dir
+
+        moves = self._moves()
+        granted = storage_dir()
+        try:
+            async with moves.lock.held(granted, within=0):
+                await moves.return_due(granted)
+        except TimeoutError:
+            edge_log.debug("the shard's index is held: restored units wait for a later beat")
+        except Exception as failed:
+            edge_log.warning("restored units were not returned on this beat: %s", failed)
 
     def _heartbeat_request(self) -> sidecar_pb2.HeartbeatRequest:
         """The health and figures as they stand: healthy, with no detail and
@@ -2195,6 +2219,11 @@ async def connect(
     are then the declaration; `plugin.settings(Config)` delivers instances of
     it.
 
+    One `Plugin` per process keeps raw records: while one declaring storage
+    is registered and has not left, connecting another declaring storage is
+    refused (RuntimeError) before anything is sent. Its moves and `RawStore`
+    are not thread-safe; make them from the loop it registered on.
+
     From contract v25 the declaration is the whole of what the version says
     about itself: its interface and whether it reads external accounts too,
     and a plugin declaring v25 registers exactly the declaration its version
@@ -2206,6 +2235,7 @@ async def connect(
     upload, which reads the declaration alone, does not carry it, so the
     sidecar would refuse the difference.
     """
+    global _registered
     from ._settings import declared_by
     from .declaration import Declaration as _Declaration
 
@@ -2228,6 +2258,19 @@ async def connect(
     # route on its host (the names' choice b).
     storage = declaration.storage
     if storage is not None and storage.kinds:
+        # One plugin per process moves raw records: two would each lock the
+        # shard's index for itself, and the shard is the process's.
+        held = _registered
+        if (
+            held is not None
+            and not held._left
+            and held._storage is not None
+            and held._storage.kinds
+        ):
+            raise RuntimeError(
+                "a plugin declaring storage is registered in this process already: one "
+                "Plugin per process keeps raw records; leave it before connecting again"
+            )
         from .edge import _archive, _restore_route
 
         edge = _edge_roles(settings, interface)
@@ -2277,6 +2320,11 @@ async def connect(
     if not reply.admitted:
         await channel.close(None)
         raise Refused(reply.refusal_reason)
+    # Its shard, as its sidecar took the shard's Lease (step 3d, item 30):
+    # where `meridian.edge.storage_dir()` writes from now on.
+    from .edge import _registered_as
+
+    _registered_as(reply.shard, reply.shards)
 
     plugin = Plugin(
         identity=Identity(
@@ -2314,7 +2362,6 @@ async def connect(
     if heartbeat:
         plugin._heartbeat = asyncio.create_task(plugin._beat())
     # What `runs_as` calls through, until it leaves (contract v21).
-    global _registered
     _registered = plugin
     # Under `meridian-dev run`, on a development deployment: this revision
     # is running, which is what `ready` means (spec/live-plugin-development).

@@ -807,6 +807,57 @@ async with await meridian.connect(declaration=DECLARATION, interface=INTERFACE) 
   the unit holding it, `outcome` archived (restorable), restored or deleted,
   or None for a record never moved. A row's `record_key` on the plugin's own
   page resolves through it, never to nothing.
+- **A storage per shard.** An instance run as shards, or with a standby,
+  shares one storage among its pods, a folder per shard. The plugin learns
+  its shard when it registers (`RegisterReply.shard`, `.shards`), and from
+  then `edge.storage_dir()` is its own shard's folder, `<storage>/shard-<n>`,
+  the only place it writes; `edge.instance_storage_dir()` is the whole,
+  every shard's folder under it, which any pod reads. A key names a record
+  across the instance: `plugin.raw_record(key)` and `RawStore` prefix a key
+  with `shard-<n>/`, the archive keeps the shard's objects under the same
+  prefix, and a move's unit is reported with it, so two shards' units of one
+  name stay two. A key with no prefix names what the instance kept before
+  it ran as shards, which its storage's copy put under `shard-0/`. Each
+  shard keeps its own index of what moved, and `find_record` reads the index
+  of the shard the key names, whichever pod wrote it. The archive's bound
+  is the instance's, summed over every shard's index; one that cannot be
+  read refuses the archive, the unit staying in storage. `restore_unit` and
+  `delete_unit` name a unit as the instance does, `shard-<n>/<unit>` (one
+  with no prefix is shard 0's, as `RawStore.tend` names them); a restore
+  or a deletion of another shard's unit is refused: "the unit <unit> is
+  shard <m>'s: its own pod restores it". No shard is known before the
+  plugin registers, so read `storage_dir()` from `on_start` on: a
+  `RawStore` anywhere in the granted storage follows its shard whenever it
+  was made, and after the pod registers again as another shard, and
+  `connectivity.Trader` reads the trading files it was not given from
+  storage on start. A live file's lines are counted with the file locked,
+  so a pod still writing in a takeover's lapse and the shard's new holder
+  each name their own line; the shard's index of what moved is read and
+  written under a lock of its own, so neither pod's move is lost from it,
+  and opened under that lock as a create, so an NFS client's cached "no such
+  file" is never trusted for it. Both are file locks held by their
+  descriptor (Linux's open-file-description locks; `fcntl.lockf` where the
+  platform has none, or the storage refuses them), so the storage class the
+  instance's storage is made from must support locks across its pods, as
+  NFSv4 does. Reads made outside a move -- `find_record`, and the bound's
+  sum of the other shards' indexes -- can lag another pod's newest move by
+  the mount's attribute-cache time; `lookupcache=positive` on the storage
+  class's mount options shortens it. A move waits for another's lock at
+  most 30 seconds, then is refused (`TimeoutError`) and the unit kept for
+  the next pass, and the sidecar is given 30 seconds to record a move;
+  `keep_line` waits at most two seconds, then refuses the line. The
+  heartbeat never waits on the lock: it returns restored units only when
+  nothing else holds it. An instance of one pod (`shards` 0) has no shard
+  folders, and its keys no prefix.
+- **One plugin per process, on its loop.** One `Plugin` per process keeps
+  raw records: while one declaring storage is registered, `connect`
+  refuses another declaring storage until the first leaves (`meridian.run`
+  leaves before it registers again). The moves (`archive_unit`,
+  `restore_unit`, `delete_unit`) are made from the loop the plugin
+  registered on, and one from another thread's loop is refused. **Neither
+  the moves nor `RawStore` are thread-safe:** use a store from one thread
+  at a time, as the plugin's loop does; a second thread's `keep_line` while
+  one is in it is refused (`RuntimeError`).
 - **What is stored** is the plugin's to say, as its figures are:
   `plugin.stored`, one `StoredSpan` per kind, on every heartbeat. The bytes
   each kind uses of the archive (`StoredSpan.bytes`) are the SDK's: it sums

@@ -145,6 +145,7 @@ from ._bookkeeping import (
     fill_price,
     filled_in_book,
     place_once,
+    raw_or_unkept,
     report_status_not_mapped,
     resolve_unanswered,
 )
@@ -538,7 +539,14 @@ class Trader(Role):
     """The connectivity role's work, against one venue: the connectivity
     role's class (SDK 0.35), registered with `meridian.run(roles=[...])` or
     bound to the suites' `Recorder`, or subclassed by a plugin adding its
-    own events. It reads the book itself on start, so it is not seeded."""
+    own events. It reads the book itself on start, so it is not seeded.
+
+    The placements sent, the accounts trading is enabled on and the venue's
+    originated orders not given (`sent`, `enabled`, `watched`) are read
+    from its storage on start, after the plugin registered
+    (`trading_files(edge.storage_dir())`): on a shard of its instance, or
+    with a standby, the shard's own folder, which is known only then (step
+    3d, item 30). With no storage granted, they are held in memory."""
 
     #: The book is read on start (`start`), so nothing is seeded.
     seed = False
@@ -585,6 +593,9 @@ class Trader(Role):
         self._venue = venue
         self._now = now
         self._scope = scope
+        #: Which of its trading files it was not given: read from storage on
+        #: start, once the plugin registered (`_from_storage`).
+        self._not_given = (sent is None, enabled is None, watched is None)
         self._sent = sent if sent is not None else Sent(None)
         self.enabled = enabled if enabled is not None else Sent(None)
         self.instructions: dict[tuple[Any, ...], ops.TradingInstruction] = {}
@@ -638,7 +649,7 @@ class Trader(Role):
         return _ns(self._now())
 
     def _raw(self, key: str) -> ops.RawRecordRef:
-        reference: ops.RawRecordRef = self.plugin.raw_record(key or "unkept")
+        reference: ops.RawRecordRef = raw_or_unkept(self.plugin, key)
         return reference
 
     def mapped(self) -> frozenset[str]:
@@ -2175,13 +2186,33 @@ class Trader(Role):
     # ── Running ─────────────────────────────────────────────────────────
 
     async def on_start(self) -> None:
-        """Its latency sent through it, and, where its venue is set up, the
-        book read (`start`) before anything is heard."""
+        """Its trading files not given read from storage, its latency sent
+        through it, and, where its venue is set up, the book read (`start`)
+        before anything is heard."""
+        self._from_storage()
         if self.latency is not None and getattr(self.latency, "role", None) is None:
             self.latency.role = self
         if self._venue() is not None and not self.started.is_set():
             await self.start()
             self.started.set()
+
+    def _from_storage(self) -> None:
+        """The trading files it was not given, read from the plugin's
+        storage now it has registered: its shard's own folder on a shard of
+        its instance (step 3d, item 30). Kept as they are where no storage
+        is granted."""
+        from ... import edge
+
+        sent, enabled, originated = trading_files(edge.storage_dir())
+        if sent is None or enabled is None:
+            return
+        no_sent, no_enabled, no_watched = self._not_given
+        if no_sent:
+            self._sent = Sent(sent)
+        if no_enabled:
+            self.enabled = Sent(enabled)
+        if no_watched:
+            self.watched = Watched(originated)
 
     async def run(self) -> None:
         """Once its venue is set up, the book read where `on_start` could not,

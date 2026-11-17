@@ -414,8 +414,7 @@ async def test_a_restore_is_copied_back_for_the_person_and_its_return_follows(
         # Past the restore period: removed, its return reported as the plugin.
         later = edge._now_ns() + 8 * DAY
         monkeypatch.setattr(edge, "_now_ns", lambda: later)
-        async with plugin._moves().lock:
-            await plugin._moves().return_due()
+        await plugin._return_due()  # as the heartbeat does
         assert not restored.exists()
     finally:
         await plugin.leave()
