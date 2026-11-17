@@ -819,14 +819,20 @@ async with await meridian.connect(declaration=DECLARATION, interface=INTERFACE) 
   name stay two. A key with no prefix names what the instance kept before
   it ran as shards, which its storage's copy put under `shard-0/`. Each
   shard keeps its own index of what moved, and `find_record` reads the index
-  of the shard the key names, whichever pod wrote it. A restore or a
-  deletion of another shard's unit is refused: "the unit <unit> is shard
-  <m>'s: its own pod restores it". No shard is known before the plugin
-  registers, so read `storage_dir()` from `on_start` on: a `RawStore` on
-  `storage_root()` follows its shard whenever it was made, and
+  of the shard the key names, whichever pod wrote it. The archive's bound
+  is the instance's, summed over every shard's index. `restore_unit` and
+  `delete_unit` name a unit as the instance does, `shard-<n>/<unit>` (one
+  with no prefix is shard 0's, as `RawStore.tend` names them); a restore
+  or a deletion of another shard's unit is refused: "the unit <unit> is
+  shard <m>'s: its own pod restores it". No shard is known before the
+  plugin registers, so read `storage_dir()` from `on_start` on: a
+  `RawStore` anywhere in the granted storage follows its shard whenever it
+  was made, and after the pod registers again as another shard, and
   `connectivity.Trader` reads the trading files it was not given from
-  storage on start. An instance of one pod (`shards` 0) has no shard
-  folders, and its keys no prefix.
+  storage on start. A live file's lines are counted with the file locked,
+  so a pod still writing in a takeover's lapse and the shard's new holder
+  each name their own line. An instance of one pod (`shards` 0) has no
+  shard folders, and its keys no prefix.
 - **What is stored** is the plugin's to say, as its figures are:
   `plugin.stored`, one `StoredSpan` per kind, on every heartbeat. The bytes
   each kind uses of the archive (`StoredSpan.bytes`) are the SDK's: it sums

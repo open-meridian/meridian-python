@@ -50,8 +50,10 @@ move is reported with it on its unit, so two shards' units of one name stay
 two. A key with no prefix names what the instance kept before it ran as
 shards, which its storage's copy put under `shard-0/`. Each shard keeps its
 own index of what moved; `find_record` reads the index of the shard a key
-names, whichever pod wrote it; a restore or a deletion of another shard's
-unit is refused, "the unit <unit> is shard <m>'s: its own pod restores it".
+names, whichever pod wrote it; the archive's bound is the instance's, over
+every shard's index. A restore or a deletion names a unit as the instance
+does (one with no prefix is shard 0's), and one of another shard's is
+refused, "the unit <unit> is shard <m>'s: its own pod restores it".
 Before the plugin registers no shard is known, and `storage_dir()` is the
 storage as a whole; an instance of one pod (`shards` 0) has no shard
 folders, its keys no prefix, as before.
@@ -180,6 +182,11 @@ STORAGE_DIR = "MERIDIAN_STORAGE_DIR"
 #: None until the plugin has registered.
 _serving: tuple[int, int] | None = None
 
+#: Counted up at every Register: a pod admitted again in the same process,
+#: as another shard or its own taken back, has what it remembered of its
+#: storage's files read afresh (`RawStore`).
+_generation = 0
+
 #: A key's shard prefix: `shard-<n>/`, n as a whole number unpadded.
 _SHARD_KEY = re.compile(r"shard-(0|[1-9][0-9]*)/")
 
@@ -187,8 +194,9 @@ _SHARD_KEY = re.compile(r"shard-(0|[1-9][0-9]*)/")
 def _registered_as(shard: int, shards: int) -> None:
     """What Register answered of this pod's shard; held while the process
     lives, so a pod waiting for its sidecar again writes where it wrote."""
-    global _serving
+    global _serving, _generation
     _serving = (shard, shards)
+    _generation += 1
 
 
 def _sharded() -> bool:
@@ -232,8 +240,11 @@ def _split(key: str) -> tuple[int | None, str]:
 
 def _instance_key(key: str) -> str:
     """A key in this pod's storage as the instance names it: prefixed with
-    its shard, where it serves one and the key names none already."""
-    return key if _SHARD_KEY.match(key) else _shard_prefix() + key
+    its shard, where it serves one, storage is granted, and the key names
+    none already."""
+    if _SHARD_KEY.match(key) or instance_storage_dir() is None:
+        return key
+    return _shard_prefix() + key
 
 
 def _shard_folder(key: str) -> tuple[Path | None, str]:
@@ -667,9 +678,8 @@ def _prune(directory: Path, root: Path) -> None:
 
 def _unit_path(unit: str) -> PurePosixPath:
     """A unit's path in storage, refused where it is not one: empty or past
-    its length (with its shard's prefix, as it is reported), absolute,
-    stepping out, or into the helpers' own."""
-    if not unit or not RECORD_MOVE_REQUEST_UNIT_LENGTH.admits(len(_instance_key(unit))):
+    its length, absolute, stepping out, or into the helpers' own."""
+    if not RECORD_MOVE_REQUEST_UNIT_LENGTH.admits(len(unit)):
         raise ValueError(f"a unit is 1 to {RECORD_MOVE_REQUEST_UNIT_LENGTH.most} characters")
     path = PurePosixPath(unit)
     if (
@@ -683,6 +693,15 @@ def _unit_path(unit: str) -> PurePosixPath:
             f"empty, . or .. part, and not under {_OWN}/"
         )
     return path
+
+
+def _reported(prefix: str, unit: str) -> str:
+    """A new move's unit as it is reported, with its shard's prefix,
+    refused past its length."""
+    named = prefix + unit
+    if not RECORD_MOVE_REQUEST_UNIT_LENGTH.admits(len(named)):
+        raise ValueError(f"a unit is 1 to {RECORD_MOVE_REQUEST_UNIT_LENGTH.most} characters")
+    return named
 
 
 def _files(root: Path) -> Iterator[tuple[str, Path]]:
@@ -880,7 +899,9 @@ class _Mover:
         last_received_ns: int,
     ) -> None:
         kind = self.kind(record_kind)
+        unit = _own_unit(unit, strict=False)
         path = _unit_path(unit)
+        _reported(_shard_prefix(), unit)
         _span(record_count, first_received_ns, last_received_ns)
         if not kind.archivable:
             raise ValueError(f"the kind {kind.name} is declared not archivable")
@@ -908,7 +929,7 @@ class _Mover:
             most = _archive_most_bytes()
             if most:
                 size = await asyncio.to_thread(_size, source)
-                used = sum(moved.archive_bytes for moved in units.values())
+                used = await asyncio.to_thread(_archive_used, units)
                 if used + size > most:
                     raise RuntimeError(
                         f"the archive holds {used:,} of its {most:,} bytes "
@@ -916,6 +937,12 @@ class _Mover:
                         "take it past: it stays in storage, and no move is recorded"
                     )
             prefix = _shard_prefix()
+            if prefix == "shard-0/" and await asyncio.to_thread(
+                _archived_before_shards, archive, unit, source
+            ):
+                # Archived and reported by the instance as one pod, which
+                # stopped before its index was written: as it was then.
+                prefix = ""
             files = await asyncio.to_thread(_copy_out, archive, prefix + unit, source)
             moved = _Moved(
                 record_kind=record_kind,
@@ -950,8 +977,6 @@ class _Mover:
             index = _Index(storage)
             units = index.read()
             held = units.get(unit)
-            if held is None:
-                _not_elsewhere(unit)
             if held is None or held.record_kind != record_kind or held.state == "deleted":
                 raise ValueError(f"the unit {unit} of {record_kind} is not archived")
             if held.state == "restored" and target.exists():
@@ -990,8 +1015,6 @@ class _Mover:
             index = _Index(storage)
             units = index.read()
             held = units.get(unit)
-            if held is None and not storage.joinpath(*path.parts).exists():
-                _not_elsewhere(unit)
             if held is not None and held.state == "deleted":
                 raise ValueError(f"the unit {unit} is deleted already")
             if held is not None:
@@ -1015,6 +1038,8 @@ class _Mover:
             if not source.exists():
                 raise FileNotFoundError(f"the unit {unit} is not in the plugin's storage")
             _span(record_count, first_received_ns, last_received_ns)
+            prefix = _shard_prefix()
+            _reported(prefix, unit)
             rule = "" if for_caller is not None else self.window_rule(kind, "deleted")
             moved = _Moved(
                 record_kind=record_kind,
@@ -1025,6 +1050,7 @@ class _Mover:
                 state="deleted",
                 at_ns=_now_ns(),
                 rule=rule,
+                prefix=prefix,
             )
             await self.report(moved.move("deleted", rule), for_caller)
             units[unit] = moved
@@ -1065,29 +1091,51 @@ class _Mover:
         return held.move(held.state, held.rule if held.state in ("archived", "deleted") else "")
 
 
-def _own_unit(unit: str) -> str:
-    """A unit a restore or a deletion names, in this shard's storage: the
-    shard's own prefix taken off; another shard's unit refused, since only
-    its own pod writes its storage (PO item 71)."""
-    if not _sharded():
+def _own_unit(unit: str, strict: bool = True) -> str:
+    """A unit a move names, in this shard's storage: on an instance of
+    shards, the shard's own prefix taken off, and another shard's unit
+    refused, since only its own pod writes its storage (PO item 71). A
+    restore or a deletion (`strict`) names a unit as the instance does, so
+    one with no prefix is shard 0's, what the instance kept before it ran
+    as shards; an archive's own unit may be named in its shard's storage."""
+    if _serving is None or not _sharded():
         return unit
     shard, within = _split(unit)
     if shard is None:
-        return unit
-    if _serving is not None and shard != _serving[0]:
+        if strict and _serving[0] != 0:
+            shard, within = 0, unit
+        else:
+            return unit
+    if shard != _serving[0]:
         raise ValueError(f"the unit {unit} is shard {shard}'s: its own pod restores it")
     return within
 
 
-def _not_elsewhere(unit: str) -> None:
-    """A unit named with no prefix that this shard does not hold, refused
-    where shard 0 holds it: what the instance kept before it ran as shards,
-    which its storage's copy put under `shard-0/`."""
-    if _serving is None or not _sharded() or _serving[0] == 0:
-        return
-    folder, _ = _shard_folder(unit)
-    if folder is not None and _Index(folder).read().get(unit) is not None:
-        raise ValueError(f"the unit {unit} is shard 0's: its own pod restores it")
+def _archive_used(units: dict[str, _Moved]) -> int:
+    """The bytes the instance's archive holds, as the indexes say: this
+    shard's (`units`, as read), and on an instance of shards every other
+    shard's, the bound being the instance's (W8.3)."""
+    used = sum(moved.archive_bytes for moved in units.values())
+    granted = instance_storage_dir()
+    if granted is None or _serving is None or not _sharded():
+        return used
+    for folder in sorted(granted.glob("shard-*")):
+        shard, _ = _split(folder.name + "/")
+        if shard is None or shard == _serving[0]:
+            continue
+        try:
+            used += sum(moved.archive_bytes for moved in _Index(folder).read().values())
+        except (OSError, ValueError, TypeError) as unread:
+            log.warning("shard %s's archive index could not be read: %s", shard, unread)
+    return used
+
+
+def _archived_before_shards(archive: _Objects, unit: str, source: Path) -> bool:
+    """Whether the archive holds a unit's first file under its name with no
+    prefix, as the instance of one pod archived it before it ran as shards."""
+    for within, _ in _files(source):
+        return archive.landed(_object_key(unit, within)) is not None
+    return False
 
 
 def _size(source: Path) -> int:

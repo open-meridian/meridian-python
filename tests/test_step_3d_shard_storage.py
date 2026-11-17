@@ -12,8 +12,10 @@ conductor does."""
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import shutil
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -66,9 +68,11 @@ def archive(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return given
 
 
-async def _pod(service: Any, address: str, shard: int, shards: int) -> meridian.Plugin:
+async def _pod(
+    service: Any, address: str, shard: int, shards: int, past: str = "archived"
+) -> meridian.Plugin:
     """A pod of the instance registered as `shard` of `shards`, its window
-    settings delivered: archived past the window."""
+    settings delivered: `past` past the window, archived by default."""
     service.shard, service.shards = shard, shards
     service.settings = [
         sidecar_pb2.SettingsDelivery(
@@ -76,7 +80,9 @@ async def _pod(service: Any, address: str, shard: int, shards: int) -> meridian.
                 sidecar_pb2.SettingValue(name=name, value=value)
                 for name, value in (
                     ("activity_window_days", "2555"),
-                    ("activity_past_window", "archived"),
+                    ("activity_past_window", past),
+                    ("responses_window_days", "30"),
+                    ("responses_past_window", past),
                 )
             ]
         )
@@ -372,3 +378,257 @@ def test_a_converted_instance_reads_shard_0s_sent_placements_never_sending_twice
     asyncio.run(rig.hear(held))
     assert [a for a in rig.fake.asked if a[0] == "place"] == []
     assert not (root / "trading").exists()
+
+
+# ── The review's findings (sdk4-review) ─────────────────────────────────────
+
+
+async def test_h1_a_deletion_on_a_shard_reports_its_prefixed_unit(
+    sidecar: Any, root: Path
+) -> None:
+    service, address = sidecar
+    day = "responses/2026-11-17"
+    for shard in (0, 1):
+        plugin = await _pod(service, address, shard=shard, shards=2, past="deleted")
+        try:
+            store = RawStore(storage_root(), kind="responses")
+            store.keep("candles", "BTC-USD", {"received_at_ns": AT, "body": f"{shard}"})
+            await store.tend(plugin, window_days=1, past="deleted", today=date(2026, 12, 1))
+        finally:
+            await plugin.leave()
+        assert not (root / f"shard-{shard}" / day).exists()
+    assert [(m.unit, m.outcome) for m, _, _ in service.moves] == [
+        (f"shard-0/{day}", sidecar_pb2.MOVE_OUTCOME_DELETED),
+        (f"shard-1/{day}", sidecar_pb2.MOVE_OUTCOME_DELETED),
+    ]
+    reader = await _pod(service, address, shard=0, shards=2, past="deleted")
+    try:
+        found = reader.find_record(f"shard-1/{day}/candles/x.json")
+        assert found is not None and found.unit == f"shard-1/{day}"
+    finally:
+        await reader.leave()
+
+
+async def test_h2_a_store_admitted_again_as_another_shard_writes_only_there(
+    sidecar: Any, root: Path
+) -> None:
+    service, address = sidecar
+    line = "responses/2026-11-17/ticker/BTC-USD.jsonl"
+    plugin = await _pod(service, address, shard=1, shards=2)
+    store = RawStore(storage_root(), kind="responses")
+    try:
+        store.keep_line("ticker", "BTC-USD", {"received_at_ns": AT, "body": "a"})
+        store.keep_line("ticker", "BTC-USD", {"received_at_ns": AT + 1, "body": "b"})
+    finally:
+        await plugin.leave()
+    # Its Lease lost, the process takes shard 0's: the same store.
+    plugin = await _pod(service, address, shard=0, shards=2)
+    try:
+        key = store.keep_line("ticker", "BTC-USD", {"received_at_ns": AT + 2, "body": "c"})
+    finally:
+        await plugin.leave()
+    assert len((root / "shard-1" / line).read_text().splitlines()) == 2
+    assert key == f"shard-0/{line}#0"
+    assert store.get(key) == {"received_at_ns": AT + 2, "body": "c"}
+
+
+async def test_h2_a_shard_taken_back_names_the_line_its_standby_left(
+    sidecar: Any, root: Path
+) -> None:
+    service, address = sidecar
+    line = root / "shard-1" / "responses/2026-11-17/ticker/BTC-USD.jsonl"
+    plugin = await _pod(service, address, shard=1, shards=2)
+    store = RawStore(storage_root(), kind="responses")
+    try:
+        store.keep_line("ticker", "BTC-USD", {"received_at_ns": AT, "body": "a"})
+    finally:
+        await plugin.leave()
+    # Its standby held shard 1 meanwhile, and kept a line.
+    with line.open("a") as out:
+        out.write(json.dumps({"received_at_ns": AT + 1, "body": "b"}) + "\n")
+    plugin = await _pod(service, address, shard=1, shards=2)
+    try:
+        key = store.keep_line("ticker", "BTC-USD", {"received_at_ns": AT + 2, "body": "c"})
+    finally:
+        await plugin.leave()
+    assert key.endswith("#2")
+    assert store.get(key) == {"received_at_ns": AT + 2, "body": "c"}
+
+
+async def test_m1_a_lagging_holder_and_the_new_one_each_name_their_own_line(
+    sidecar: Any, root: Path
+) -> None:
+    service, address = sidecar
+    plugin = await _pod(service, address, shard=1, shards=2)
+    try:
+        old = RawStore(storage_root(), kind="responses")
+        new = RawStore(storage_root(), kind="responses")
+        kept = [
+            (old, {"received_at_ns": AT, "body": "a"}),
+            (new, {"received_at_ns": AT + 1, "body": "b"}),
+            (old, {"received_at_ns": AT + 2, "body": "c"}),
+            (new, {"received_at_ns": AT + 3, "body": "d"}),
+        ]
+        keys = [store.keep_line("ticker", "BTC-USD", record) for store, record in kept]
+        for key, (_, record) in zip(keys, kept, strict=True):
+            assert new.get(key) == record
+        # A line a crash left unfinished is ended, and the next is named past it.
+        path = root / "shard-1" / "responses/2026-11-17/ticker/BTC-USD.jsonl"
+        with path.open("a") as out:
+            out.write('{"received_at_ns": ')
+        record = {"received_at_ns": AT + 4, "body": "e"}
+        key = new.keep_line("ticker", "BTC-USD", record)
+        assert new.get(key) == record
+    finally:
+        await plugin.leave()
+
+
+async def test_m2_the_archives_bound_holds_across_every_shard(
+    sidecar: Any, root: Path, archive: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    service, address = sidecar
+    for shard in (0, 1):
+        _unit_in(root / f"shard-{shard}", "x" * 100)
+    size = (root / "shard-0" / UNIT / "act-77.json").stat().st_size
+    monkeypatch.setenv("MERIDIAN_ARCHIVE_MOST_BYTES", str(size * 3 // 2))
+    first = await _pod(service, address, shard=0, shards=2)
+    try:
+        await _archived(first)
+    finally:
+        await first.leave()
+    second = await _pod(service, address, shard=1, shards=2)
+    try:
+        with pytest.raises(RuntimeError, match="would take it past"):
+            await _archived(second)
+    finally:
+        await second.leave()
+    assert (root / "shard-1" / UNIT).exists()
+
+
+async def test_m3_a_store_on_a_folder_in_the_storage_follows_its_shard(
+    sidecar: Any, root: Path
+) -> None:
+    service, address = sidecar
+    store = RawStore(storage_root() / "raw", kind="responses")
+    plugin = await _pod(service, address, shard=1, shards=2)
+    try:
+        key = store.keep("candles", "BTC-USD", {"received_at_ns": AT, "body": "x"})
+        ref = plugin.raw_record(key).key
+    finally:
+        await plugin.leave()
+    assert key.startswith("shard-1/raw/responses/") and ref == key
+    assert (root / key).is_file()
+    assert store.get(ref) == {"received_at_ns": AT, "body": "x"}
+
+
+def _old_entry(folder: Path, unit: str, files: dict[str, list[Any]]) -> None:
+    """An index entry as an instance of one pod wrote it: no prefix."""
+    edge._Index(folder).write(
+        {
+            unit: edge._Moved(
+                record_kind="activity",
+                unit=unit,
+                record_count=1,
+                first_received_ns=FIRST,
+                last_received_ns=LAST,
+                state="archived",
+                files=files,
+            )
+        }
+    )
+
+
+async def test_l1_on_shard_1_a_unit_with_no_prefix_is_shard_0s(
+    sidecar: Any, root: Path, archive: Path
+) -> None:
+    service, address = sidecar
+    ben = caller_header("write", subject="local|ben", display_name="Ben", roles=["custody"])
+    _old_entry(root / "shard-0", UNIT, {})
+    _unit_in(root / "shard-1", "shard 1")
+    plugin = await _pod(service, address, shard=1, shards=2)
+    try:
+        await _archived(plugin)
+        with pytest.raises(ValueError, match=f"^the unit {UNIT} is shard 0's"):
+            await plugin.restore_unit("activity", UNIT, for_caller=ben)
+        restored = await plugin.restore_unit("activity", f"shard-1/{UNIT}", for_caller=ben)
+        assert restored.is_relative_to(root / "shard-1")
+    finally:
+        await plugin.leave()
+
+
+async def test_l2_a_unit_archived_before_the_copy_but_not_indexed_is_not_archived_again(
+    sidecar: Any, root: Path, archive: Path
+) -> None:
+    service, address = sidecar
+    _unit_in(root / "shard-0", "before")
+    # The pod of one pod archived it and reported it, and stopped before
+    # its index was written.
+    (archive / UNIT).mkdir(parents=True)
+    shutil.copy(root / "shard-0" / UNIT / "act-77.json", archive / UNIT / "act-77.json")
+    service.moves.append(
+        (
+            sidecar_pb2.RecordMoveRequest(
+                record_kind="activity", unit=UNIT, record_count=1, outcome=ARCHIVED
+            ),
+            "",
+            AT,
+        )
+    )
+    plugin = await _pod(service, address, shard=0, shards=2)
+    try:
+        await _archived(plugin)
+        found = plugin.find_record(f"shard-0/{UNIT}/act-77.json")
+    finally:
+        await plugin.leave()
+    assert len(service.moves) == 1, "the conductor's again"
+    assert not (archive / "shard-0").exists()
+    assert not (root / "shard-0" / UNIT).exists()
+    assert found is not None and found.unit == UNIT
+
+
+async def test_l3_a_key_is_not_prefixed_where_no_storage_is_granted(
+    sidecar: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    service, address = sidecar
+    monkeypatch.delenv("MERIDIAN_STORAGE_DIR", raising=False)
+    plugin = await _pod(service, address, shard=1, shards=2)
+    try:
+        assert plugin.raw_record("responses/x.json").key == "responses/x.json"
+    finally:
+        await plugin.leave()
+
+
+def test_l3_the_traders_unkept_names_no_shard(
+    root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from test_connectivity_trader import Rig
+
+    monkeypatch.setattr(edge, "_serving", (1, 2))
+    rig = Rig(Recorder("broker"))
+    assert rig.trader._raw("").key == "unkept"
+
+
+async def test_l4_an_old_units_length_is_its_own(
+    sidecar: Any, root: Path, archive: Path
+) -> None:
+    service, address = sidecar
+    ben = caller_header("write", subject="local|ben", display_name="Ben", roles=["custody"])
+    unit = "/".join(["u" * 50] * 10)  # 509 characters, as reported then
+    data = b'{"id": "long"}'
+    (archive / unit).mkdir(parents=True)
+    (archive / unit / "f.json").write_bytes(data)
+    digest = hashlib.sha256(data).hexdigest()
+    _old_entry(root / "shard-0", unit, {"f.json": [len(data), digest]})
+    plugin = await _pod(service, address, shard=0, shards=2)
+    try:
+        restored = await plugin.restore_unit("activity", unit, for_caller=ben)
+    finally:
+        await plugin.leave()
+    assert (restored / "f.json").read_bytes() == data
+
+
+def test_l5_a_stores_root_is_set_as_before(tmp_path: Path) -> None:
+    store = RawStore(tmp_path / "a", kind="responses")
+    store.root = tmp_path / "b"
+    key = store.keep("candles", "BTC-USD", {"received_at_ns": AT, "body": "x"})
+    assert (tmp_path / "b" / key).is_file()

@@ -145,6 +145,7 @@ from ._bookkeeping import (
     fill_price,
     filled_in_book,
     place_once,
+    raw_or_unkept,
     report_status_not_mapped,
     resolve_unanswered,
 )
@@ -648,7 +649,7 @@ class Trader(Role):
         return _ns(self._now())
 
     def _raw(self, key: str) -> ops.RawRecordRef:
-        reference: ops.RawRecordRef = self.plugin.raw_record(key or "unkept")
+        reference: ops.RawRecordRef = raw_or_unkept(self.plugin, key)
         return reference
 
     def mapped(self) -> frozenset[str]:

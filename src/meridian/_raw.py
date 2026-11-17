@@ -48,15 +48,17 @@ whatever the transport.
 
 from __future__ import annotations
 
+import fcntl
 import json
 import logging
+import os
 import re
 import tempfile
 from collections import OrderedDict
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, TextIO
 
 from .errors import MeridianError
@@ -87,6 +89,12 @@ def storage_root(prefix: str = "meridian-raw-") -> Path:
     if granted is not None:
         return granted
     return Path(tempfile.mkdtemp(prefix=prefix))
+
+
+def _generation() -> int:
+    from . import edge
+
+    return edge._generation
 
 
 def _safe(part: str) -> str:
@@ -125,57 +133,103 @@ class RawStore:
         self._day = ""
         #: Each file's last line kept: its body and its key.
         self._last: dict[str, tuple[str, str]] = {}
-        #: The lines each day's file holds, counted once: a stream adds many.
-        self._lines: dict[str, int] = {}
+        #: The lines each day's file held and its size in bytes, as last
+        #: counted: counted again past that size, only the bytes added.
+        self._lines: dict[str, tuple[int, int]] = {}
         #: When the answer each live line names first arrived, the latest
         #: `_REMEMBERED` of the day.
         self._first: OrderedDict[str, int] = OrderedDict()
         #: The files held open for appending, the one written least lately first.
         self._open: OrderedDict[str, TextIO] = OrderedDict()
+        #: The Register it remembers its files under (`_fresh`).
+        self._generation = _generation()
 
-    def _follows(self) -> bool:
-        """Whether this store is on the instance's granted storage -- the
-        whole, as `storage_root()` is before Register, or the shard's folder,
-        as it is after -- and so writes in its shard's folder once the plugin
-        registered as one."""
-        from .edge import instance_storage_dir, storage_dir
+    def _fresh(self) -> None:
+        """What it remembers of its files forgotten, and its open files
+        closed, when the plugin has registered again since: as another
+        shard, or its own taken back after a standby wrote it."""
+        now = _generation()
+        if now == self._generation:
+            return
+        self._generation = now
+        for out in self._open.values():
+            out.close()
+        self._open.clear()
+        self._last.clear()
+        self._lines.clear()
+        self._first.clear()
+        self._day = ""
 
-        given = Path(self._given)
-        return given in (instance_storage_dir(), storage_dir())
+    def _within(self) -> PurePosixPath | None:
+        """Where it was given in the instance's granted storage -- the
+        storage itself, a shard's folder, or a folder in either -- as a path
+        below the shard's folder; None for a root elsewhere."""
+        from .edge import _split, instance_storage_dir
+
+        granted = instance_storage_dir()
+        if granted is None:
+            return None
+        try:
+            below = PurePosixPath(Path(self._given).relative_to(granted).as_posix())
+        except ValueError:
+            return None
+        shard, rest = _split(below.as_posix() + "/")
+        return PurePosixPath(rest or ".") if shard is not None else below
+
+    def _sharded(self) -> PurePosixPath | None:
+        """Where it is below its shard's folder, on the granted storage of
+        an instance of shards; None where it writes the root it was given."""
+        from .edge import _sharded
+
+        return self._within() if _sharded() else None
 
     @property
     def root(self) -> Path:
-        """Where it writes: on the granted storage, the shard's own folder
-        (`storage_dir()`); else the root it was given."""
+        """Where it writes: on the granted storage of an instance of shards,
+        its place in the shard's own folder (`storage_dir()`), whenever it
+        was made; else the root it was given."""
         from .edge import storage_dir
 
-        if self._follows():
-            mine = storage_dir()
-            if mine is not None:
-                return mine
-        return self._given
+        below = self._sharded()
+        mine = storage_dir()
+        if below is None or mine is None:
+            return self._given
+        return mine.joinpath(*below.parts)
+
+    @root.setter
+    def root(self, given: Path) -> None:
+        self._given = given
+        self._generation = -1
 
     def _prefix(self) -> str:
-        """What its keys are prefixed with: its shard's, on the granted
+        """What its keys are prefixed with, so they name the record across
+        the instance: its shard's folder and its place there, on the granted
         storage of an instance of shards; else nothing."""
         from .edge import _shard_prefix
 
-        return _shard_prefix() if self._follows() else ""
+        below = self._sharded()
+        if below is None:
+            return ""
+        return _shard_prefix() + ("" if str(below) == "." else f"{below}/")
 
     def _path(self, key: str) -> Path:
-        """The file a key names: on the granted storage, in whichever shard's
-        folder it names (shard 0's for one with no prefix, on an instance of
-        shards); else under the root it was given."""
-        from .edge import _shard_folder
+        """The file a key names: on the granted storage of an instance of
+        shards, in whichever shard's folder it names, or, with no prefix,
+        shard 0's, where the copy put what the instance kept before; else
+        under the root it was given."""
+        from .edge import _split, instance_storage_dir
 
-        if self._follows():
-            folder, within = _shard_folder(key)
-            if folder is not None:
-                return folder / within
-        return self._given / key
+        below = self._sharded()
+        granted = instance_storage_dir()
+        if below is None or granted is None:
+            return self._given / key
+        if _split(key)[0] is not None:
+            return granted / key
+        return granted.joinpath("shard-0", *below.parts) / key
 
     def keep(self, call: str, name: str, record: dict[str, Any]) -> str:
         """Keep one answer; its key. A key is never written twice."""
+        self._fresh()
         self._kept += 1
         received = int(record["received_at_ns"])
         key = (
@@ -186,13 +240,19 @@ class RawStore:
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("x", encoding="utf-8") as out:
             json.dump(record, out, indent=1, sort_keys=True)
+            out.flush()
+            os.fsync(out.fileno())
         return self._prefix() + key
 
     def keep_line(self, call: str, name: str, record: dict[str, Any]) -> str:
         """Keep one live answer as the next line of its day's file for `call`
         and `name`, unless its body is the one kept last for them, which the
         returned key then names again: `<file>#<line>`. The line is written
-        and flushed before this returns."""
+        and synced before this returns. The file is locked while its lines
+        are counted and the line written, so a pod still writing through a
+        takeover's lapse and the shard's new holder each name their own; a
+        line a crash left unfinished is ended first, and counted."""
+        self._fresh()
         received = int(record["received_at_ns"])
         day = _day_of(received)
         if day > self._day:
@@ -203,18 +263,20 @@ class RawStore:
         held = self._last.get(key)
         if held is not None and held[0] == body:
             return held[1]
-        lines = self._lines.get(key)
-        if lines is None:
-            path = self.root / key
-            lines = sum(1 for _ in path.open(encoding="utf-8")) if path.exists() else 0
         out = self._appender(key)
         try:
-            out.write(json.dumps(record, sort_keys=True) + "\n")
-            out.flush()
+            fcntl.lockf(out, fcntl.LOCK_EX)
+            try:
+                lines = self._count(key, out)
+                out.write(json.dumps(record, sort_keys=True) + "\n")
+                out.flush()
+                os.fsync(out.fileno())
+                self._lines[key] = (lines + 1, os.fstat(out.fileno()).st_size)
+            finally:
+                fcntl.lockf(out, fcntl.LOCK_UN)
         except OSError:
             self._close(key)
             raise
-        self._lines[key] = lines + 1
         named = f"{self._prefix()}{key}#{lines}"
         self._last[key] = (body, named)
         self._first[named] = received
@@ -234,6 +296,26 @@ class RawStore:
             if line is not None and "received_at_ns" in line:
                 return int(line["received_at_ns"])
         return otherwise
+
+    def _count(self, key: str, out: TextIO) -> int:
+        """The lines the file holds now, its lock held: as last counted
+        where its size is unchanged, else counted on from there, reading
+        only what was added. A last line left unfinished is ended."""
+        size = os.fstat(out.fileno()).st_size
+        lines, counted = self._lines.get(key, (0, 0))
+        if counted == size:
+            return lines
+        if counted > size:
+            lines, counted = 0, 0
+        with (self.root / key).open("rb") as read:
+            read.seek(counted)
+            added = read.read(size - counted)
+        lines += added.count(b"\n")
+        if added and not added.endswith(b"\n"):
+            out.write("\n")
+            out.flush()
+            lines += 1
+        return lines
 
     def _appender(self, key: str) -> TextIO:
         """The file `key` names, held open for appending: its directory made
@@ -262,10 +344,10 @@ class RawStore:
         forgotten is still in its file, and read from it if asked again."""
         prefix = f"{self.kind}/"
 
-        def earlier(key: str) -> bool:
-            from .edge import _split
+        own = self._prefix()
 
-            within = _split(key)[1]
+        def earlier(key: str) -> bool:
+            within = key[len(own) :] if own and key.startswith(own) else key
             return within[len(prefix) : len(prefix) + 10] < before
 
         for key in [k for k in self._open if earlier(k)]:
@@ -282,7 +364,9 @@ class RawStore:
 
     def get(self, ref_key: str) -> dict[str, Any] | None:
         """The record a row's reference names: a whole answer, or one line of a
-        day's live answers. None once it has moved or gone."""
+        day's live answers. None once it has moved or gone, or for a line a
+        crash left unfinished."""
+        self._fresh()
         key, _, where = ref_key.partition("#")
         path = self._path(key)
         if not path.is_file():
@@ -293,7 +377,10 @@ class RawStore:
             lines = path.read_text(encoding="utf-8").splitlines()
             if int(where) >= len(lines):
                 return None
-            line: dict[str, Any] = json.loads(lines[int(where)])
+            try:
+                line: dict[str, Any] = json.loads(lines[int(where)])
+            except ValueError:
+                return None
             return line
         record: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
         return record
@@ -382,15 +469,17 @@ class RawStore:
         if today is None:
             today = datetime.now(UTC).date()
         cutoff = today - timedelta(days=window_days)
+        self._fresh()
         self._forget(before=today.isoformat())
         for unit in self.units():
             if unit.day >= cutoff or unit.day >= today or past == "kept":
                 continue
             try:
+                named = self._named(unit.unit)
                 if past == "archived":
                     await plugin.archive_unit(
                         self.kind,
-                        unit.unit,
+                        named,
                         record_count=unit.records,
                         first_received_ns=unit.first_ns,
                         last_received_ns=unit.last_ns,
@@ -398,7 +487,7 @@ class RawStore:
                 elif past == "deleted":
                     await plugin.delete_unit(
                         self.kind,
-                        unit.unit,
+                        named,
                         record_count=unit.records,
                         first_received_ns=unit.first_ns,
                         last_received_ns=unit.last_ns,
@@ -415,6 +504,13 @@ class RawStore:
                     last_received_ns=max(u.last_ns for u in held),
                 )
             ]
+
+    def _named(self, unit: str) -> str:
+        """A unit as a move names it, as the instance does: with its shard's
+        prefix on the granted storage of an instance of shards."""
+        from .edge import _instance_key
+
+        return _instance_key(unit) if self._sharded() is not None else unit
 
     def _window(
         self, settings: Any, window_days: int | None, past: str | None
