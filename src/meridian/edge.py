@@ -51,6 +51,19 @@ are kept. Its bound, where a deployment admin gave one, is
 `archive_unit` refuses a unit that would take the archive past it, before
 anything is written or reported, and the unit stays in storage.
 
+A bucket is reached under the pod's account, which the bucket's workload
+identity trusts by name. So `meridian.run` asks the bucket before each
+Register, for at most one key under the instance's prefix (a list, the least
+the account may do): refused on auth -- a 401 or 403, or no credential at
+all -- the plugin does not register, says "the archive's bucket refuses this
+instance's account <namespace>/<account>: its workload identity must trust
+that account (pluginArchive in values.yaml)", naming the account from
+`MERIDIAN_POD_NAMESPACE` and `MERIDIAN_POD_SERVICE_ACCOUNT` where the
+deployment gives both ("this instance's account" alone otherwise), and asks
+again once a minute, never
+exiting, until the administrator's trust is in place. Anything else -- a
+network fault, a 5xx, no answer in 30 s -- is said, and the plugin goes on.
+
 The plugin moves its own records, in units it can find again: a unit is a
 file or a directory in its storage, named by its path there
 ("activity/ACC-1/2019-03"), and the records it holds are the paths within
@@ -453,6 +466,80 @@ class _Bucket:
         held = str(head.get("ChecksumSHA256", ""))
         digest = base64.b64decode(held).hex() if held else ""
         return int(head["ContentLength"]), digest
+
+    def answers(self) -> None:
+        """The least the instance's account may be asked: a list of at most
+        one key under its own prefix. What the bucket refuses is raised."""
+        self.client.list_objects_v2(Bucket=self.bucket, Prefix=self._key(""), MaxKeys=1)
+
+
+#: Where the deployment names the pod's namespace and account, from the
+#: downward API (PO item 64): what a refusal names the account by.
+_POD_NAMESPACE = "MERIDIAN_POD_NAMESPACE"
+_POD_SERVICE_ACCOUNT = "MERIDIAN_POD_SERVICE_ACCOUNT"
+
+
+def _refused_text() -> str:
+    """What a plugin says while the archive's bucket refuses its account
+    (PO items 60, 61 and 64): the account as `<namespace>/<account>` where
+    the deployment gives both, else "this instance's account" alone."""
+    namespace = os.environ.get(_POD_NAMESPACE, "").strip()
+    account = os.environ.get(_POD_SERVICE_ACCOUNT, "").strip()
+    named = f" {namespace}/{account}" if namespace and account else ""
+    return (
+        f"the archive's bucket refuses this instance's account{named}: its workload identity "
+        "must trust that account (pluginArchive in values.yaml)"
+    )
+
+
+#: The codes a refusal of the account is answered with where its HTTP
+#: status alone does not say so: STS's, as the pod's web identity is
+#: exchanged for a credential before the bucket is asked.
+_AUTH_CODES = frozenset({"AccessDenied", "InvalidIdentityToken", "InvalidClientTokenId"})
+
+#: The pod holds no credential at all: no identity is associated with its
+#: account (EKS Pod Identity's refusal; botocore's name for it).
+_NO_CREDENTIAL = frozenset({"NoCredentialsError"})
+
+
+def _refused_on_auth(failed: BaseException) -> bool:
+    """Whether the bucket's answer refuses the pod's account: an HTTP 401 or
+    403, a code that says so, or no credential at all. A network fault, a
+    timeout or a 5xx says nothing of the account, and is not one. Read by
+    shape, as botocore raises it, with no cloud's library imported."""
+    if any(kind.__name__ in _NO_CREDENTIAL for kind in type(failed).__mro__):
+        return True
+    response = getattr(failed, "response", None)
+    if not isinstance(response, Mapping):
+        return False
+    status = (response.get("ResponseMetadata") or {}).get("HTTPStatusCode")
+    code = (response.get("Error") or {}).get("Code", "")
+    return status in (401, 403) or code in _AUTH_CODES
+
+
+def _archive_is_bucket() -> bool:
+    """Whether the instance's archive is a bucket rather than mounted: the
+    one asked before the plugin registers."""
+    return archive_dir() is None and bool(os.environ.get(_ARCHIVE_BUCKET, ""))
+
+
+def _archive_refused() -> str | None:
+    """Asked before the plugin registers: where the instance's archive is a
+    bucket, the bucket's answer where it refuses the pod's account, else
+    None -- no bucket, a bucket that answers, or one that failed otherwise
+    (said, and the plugin goes on as with no ask). A client made afresh
+    each time, so no credential refused earlier is kept."""
+    try:
+        archive = _archive()
+        if not isinstance(archive, _Bucket):
+            return None
+        archive.answers()
+    except Exception as failed:
+        answer = f"{type(failed).__name__}: {failed}"
+        if _refused_on_auth(failed):
+            return answer
+        log.warning("the archive's bucket was not reached at start (%s); going on", answer)
+    return None
 
 
 def _archive() -> _Objects | None:
