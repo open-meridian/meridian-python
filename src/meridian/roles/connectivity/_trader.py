@@ -40,7 +40,9 @@ outcome unknown, `venue status not mapped`. A send never answered
 by reading the account's orders for its client order ID, never by sending it
 again: before every send the placement is noted in storage (`Sent`), so a
 placement the book still holds queued after a restart is asked about, never
-sent twice.
+sent twice. An unknown outcome is said once per placement, and said
+resolved (`outcome resolved`) once the venue's orders show what became of
+it.
 
 **Fills.** The account's orders are read on a poll, and, where the venue
 streams its trade updates, each update handed on (`on_update`). Where the
@@ -141,6 +143,7 @@ from ._bookkeeping import (
     Sent,
     VenueRefused,
     VenueUnanswered,
+    _said_unknown,
     bust_id,
     execution_id,
     fill_price,
@@ -152,6 +155,15 @@ from ._bookkeeping import (
 )
 
 log = logging.getLogger("meridian.roles.connectivity")
+
+
+def _unknown_in_book(placement: ops.Placement) -> bool:
+    """Whether the book holds the placement said outcome unknown."""
+    return any(
+        held.condition == ops.PLACEMENT_CONDITION_OUTCOME_UNKNOWN
+        for held in placement.status.conditions
+    )
+
 
 #: The places a fill's price worked out from two averages is rounded to
 #: where the division is not exact.
@@ -328,7 +340,9 @@ class Venue(Protocol):
     #: `request_quotes(code, asked)` (the request's ID and its raw record's
     #: key), `quotes(code, request_id)` (each `VenueQuote` and the raw
     #: record's key) and `accept_quote(code, request_id, quote, asked)` (the
-    #: order the acceptance made, as `place` answers it).
+    #: order the acceptance made, as `place` answers it, its client order ID
+    #: the placement's ID, `asked.placement_id`, by which an acceptance
+    #: whose answer was lost is found).
     #: An adapter may also answer `charges(code)` (a list of `VenueCharge`)
     #: and `stated_settlement(code, order, traded)` (the settlement date the
     #: venue states for an order's fill, "" for none); the Trader asks
@@ -387,6 +401,12 @@ class Worked:
     #: earlier process's), with nothing reported of it: said outcome
     #: unknown once, should the venue's orders not hold it (0.37.0).
     unreported: bool = False
+    #: Said outcome unknown, by this pod or one before it (the book's
+    #: condition): said resolved once its order is found (0.37.0).
+    said_unknown: bool = False
+    #: Its outcome-unknown report failed: the book is read before it is
+    #: reported again, should the first have landed.
+    recheck: bool = False
     acknowledged: bool = False
     ended: str = ""
     cancel_sent: bool = False
@@ -411,6 +431,9 @@ class Worked:
     quotes: dict[str, str] = field(default_factory=dict)
     outcomes: dict[str, int] = field(default_factory=dict)
     accepted: str = ""
+    #: The quotes open when one was picked, each recorded not picked once
+    #: the acceptance's order is known.
+    others: tuple[str, ...] = ()
     asked: Asked | None = None
 
 
@@ -738,6 +761,7 @@ class Trader(Role):
                     placement.placement_id, executions, besides=worked.venue_order_id
                 )
             worked.unanswered = not worked.venue_order_id and not worked.rfq_request
+            worked.said_unknown = _unknown_in_book(placement)
             self.working[placement.placement_id] = worked
             self.decided.add(placement.placement_id)
             log.info("working %s again: %s filled", placement.placement_id, worked.filled)
@@ -983,6 +1007,7 @@ class Trader(Role):
             self.latency.order_ack(self.session, self._clock_ns() - sent_at)
         if placed.state == "unknown":
             worked.unanswered = True
+            worked.said_unknown = True
             self.working[pid] = worked
             return
         if placed.state == "sent_before":
@@ -1009,10 +1034,25 @@ class Trader(Role):
         pid = placement.placement_id
         worked = await self._worked(placement, order)
         if worked is not None:
-            worked.unanswered = not worked.rfq_request
-            worked.unreported = queued and worked.unanswered
+            worked.said_unknown = _unknown_in_book(placement)
+            if worked.rfq_request:
+                worked.unanswered = False
+            elif queued:
+                self._unanswered(worked, placement)
+            else:
+                worked.unanswered = True
             self.working[pid] = worked
             self.decided.add(pid)
+
+    def _unanswered(self, worked: Worked, placement: ops.Placement) -> None:
+        """A placement whose venue order is not known: looked for by its
+        client order ID, and said outcome unknown once (0.37.0) should the
+        venue's orders not hold it -- unless the book shows it said, or this
+        shard's folder notes it said, by this pod or another."""
+        worked.unanswered = True
+        said = _unknown_in_book(placement)
+        worked.said_unknown = worked.said_unknown or said
+        worked.unreported = not said and _said_unknown(worked.placement_id) not in self._sent
 
     def placement_types(self, venue: Venue, code: str) -> tuple[int, ...]:
         """The placement types the venue takes on an account (contract v27,
@@ -1117,6 +1157,7 @@ class Trader(Role):
             # with; the request is never sent again -- nor where another pod
             # noted it first on the shard's folder (a takeover's lapse).
             worked.rfq_request = worked.placement_id
+            worked.said_unknown = requested.state == "unknown"
             self.working[worked.placement_id] = worked
             return
         if requested.state != "placed":
@@ -1229,14 +1270,22 @@ class Trader(Role):
             dealer_quote_id = quote.dealer_quote_id
         if not dealer_quote_id or quote is None:
             return
-        worked.accepted = picked
+        worked.others = tuple(
+            other.quote_id
+            for other in placement.quotes
+            if other.quote_id != picked and other.outcome == ops.PLACEMENT_QUOTE_OUTCOME_OPEN
+        )
         # The acceptance makes the venue's order, so it is noted as a send is
         # (0.37.0): never sent again after a restart, nor by a second pod in
-        # a takeover's lapse; its order is then found by the placement's ID.
+        # a takeover's lapse; its order is then found by the placement's ID,
+        # and said outcome unknown once while it is not. Accepted once noted:
+        # a note that fails leaves the pick to be heard again.
         noted = f"accept:{worked.placement_id}:{picked}"
         if noted in self._sent or not self._sent.note(noted):
-            worked.unanswered = True
+            worked.accepted = picked
+            self._unanswered(worked, placement)
             return
+        worked.accepted = picked
         asked = worked.asked
         if asked is None:
             order = await self._order_of(placement)
@@ -1262,26 +1311,31 @@ class Trader(Role):
             )
             return
         except VenueUnanswered:
-            worked.unanswered = True
+            self._unanswered(worked, placement)
             return
-        await self.report_placement_quote(
-            placement_id=worked.placement_id,
-            quote_id=picked,
-            outcome=ops.PLACEMENT_QUOTE_OUTCOME_ACCEPTED,
-            raw_record=self._raw(key),
-            idempotency_key=f"quote:{picked}:accepted",
-        )
-        for other in placement.quotes:
-            if other.quote_id != picked and other.outcome == ops.PLACEMENT_QUOTE_OUTCOME_OPEN:
-                await self.report_placement_quote(
-                    placement_id=worked.placement_id,
-                    quote_id=other.quote_id,
-                    outcome=ops.PLACEMENT_QUOTE_OUTCOME_NOT_PICKED,
-                    raw_record=self._raw(key),
-                    idempotency_key=f"quote:{other.quote_id}:not-picked",
-                )
+        await self._quote_outcomes(worked, key)
         worked.venue_order_id = record.order_id
         await self._report_status(venue, worked, record, key)
+
+    async def _quote_outcomes(self, worked: Worked, key: str) -> None:
+        """The picked quote recorded accepted and every other open one not
+        picked, each under its own key, so a second recording is the
+        first: once its acceptance answered, or once its order is found."""
+        await self.report_placement_quote(
+            placement_id=worked.placement_id,
+            quote_id=worked.accepted,
+            outcome=ops.PLACEMENT_QUOTE_OUTCOME_ACCEPTED,
+            raw_record=self._raw(key),
+            idempotency_key=f"quote:{worked.accepted}:accepted",
+        )
+        for other in worked.others:
+            await self.report_placement_quote(
+                placement_id=worked.placement_id,
+                quote_id=other,
+                outcome=ops.PLACEMENT_QUOTE_OUTCOME_NOT_PICKED,
+                raw_record=self._raw(key),
+                idempotency_key=f"quote:{other}:not-picked",
+            )
 
     # ── Changing: a cancel or a replace ─────────────────────────────────
 
@@ -1525,42 +1579,85 @@ class Trader(Role):
                 record = answered.get(worked.placement_id)
                 if record is None:
                     if worked.unreported:
-                        # Noted as sent, by another pod or an earlier process,
-                        # and not among the venue's orders: said once, through
-                        # the sidecar (a deposed pod's report is fenced), and
-                        # still looked for by its client order ID.
-                        await self.report_placement(
-                            placement_id=worked.placement_id,
-                            event=ops.PLACEMENT_EVENT_OUTCOME_UNKNOWN,
-                            unknown_reason=ops.UNKNOWN_REASON_REQUEST_UNANSWERED,
-                            raw_record=self._raw(key),
-                        )
-                        worked.unreported = False
+                        await self._say_unknown(worked, key)
                     continue
-                worked.venue_order_id = record.order_id
-                worked.unanswered = False
-                worked.unreported = False
+                await self._found(worked, record, key)
             record = by_id.get(worked.venue_order_id)
             if record is None:
                 continue
             await self._report_status(venue, worked, record, key, by_id)
         if code not in self.mapped():
             return
-        # While a placement on the account is unanswered, only an order that
-        # could be its -- one naming it, or naming no client order ID -- is
-        # held back from the venue-originated ones.
-        unanswered = any(w.unanswered for w in mine)
+        # While a placement on the account is unanswered and not yet said
+        # outcome unknown, only an order that could be its -- one naming it,
+        # or naming no client order ID -- is held back from the
+        # venue-originated ones. Once it is said unknown the hold ends: the
+        # trader resolves it, and the venue's own orders are reported.
+        unanswered = any(w.unanswered and not w.said_unknown for w in mine)
         placed = {w.venue_order_id for w in self.working.values()} | self.venue_orders
         for record in orders:
             if record.order_id in placed:
                 continue
             if unanswered and not record.client_order_id:
                 continue
-            if any(record.client_order_id == w.placement_id for w in self.working.values()):
+            if record.client_order_id and (
+                record.client_order_id in self.working or record.client_order_id in self.held
+            ):
                 continue
             if record.replaces and record.replaces in placed:
                 continue
             await self._originated(venue, code, record, key)
+
+    async def _say_unknown(self, worked: Worked, key: str) -> None:
+        """A placement noted as sent, by another pod or an earlier process,
+        and not among the venue's orders: said outcome unknown once, through
+        the sidecar (a deposed pod's report is fenced), noted so, and still
+        looked for by its client order ID. A report that fails is logged and
+        tried at the next poll, the book read first."""
+        pid = worked.placement_id
+        if _said_unknown(pid) in self._sent:
+            worked.unreported, worked.said_unknown = False, True
+            return
+        if worked.recheck and await self._said_in_book(pid):
+            worked.unreported, worked.said_unknown, worked.recheck = False, True, False
+            return
+        try:
+            await self.report_placement(
+                placement_id=pid,
+                event=ops.PLACEMENT_EVENT_OUTCOME_UNKNOWN,
+                unknown_reason=ops.UNKNOWN_REASON_REQUEST_UNANSWERED,
+                raw_record=self._raw(key),
+            )
+        except MeridianError as failed:
+            worked.recheck = True
+            log.warning("%s: its outcome unknown was not reported: %s", pid, failed)
+            return
+        worked.unreported, worked.said_unknown, worked.recheck = False, True, False
+        try:
+            self._sent.note(_said_unknown(pid))
+        except OSError as failed:
+            # The book's condition says it on a restart all the same.
+            log.warning("%s: its outcome unknown report was not noted: %s", pid, failed)
+
+    async def _said_in_book(self, placement_id: str) -> bool:
+        """Whether the book holds the placement said outcome unknown."""
+        listed = await self.list_orders()
+        return any(
+            _unknown_in_book(placement)
+            for order in listed.orders
+            for placement in order.placements
+            if placement.placement_id == placement_id
+        )
+
+    async def _found(self, worked: Worked, record: VenueOrder, key: str) -> None:
+        """An unanswered placement's order, found by its client order ID: an
+        RFQ's quote outcomes recorded; its status, and its outcome said
+        resolved where it was said unknown, follow (`_report_status`)."""
+        worked.venue_order_id = record.order_id
+        worked.unanswered = False
+        worked.unreported = False
+        if worked.rfq_request and worked.accepted:
+            await self._quote_outcomes(worked, key)
 
     async def _originated(self, venue: Venue, code: str, record: VenueOrder, key: str) -> None:
         """A venue order no placement names (contract v23): each fill after
@@ -1785,8 +1882,7 @@ class Trader(Role):
             if worked is None:
                 return
             if worked.unanswered and not worked.venue_order_id:
-                worked.venue_order_id = record.order_id
-                worked.unanswered = False
+                await self._found(worked, record, key)
             if event in ("order_replace_rejected", "order_cancel_rejected"):
                 if worked.replacing is not None or worked.cancel_sent:
                     worked.replacing = None
@@ -1835,7 +1931,17 @@ class Trader(Role):
                 await report_status_not_mapped(
                     self, worked.placement_id, record.status, venue.source, key
                 )
+                worked.said_unknown = True
             return
+        if worked.said_unknown:
+            # Its outcome found by asking the venue (W11.10): said resolved,
+            # so the book drops its condition, before what the venue says.
+            await self.report_placement(
+                placement_id=worked.placement_id,
+                event=ops.PLACEMENT_EVENT_OUTCOME_RESOLVED,
+                raw_record=self._raw(key),
+            )
+            worked.said_unknown = False
         if category == REJECTED and not worked.ended:
             worked.ended = "rejected"
             await self.report_placement(

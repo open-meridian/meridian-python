@@ -191,6 +191,11 @@ log = logging.getLogger("meridian.edge")
 #: Where the deployment says it mounted the instance's own storage.
 STORAGE_DIR = "MERIDIAN_STORAGE_DIR"
 
+#: The instance's shard count, as the launcher sets it on every container of
+#: a pod of an instance with several shards or a standby (1 for a standby
+#: alone); unset on an instance's one pod (step 3d; PO 73).
+_PLUGIN_SHARDS = "MERIDIAN_PLUGIN_SHARDS"
+
 
 #: The shard this pod serves and how many its instance runs, as its sidecar
 #: answered Register (`RegisterReply.shard`, `.shards`; step 3d, item 30):
@@ -239,9 +244,10 @@ def storage_dir() -> Path | None:
     registered as a shard of its instance, its own shard's folder,
     `<storage>/shard-<n>`, where alone it writes (step 3d, item 30).
 
-    Read before Register on a storage its copy step converted for shards
-    (`.meridian/copied-from-<claim>` at its root), or one holding a shard's
-    folder (`shard-<n>/`), it raises RuntimeError:
+    Read before Register on an instance the launcher says runs shards or a
+    standby (`MERIDIAN_PLUGIN_SHARDS` 1 or more), on a storage its copy step
+    converted for shards (`.meridian/copied-from-<claim>` at its root), or
+    on one holding a shard's folder (`shard-<n>/`), it raises RuntimeError:
     the shard's folder is known only once registered, and the root is no
     pod's to write. A plugin reads it from its class's `on_start`."""
     if _serving is None:
@@ -259,6 +265,16 @@ def _refuse_before_register() -> None:
     granted = instance_storage_dir()
     if granted is None:
         return
+    shards = os.environ.get(_PLUGIN_SHARDS, "").strip()
+    if shards.isdigit() and int(shards) >= 1:
+        raise RuntimeError(
+            f"storage_dir() was read before the plugin registered, on an instance of "
+            f"{shards} shard(s) or a standby ({_PLUGIN_SHARDS}): its pods share its storage, "
+            f"its shard's folder is known only once registered, and the root is no pod's "
+            f"to write. Read storage from the class's on_start; `meridian plugin migrate` "
+            f"to 0.37.0 rewrites the connectivity template's trading files and names any "
+            f"other such read it finds"
+        )
     with contextlib.suppress(OSError):
         shared = next((granted / ".meridian").glob("copied-from-*"), None) or next(
             (p for p in granted.glob("shard-*") if _SHARD_KEY.fullmatch(p.name + "/")), None

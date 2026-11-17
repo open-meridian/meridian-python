@@ -111,9 +111,11 @@ class Sent:
     def __init__(self, file: Path | None) -> None:
         self._file = file
         self._held: set[str] = set()
-        #: The given file's modification time when last read: an earlier
-        #: release's pod writing it again (a rollout inside a lapse) is read.
-        self._read_at: int | None = None
+        #: The given file as last read whole -- its modification time, size
+        #: and inode: an earlier release's pod writing it again (a rollout
+        #: inside a lapse) is read. Kept only once a read parsed, so a write
+        #: caught half done is read again.
+        self._read_at: tuple[int, int, int] | None = None
         self._read_file()
 
     def _read_file(self) -> None:
@@ -122,16 +124,17 @@ class Sent:
         if file is None:
             return
         try:
-            at = file.stat().st_mtime_ns
+            stat = file.stat()
         except OSError:
             return
+        at = (stat.st_mtime_ns, stat.st_size, stat.st_ino)
         if at == self._read_at:
             return
-        self._read_at = at
         with contextlib.suppress(OSError, ValueError):
             held = json.loads(file.read_text())
             if isinstance(held, list):
                 self._held |= {str(each) for each in held}
+            self._read_at = at
 
     @property
     def _folder(self) -> Path | None:
@@ -193,29 +196,72 @@ class Sent:
         if marker is None:
             self._held.add(name)
             return True
-        made_folder = not marker.parent.is_dir()
-        marker.parent.mkdir(parents=True, exist_ok=True)
-        if made_folder:
-            _sync_folder(marker.parent.parent)
-        try:
-            made = os.open(marker, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
-        except FileExistsError:
-            self._held.add(name)
-            return False
-        try:
-            try:
-                os.write(made, name.encode("utf-8"))
-                os.fsync(made)
-            finally:
-                os.close(made)
-        except BaseException:
-            # Not kept, so nothing was done under it: the marker goes, or it
-            # would read as noted with nothing behind it.
-            marker.unlink(missing_ok=True)
-            raise
-        _sync_folder(marker.parent)
+        _make_folders(marker.parent)
+        if marker.name.startswith(_HASHED):
+            made = _link_marker(marker, name)
+        else:
+            made = _create_marker(marker, name)
         self._held.add(name)
+        if made:
+            _sync_folder(marker.parent)
+        return made
+
+
+def _make_folders(folder: Path) -> None:
+    """`folder` and any folder above it missing, each one's entry made
+    durable in the folder above it."""
+    made: list[Path] = []
+    at = folder
+    while not at.is_dir():
+        made.append(at)
+        if at.parent == at:
+            break
+        at = at.parent
+    folder.mkdir(parents=True, exist_ok=True)
+    for each in made:
+        _sync_folder(each.parent)
+
+
+def _create_marker(marker: Path, name: str) -> bool:
+    """A marker named by its name, created exclusively: False where it was
+    made already. One whose write fails goes, or it would read as noted with
+    nothing done under it."""
+    try:
+        made = os.open(marker, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+    except FileExistsError:
+        return False
+    try:
+        try:
+            os.write(made, name.encode("utf-8"))
+            os.fsync(made)
+        finally:
+            os.close(made)
+    except BaseException:
+        marker.unlink(missing_ok=True)
+        raise
+    return True
+
+
+def _link_marker(marker: Path, name: str) -> bool:
+    """A marker named by its name's digest, whose name is read from it:
+    written whole to a hidden file first, then linked into place, which
+    fails where it exists. It is never seen empty, a crash between the two
+    leaving only the hidden file."""
+    hidden = marker.with_name(f".{marker.name}.{os.getpid()}.{os.urandom(4).hex()}")
+    made = os.open(hidden, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+    try:
+        try:
+            os.write(made, name.encode("utf-8"))
+            os.fsync(made)
+        finally:
+            os.close(made)
+        try:
+            os.link(hidden, marker)
+        except FileExistsError:
+            return False
         return True
+    finally:
+        hidden.unlink(missing_ok=True)
 
 
 #: A marker named by its name's digest, the name too long for a file's.
@@ -299,6 +345,9 @@ async def place_once(
             unknown_reason=ops.UNKNOWN_REASON_REQUEST_UNANSWERED,
             raw_record=raw_or_unkept(role.plugin, lost.raw_key),
         )
+        # Said once (0.37.0): a restart, or the pod that takes the shard,
+        # finds it said and says it no more.
+        sent.note(_said_unknown(placement_id))
         return Placed("unknown", raw_key=lost.raw_key)
     return Placed("placed", answer, raw_key)
 
@@ -312,6 +361,13 @@ def raw_or_unkept(plugin: Any, key: str) -> Any:
     reference = plugin.raw_record("unkept")
     reference.key = "unkept"
     return reference
+
+
+def _said_unknown(placement_id: str) -> str:
+    """The name a placement's outcome-unknown report is noted under, in the
+    same `Sent` as its send (0.37.0), once reported: a placement's unknown
+    outcome is said once, by whichever pod holds its shard."""
+    return f"unknown:{placement_id}"
 
 
 def resolve_unanswered(
