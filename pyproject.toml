@@ -61,6 +61,10 @@ meridian-dev = "meridian.dev:main"
 # A version's declaration as JSON, built from the plugin's code: what
 # `meridian plugin upload` reads from the built image (W8.1, contract v11).
 meridian-declaration = "meridian.declaration:main"
+# The storage copy pod's command and the init container its instance's pods
+# wait in (step 3d, item 30; PO 86 and 88): run from the plugin's own image, as
+# the plugin's own user.
+meridian-storage = "meridian.storage:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

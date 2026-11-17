@@ -849,6 +849,15 @@ async with await meridian.connect(declaration=DECLARATION, interface=INTERFACE) 
   heartbeat never waits on the lock: it returns restored units only when
   nothing else holds it. An instance of one pod (`shards` 0) has no shard
   folders, and its keys no prefix.
+- **The copy into `shard-0/`.** Before an instance that kept its own
+  storage first runs as several pods, the deployment copies that storage
+  into the shared one's `shard-0/` with a pod running the plugin's own
+  image, as the plugin's own user, and the instance's pods wait for the copy
+  before the plugin starts. Both are the SDK's command, `meridian-storage`,
+  on the image's PATH from the base: `meridian-storage copy <claim>` and
+  `meridian-storage copied <claim>`. The plugin does nothing for either; an
+  image built on the SDK's base has them, and one built otherwise needs the
+  SDK installed as a package so the command is on its PATH.
 - **One plugin per process, on its loop.** One `Plugin` per process keeps
   raw records: while one declaring storage is registered, `connect`
   refuses another declaring storage until the first leaves (`meridian.run`
