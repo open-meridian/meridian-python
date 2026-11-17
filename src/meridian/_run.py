@@ -57,6 +57,18 @@ again from the first settings. So a pod that lost its shard keeps its
 plugin's process, and takes the next one with no restart to wait out. What
 stops a deposed holder's writes is its sidecar; this stops its work.
 
+An instance whose archive is a bucket (`MERIDIAN_ARCHIVE_BUCKET`) asks it,
+before each Register, for at most one key under its own prefix: a cloud's
+workload identity trusts an account by its name, and the deployment's
+administrator must trust this instance's for the bucket. Refused on auth --
+a 401 or 403, or no credential at all -- the plugin does not register (its
+pod not Ready), says "the archive's bucket refuses this instance's account:
+its workload identity must trust that account (pluginArchive in
+values.yaml)", and asks again once a minute without limit, so a trust added
+later is found without a restart; it never exits for it. A network fault, a
+5xx or an ask unanswered in 30 s says nothing of the account: it is said,
+and the plugin goes on to register.
+
 The process leaves only when it is stopped, or on a fault of its own: a
 refusal (`Refused`), or an exception from a class's `on_start()` or from
 serving the pages, raised as it is.
@@ -96,6 +108,17 @@ FIGURES_SECONDS = 10.0
 #: answered at once that it is not serving.
 _ATTEMPT_SECONDS = 60.0
 _ATTEMPT_PAUSE_SECONDS = 1.0
+
+#: How often an archive's bucket that refused the pod's account is asked
+#: again: a minute, as the wait for a sidecar is said. Fixed, not backed
+#: off, so a trust an administrator adds is found within a minute; at one
+#: list a minute, its cost is nothing.
+_ARCHIVE_CHECK_SECONDS = 60.0
+
+#: How long one ask of the archive's bucket may take before the plugin
+#: goes on as for any fault but a refusal: under boto3's own connect and
+#: read timeouts and their retries.
+_ARCHIVE_ASK_SECONDS = 30.0
 
 #: What a call answers when its sidecar went while it was asked.
 _GONE = frozenset(
@@ -154,6 +177,8 @@ async def run_async(
             handled.append(stop)
     try:
         while True:
+            if not await _archive_trusted(stopped):
+                return
             connected = await _connected(declaration, roles, stopped)
             if connected is None:
                 return
@@ -177,6 +202,52 @@ async def run_async(
         for stop in handled:
             with contextlib.suppress(Exception):
                 loop.remove_signal_handler(stop)
+
+
+async def _archive_trusted(stopped: asyncio.Event) -> bool:
+    """True once the plugin may register as far as its archive goes: it has
+    no bucket, its bucket answers, or the ask failed other than on auth or
+    took longer than `_ARCHIVE_ASK_SECONDS`, as before there was an ask.
+    While the bucket refuses the pod's account, the refusal is said and the
+    bucket asked again every `_ARCHIVE_CHECK_SECONDS`, without limit. False
+    where the process was stopped first."""
+    from . import edge
+
+    if not edge._archive_is_bucket():
+        return True
+    while True:
+        asking = asyncio.ensure_future(asyncio.to_thread(edge._archive_refused))
+        stopping = asyncio.ensure_future(stopped.wait())
+        try:
+            await asyncio.wait(
+                {asking, stopping},
+                timeout=_ARCHIVE_ASK_SECONDS,
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+        finally:
+            stopping.cancel()
+        if stopped.is_set():
+            return False
+        if not asking.done():
+            # Its thread ends on boto3's own timeouts; nothing waits for it.
+            log.warning(
+                "the archive's bucket did not answer within %.0f s at start; going on",
+                _ARCHIVE_ASK_SECONDS,
+            )
+            return True
+        answer = asking.result()
+        if answer is None:
+            return True
+        log.error(edge._REFUSED)
+        log.info(
+            "the archive's bucket answered %s; asking it again in %.0f s",
+            answer,
+            _ARCHIVE_CHECK_SECONDS,
+        )
+        with contextlib.suppress(asyncio.TimeoutError):
+            await asyncio.wait_for(stopped.wait(), _ARCHIVE_CHECK_SECONDS)
+        if stopped.is_set():
+            return False
 
 
 async def _connected(

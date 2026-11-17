@@ -85,7 +85,9 @@ while another pod runs. A sidecar that stops answering -- two heartbeats in
 a row -- stops the plugin's classes as any stop does, `on_stop()` called,
 and the plugin waits for its sidecar again in the same process, as a
 standby: served again, it registers again and its classes start again from
-the first settings. `run` leaves only when it is stopped, or on a fault of
+the first settings. An instance whose archive is a bucket asks the bucket
+before each Register, and waits while it refuses the pod's account (see
+"The archive"). `run` leaves only when it is stopped, or on a fault of
 the plugin's own (a refusal, or an exception from `on_start()` or from
 serving the pages). `meridian.connect`, for a script or a test, still gives
 up after its `wait` (`NoSidecar`).
@@ -770,6 +772,16 @@ async with await meridian.connect(declaration=DECLARATION, interface=INTERFACE) 
   in a cloud the bucket `MERIDIAN_ARCHIVE_BUCKET` names (an `s3://` URL, read
   through boto3, which a plugin deployed with one installs), behind the same
   interface. With neither, records past their window are kept.
+- **A bucket is checked at start.** The pod reaches it under its account,
+  which the bucket's workload identity trusts by name. Before each Register,
+  `meridian.run` lists at most one key under the instance's prefix. Refused
+  on auth (a 401 or 403, or no credential at all), the plugin does not
+  register, so its pod is not Ready; it logs "the archive's bucket refuses
+  this instance's account: its workload identity must trust that account
+  (pluginArchive in values.yaml)" and asks again once a minute, never
+  exiting, so a trust the administrator adds is found without a restart. A
+  network fault, a 5xx or no answer in 30 s is logged, and the plugin goes
+  on to register.
 - **A unit** is a file or directory in the plugin's storage, named by its
   path there; the records it holds are the paths within it, which rows name
   as their `record_key`. `archive_unit` writes it to the archive, checks
