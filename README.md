@@ -847,8 +847,11 @@ async with await meridian.connect(declaration=DECLARATION, interface=INTERFACE) 
   the next pass, and the sidecar is given 30 seconds to record a move;
   `keep_line` waits at most two seconds, then refuses the line. The
   heartbeat never waits on the lock: it returns restored units only when
-  nothing else holds it. An instance of one pod (`shards` 0) has no shard
-  folders, and its keys no prefix.
+  nothing else holds it. Read before Register on a storage its pods share
+  (one its copy step converted, `.meridian/copied-from-<claim>`, or one
+  holding a shard's folder), `storage_dir()` raises rather than answer the
+  root. An instance of one pod (`shards` 0) has no shard folders, and its
+  keys no prefix.
 - **The copy into `shard-0/`.** Before an instance that kept its own
   storage first runs as several pods, the deployment copies that storage
   into the shared one's `shard-0/` with a pod running the plugin's own
@@ -867,6 +870,18 @@ async with await meridian.connect(declaration=DECLARATION, interface=INTERFACE) 
   the moves nor `RawStore` are thread-safe:** use a store from one thread
   at a time, as the plugin's loop does; a second thread's `keep_line` while
   one is in it is refused (`RuntimeError`).
+- **A placement sent at most once across a takeover** (0.37.0). The
+  Trader notes each placement before its send as a file of its own in the
+  shard's folder, `trading/sent/<pid>`, created exclusively: of the deposed
+  pod and the one that took its shard, inside the lapse, only the one that
+  created it sends, and the other finds its order by the placement's ID as
+  its client order ID; one not found is said outcome unknown, `request
+  unanswered`, once. An RFQ's acceptance is noted the same way, and a
+  charge once reported. **A connectivity instance run as shards or with a
+  standby needs storage granted for this**: with none, what it sent is held
+  in memory, so a pod taking a shard over may send a placement again, and
+  the Trader says so in its log on start. `trading/sent.json`, as earlier
+  releases wrote it, is read and no longer written.
 - **What is stored** is the plugin's to say, as its figures are:
   `plugin.stored`, one `StoredSpan` per kind, on every heartbeat. The bytes
   each kind uses of the archive (`StoredSpan.bytes`) are the SDK's: it sums

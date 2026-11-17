@@ -383,6 +383,10 @@ class Worked:
     executions: dict[str, str] = field(default_factory=dict)
     unknown: str = ""
     unanswered: bool = False
+    #: Queued in the book and noted as sent before (another pod's, or an
+    #: earlier process's), with nothing reported of it: said outcome
+    #: unknown once, should the venue's orders not hold it (0.37.0).
+    unreported: bool = False
     acknowledged: bool = False
     ended: str = ""
     cancel_sent: bool = False
@@ -596,7 +600,7 @@ class Trader(Role):
         self._scope = scope
         #: Which of its trading files it was not given: read from storage on
         #: start, once the plugin registered (`_from_storage`).
-        self._not_given = (sent is None, enabled is None, watched is None)
+        self._not_given = (sent is None, enabled is None, watched is None, charged is None)
         self._sent = sent if sent is not None else Sent(None)
         self.enabled = enabled if enabled is not None else Sent(None)
         self.instructions: dict[tuple[Any, ...], ops.TradingInstruction] = {}
@@ -929,7 +933,7 @@ class Trader(Role):
             return
         if pid in self._sent:
             # Sent before this process: asked about, never sent again.
-            await self._sent_before(placement, order)
+            await self._sent_before(placement, order, queued=True)
             return
         self.decided.add(pid)
         order = order if order is not None else await self._order_of(placement)
@@ -984,7 +988,7 @@ class Trader(Role):
         if placed.state == "sent_before":
             # Another pod noted it first on the shard's folder: a takeover's
             # lapse. Asked about, never sent again.
-            await self._sent_before(placement, order)
+            await self._sent_before(placement, order, queued=True)
             return
         if placed.state != "placed":
             return
@@ -993,13 +997,20 @@ class Trader(Role):
         self.working[pid] = worked
         await self._report_status(venue, worked, record, key)
 
-    async def _sent_before(self, placement: ops.Placement, order: ops.Order | None) -> None:
+    async def _sent_before(
+        self, placement: ops.Placement, order: ops.Order | None, *, queued: bool = False
+    ) -> None:
         """A placement noted as sent before, by an earlier process or by
-        another pod: found among the venue's orders, never sent again."""
+        another pod: found among the venue's orders, never sent again. One
+        the book still holds queued, of which nothing was reported, is said
+        outcome unknown, `request unanswered`, once the venue's orders read
+        do not hold it (`_read_orders`): the noting pod's send may have
+        failed, or its report been fenced."""
         pid = placement.placement_id
         worked = await self._worked(placement, order)
         if worked is not None:
             worked.unanswered = not worked.rfq_request
+            worked.unreported = queued and worked.unanswered
             self.working[pid] = worked
             self.decided.add(pid)
 
@@ -1219,6 +1230,13 @@ class Trader(Role):
         if not dealer_quote_id or quote is None:
             return
         worked.accepted = picked
+        # The acceptance makes the venue's order, so it is noted as a send is
+        # (0.37.0): never sent again after a restart, nor by a second pod in
+        # a takeover's lapse; its order is then found by the placement's ID.
+        noted = f"accept:{worked.placement_id}:{picked}"
+        if noted in self._sent or not self._sent.note(noted):
+            worked.unanswered = True
+            return
         asked = worked.asked
         if asked is None:
             order = await self._order_of(placement)
@@ -1506,18 +1524,37 @@ class Trader(Role):
             if worked.unanswered:
                 record = answered.get(worked.placement_id)
                 if record is None:
+                    if worked.unreported:
+                        # Noted as sent, by another pod or an earlier process,
+                        # and not among the venue's orders: said once, through
+                        # the sidecar (a deposed pod's report is fenced), and
+                        # still looked for by its client order ID.
+                        await self.report_placement(
+                            placement_id=worked.placement_id,
+                            event=ops.PLACEMENT_EVENT_OUTCOME_UNKNOWN,
+                            unknown_reason=ops.UNKNOWN_REASON_REQUEST_UNANSWERED,
+                            raw_record=self._raw(key),
+                        )
+                        worked.unreported = False
                     continue
                 worked.venue_order_id = record.order_id
                 worked.unanswered = False
+                worked.unreported = False
             record = by_id.get(worked.venue_order_id)
             if record is None:
                 continue
             await self._report_status(venue, worked, record, key, by_id)
-        if any(w.unanswered for w in mine) or code not in self.mapped():
+        if code not in self.mapped():
             return
+        # While a placement on the account is unanswered, only an order that
+        # could be its -- one naming it, or naming no client order ID -- is
+        # held back from the venue-originated ones.
+        unanswered = any(w.unanswered for w in mine)
         placed = {w.venue_order_id for w in self.working.values()} | self.venue_orders
         for record in orders:
             if record.order_id in placed:
+                continue
+            if unanswered and not record.client_order_id:
                 continue
             if any(record.client_order_id == w.placement_id for w in self.working.values()):
                 continue
@@ -2124,7 +2161,9 @@ class Trader(Role):
         noted = f"{charge_id}|{placement_id}"
         if noted in self.charged:
             return
-        self.charged.note(noted)
+        # Noted once reported (0.37.0): a pod whose report is fenced, its
+        # shard taken, leaves the charge for the holder, which shares the
+        # folder; the book takes a charge again by its ID.
         await self.report_charge(
             placement_id=placement_id,
             fee=Fee(
@@ -2135,6 +2174,7 @@ class Trader(Role):
             settlement_date=str(charge.get("settlement_date") or ""),
             raw_record=self._raw(str(charge.get("raw") or "")),
         )
+        self.charged.note(noted)
 
     # ── Accounts and the catalogue ──────────────────────────────────────
 
@@ -2218,14 +2258,22 @@ class Trader(Role):
 
         sent, enabled, originated = trading_files(edge.storage_dir())
         if sent is None or enabled is None:
+            if edge._sharded():
+                log.error(
+                    "no storage is granted to this instance, which runs as shards or with a "
+                    "standby: what it sent is held in memory, so a pod taking its shard over "
+                    "may send a placement again; grant it storage (MERIDIAN_STORAGE_DIR)"
+                )
             return
-        no_sent, no_enabled, no_watched = self._not_given
+        no_sent, no_enabled, no_watched, no_charged = self._not_given
         if no_sent:
             self._sent = Sent(sent)
         if no_enabled:
             self.enabled = Sent(enabled)
         if no_watched:
             self.watched = Watched(originated)
+        if no_charged:
+            self.charged = Sent(charged_file(edge.storage_dir()))
 
     async def run(self) -> None:
         """Once its venue is set up, the book read where `on_start` could not,

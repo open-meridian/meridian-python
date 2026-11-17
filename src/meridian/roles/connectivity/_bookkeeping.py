@@ -111,11 +111,27 @@ class Sent:
     def __init__(self, file: Path | None) -> None:
         self._file = file
         self._held: set[str] = set()
-        if file is not None and file.is_file():
-            with contextlib.suppress(OSError, ValueError):
-                held = json.loads(file.read_text())
-                if isinstance(held, list):
-                    self._held = {str(each) for each in held}
+        #: The given file's modification time when last read: an earlier
+        #: release's pod writing it again (a rollout inside a lapse) is read.
+        self._read_at: int | None = None
+        self._read_file()
+
+    def _read_file(self) -> None:
+        """The names in the given file, as an earlier release wrote it whole."""
+        file = self._file
+        if file is None:
+            return
+        try:
+            at = file.stat().st_mtime_ns
+        except OSError:
+            return
+        if at == self._read_at:
+            return
+        self._read_at = at
+        with contextlib.suppress(OSError, ValueError):
+            held = json.loads(file.read_text())
+            if isinstance(held, list):
+                self._held |= {str(each) for each in held}
 
     @property
     def _folder(self) -> Path | None:
@@ -139,7 +155,8 @@ class Sent:
         if marker is not None and marker.exists():
             self._held.add(name)
             return True
-        return False
+        self._read_file()
+        return name in self._held
 
     def _noted(self) -> set[str]:
         """Every name noted: the file given, and each marker in the folder,
@@ -176,17 +193,26 @@ class Sent:
         if marker is None:
             self._held.add(name)
             return True
+        made_folder = not marker.parent.is_dir()
         marker.parent.mkdir(parents=True, exist_ok=True)
+        if made_folder:
+            _sync_folder(marker.parent.parent)
         try:
             made = os.open(marker, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
         except FileExistsError:
             self._held.add(name)
             return False
         try:
-            os.write(made, name.encode("utf-8"))
-            os.fsync(made)
-        finally:
-            os.close(made)
+            try:
+                os.write(made, name.encode("utf-8"))
+                os.fsync(made)
+            finally:
+                os.close(made)
+        except BaseException:
+            # Not kept, so nothing was done under it: the marker goes, or it
+            # would read as noted with nothing behind it.
+            marker.unlink(missing_ok=True)
+            raise
         _sync_folder(marker.parent)
         self._held.add(name)
         return True
