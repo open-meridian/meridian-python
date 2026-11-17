@@ -48,12 +48,16 @@ whatever the transport.
 
 from __future__ import annotations
 
+import errno
 import fcntl
 import json
 import logging
 import os
 import re
+import struct
 import tempfile
+import threading
+import time
 from collections import OrderedDict
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
@@ -78,6 +82,73 @@ _HELD_OPEN = 128
 #: The live lines whose first arrival is remembered, the latest; any other's
 #: is read from its line.
 _REMEMBERED = 10_000
+#: How long `keep_line` waits for its file's lock while another pod holds it,
+#: at most: past it the line is refused (TimeoutError), never waited for
+#: without end on the loop the heartbeat runs on. Under a heartbeat's period.
+_LINE_WAIT_SECONDS = 2.0
+
+#: Open-file-description locks where the platform has them (Linux 3.15+, and
+#: NFS through it): held by the descriptor that took them, so closing any other
+#: descriptor on the file in this process -- a read on a worker thread, another
+#: `RawStore` -- never lets one go, and two descriptors in one process
+#: conflict as two processes do. Elsewhere (macOS, a developer's machine),
+#: POSIX record locks (`lockf`), which are the whole process's.
+_OFD_SETLK: int | None = getattr(fcntl, "F_OFD_SETLK", None)
+
+
+def _flock(kind: int) -> bytes:
+    """A `struct flock` over the whole file, as Linux lays it out on 64 bits:
+    `l_type`, `l_whence`, `l_start`, `l_len`, `l_pid` (0, as an OFD lock's is)."""
+    return struct.pack("hhqqixxxx", kind, os.SEEK_SET, 0, 0, 0)
+
+
+def _try_lock(fd: int) -> bool:
+    """`fd`'s file locked for writing without waiting: False while another
+    holds it. By the descriptor where the platform can (`_OFD_SETLK`); a
+    storage that refuses such a lock is locked by `lockf` from then on."""
+    global _OFD_SETLK
+    try:
+        if _OFD_SETLK is not None:
+            try:
+                fcntl.fcntl(fd, _OFD_SETLK, _flock(fcntl.F_WRLCK))
+                return True
+            except OSError as refused:
+                if refused.errno not in (errno.EINVAL, errno.ENOSYS, errno.EOPNOTSUPP):
+                    raise
+                log.warning(
+                    "the storage refuses a descriptor's lock (%s); using lockf", refused
+                )
+                _OFD_SETLK = None
+        fcntl.lockf(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return True
+    except OSError as busy:
+        if busy.errno in (errno.EACCES, errno.EAGAIN):
+            return False
+        raise
+
+
+def _unlock(fd: int) -> None:
+    """`fd`'s lock let go, whichever kind `_try_lock` took."""
+    if _OFD_SETLK is not None:
+        fcntl.fcntl(fd, _OFD_SETLK, _flock(fcntl.F_UNLCK))
+    fcntl.lockf(fd, fcntl.LOCK_UN)
+
+
+def _lock_waiting(fd: int, within: float, what: str) -> None:
+    """`fd`'s file locked, waited for while another holds it, at most
+    `within` seconds: past that, TimeoutError naming `what`, nothing done.
+    Blocks its thread meanwhile."""
+    ends = time.monotonic() + within
+    wait = 0.002
+    while not _try_lock(fd):
+        left = ends - time.monotonic()
+        if left <= 0:
+            raise TimeoutError(
+                f"{what} is locked by another pod past {within:g} s: nothing was written; "
+                "ask again"
+            )
+        time.sleep(min(wait, left))
+        wait = min(wait * 2, 0.05)
 
 
 def storage_root(prefix: str = "meridian-raw-") -> Path:
@@ -122,7 +193,11 @@ class StoredUnit:
 
 class RawStore:
     """Raw records as files under the storage's `<kind>/`, one unit a day. Each
-    record is a JSON object holding at least `received_at_ns`."""
+    record is a JSON object holding at least `received_at_ns`.
+
+    Not thread-safe: use a store from one thread at a time, as a plugin's
+    loop does (a `keep_line` on a second thread while one is in it is
+    refused). Its files' locks hold across the pods of a shard."""
 
     def __init__(self, root: Path, kind: str = "responses") -> None:
         self._given = root
@@ -143,6 +218,8 @@ class RawStore:
         self._open: OrderedDict[str, TextIO] = OrderedDict()
         #: The Register it remembers its files under (`_fresh`).
         self._generation = _generation()
+        #: Held while a thread is in `keep_line`: a second is refused.
+        self._writing = threading.Lock()
 
     def _fresh(self) -> None:
         """What it remembers of its files forgotten, and its open files
@@ -251,7 +328,24 @@ class RawStore:
         and synced before this returns. The file is locked while its lines
         are counted and the line written, so a pod still writing through a
         takeover's lapse and the shard's new holder each name their own; a
-        line a crash left unfinished is ended first, and counted."""
+        line a crash left unfinished is ended first, and counted. Another
+        pod's lock is waited for at most `_LINE_WAIT_SECONDS` (two seconds),
+        then the line is refused, TimeoutError, and nothing written.
+
+        A store is written from one thread at a time: a second thread's
+        `keep_line` while one is in it is refused (RuntimeError), since both
+        would count the same lines through the one descriptor."""
+        if not self._writing.acquire(blocking=False):
+            raise RuntimeError(
+                "this RawStore is in keep_line on another thread: a store is written from "
+                "one thread at a time (keep a store per thread, or call it from the loop)"
+            )
+        try:
+            return self._keep_line(call, name, record)
+        finally:
+            self._writing.release()
+
+    def _keep_line(self, call: str, name: str, record: dict[str, Any]) -> str:
         self._fresh()
         received = int(record["received_at_ns"])
         day = _day_of(received)
@@ -265,7 +359,7 @@ class RawStore:
             return held[1]
         out = self._appender(key)
         try:
-            fcntl.lockf(out, fcntl.LOCK_EX)
+            _lock_waiting(out.fileno(), _LINE_WAIT_SECONDS, f"the live file {key}")
             try:
                 lines = self._count(key, out)
                 out.write(json.dumps(record, sort_keys=True) + "\n")
@@ -273,7 +367,13 @@ class RawStore:
                 os.fsync(out.fileno())
                 self._lines[key] = (lines + 1, os.fstat(out.fileno()).st_size)
             finally:
-                fcntl.lockf(out, fcntl.LOCK_UN)
+                try:
+                    _unlock(out.fileno())
+                except OSError as failed:
+                    # Closing it lets the lock go all the same; a line
+                    # written is not turned into a failure here.
+                    log.warning("the lock on %s was let go by closing it: %s", key, failed)
+                    self._close(key)
         except OSError:
             self._close(key)
             raise

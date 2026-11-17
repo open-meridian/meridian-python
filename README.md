@@ -833,11 +833,31 @@ async with await meridian.connect(declaration=DECLARATION, interface=INTERFACE) 
   storage on start. A live file's lines are counted with the file locked,
   so a pod still writing in a takeover's lapse and the shard's new holder
   each name their own line; the shard's index of what moved is read and
-  written under a lock of its own, so neither pod's move is lost from it.
-  Both are POSIX record locks (`fcntl.lockf`), so the storage class the
-  instance's storage is made from must support them across its pods, as
-  NFSv4 does. An instance of one pod (`shards` 0) has no shard folders, and
-  its keys no prefix.
+  written under a lock of its own, so neither pod's move is lost from it,
+  and opened under that lock as a create, so an NFS client's cached "no such
+  file" is never trusted for it. Both are file locks held by their
+  descriptor (Linux's open-file-description locks; `fcntl.lockf` where the
+  platform has none, or the storage refuses them), so the storage class the
+  instance's storage is made from must support locks across its pods, as
+  NFSv4 does. Reads made outside a move -- `find_record`, and the bound's
+  sum of the other shards' indexes -- can lag another pod's newest move by
+  the mount's attribute-cache time; `lookupcache=positive` on the storage
+  class's mount options shortens it. A move waits for another's lock at
+  most 30 seconds, then is refused (`TimeoutError`) and the unit kept for
+  the next pass, and the sidecar is given 30 seconds to record a move;
+  `keep_line` waits at most two seconds, then refuses the line. The
+  heartbeat never waits on the lock: it returns restored units only when
+  nothing else holds it. An instance of one pod (`shards` 0) has no shard
+  folders, and its keys no prefix.
+- **One plugin per process, on its loop.** One `Plugin` per process keeps
+  raw records: while one declaring storage is registered, `connect`
+  refuses another declaring storage until the first leaves (`meridian.run`
+  leaves before it registers again). The moves (`archive_unit`,
+  `restore_unit`, `delete_unit`) are made from the loop the plugin
+  registered on, and one from another thread's loop is refused. **Neither
+  the moves nor `RawStore` are thread-safe:** use a store from one thread
+  at a time, as the plugin's loop does; a second thread's `keep_line` while
+  one is in it is refused (`RuntimeError`).
 - **What is stored** is the plugin's to say, as its figures are:
   `plugin.stored`, one `StoredSpan` per kind, on every heartbeat. The bytes
   each kind uses of the archive (`StoredSpan.bytes`) are the SDK's: it sums

@@ -12,24 +12,35 @@ conductor does."""
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import errno
+import fcntl
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 import sys
+import threading
+import time
+from collections.abc import Iterator
 from datetime import date
 from pathlib import Path
 from typing import Any
 
+import grpc
 import pytest
 
 import meridian
-from meridian import edge
+from conftest import FakeSidecar
+from meridian import _raw, edge
 from meridian.declaration import Declaration, RecordKind, Storage
 from meridian.edge import RawStore, storage_root
+from meridian.errors import CallFailed
+from meridian.plugin.v1 import operations_pb2_grpc
 from meridian.suites import Recorder
 from meridian.testing import caller_header
-from meridian.v1 import sidecar_pb2
+from meridian.v1 import sidecar_pb2, sidecar_pb2_grpc
 
 DECLARATION = Declaration(
     settings=(meridian.Setting("consumer_key", secret=True, required=True),),
@@ -570,7 +581,18 @@ def _two_holders(tmp_path: Path, *runs: list[str]) -> list[list[str]]:
         )
         for run in runs
     ]
-    # Each registers before it waits; the file lets them both go together.
+    # Each registers and says so before it waits; once both have, the file
+    # lets them go together.
+    ends = time.monotonic() + 60
+    try:
+        while len(list(tmp_path.glob(f"{go.name}.ready-*"))) < len(pods):
+            assert all(pod.poll() is None for pod in pods), "a pod ended before it was ready"
+            assert time.monotonic() < ends, "the pods were not ready within 60 s"
+            time.sleep(0.01)
+    except AssertionError:
+        for pod in pods:
+            pod.kill()
+        raise
     go.touch()
     printed = []
     for pod in pods:
@@ -770,3 +792,401 @@ def test_l5_a_stores_root_is_set_as_before(tmp_path: Path) -> None:
     store.root = tmp_path / "b"
     key = store.keep("candles", "BTC-USD", {"received_at_ns": AT, "body": "x"})
     assert (tmp_path / "b" / key).is_file()
+
+
+# ── sdk56-review: the locks bounded, held by their descriptor, read fresh ───
+
+#: Another pod holding a file's lock (lockf) for argv[2] seconds, then gone:
+#: "held" once it holds it.
+_HOLD = """
+import fcntl, os, sys, time
+fd = os.open(sys.argv[1], os.O_RDWR | os.O_CREAT, 0o644)
+fcntl.lockf(fd, fcntl.LOCK_EX)
+print("held", flush=True)
+time.sleep(float(sys.argv[2]))
+"""
+
+_OFD = pytest.mark.skipif(
+    not hasattr(fcntl, "F_OFD_SETLK"), reason="open-file-description locks are Linux's"
+)
+
+
+@contextlib.contextmanager
+def _held_by_another_pod(path: Path, seconds: float) -> Iterator[None]:
+    """`path` locked by another process for `seconds` at most: a holder that
+    does not let go meanwhile, as a deposed pod stuck in a move does."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    pod = subprocess.Popen(
+        [sys.executable, "-c", _HOLD, str(path), str(seconds)],
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        assert pod.stdout is not None and pod.stdout.readline().strip() == "held"
+        yield
+    finally:
+        pod.kill()
+        pod.wait()
+
+
+def _cached_as_missing(index: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """This pod's client holds `index` cached as missing (H1), as an NFS
+    client does for a file another client made since it looked, until its
+    directory's attributes time out: every lookup by name says it is not
+    there, and only an open that may create it goes to the server."""
+    real_open = os.open
+
+    def opened(path: Any, flags: int, *args: Any, **kwargs: Any) -> int:
+        if Path(path) == index and not flags & os.O_CREAT:
+            raise FileNotFoundError(errno.ENOENT, "cached as missing", str(path))
+        return real_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(os, "open", opened)
+    for name in ("stat", "open", "read_text", "read_bytes"):
+        real = getattr(Path, name)
+
+        def missing(self: Path, *args: Any, _real: Any = real, **kwargs: Any) -> Any:
+            if self == index:
+                raise FileNotFoundError(errno.ENOENT, "cached as missing", str(self))
+            return _real(self, *args, **kwargs)
+
+        monkeypatch.setattr(Path, name, missing)
+
+
+def _units_in(folder: Path, *units: str) -> None:
+    for unit in units:
+        (folder / unit).mkdir(parents=True)
+        (folder / unit / "act.json").write_text(json.dumps({"unit": unit}))
+
+
+async def test_h1_an_index_cached_as_missing_never_loses_a_move(
+    sidecar: Any, root: Path, archive: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The shard's index, written by another pod since this pod's client
+    found none there, is read under the lock all the same: opened as a
+    create, which goes to the server, never looked up first; so the move
+    the other recorded stays in it."""
+    service, address = sidecar
+    units = ["activity/ACC-1/2019-03", "activity/ACC-1/2019-04"]
+    _units_in(root / "shard-0", *units)
+    index = root.joinpath("shard-0", *edge._INDEX.parts)
+    plugin = await _pod(service, address, shard=0, shards=2)
+    try:
+        for n, unit in enumerate(units):
+            with monkeypatch.context() as stale:
+                if n:
+                    _cached_as_missing(index, stale)
+                await plugin.archive_unit(
+                    "activity",
+                    unit,
+                    record_count=1,
+                    first_received_ns=FIRST,
+                    last_received_ns=LAST,
+                )
+    finally:
+        await plugin.leave()
+    assert sorted(json.loads(index.read_text())["units"]) == units, "a move was lost"
+
+
+async def test_m1_a_holder_that_never_lets_go_never_stops_the_heartbeat(
+    sidecar: Any, root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Restored units are returned beside the heartbeat, only where the
+    index is free: another pod holding it, however long, never holds up a
+    beat."""
+    service, address = sidecar
+    monkeypatch.setattr(meridian.client, "HEARTBEAT_SECONDS", 0.05)
+    service.shard, service.shards = 0, 2
+    with _held_by_another_pod(root.joinpath("shard-0", *edge._INDEX_LOCK.parts), 30):
+        plugin = await meridian.connect(address, declaration=DECLARATION, roles=[])
+        try:
+            await service.beats_from(service.mark(), count=10)
+        finally:
+            await plugin.leave()
+
+
+async def test_m1_a_move_waits_for_the_index_at_most_its_bound(
+    sidecar: Any, root: Path, archive: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    service, address = sidecar
+    _unit_in(root / "shard-0", "waited")
+    monkeypatch.setattr(edge, "_MOVE_WAIT_SECONDS", 0.3, raising=False)
+    plugin = await _pod(service, address, shard=0, shards=2)
+    try:
+        with _held_by_another_pod(root.joinpath("shard-0", *edge._INDEX_LOCK.parts), 5):
+            began = time.monotonic()
+            with pytest.raises(TimeoutError, match="held by another move"):
+                await _archived(plugin)
+            assert time.monotonic() - began < 3
+    finally:
+        await plugin.leave()
+    assert (root / "shard-0" / UNIT).exists() and not service.moves
+
+
+class _Stalled(FakeSidecar):
+    """A sidecar that takes `stall` seconds to record a move."""
+
+    stall = 3.0
+
+    async def RecordMove(self, request: Any, context: Any) -> Any:  # noqa: N802
+        await asyncio.sleep(self.stall)
+        return await super().RecordMove(request, context)
+
+
+async def test_m1_the_sidecar_is_given_a_deadline_to_record_a_move(
+    root: Path, archive: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The lock is held while the move is recorded, so RecordMove has a
+    deadline: past it the move is not recorded, and the unit stays."""
+    monkeypatch.setattr(edge, "_RECORD_MOVE_SECONDS", 0.3, raising=False)
+    _unit_in(root / "shard-0", "slow")
+    service = _Stalled()
+    server = grpc.aio.server()
+    sidecar_pb2_grpc.add_SidecarServiceServicer_to_server(service, server)
+    operations_pb2_grpc.add_PluginOperationsServicer_to_server(service.operations, server)
+    port = server.add_insecure_port("127.0.0.1:0")
+    await server.start()
+    try:
+        plugin = await _pod(service, f"127.0.0.1:{port}", shard=0, shards=2)
+        try:
+            began = time.monotonic()
+            with pytest.raises(CallFailed):
+                await _archived(plugin)
+            assert time.monotonic() - began < 2.5
+        finally:
+            await plugin.leave()
+    finally:
+        await server.stop(grace=None)
+    assert (root / "shard-0" / UNIT).exists()
+    assert not any(archive.rglob("*.json"))
+
+
+def test_m1_a_line_waits_for_another_pods_lock_at_most_its_bound(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`keep_line` runs on the loop: another pod's lock on the live file is
+    waited for at most its bound, then the line is refused."""
+    monkeypatch.setattr(_raw, "_LINE_WAIT_SECONDS", 0.3, raising=False)
+    store = RawStore(tmp_path, kind="responses")
+    path = tmp_path / "responses/2026-11-17/ticker/BTC-USD.jsonl"
+    record = {"received_at_ns": AT, "body": "a"}
+    with _held_by_another_pod(path, 5):
+        began = time.monotonic()
+        with pytest.raises(TimeoutError, match="locked by another pod"):
+            store.keep_line("ticker", "BTC-USD", record)
+        assert time.monotonic() - began < 3
+    assert store.keep_line("ticker", "BTC-USD", record).endswith("#0")
+
+
+@_OFD
+def test_m2_a_read_on_another_thread_never_drops_the_line_files_lock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The live file's lock is its descriptor's: a worker thread opening and
+    closing the day's file between the count and the write -- an archive's
+    copy, a plugin's `get` -- never lets it go."""
+    store = RawStore(tmp_path, kind="responses")
+    path = tmp_path / "responses/2026-11-17/ticker/BTC-USD.jsonl"
+    tried: list[str] = []
+    count = RawStore._count
+
+    def counted(self: RawStore, key: str, out: Any) -> int:
+        lines = count(self, key, out)
+        reader = threading.Thread(target=path.read_bytes)
+        reader.start()
+        reader.join()
+        another = subprocess.run(
+            [sys.executable, "-c", _TRY_LOCK, str(path)],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=True,
+        )
+        tried.append(another.stdout.strip())
+        return lines
+
+    monkeypatch.setattr(RawStore, "_count", counted)
+    store.keep_line("ticker", "BTC-USD", {"received_at_ns": AT, "body": "a"})
+    assert tried == ["refused"]
+
+
+@_OFD
+async def test_m2_two_movers_in_one_process_take_the_index_in_turn(tmp_path: Path) -> None:
+    """Two holders of the index's lock in one process -- a plugin left and
+    its untracked move still running, beside the next -- conflict as two
+    pods do."""
+    first, second = edge._Moves(), edge._Moves()
+    async with first.held(tmp_path):
+        with pytest.raises(TimeoutError):
+            async with second.held(tmp_path, within=0.2):
+                pass
+    async with second.held(tmp_path, within=0.2):
+        pass
+
+
+async def test_m2_one_plugin_per_process_keeps_raw_records(sidecar: Any, root: Path) -> None:
+    service, address = sidecar
+    first = await _pod(service, address, shard=0, shards=2)
+    try:
+        with pytest.raises(RuntimeError, match="one Plugin per process"):
+            await meridian.connect(address, heartbeat=False, declaration=DECLARATION, roles=[])
+        assert len(service.registered) == 1, "refused before anything is sent"
+    finally:
+        await first.leave()
+    second = await _pod(service, address, shard=0, shards=2)
+    await second.leave()
+
+
+async def test_m2_a_move_from_another_threads_loop_is_refused(
+    sidecar: Any, root: Path, archive: Path
+) -> None:
+    service, address = sidecar
+    ben = caller_header("write", subject="local|ben", display_name="Ben", roles=["custody"])
+    _unit_in(root / "shard-0", "x")
+    plugin = await _pod(service, address, shard=0, shards=2)
+    try:
+        await _archived(plugin)
+        answered: list[BaseException | None] = []
+
+        def elsewhere() -> None:
+            try:
+                asyncio.run(plugin.restore_unit("activity", UNIT, for_caller=ben))
+                answered.append(None)
+            except BaseException as raised:  # noqa: BLE001
+                answered.append(raised)
+
+        thread = threading.Thread(target=elsewhere, daemon=True)
+        thread.start()
+        await asyncio.to_thread(thread.join, 10)
+        assert len(answered) == 1 and isinstance(answered[0], RuntimeError), answered
+        assert "the loop it registered on" in str(answered[0])
+    finally:
+        await plugin.leave()
+
+
+def test_m2_a_store_written_from_two_threads_at_once_refuses_the_second(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two threads in one store would count the same lines through its one
+    descriptor: the second is refused while the first is in `keep_line`."""
+    store = RawStore(tmp_path, kind="responses")
+    inside, release = threading.Event(), threading.Event()
+    count = RawStore._count
+
+    def counted(self: RawStore, key: str, out: Any) -> int:
+        inside.set()
+        release.wait(3)
+        return count(self, key, out)
+
+    monkeypatch.setattr(RawStore, "_count", counted)
+    first = threading.Thread(
+        target=store.keep_line, args=("ticker", "BTC-USD", {"received_at_ns": AT, "body": "a"})
+    )
+    first.start()
+    assert inside.wait(10)
+    try:
+        with pytest.raises(RuntimeError, match="one thread at a time"):
+            store.keep_line("ticker", "BTC-USD", {"received_at_ns": AT + 1, "body": "b"})
+    finally:
+        release.set()
+        first.join(10)
+
+
+@_OFD
+def test_a_storage_refusing_descriptor_locks_is_locked_by_lockf(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real = fcntl.fcntl
+
+    def refusing(fd: int, cmd: int, arg: Any = 0) -> Any:
+        if cmd == fcntl.F_OFD_SETLK:
+            raise OSError(errno.EINVAL, "not on this storage")
+        return real(fd, cmd, arg)
+
+    monkeypatch.setattr(fcntl, "fcntl", refusing)
+    monkeypatch.setattr(_raw, "_OFD_SETLK", fcntl.F_OFD_SETLK)
+    store = RawStore(tmp_path, kind="responses")
+    key = store.keep_line("ticker", "BTC-USD", {"received_at_ns": AT, "body": "a"})
+    assert key.endswith("#0") and _raw._OFD_SETLK is None
+
+
+async def test_l2_another_shards_index_from_a_newer_sdk_is_counted(
+    sidecar: Any, root: Path, archive: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """In a rolling upgrade another shard's index may hold a field this SDK
+    does not know: its bytes are counted all the same, and the archive goes
+    on."""
+    service, address = sidecar
+    _unit_in(root / "shard-1", "x")
+    other = root.joinpath("shard-0", *edge._INDEX.parts)
+    other.parent.mkdir(parents=True)
+    entry = {
+        "record_kind": "activity",
+        "unit": "activity/ACC-9/2019-01",
+        "record_count": 1,
+        "first_received_ns": FIRST,
+        "last_received_ns": LAST,
+        "state": "archived",
+        "files": {"f.json": [10, "0" * 64]},
+        "added_later": "by a newer SDK",
+    }
+    other.write_text(json.dumps({"units": {entry["unit"]: entry}}))
+    monkeypatch.setenv("MERIDIAN_ARCHIVE_MOST_BYTES", str(1 << 30))
+    plugin = await _pod(service, address, shard=1, shards=2)
+    try:
+        await _archived(plugin)
+    finally:
+        await plugin.leave()
+    assert not (root / "shard-1" / UNIT).exists()
+
+
+async def test_l4_a_cancelled_move_lets_go_of_the_index_only_once_its_copy_ends(
+    sidecar: Any, root: Path, archive: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A move cancelled while its copy runs on a worker thread holds the
+    index's lock until the thread ends, so another pod's move never runs
+    beside a copy still writing."""
+    service, address = sidecar
+    _unit_in(root / "shard-0", "x")
+    started, copied = threading.Event(), threading.Event()
+    copy_out = edge._copy_out
+
+    def slow(*args: Any) -> Any:
+        started.set()
+        time.sleep(0.5)
+        try:
+            return copy_out(*args)
+        finally:
+            copied.set()
+
+    monkeypatch.setattr(edge, "_copy_out", slow)
+    plugin = await _pod(service, address, shard=0, shards=2)
+    try:
+        moving = asyncio.ensure_future(_archived(plugin))
+        assert await asyncio.to_thread(started.wait, 10)
+        moving.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await moving
+        assert copied.is_set(), "the lock was let go while the copy still wrote"
+    finally:
+        await plugin.leave()
+    assert (root / "shard-0" / UNIT).exists() and not service.moves
+
+
+async def test_l4_a_lock_not_let_go_cleanly_does_not_fail_a_move_done(
+    sidecar: Any, root: Path, archive: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    service, address = sidecar
+    _unit_in(root / "shard-0", "x")
+
+    def failing(fd: int) -> None:
+        raise OSError(errno.EIO, "the storage did not answer")
+
+    monkeypatch.setattr(edge, "_unlock", failing)
+    plugin = await _pod(service, address, shard=0, shards=2)
+    try:
+        await _archived(plugin)
+    finally:
+        await plugin.leave()
+    index = json.loads(root.joinpath("shard-0", *edge._INDEX.parts).read_text())
+    assert list(index["units"]) == [UNIT] and len(service.moves) == 1

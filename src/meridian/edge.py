@@ -109,6 +109,17 @@ reported. `delete_unit` reports the deletion first, so a refusal --
 hold -- keeps the unit; deleting an archived unit is an admin's act. Nothing
 of a record's content is ever in a move: a count, two times and the key.
 
+Moves are made one at a time, in the process and across the pods holding a
+shard at once (a deposed holder in a takeover's lapse and the new one), by a
+lock on the shard's index. A move waits for another's at most 30 seconds,
+then is refused (TimeoutError) and the unit kept, for the next pass to try
+again; the sidecar is given 30 seconds to record a move. The heartbeat never
+waits on a move: it returns restored units only when nothing else holds the
+lock. One `Plugin` per process makes the moves, from the loop it registered
+on: while one declaring storage is registered, `connect` refuses a second,
+and a move from another loop is refused. Neither the moves nor `RawStore`
+are thread-safe.
+
 What each kind holds in storage is the plugin's to say, as its figures are
 (`plugin.stored`, one `StoredSpan` per kind), on every heartbeat; the bytes
 each kind uses of the archive (`StoredSpan.bytes`) are the SDK's, summed
@@ -130,8 +141,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import dataclasses
-import errno
-import fcntl
 import hashlib
 import json
 import logging
@@ -141,12 +150,13 @@ import shutil
 import tempfile
 import time
 import urllib.parse
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import AsyncIterator, Iterator, Mapping, Sequence
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any, Protocol
 
 from ._raw import RawStore as RawStore
 from ._raw import StoredUnit as StoredUnit
+from ._raw import _try_lock, _unlock
 from ._raw import storage_root as storage_root
 from .bounds import (
     AS_REPORTED_CODE_LENGTH,
@@ -768,6 +778,9 @@ class _Moved:
         )
 
 
+_MOVED_FIELDS = frozenset(field.name for field in dataclasses.fields(_Moved))
+
+
 class _Index:
     """What moved, kept in the instance's storage, so a unit is found again
     after a restart and a record's key resolves to its unit."""
@@ -776,11 +789,39 @@ class _Index:
         self.storage = storage
         self.path = storage.joinpath(*_INDEX.parts)
 
-    def read(self) -> dict[str, _Moved]:
-        if not self.path.is_file():
+    def read(self, *, held: bool = False, lenient: bool = False) -> dict[str, _Moved]:
+        """What moved, as the index holds it now. `held`, under the shard's
+        lock (`_Moves`): opened to create it, so on NFS the open goes to the
+        server even where this pod's client cached the file as missing
+        before another pod made it, and the index read is the last
+        writer's; never looked up first. Otherwise a missing file is an
+        empty index, and a read that fails (a file renamed over meanwhile:
+        ESTALE on NFS) is tried once more. `lenient`, for summing bytes
+        alone: fields a newer SDK added are passed over."""
+        flags = os.O_RDONLY | (os.O_CREAT if held else 0)
+        for attempt in (1, 2):
+            try:
+                fd = os.open(self.path, flags, 0o644)
+                with os.fdopen(fd, "rb") as handle:
+                    text = handle.read()
+                break
+            except FileNotFoundError:
+                return {}
+            except OSError:
+                if attempt == 2:
+                    raise
+        if not text.strip():
             return {}
-        held = json.loads(self.path.read_text())
-        return {unit: _Moved(**entry) for unit, entry in held.get("units", {}).items()}
+        whole = json.loads(text)
+        if not isinstance(whole, dict):
+            raise ValueError(f"{self.path} holds a {type(whole).__name__}, not the index")
+        units = whole.get("units", {})
+        if lenient:
+            units = {
+                unit: {name: value for name, value in entry.items() if name in _MOVED_FIELDS}
+                for unit, entry in units.items()
+            }
+        return {unit: _Moved(**entry) for unit, entry in units.items()}
 
     def write(self, units: dict[str, _Moved]) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -790,7 +831,7 @@ class _Index:
     def archive_bytes(self) -> dict[str, int]:
         """The bytes each kind uses of the archive, as this index holds it."""
         used: dict[str, int] = {}
-        for moved in self.read().values():
+        for moved in self.read(lenient=True).values():
             if moved.archive_bytes:
                 used[moved.record_kind] = used.get(moved.record_kind, 0) + moved.archive_bytes
         return used
@@ -833,60 +874,121 @@ def _span(record_count: int, first_received_ns: int, last_received_ns: int) -> N
         raise ValueError("last_received_ns is before first_received_ns")
 
 
+#: How long a move waits for the shard's index while another move holds it,
+#: here or in another pod, at most: past it the move is refused
+#: (TimeoutError), the unit kept for the next pass.
+_MOVE_WAIT_SECONDS = 30.0
+#: The deadline of RecordMove, which a move awaits holding the index's lock.
+_RECORD_MOVE_SECONDS = 30.0
+
+
 class _Moves:
     """The lock a move holds while it reads, changes and writes the shard's
     index: this process's moves one at a time, and across the pods holding
     the shard at once -- a deposed holder still writing through a
     takeover's lapse and the new one (PO item 79) -- one writer of the
-    index at a time, by a POSIX record lock on `_INDEX_LOCK`, so neither
-    writes over a move the other recorded. Waited for without blocking the
-    loop."""
+    index at a time, by a lock on `_INDEX_LOCK` held by its descriptor
+    (`_raw._try_lock`), so neither writes over a move the other recorded.
+    Waited for without blocking the loop, and at most `within` seconds."""
 
     def __init__(self) -> None:
         self._local = asyncio.Lock()
-        self._held: int | None = None
+        self._loop: asyncio.AbstractEventLoop | None = None
 
-    async def __aenter__(self) -> _Moves:
-        await self._local.acquire()
+    @contextlib.asynccontextmanager
+    async def held(
+        self, storage: Path | None, within: float | None = None
+    ) -> AsyncIterator[None]:
+        """The lock on `storage`'s index -- the storage the move named, never
+        found again after an await -- taken within `within` seconds
+        (`_MOVE_WAIT_SECONDS` where not given; 0: only where free now), else
+        TimeoutError and nothing done."""
+        if within is None:
+            within = _MOVE_WAIT_SECONDS
+        loop = asyncio.get_running_loop()
+        if self._loop is None:
+            self._loop = loop
+        elif self._loop is not loop:
+            raise RuntimeError(
+                "the plugin's moves are made on the loop it registered on, not another "
+                "thread's: the archive's helpers are not thread-safe"
+            )
+        ends = loop.time() + within
+        busy = TimeoutError(
+            f"the shard's index of what moved is held by another move, here or in another "
+            f"pod, past {within:g} s: nothing moved, and the next pass tries again"
+        )
+        fd = None
         try:
-            granted = storage_dir()
-            if granted is not None:
-                self._held = await _lock_file(granted.joinpath(*_INDEX_LOCK.parts))
-        except BaseException:
-            self._local.release()
+            if self._local.locked() and within <= 0:
+                raise busy
+            try:
+                async with asyncio.timeout(max(within, 0.001)):
+                    await self._local.acquire()
+            except TimeoutError:
+                raise busy from None
+        except TimeoutError:
+            if within > 0:
+                log.warning("%s", busy)
             raise
-        return self
-
-    async def __aexit__(self, *exc: object) -> None:
-        held, self._held = self._held, None
         try:
-            if held is not None:
+            if storage is not None:
                 try:
-                    fcntl.lockf(held, fcntl.LOCK_UN)
-                finally:
-                    os.close(held)
+                    fd = await _lock_file(storage.joinpath(*_INDEX_LOCK.parts), ends, busy)
+                except TimeoutError:
+                    if within > 0:
+                        log.warning("%s", busy)
+                    raise
+            yield
         finally:
-            self._local.release()
+            try:
+                if fd is not None:
+                    try:
+                        _unlock(fd)
+                    except OSError as failed:
+                        # Closing it lets the lock go all the same; a move
+                        # done is not turned into a failure here.
+                        log.warning("the index's lock was let go by closing it: %s", failed)
+                    finally:
+                        os.close(fd)
+            finally:
+                self._local.release()
 
 
-async def _lock_file(path: Path) -> int:
-    """`path` opened and locked by this process (lockf), waited for while
-    another holds it: its descriptor, closed to let it go."""
+async def _lock_file(path: Path, ends: float, busy: TimeoutError) -> int:
+    """`path` opened and locked by its descriptor, waited for while another
+    holds it until the loop's time `ends`, then `busy` raised: its
+    descriptor, closed to let it go."""
     path.parent.mkdir(parents=True, exist_ok=True)
     held = os.open(path, os.O_RDWR | os.O_CREAT, 0o644)
+    loop = asyncio.get_running_loop()
     try:
         wait = 0.005
-        while True:
-            try:
-                fcntl.lockf(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                return held
-            except OSError as busy:
-                if busy.errno not in (errno.EACCES, errno.EAGAIN):
-                    raise
-            await asyncio.sleep(wait)
+        while not _try_lock(held):
+            left = ends - loop.time()
+            if left <= 0:
+                raise busy
+            await asyncio.sleep(min(wait, left))
             wait = min(wait * 2, 0.05)
+        return held
     except BaseException:
         os.close(held)
+        raise
+
+
+async def _in_thread(work: Any, *args: Any) -> Any:
+    """`work(*args)` on a worker thread, waited for to its end even when the
+    move awaiting it is cancelled, so the index's lock is never let go while
+    the thread still writes; the cancellation is raised after."""
+    running = asyncio.ensure_future(asyncio.to_thread(work, *args))
+    try:
+        return await asyncio.shield(running)
+    except asyncio.CancelledError:
+        while not running.done():
+            with contextlib.suppress(asyncio.CancelledError):
+                await asyncio.wait({running})
+        if not running.cancelled():
+            running.exception()
         raise
 
 
@@ -947,7 +1049,8 @@ class _Mover:
             )
         metadata = _caller_metadata(for_caller) if for_caller is not None else ()
         await self.plugin._for_person(
-            "RecordMove", self.plugin._stub.RecordMove(move, metadata=metadata)
+            "RecordMove",
+            self.plugin._stub.RecordMove(move, metadata=metadata, timeout=_RECORD_MOVE_SECONDS),
         )
 
     # The moves.
@@ -974,15 +1077,15 @@ class _Mover:
             )
         storage = _storage()
         source = storage.joinpath(*path.parts)
-        async with self.lock:
-            await self.return_due()
+        async with self.lock.held(storage):
+            await self.return_due(storage)
             index = _Index(storage)
-            units = index.read()
+            units = index.read(held=True)
             held = units.get(unit)
             if held is not None and held.state in ("archived", "restored"):
                 if source.exists():
                     # Archived and recorded before a restart removed it.
-                    await asyncio.to_thread(_remove, source)
+                    await _in_thread(_remove, source)
                     return
                 raise ValueError(f"the unit {unit} is archived already")
             if not source.exists():
@@ -990,8 +1093,8 @@ class _Mover:
             rule = self.window_rule(kind, "archived")
             most = _archive_most_bytes()
             if most:
-                size = await asyncio.to_thread(_size, source)
-                used = await asyncio.to_thread(_archive_used, units)
+                size = await _in_thread(_size, source)
+                used = await _in_thread(_archive_used, units)
                 if used + size > most:
                     raise RuntimeError(
                         f"the archive holds {used:,} of its {most:,} bytes "
@@ -999,13 +1102,13 @@ class _Mover:
                         "take it past: it stays in storage, and no move is recorded"
                     )
             prefix = _shard_prefix()
-            if prefix == "shard-0/" and await asyncio.to_thread(
+            if prefix == "shard-0/" and await _in_thread(
                 _archived_before_shards, archive, unit, source
             ):
                 # Archived and reported by the instance as one pod, which
                 # stopped before its index was written: as it was then.
                 prefix = ""
-            files = await asyncio.to_thread(_copy_out, archive, prefix + unit, source)
+            files = await _in_thread(_copy_out, archive, prefix + unit, source)
             moved = _Moved(
                 record_kind=record_kind,
                 unit=unit,
@@ -1022,11 +1125,11 @@ class _Mover:
                 await self.report(moved.move("archived", rule), None)
             except BaseException:
                 # Not recorded, so not archived: the unit stays in storage.
-                await asyncio.to_thread(_forget, archive, moved.named, files)
+                await _in_thread(_forget, archive, moved.named, files)
                 raise
             units[unit] = moved
             index.write(units)
-            await asyncio.to_thread(_remove, source)
+            await _in_thread(_remove, source)
 
     async def restore(self, record_kind: str, unit: str, for_caller: Caller | str) -> Path:
         self.kind(record_kind)
@@ -1034,10 +1137,10 @@ class _Mover:
         _unit_path(unit)
         storage = _storage()
         target = storage.joinpath(*_RESTORED.parts, *PurePosixPath(unit).parts)
-        async with self.lock:
-            await self.return_due()
+        async with self.lock.held(storage):
+            await self.return_due(storage)
             index = _Index(storage)
-            units = index.read()
+            units = index.read(held=True)
             held = units.get(unit)
             if held is None or held.record_kind != record_kind or held.state == "deleted":
                 raise ValueError(f"the unit {unit} of {record_kind} is not archived")
@@ -1049,11 +1152,11 @@ class _Mover:
                     "this instance is given no archive now: what it holds is kept, and "
                     "restorable once a deployment admin allows it again"
                 )
-            await asyncio.to_thread(_copy_back, archive, held, target)
+            await _in_thread(_copy_back, archive, held, target)
             try:
                 await self.report(held.move("restored"), for_caller)
             except BaseException:
-                await asyncio.to_thread(_remove, target, storage)
+                await _in_thread(_remove, target, storage)
                 raise
             held.state, held.restored_at_ns = "restored", _now_ns()
             index.write(units)
@@ -1072,10 +1175,10 @@ class _Mover:
         unit = _own_unit(unit)
         path = _unit_path(unit)
         storage = _storage()
-        async with self.lock:
-            await self.return_due()
+        async with self.lock.held(storage):
+            await self.return_due(storage)
             index = _Index(storage)
-            units = index.read()
+            units = index.read(held=True)
             held = units.get(unit)
             if held is not None and held.state == "deleted":
                 raise ValueError(f"the unit {unit} is deleted already")
@@ -1089,8 +1192,8 @@ class _Mover:
                 await self.report(held.move("deleted"), for_caller)
                 archive = _archive()
                 if archive is not None:
-                    await asyncio.to_thread(_forget, archive, held.named, held.files)
-                await asyncio.to_thread(
+                    await _in_thread(_forget, archive, held.named, held.files)
+                await _in_thread(
                     _remove, storage.joinpath(*_RESTORED.parts, *path.parts), storage
                 )
                 held.state, held.at_ns = "deleted", _now_ns()
@@ -1117,16 +1220,16 @@ class _Mover:
             await self.report(moved.move("deleted", rule), for_caller)
             units[unit] = moved
             index.write(units)
-            await asyncio.to_thread(_remove, source)
+            await _in_thread(_remove, source)
 
-    async def return_due(self) -> None:
+    async def return_due(self, granted: Path | None) -> None:
         """Each restored unit past the restore period removed from the
-        restore area, its return reported first; the archive still holds it."""
-        granted = storage_dir()
+        restore area of `granted`, the storage whose index's lock is held,
+        its return reported first; the archive still holds it."""
         if granted is None or self.plugin._storage is None:
             return
         index = _Index(granted)
-        units = index.read()
+        units = index.read(held=True)
         due = _now_ns() - _RESTORE_DAYS * NANOS_PER_DAY
         for unit, held in units.items():
             if held.state != "restored" or held.restored_at_ns > due:
@@ -1139,7 +1242,7 @@ class _Mover:
                 log.warning("the return of %s was not recorded: %s", unit, failed)
                 continue
             target = granted.joinpath(*_RESTORED.parts, *PurePosixPath(unit).parts)
-            await asyncio.to_thread(_remove, target, granted)
+            await _in_thread(_remove, target, granted)
             held.state, held.restored_at_ns = "archived", 0
             index.write(units)
 
@@ -1177,8 +1280,11 @@ def _archive_used(units: dict[str, _Moved]) -> int:
     """The bytes the instance's archive holds, as the indexes say: this
     shard's (`units`, as read), and on an instance of shards every other
     shard's, the bound being the instance's (W8.3). Another shard's index
-    that cannot be read refuses the archive, never counted as holding
-    nothing, so the bound is never passed unseen."""
+    that cannot be read, tried twice, refuses the archive, never counted as
+    holding nothing; one holding fields a newer SDK added is counted. The
+    lock is the shard's, so two shards archiving at once may each count
+    the other before its move: the bound can be passed by what they moved
+    together, never by one alone."""
     used = sum(moved.archive_bytes for moved in units.values())
     granted = instance_storage_dir()
     if granted is None or _serving is None or not _sharded():
@@ -1188,7 +1294,8 @@ def _archive_used(units: dict[str, _Moved]) -> int:
         if shard is None or shard == _serving[0]:
             continue
         try:
-            used += sum(moved.archive_bytes for moved in _Index(folder).read().values())
+            held = _Index(folder).read(lenient=True)
+            used += sum(moved.archive_bytes for moved in held.values())
         except (OSError, ValueError, TypeError, AttributeError) as unread:
             raise RuntimeError(
                 f"shard {shard}'s archive index could not be read ({unread}): the archive's "
@@ -1280,7 +1387,7 @@ def _with_bytes(
         return spans
     try:
         used = _Index(granted).archive_bytes()
-    except (OSError, ValueError, TypeError) as unread:
+    except (OSError, ValueError, TypeError, AttributeError) as unread:
         log.warning("the archive's index could not be read for the heartbeat: %s", unread)
         return spans
     if not used and not any(span.bytes for span in spans):

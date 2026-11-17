@@ -7,15 +7,17 @@ fake sidecar answering it shard 0 of 2, on the one shared storage
     python _two_holders.py lines <go-file> <name> <count>
     python _two_holders.py archive <go-file> <unit> [<unit> ...]
 
-Each waits for <go-file>, so both write at once, then prints, as JSON, the
-keys it was given (`lines`) or the units it archived (`archive`). Its
-sidecar takes a moment to record a move, as a real one does, so each
-pod's moves overlap the other's."""
+Each registers, says so (`<go-file>.ready-<pid>`), and waits for <go-file>,
+which the test touches once both are ready, so both write at once; then it
+prints, as JSON, the keys it was given (`lines`) or the units it archived
+(`archive`). Its sidecar takes a moment to record a move, as a real one
+does, so each pod's moves overlap the other's."""
 
 from __future__ import annotations
 
 import asyncio
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -54,6 +56,7 @@ async def main(mode: str, go: Path, args: list[str]) -> list[str]:
     try:
         plugin = await _pod(service, f"127.0.0.1:{port}", shard=0, shards=2)
         try:
+            go.with_name(f"{go.name}.ready-{os.getpid()}").touch()
             _wait(go)
             if mode == "lines":
                 name, count = args[0], int(args[1])
