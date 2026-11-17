@@ -3729,20 +3729,22 @@ class ReportExecutionResult(_message.Message):
     def __init__(self, placement: _Optional[_Union[Placement, _Mapping]] = ..., execution: _Optional[_Union[Execution, _Mapping]] = ..., order: _Optional[_Union[Order, _Mapping]] = ..., charge: _Optional[_Union[Charge, _Mapping]] = ..., unplaced: _Optional[_Union[UnplacedFact, _Mapping]] = ..., entry: _Optional[_Union[EntryMeta, _Mapping]] = ..., journal: _Optional[_Union[JournalRef, _Mapping]] = ...) -> None: ...
 
 class ReportChargeParams(_message.Message):
-    __slots__ = ("placement_id", "fee", "trade_date", "settlement_date", "raw_record", "acting_for")
+    __slots__ = ("placement_id", "fee", "trade_date", "settlement_date", "raw_record", "idempotency_key", "acting_for")
     PLACEMENT_ID_FIELD_NUMBER: _ClassVar[int]
     FEE_FIELD_NUMBER: _ClassVar[int]
     TRADE_DATE_FIELD_NUMBER: _ClassVar[int]
     SETTLEMENT_DATE_FIELD_NUMBER: _ClassVar[int]
     RAW_RECORD_FIELD_NUMBER: _ClassVar[int]
+    IDEMPOTENCY_KEY_FIELD_NUMBER: _ClassVar[int]
     ACTING_FOR_FIELD_NUMBER: _ClassVar[int]
     placement_id: str
     fee: Fee
     trade_date: str
     settlement_date: str
     raw_record: RawRecordRef
+    idempotency_key: str
     acting_for: _sidecar_pb2.CallerAssertion
-    def __init__(self, placement_id: _Optional[str] = ..., fee: _Optional[_Union[Fee, _Mapping]] = ..., trade_date: _Optional[str] = ..., settlement_date: _Optional[str] = ..., raw_record: _Optional[_Union[RawRecordRef, _Mapping]] = ..., acting_for: _Optional[_Union[_sidecar_pb2.CallerAssertion, _Mapping]] = ...) -> None: ...
+    def __init__(self, placement_id: _Optional[str] = ..., fee: _Optional[_Union[Fee, _Mapping]] = ..., trade_date: _Optional[str] = ..., settlement_date: _Optional[str] = ..., raw_record: _Optional[_Union[RawRecordRef, _Mapping]] = ..., idempotency_key: _Optional[str] = ..., acting_for: _Optional[_Union[_sidecar_pb2.CallerAssertion, _Mapping]] = ...) -> None: ...
 
 class ReportChargeResult(_message.Message):
     __slots__ = ("placement", "execution", "order", "charge", "unplaced", "entry", "journal")
@@ -8477,18 +8479,20 @@ class ReportPlacementRequest(_message.Message):
     def __init__(self, placement_id: _Optional[str] = ..., event: _Optional[_Union[PlacementEvent, str]] = ..., venue_order_id: _Optional[str] = ..., routed_at_ns: _Optional[int] = ..., routed_precision: _Optional[_Union[TimePrecision, str]] = ..., rejection_reason: _Optional[_Union[RejectionReason, str]] = ..., rejection_as_reported: _Optional[_Union[AsReported, _Mapping]] = ..., unknown_reason: _Optional[_Union[UnknownReason, str]] = ..., status_as_reported: _Optional[_Union[AsReported, _Mapping]] = ..., restatement_reason: _Optional[_Union[RestatementReason, str]] = ..., quantity: _Optional[_Union[Decimal, _Mapping]] = ..., limit_price: _Optional[_Union[Money, _Mapping]] = ..., raw_record: _Optional[_Union[RawRecordRef, _Mapping]] = ...) -> None: ...
 
 class ReportChargeRequest(_message.Message):
-    __slots__ = ("placement_id", "fee", "trade_date", "settlement_date", "raw_record")
+    __slots__ = ("placement_id", "fee", "trade_date", "settlement_date", "raw_record", "idempotency_key")
     PLACEMENT_ID_FIELD_NUMBER: _ClassVar[int]
     FEE_FIELD_NUMBER: _ClassVar[int]
     TRADE_DATE_FIELD_NUMBER: _ClassVar[int]
     SETTLEMENT_DATE_FIELD_NUMBER: _ClassVar[int]
     RAW_RECORD_FIELD_NUMBER: _ClassVar[int]
+    IDEMPOTENCY_KEY_FIELD_NUMBER: _ClassVar[int]
     placement_id: str
     fee: Fee
     trade_date: str
     settlement_date: str
     raw_record: RawRecordRef
-    def __init__(self, placement_id: _Optional[str] = ..., fee: _Optional[_Union[Fee, _Mapping]] = ..., trade_date: _Optional[str] = ..., settlement_date: _Optional[str] = ..., raw_record: _Optional[_Union[RawRecordRef, _Mapping]] = ...) -> None: ...
+    idempotency_key: str
+    def __init__(self, placement_id: _Optional[str] = ..., fee: _Optional[_Union[Fee, _Mapping]] = ..., trade_date: _Optional[str] = ..., settlement_date: _Optional[str] = ..., raw_record: _Optional[_Union[RawRecordRef, _Mapping]] = ..., idempotency_key: _Optional[str] = ...) -> None: ...
 
 class RecordLocateRequest(_message.Message):
     __slots__ = ("account_id", "venue_account_code", "instrument_id", "quantity_requested", "answer", "locate_record_id", "raw_record", "idempotency_key")

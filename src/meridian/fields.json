@@ -16932,6 +16932,19 @@
       "store": "bor"
     },
     {
+      "name": "meridian.v1.ReportChargeRequest.idempotency_key",
+      "type": "text",
+      "empty": "empty is none: the fact is applied once by its message identifier alone",
+      "intent": "lets the report be retried after a lost reply and applied once",
+      "meaning": "the plugin's own key for the report; a second with the same key and the same content is answered as the first was, no second charge recorded; one with other content is refused REFUSAL_REASON_IDEMPOTENCY_CONFLICT",
+      "not_meaning": "the envelope's message identifier; or the venue's charge or fill ID, from which the plugin may derive it",
+      "filled": "as-reported",
+      "filled_by": "connectivity",
+      "since": "v30",
+      "stability": "preview",
+      "store": "bor"
+    },
+    {
       "name": "meridian.v1.ReportValueDateRollRequest.venue_account_code",
       "type": "text",
       "empty": "never empty",
