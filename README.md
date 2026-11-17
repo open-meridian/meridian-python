@@ -820,7 +820,8 @@ async with await meridian.connect(declaration=DECLARATION, interface=INTERFACE) 
   it ran as shards, which its storage's copy put under `shard-0/`. Each
   shard keeps its own index of what moved, and `find_record` reads the index
   of the shard the key names, whichever pod wrote it. The archive's bound
-  is the instance's, summed over every shard's index. `restore_unit` and
+  is the instance's, summed over every shard's index; one that cannot be
+  read refuses the archive, the unit staying in storage. `restore_unit` and
   `delete_unit` name a unit as the instance does, `shard-<n>/<unit>` (one
   with no prefix is shard 0's, as `RawStore.tend` names them); a restore
   or a deletion of another shard's unit is refused: "the unit <unit> is
