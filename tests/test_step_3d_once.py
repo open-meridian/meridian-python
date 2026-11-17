@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import json
 from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -874,9 +875,12 @@ def test_a_pick_whose_note_failed_is_taken_again(
     asyncio.run(go())
 
 
-def test_a_held_placements_order_is_not_read_as_the_venues_own(tmp_path: Path) -> None:
-    """B-L3: P sent, then a stop holds it when the next pod hears it; its
-    order, naming P, is not reported on no placement."""
+def test_a_sent_placements_order_under_a_stop_is_not_read_as_the_venues_own(
+    tmp_path: Path,
+) -> None:
+    """B-L3: P sent, then a stop in force when the next pod hears it; its
+    order, naming P, is not reported on no placement. Since sdk6-review M3 it
+    is worked as sent, not held (`test_a_sent_placement_under_a_stop_...`)."""
     from test_connectivity_trader import Rig
 
     file = tmp_path / "trading" / "sent.json"
@@ -898,7 +902,7 @@ def test_a_held_placements_order_is_not_read_as_the_venues_own(tmp_path: Path) -
         await rig.poll(2)
 
     asyncio.run(go())
-    assert PLACEMENT in rig.trader.held
+    assert PLACEMENT in rig.trader.working and PLACEMENT not in rig.trader.held
     assert originated == []
 
 
@@ -983,3 +987,433 @@ def test_storage_dir_before_register_on_an_instances_one_pod_is_as_before(
     assert edge.storage_dir() == root
     monkeypatch.setenv("MERIDIAN_PLUGIN_SHARDS", "")
     assert edge.storage_dir() == root
+
+
+# ── sdk6-review: the book read whole, a pod admitted again, a stop ──────────
+
+
+def _paged(rig: Any, after: Any = lambda: True) -> None:
+    """ListOrders as core pages it: once `after()`, a first page of 100 other
+    orders, and the rig's own on the second."""
+    others = [
+        ops.Order(order_id=f"ORD-OTHER-{n:03d}", account_id=testing.ACCOUNT) for n in range(100)
+    ]
+
+    def listed(params: Any) -> ops.ListOrdersResult:
+        whole = rig._listed(params)
+        if not after() or params.cursor == "2":
+            return whole
+        return ops.ListOrdersResult(orders=others, next_cursor="2", as_of=whole.as_of)
+
+    rig.recorder.answer("ListOrders", listed)
+
+
+def _seen(rig: Any) -> list[str]:
+    originated: list[str] = []
+
+    async def seen(venue: Any, code: str, record: VenueOrder, key: str) -> None:
+        originated.append(record.order_id)
+
+    rig.trader._originated = seen
+    return originated
+
+
+def test_the_recheck_reads_every_page_of_the_book(tmp_path: Path) -> None:
+    """S6-M1: the report landed and its reply was lost; the book holds more
+    than a page of orders, P's on the second. Read whole, it is said once."""
+    from meridian.errors import MeridianError
+    from test_connectivity_trader import Rig
+
+    file = tmp_path / "trading" / "sent.json"
+    Sent(file).note(PLACEMENT)
+    recorder = Recorder("broker")
+    rig = Rig(recorder, sent=Sent(file))
+    held = rig.placement(PLACEMENT)
+    rig.holds(held)
+    landed: list[bool] = []
+    _paged(rig, lambda: bool(landed))
+    report = rig.trader.report_placement
+
+    async def landed_unanswered(**kw: Any) -> Any:
+        if kw.get("event") == ops.PLACEMENT_EVENT_OUTCOME_UNKNOWN and not landed:
+            await report(**kw)
+            rig.holds(_said(held))
+            landed.append(True)
+            raise MeridianError("no answer in time")
+        return await report(**kw)
+
+    rig.trader.report_placement = landed_unanswered  # type: ignore[method-assign]
+
+    async def go() -> None:
+        await rig.hear(held)
+        await rig.poll(3)
+
+    asyncio.run(go())
+    assert _unknowns(recorder) == [PLACEMENT]
+
+
+def test_a_placement_is_found_on_any_page_of_the_book() -> None:
+    """S6-M1: `_order_of` reads past the first page."""
+    from test_connectivity_trader import Rig
+
+    recorder = Recorder("broker")
+    rig = Rig(recorder)
+    held = rig.placement(PLACEMENT)
+    rig.holds(held)
+    _paged(rig)
+    asyncio.run(rig.hear(held))
+    assert [x for x in rig.fake.asked if x[0] == "place"] == [("place", PLACEMENT)]
+
+
+def test_a_stop_on_another_account_cancels_nothing_past_the_first_page() -> None:
+    """S6-M1, the stop's own read: P's account is known though its order is
+    on the second page, so a stop on another account leaves it working."""
+    from test_connectivity_trader import placed
+
+    recorder = Recorder("broker")
+    rig = placed(recorder)
+    _paged(rig)
+    instruction = ops.TradingInstruction(
+        target=ops.TradingInstructionTarget(account_id="ACC-01JAE000000000000000000002"),
+        value=ops.TRADING_INSTRUCTION_VALUE_STOP,
+        entry=ops.EntryMeta(entry_id="ENT-stop-2"),
+    )
+    recorder.answer(
+        "TradingInstructionChanged",
+        lambda _: ops.TradingInstructionChangedEvent(instruction=instruction),
+    )
+    asyncio.run(
+        recorder._hear({"TradingInstructionChanged": rig.trader.on_trading_instruction_changed})
+    )
+    assert [x for x in rig.fake.asked if x[0] == "cancel"] == []
+
+
+def _cancelled_once_landed(rig: Any, held: ops.Placement) -> None:
+    """The unknown report lands, then the run loop cancels the pod (two
+    heartbeats unanswered) before the report returns."""
+    report = rig.trader.report_placement
+    cancelled: list[bool] = []
+
+    async def landed_then_cancelled(**kw: Any) -> Any:
+        answer = await report(**kw)
+        if kw.get("event") == ops.PLACEMENT_EVENT_OUTCOME_UNKNOWN and not cancelled:
+            rig.holds(_said(held))
+            cancelled.append(True)
+            raise asyncio.CancelledError
+        return answer
+
+    rig.trader.report_placement = landed_then_cancelled
+
+
+async def _admitted_again(rig: Any) -> None:
+    """The run loop's stop and start, the same Trader admitted again."""
+    await rig.trader.on_stop()
+    await rig.trader.on_start()
+
+
+def test_a_pod_admitted_again_reads_the_book_afresh(tmp_path: Path) -> None:
+    """S6-M2.1: cancelled after its unknown report landed and before it was
+    noted; admitted again, it reads the book, which holds it said."""
+    from test_connectivity_trader import Rig
+
+    file = tmp_path / "trading" / "sent.json"
+    Sent(file).note(PLACEMENT)
+    recorder = Recorder("broker")
+    rig = Rig(recorder, sent=Sent(file))
+    held = rig.placement(PLACEMENT)
+    rig.holds(held)
+    _cancelled_once_landed(rig, held)
+
+    async def go() -> None:
+        await rig.hear(held)
+        with pytest.raises(asyncio.CancelledError):
+            await rig.poll(1)
+        await _admitted_again(rig)
+        await rig.poll(2)
+
+    asyncio.run(go())
+    assert _unknowns(recorder) == [PLACEMENT]
+    assert rig.trader.working[PLACEMENT].unanswered, "still looked for"
+
+
+def test_a_placement_cancelled_in_its_send_is_worked_once_admitted_again(
+    tmp_path: Path,
+) -> None:
+    """S6-M2.2: cancelled inside place_once's unknown report, P is decided
+    and not worked; admitted again, its order is found as P's, never as the
+    venue's own."""
+    from test_connectivity_trader import LOST, Rig
+
+    file = tmp_path / "trading" / "sent.json"
+    recorder = Recorder("broker")
+    rig = Rig(recorder, symbol=LOST, sent=Sent(file))
+    held = rig.placement(PLACEMENT)
+    rig.holds(held)
+    originated = _seen(rig)
+    _cancelled_once_landed(rig, held)
+
+    async def go() -> None:
+        with pytest.raises(asyncio.CancelledError):
+            await rig.hear(held)
+        await _admitted_again(rig)
+        await rig.poll(2)
+
+    asyncio.run(go())
+    assert originated == []
+    assert _events(recorder) == [
+        "PLACEMENT_EVENT_OUTCOME_UNKNOWN",
+        "PLACEMENT_EVENT_OUTCOME_RESOLVED",
+        "PLACEMENT_EVENT_ACKNOWLEDGED",
+    ]
+
+
+def test_a_sent_placement_under_a_stop_is_cancelled_and_its_fills_reported(
+    tmp_path: Path,
+) -> None:
+    """S6-M3: noted and sent by the pod before, a stop in force when this
+    one hears it: worked as sent, not held; its fill reported on it and its
+    order cancelled at the venue."""
+    from test_connectivity_trader import Rig
+
+    file = tmp_path / "trading" / "sent.json"
+    Sent(file).note(PLACEMENT)
+    recorder = Recorder("broker")
+    rig = Rig(recorder, sent=Sent(file))
+    originated = _seen(rig)
+    rig.fake.held["1"] = VenueOrder(
+        "1", PLACEMENT, "open", symbol="AAPL", side="buy", quantity=Decimal(10),
+        placed_at=testing.NOW, updated_at=testing.NOW,
+    )  # fmt: skip
+    rig.fake.fill("1", "1", "230.00")
+    held = rig.placement(PLACEMENT)
+    rig.holds(held)
+
+    async def go() -> None:
+        await rig.instruct(ops.TRADING_INSTRUCTION_VALUE_STOP)
+        await rig.hear(held)
+        await rig.poll(2)
+
+    asyncio.run(go())
+    assert PLACEMENT not in rig.trader.held
+    assert ("cancel", "1") in rig.fake.asked
+    assert [e.placement_id for e in recorder.on("ReportExecution")] == [PLACEMENT]
+    assert originated == []
+
+
+def test_a_held_placement_the_book_ended_is_dropped() -> None:
+    """S6-M3: held by a stop, then ended in the book (the ems cancelled it):
+    no longer held."""
+    from test_connectivity_trader import Rig
+
+    rig = Rig(Recorder("broker"))
+    held = rig.placement(PLACEMENT)
+    rig.holds(held)
+    ended = rig.placement(PLACEMENT, state=ops.PLACEMENT_STATE_CANCELLED)
+
+    async def go() -> None:
+        await rig.instruct(ops.TRADING_INSTRUCTION_VALUE_STOP)
+        await rig.hear(held)
+        assert PLACEMENT in rig.trader.held
+        await rig.hear(ended)
+
+    asyncio.run(go())
+    assert PLACEMENT not in rig.trader.held
+
+
+def test_place_onces_unknown_note_failing_leaves_the_placement_worked(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """S6-L1: the note of a send's unknown raises (a full disk): logged, and
+    the placement still worked, its order found as its own."""
+    import contextlib
+
+    from test_connectivity_trader import LOST, Rig
+
+    file = tmp_path / "trading" / "sent.json"
+    recorder = Recorder("broker")
+    sent = Sent(file)
+    rig = Rig(recorder, symbol=LOST, sent=sent)
+    held = rig.placement(PLACEMENT)
+    rig.holds(held)
+    originated = _seen(rig)
+    note = sent.note
+
+    def full(name: str) -> bool:
+        if name.startswith("unknown:"):
+            raise OSError(28, "No space left on device")
+        return note(name)
+
+    monkeypatch.setattr(sent, "note", full)
+
+    async def go() -> None:
+        with contextlib.suppress(OSError):
+            await rig.hear(held)
+        await rig.poll(2)
+
+    asyncio.run(go())
+    assert originated == []
+    assert "PLACEMENT_EVENT_ACKNOWLEDGED" in _events(recorder)
+
+
+def test_a_working_placement_with_no_venue_order_is_said_unknown_and_the_hold_ends(
+    tmp_path: Path,
+) -> None:
+    """Residual of 054848a (S6-L2): resumed as working with no venue order ID
+    and no condition, and not at the venue: said unknown once, so the
+    account's orders naming no client order ID are held no longer."""
+    from test_connectivity_trader import Rig
+
+    file = tmp_path / "trading" / "sent.json"
+    Sent(file).note(PLACEMENT)
+    recorder = Recorder("broker")
+    rig = Rig(recorder, sent=Sent(file))
+    originated = _seen(rig)
+    rig.fake.held["10"] = VenueOrder("10", "", "filled", placed_at=testing.NOW)
+    held = rig.placement(PLACEMENT, state=ops.PLACEMENT_STATE_WORKING)
+    rig.holds(held)
+
+    async def go() -> None:
+        await rig.hear(held)
+        await rig.poll(3)
+
+    asyncio.run(go())
+    assert _unknowns(recorder) == [PLACEMENT]
+    assert originated == ["10", "10", "10"]
+
+
+def test_a_placement_said_unknown_and_resolved_holds_nothing_back(tmp_path: Path) -> None:
+    """S6-L2: noted said unknown, the book's condition gone (said resolved,
+    its acknowledgement lost): nothing is still to be said, so nothing held."""
+    from test_connectivity_trader import Rig
+
+    file = tmp_path / "trading" / "sent.json"
+    Sent(file).note(PLACEMENT)
+    Sent(file).note(f"unknown:{PLACEMENT}")
+    recorder = Recorder("broker")
+    rig = Rig(recorder, sent=Sent(file))
+    originated = _seen(rig)
+    rig.fake.held["10"] = VenueOrder("10", "", "filled", placed_at=testing.NOW)
+    held = rig.placement(PLACEMENT)
+    rig.holds(held)
+
+    async def go() -> None:
+        await rig.hear(held)
+        await rig.poll(3)
+
+    asyncio.run(go())
+    assert _unknowns(recorder) == []
+    assert originated == ["10", "10", "10"]
+
+
+def test_a_status_not_mapped_the_book_holds_is_not_said_again(tmp_path: Path) -> None:
+    """S6-L3: restarted, the book's condition names the status; the venue
+    still says it, so nothing is said again."""
+    from test_connectivity_trader import Rig
+
+    file = tmp_path / "trading" / "sent.json"
+    Sent(file).note(PLACEMENT)
+    recorder = Recorder("broker")
+    rig = Rig(recorder, sent=Sent(file))
+    rig.fake.held["1"] = VenueOrder(
+        "1", PLACEMENT, "held", placed_at=testing.NOW, updated_at=testing.NOW
+    )
+    held = rig.placement(PLACEMENT)
+    held.status.conditions.add(
+        condition=ops.PLACEMENT_CONDITION_OUTCOME_UNKNOWN,
+        unknown_reason=ops.UNKNOWN_REASON_VENUE_STATUS_NOT_MAPPED,
+        status_as_reported=ops.AsReported(
+            scheme="fakeb:order-status", code="held", text="held"
+        ),
+    )
+    rig.holds(held)
+
+    async def go() -> None:
+        await rig.hear(held)
+        await rig.poll(2)
+
+    asyncio.run(go())
+    assert _unknowns(recorder) == []
+
+
+def test_a_recheck_that_fails_does_not_stop_the_poll(tmp_path: Path) -> None:
+    """S6-L4: the book read before a second unknown report fails: logged, and
+    the rest of the poll goes on."""
+    from meridian.errors import MeridianError
+    from test_connectivity_trader import Rig
+
+    file = tmp_path / "trading" / "sent.json"
+    Sent(file).note(PLACEMENT)
+    recorder = Recorder("broker")
+    rig = Rig(recorder, sent=Sent(file))
+    held = rig.placement(PLACEMENT)
+    rig.holds(held)
+    failing: list[bool] = []
+    report = rig.trader.report_placement
+
+    async def unanswered(**kw: Any) -> Any:
+        if kw.get("event") == ops.PLACEMENT_EVENT_OUTCOME_UNKNOWN and not failing:
+            failing.append(True)
+            raise MeridianError("no answer in time")
+        return await report(**kw)
+
+    rig.trader.report_placement = unanswered  # type: ignore[method-assign]
+
+    def listed(params: Any) -> ops.ListOrdersResult:
+        if failing and not params.HasField("since"):
+            raise MeridianError("the sidecar did not answer")
+        return rig._listed(params)
+
+    async def go() -> None:
+        await rig.hear(held)
+        recorder.answer("ListOrders", listed)
+        await rig.poll(1)
+        await rig.trader.poll()  # not raised
+
+    asyncio.run(go())
+    assert rig.trader.shown.last_poll is not None
+
+
+def test_an_rfq_acceptances_quote_outcomes_failing_are_recorded_at_the_next_poll(
+    tmp_path: Path,
+) -> None:
+    """S6-L5: the acceptance answered, its quote outcomes' report failed:
+    its order still worked, and the outcomes recorded at the next poll."""
+    from meridian.errors import MeridianError
+
+    file = tmp_path / "trading" / "sent.json"
+
+    async def go() -> None:
+        rig = _rfq_rig(file)
+        held = rig.placement(placement_type=ops.PLACEMENT_TYPE_RFQ)
+        rig.holds(held, order_type=ops.ORDER_TYPE_REQUEST_FOR_QUOTE)
+        await rig.hear(held)
+        record = rig.trader.report_placement_quote
+        failures = [MeridianError("no answer in time")]
+
+        async def once_failing(**kw: Any) -> Any:
+            if failures and kw.get("outcome") == ops.PLACEMENT_QUOTE_OUTCOME_ACCEPTED:
+                raise failures.pop()
+            return await record(**kw)
+
+        rig.trader.report_placement_quote = once_failing
+        with pytest.raises(MeridianError):
+            await rig.hear(_picked(held))
+        assert rig.venue.accepted == ["Q-B"]
+        rig.venue.orders = lambda code: (
+            [VenueOrder("V-RFQ-1", held.placement_id, "open", placed_at=testing.NOW)],
+            "rfq/orders",
+        )
+        await rig.poll(2)
+        said = {
+            (q.quote_id, ops.PlacementQuoteOutcome.Name(q.outcome))
+            for q in rig.recorder.on("ReportPlacementQuote")
+            if q.quote_id
+        }
+        assert {
+            ("PQT-Q-B", "PLACEMENT_QUOTE_OUTCOME_ACCEPTED"),
+            ("PQT-Q-A", "PLACEMENT_QUOTE_OUTCOME_NOT_PICKED"),
+        } <= said
+        assert "PLACEMENT_EVENT_ACKNOWLEDGED" in _events(rig.recorder, held.placement_id)
+        assert rig.venue.accepted == ["Q-B"]
+
+    asyncio.run(go())

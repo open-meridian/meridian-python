@@ -116,7 +116,7 @@ import json
 import logging
 import os
 import tempfile
-from collections.abc import Callable, Sequence
+from collections.abc import AsyncIterator, Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, tzinfo
 from decimal import Decimal
@@ -162,6 +162,20 @@ def _unknown_in_book(placement: ops.Placement) -> bool:
     return any(
         held.condition == ops.PLACEMENT_CONDITION_OUTCOME_UNKNOWN
         for held in placement.status.conditions
+    )
+
+
+def _status_in_book(placement: ops.Placement) -> str:
+    """The venue status the book holds the placement said outcome unknown
+    for, `venue status not mapped`; "" for none."""
+    return next(
+        (
+            held.status_as_reported.code
+            for held in placement.status.conditions
+            if held.condition == ops.PLACEMENT_CONDITION_OUTCOME_UNKNOWN
+            and held.unknown_reason == ops.UNKNOWN_REASON_VENUE_STATUS_NOT_MAPPED
+        ),
+        "",
     )
 
 
@@ -387,6 +401,9 @@ class Worked:
     currency: str
     venue_order_id: str = ""
     symbol: str = ""
+    #: The order's account: the trading instructions binding it are read by
+    #: it (`in_force`).
+    account_id: str = ""
     # The filled quantity reported, and the venue's average price then: of
     # the order it holds now, the fills of any it replaced counted in
     # `carried`.
@@ -434,6 +451,9 @@ class Worked:
     #: The quotes open when one was picked, each recorded not picked once
     #: the acceptance's order is known.
     others: tuple[str, ...] = ()
+    #: The picked quote recorded accepted and the others not picked: tried
+    #: again at each poll until they are.
+    quotes_said: bool = False
     asked: Asked | None = None
 
 
@@ -740,6 +760,10 @@ class Trader(Role):
     ) -> None:
         if placement.connectivity_instance_id != self.me:
             return
+        if placement.status.state != ops.PLACEMENT_STATE_QUEUED:
+            # Held back while queued; the book has moved it on since (the
+            # ems cancelled it, say), so it is held no longer.
+            self.held.pop(placement.placement_id, None)
         if await self._adopt(placement):
             return
         self.venue_orders.update(placement.venue_order_ids)
@@ -760,8 +784,13 @@ class Trader(Role):
                 worked.carried = filled_in_book(
                     placement.placement_id, executions, besides=worked.venue_order_id
                 )
-            worked.unanswered = not worked.venue_order_id and not worked.rfq_request
-            worked.said_unknown = _unknown_in_book(placement)
+            if worked.venue_order_id or worked.rfq_request:
+                worked.said_unknown = _unknown_in_book(placement)
+            else:
+                # Sent, and no venue order ID in the book: looked for by its
+                # client order ID, and said outcome unknown once should the
+                # venue's orders not hold it (PO 72).
+                self._unanswered(worked, placement)
             self.working[placement.placement_id] = worked
             self.decided.add(placement.placement_id)
             log.info("working %s again: %s filled", placement.placement_id, worked.filled)
@@ -791,6 +820,7 @@ class Trader(Role):
             placement_id=placement.placement_id,
             order_id=placement.order_id,
             code=placement.venue_account_code or held.code,
+            account_id=placement.account_id,
             instrument_id=held.instrument_id,
             currency=held.currency or self.default_currency,
             venue_order_id=held.venue_order_id,
@@ -815,12 +845,23 @@ class Trader(Role):
         return True
 
     async def _order_of(self, placement: ops.Placement) -> ops.Order | None:
-        listed = await self.list_orders(account_id=placement.account_id)
-        for order in listed.orders:
-            if order.order_id == placement.order_id:
-                found: ops.Order = order
-                return found
+        async for listed in self._book(placement.account_id):
+            for order in listed.orders:
+                if order.order_id == placement.order_id:
+                    found: ops.Order = order
+                    return found
         return None
+
+    async def _book(self, account_id: str = "") -> AsyncIterator[ops.ListOrdersResult]:
+        """The book's orders in this plugin's scope, or in one account, page
+        by page to the last: the book answers a page at a time."""
+        cursor = ""
+        while True:
+            listed = await self.list_orders(account_id=account_id, cursor=cursor)
+            yield listed
+            if not listed.next_cursor or listed.next_cursor == cursor:
+                return
+            cursor = listed.next_cursor
 
     # ── Hearing ─────────────────────────────────────────────────────────
 
@@ -921,13 +962,29 @@ class Trader(Role):
         for worked in list(self.working.values()):
             if worked.ended or worked.cancel_sent:
                 continue
-            if accounts is None:
-                listed = await self.list_orders()
-                accounts = {o.order_id: str(o.account_id) for o in listed.orders}
-            account = accounts.get(worked.order_id, "")
+            account = worked.account_id
+            if not account:
+                if accounts is None:
+                    accounts = {
+                        o.order_id: str(o.account_id)
+                        async for listed in self._book()
+                        for o in listed.orders
+                    }
+                account = accounts.get(worked.order_id, "")
             if account and not self._covers(instruction, account):
                 continue
             await self._cancel(worked, cause=instruction.entry, reason="a stop is in force")
+
+    async def _under_stop(self, worked: Worked) -> None:
+        """A placement worked, its venue order known, while a stop binds its
+        account -- one sent before this pod heard it, say: cancelled at the
+        venue as the stop's own cancels are."""
+        if worked.ended or worked.cancel_sent or not worked.venue_order_id:
+            return
+        binding = self.in_force(worked.account_id)
+        if binding is None or binding.value != ops.TRADING_INSTRUCTION_VALUE_STOP:
+            return
+        await self._cancel(worked, cause=binding.entry, reason="a stop is in force")
 
     async def _release_held(self) -> None:
         for placement_id, placement in list(self.held.items()):
@@ -951,13 +1008,15 @@ class Trader(Role):
     async def on_queued(self, placement: ops.Placement, order: ops.Order | None) -> None:
         """A queued placement naming this instance: held, rejected, or sent."""
         pid = placement.placement_id
+        if pid in self._sent:
+            # Sent before this process: asked about, never sent again --
+            # under a stop too, which cancels its order once found
+            # (`_under_stop`).
+            await self._sent_before(placement, order, queued=True)
+            return
         if self.in_force(placement.account_id) is not None:
             self.held[pid] = placement
             log.info("holding %s back: trading is paused or stopped", pid)
-            return
-        if pid in self._sent:
-            # Sent before this process: asked about, never sent again.
-            await self._sent_before(placement, order, queued=True)
             return
         self.decided.add(pid)
         order = order if order is not None else await self._order_of(placement)
@@ -988,6 +1047,7 @@ class Trader(Role):
             placement_id=pid,
             order_id=order.order_id,
             code=code,
+            account_id=placement.account_id,
             instrument_id=order.instrument_id,
             currency=found.instrument.currency or self.default_currency,
             symbol=symbol,
@@ -1129,6 +1189,10 @@ class Trader(Role):
             or self.default_currency,
             venue_order_id=placement.venue_order_id,
             symbol=symbol_of(found.instrument, venue.source) if found.found else "",
+            account_id=placement.account_id,
+            # A status not mapped that the book holds said: said no more
+            # while the venue says it still.
+            unknown=_status_in_book(placement),
         )
         if placement.placement_type == ops.PLACEMENT_TYPE_RFQ:
             # An RFQ worked again (contract v27): its request by the tag it
@@ -1137,6 +1201,15 @@ class Trader(Role):
             worked.quotes = {q.dealer_quote_id: q.quote_id for q in placement.quotes}
             worked.outcomes = {q.quote_id: int(q.outcome) for q in placement.quotes}
             worked.accepted = placement.picked_quote_id if placement.venue_order_id else ""
+            worked.others = tuple(
+                q.quote_id
+                for q in placement.quotes
+                if q.quote_id != placement.picked_quote_id
+                and q.outcome == ops.PLACEMENT_QUOTE_OUTCOME_OPEN
+            )
+            worked.quotes_said = (
+                worked.outcomes.get(worked.accepted) == ops.PLACEMENT_QUOTE_OUTCOME_ACCEPTED
+            )
         return worked
 
     # ── An RFQ placement (contract v27, W11.40, W11.41) ────────────────
@@ -1313,8 +1386,10 @@ class Trader(Role):
         except VenueUnanswered:
             self._unanswered(worked, placement)
             return
-        await self._quote_outcomes(worked, key)
+        # Its order known first: outcomes whose report fails are recorded
+        # at the next poll that reads it (`quotes_said`).
         worked.venue_order_id = record.order_id
+        await self._quote_outcomes(worked, key)
         await self._report_status(venue, worked, record, key)
 
     async def _quote_outcomes(self, worked: Worked, key: str) -> None:
@@ -1336,6 +1411,7 @@ class Trader(Role):
                 raw_record=self._raw(key),
                 idempotency_key=f"quote:{other}:not-picked",
             )
+        worked.quotes_said = True
 
     # ── Changing: a cancel or a replace ─────────────────────────────────
 
@@ -1585,15 +1661,18 @@ class Trader(Role):
             record = by_id.get(worked.venue_order_id)
             if record is None:
                 continue
+            if worked.rfq_request and worked.accepted and not worked.quotes_said:
+                await self._quote_outcomes(worked, key)
             await self._report_status(venue, worked, record, key, by_id)
+            await self._under_stop(worked)
         if code not in self.mapped():
             return
-        # While a placement on the account is unanswered and not yet said
-        # outcome unknown, only an order that could be its -- one naming it,
-        # or naming no client order ID -- is held back from the
-        # venue-originated ones. Once it is said unknown the hold ends: the
+        # While a placement on the account is unanswered and its outcome
+        # unknown is still to be said, only an order that could be its --
+        # one naming it, or naming no client order ID -- is held back from
+        # the venue-originated ones. Once it is said unknown the hold ends: the
         # trader resolves it, and the venue's own orders are reported.
-        unanswered = any(w.unanswered and not w.said_unknown for w in mine)
+        unanswered = any(w.unanswered and w.unreported for w in mine)
         placed = {w.venue_order_id for w in self.working.values()} | self.venue_orders
         for record in orders:
             if record.order_id in placed:
@@ -1618,10 +1697,10 @@ class Trader(Role):
         if _said_unknown(pid) in self._sent:
             worked.unreported, worked.said_unknown = False, True
             return
-        if worked.recheck and await self._said_in_book(pid):
-            worked.unreported, worked.said_unknown, worked.recheck = False, True, False
-            return
         try:
+            if worked.recheck and await self._said_in_book(worked):
+                worked.unreported, worked.said_unknown, worked.recheck = False, True, False
+                return
             await self.report_placement(
                 placement_id=pid,
                 event=ops.PLACEMENT_EVENT_OUTCOME_UNKNOWN,
@@ -1639,25 +1718,23 @@ class Trader(Role):
             # The book's condition says it on a restart all the same.
             log.warning("%s: its outcome unknown report was not noted: %s", pid, failed)
 
-    async def _said_in_book(self, placement_id: str) -> bool:
-        """Whether the book holds the placement said outcome unknown."""
-        listed = await self.list_orders()
-        return any(
-            _unknown_in_book(placement)
-            for order in listed.orders
-            for placement in order.placements
-            if placement.placement_id == placement_id
-        )
+    async def _said_in_book(self, worked: Worked) -> bool:
+        """Whether the book holds the placement said outcome unknown, read
+        to its last page."""
+        async for listed in self._book(worked.account_id):
+            for order in listed.orders:
+                for placement in order.placements:
+                    if placement.placement_id == worked.placement_id:
+                        return _unknown_in_book(placement)
+        return False
 
     async def _found(self, worked: Worked, record: VenueOrder, key: str) -> None:
         """An unanswered placement's order, found by its client order ID: an
-        RFQ's quote outcomes recorded; its status, and its outcome said
-        resolved where it was said unknown, follow (`_report_status`)."""
+        RFQ's quote outcomes, its status, and its outcome said resolved
+        where it was said unknown, follow (`_read_orders`)."""
         worked.venue_order_id = record.order_id
         worked.unanswered = False
         worked.unreported = False
-        if worked.rfq_request and worked.accepted:
-            await self._quote_outcomes(worked, key)
 
     async def _originated(self, venue: Venue, code: str, record: VenueOrder, key: str) -> None:
         """A venue order no placement names (contract v23): each fill after
@@ -2172,13 +2249,13 @@ class Trader(Role):
             worked.average = None
 
     async def _execution_in_book(self, worked: Worked, fill: str) -> str:
-        listed = await self.list_orders()
-        for execution in listed.executions:
-            if (
-                execution.placement_id == worked.placement_id
-                and execution.venue_execution_id == fill
-            ):
-                return str(execution.execution_id)
+        async for listed in self._book(worked.account_id):
+            for execution in listed.executions:
+                if (
+                    execution.placement_id == worked.placement_id
+                    and execution.venue_execution_id == fill
+                ):
+                    return str(execution.execution_id)
         return ""
 
     # ── A stated settlement date, and charges (0.31.0) ──────────────────
@@ -2354,6 +2431,21 @@ class Trader(Role):
         if self._venue() is not None and not self.started.is_set():
             await self.start()
             self.started.set()
+
+    async def on_stop(self) -> None:
+        """Stopped -- its sidecar lost, or the plugin stopping: what it held
+        of the book is forgotten, so that admitted again, by Register, it
+        reads the book afresh on start (`start`) rather than work on what
+        it knew when deposed. A subclass's `on_stop` calls this one."""
+        self.started.clear()
+        self.working.clear()
+        self.held.clear()
+        self.decided.clear()
+        self.venue_orders.clear()
+        self.instructions.clear()
+        self.published.clear()
+        self.watermark = None
+        self._first_read = set()
 
     def _from_storage(self) -> None:
         """The trading files it was not given, read from the plugin's

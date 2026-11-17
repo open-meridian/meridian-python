@@ -880,10 +880,17 @@ async with await meridian.connect(declaration=DECLARATION, interface=INTERFACE) 
   unanswered`, once per placement (noted as `unknown:<pid>`, and read from
   the book's condition), never sent again: the trader resolves it. Once its
   order is found, it is said resolved (`PLACEMENT_EVENT_OUTCOME_RESOLVED`)
-  before what the venue says of it. While a placement on an account is
-  unanswered and not yet said unknown, the account's orders naming no
-  client order ID are held back from the venue-originated ones; once it is
-  said unknown they are reported. An RFQ's acceptance is noted the same
+  before what the venue says of it. A placement the book holds sent or
+  working with no venue order ID is looked for and said unknown the same
+  way. While a placement on an account is unanswered and its unknown is
+  still to be said, the account's orders naming no client order ID are held
+  back from the venue-originated ones; once it is said unknown they are
+  reported. A placement noted as sent is worked as sent under a pause or a
+  stop too: its fills are reported on it, and under a stop its order is
+  cancelled once found. The book is read to its last page wherever the
+  Trader looks a placement up, and a Trader stopped (its sidecar lost)
+  forgets what it held of the book and reads it afresh when admitted
+  again. An RFQ's acceptance is noted the same
   way, and one noted with no order behind it is said unknown once; a
   charge is noted once reported. An adapter's order made by an acceptance
   carries the placement's ID as its client order ID, as a placement's does.

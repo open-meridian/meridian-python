@@ -153,7 +153,12 @@ def _lock_waiting(fd: int, within: float, what: str) -> None:
 
 def storage_root(prefix: str = "meridian-raw-") -> Path:
     """The instance's granted storage (`storage_dir()`), else a temporary
-    directory, which a restart loses."""
+    directory, which a restart loses.
+
+    Read before Register it answers the instance's storage as a whole, with
+    no refusal: a `RawStore` made on it follows to its shard's folder once
+    the plugin registered, so it is for a `RawStore` alone then. A plugin's
+    own files go under `storage_dir()`, read from its class's `on_start`."""
     from .edge import _storage_dir
 
     # Before Register, the storage as a whole, which a RawStore made on it

@@ -47,6 +47,7 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import json
+import logging
 import os
 from collections.abc import Awaitable, Callable, Iterable, Iterator, Sequence
 from dataclasses import dataclass
@@ -57,6 +58,8 @@ from urllib.parse import quote, unquote
 
 from ...operations import as_decimal
 from ...plugin.v1 import operations_pb2 as ops
+
+log = logging.getLogger("meridian.roles.connectivity")
 
 __all__ = [
     "Placed",
@@ -346,8 +349,14 @@ async def place_once(
             raw_record=raw_or_unkept(role.plugin, lost.raw_key),
         )
         # Said once (0.37.0): a restart, or the pod that takes the shard,
-        # finds it said and says it no more.
-        sent.note(_said_unknown(placement_id))
+        # finds it said and says it no more. A note that fails is logged:
+        # the book's condition says it all the same.
+        try:
+            sent.note(_said_unknown(placement_id))
+        except OSError as failed:
+            log.warning(
+                "%s: its outcome unknown report was not noted: %s", placement_id, failed
+            )
         return Placed("unknown", raw_key=lost.raw_key)
     return Placed("placed", answer, raw_key)
 
