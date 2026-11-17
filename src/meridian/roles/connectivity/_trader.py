@@ -7,13 +7,14 @@ adapter that reads the broker's words into this module's (`Venue`).
     trader = connectivity.Trader(
         lambda: venue,                        # the plugin's adapter, or None until set up
         now=lambda: datetime.now(UTC), market_zone=ZoneInfo("America/New_York"),
-        sent=connectivity.Sent(storage / "trading" / "sent.json"),
-        enabled=connectivity.Sent(storage / "trading" / "enabled.json"),
-        watched=connectivity.Watched(storage / "trading" / "originated.json"),
         scope=lambda: scope,
         poll_seconds=lambda: 5.0,
     )
     meridian.run(declaration=DECLARATION, roles=[trader])   # the connectivity role (0.35)
+
+What it sent, enabled and watched it reads from the plugin's storage on
+start, once registered (`trading_files`): a shard's own folder is known only
+then (0.37.0).
 
 **What it does.** It hears each placement naming its own instance, and no
 other's. For each queued one it reads the placement's order from the book
@@ -928,11 +929,7 @@ class Trader(Role):
             return
         if pid in self._sent:
             # Sent before this process: asked about, never sent again.
-            worked = await self._worked(placement, order)
-            if worked is not None:
-                worked.unanswered = not worked.rfq_request
-                self.working[pid] = worked
-                self.decided.add(pid)
+            await self._sent_before(placement, order)
             return
         self.decided.add(pid)
         order = order if order is not None else await self._order_of(placement)
@@ -984,12 +981,27 @@ class Trader(Role):
             worked.unanswered = True
             self.working[pid] = worked
             return
+        if placed.state == "sent_before":
+            # Another pod noted it first on the shard's folder: a takeover's
+            # lapse. Asked about, never sent again.
+            await self._sent_before(placement, order)
+            return
         if placed.state != "placed":
             return
         record, key = placed.answer, placed.raw_key
         worked.venue_order_id = record.order_id
         self.working[pid] = worked
         await self._report_status(venue, worked, record, key)
+
+    async def _sent_before(self, placement: ops.Placement, order: ops.Order | None) -> None:
+        """A placement noted as sent before, by an earlier process or by
+        another pod: found among the venue's orders, never sent again."""
+        pid = placement.placement_id
+        worked = await self._worked(placement, order)
+        if worked is not None:
+            worked.unanswered = not worked.rfq_request
+            self.working[pid] = worked
+            self.decided.add(pid)
 
     def placement_types(self, venue: Venue, code: str) -> tuple[int, ...]:
         """The placement types the venue takes on an account (contract v27,
@@ -1089,9 +1101,10 @@ class Trader(Role):
             lambda: self._call(venue.request_quotes, worked.code, asked),  # type: ignore[attr-defined]
             source=venue.source,
         )
-        if requested.state == "unknown":
+        if requested.state in ("unknown", "sent_before"):
             # Its quotes are read by the placement's ID, the tag it was sent
-            # with; the request is never sent again.
+            # with; the request is never sent again -- nor where another pod
+            # noted it first on the shard's folder (a takeover's lapse).
             worked.rfq_request = worked.placement_id
             self.working[worked.placement_id] = worked
             return
@@ -2279,7 +2292,9 @@ def basis_of(basis: ops.DateBasis) -> DateBasis:
 def trading_files(base: Path | None) -> tuple[Path | None, Path | None, Path | None]:
     """Where the placements sent, the accounts trading is enabled on, and
     the venue-originated orders are noted: `trading/sent.json`,
-    `trading/enabled.json` and `trading/originated.json` in storage."""
+    `trading/enabled.json` and `trading/originated.json` in storage. From
+    0.37.0 a `Sent` notes each name as a file of its own beside its file
+    (`trading/sent/<pid>`), reading the file and never writing it again."""
     if base is None:
         return None, None, None
     held = base / "trading"

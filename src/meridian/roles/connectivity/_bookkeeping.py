@@ -7,7 +7,9 @@ a venue.
 
 **No double send** (W11.8): a placement is noted in the plugin's own storage
 before it is sent (`Sent`), so one the book still holds queued after a restart
-is asked about, never sent again:
+is asked about, never sent again. From 0.37.0 the note is a marker of its own,
+`trading/sent/<pid>`, created exclusively: of two pods sharing a shard's
+folder inside a takeover's lapse, only the one that created it sends:
 
     sent = connectivity.Sent(storage / "trading" / "sent.json")
     outcome = await connectivity.place_once(
@@ -43,14 +45,15 @@ stay the plugin's.
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import json
 import os
-import tempfile
 from collections.abc import Awaitable, Callable, Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from decimal import ROUND_HALF_EVEN, Decimal
 from pathlib import Path
 from typing import Any, TypeVar
+from urllib.parse import quote, unquote
 
 from ...operations import as_decimal
 from ...plugin.v1 import operations_pb2 as ops
@@ -91,43 +94,130 @@ class VenueUnanswered(Exception):
 
 
 class Sent:
-    """The placements sent, by ID, kept in a JSON file in the plugin's storage
-    and written whole on every change, each noted before its send; None for a
-    test, which keeps them in memory. The same serves any set of names a
-    plugin must not lose -- the accounts trading is enabled on, say."""
+    """The placements sent, by ID, each noted in the plugin's storage before
+    its send; None for a test, which keeps them in memory. The same serves
+    any set of names a plugin must not lose -- the accounts trading is
+    enabled on, say.
+
+    From 0.37.0 (step 3d) each name is a file of its own beside the file
+    given, in the folder of its name: `trading/sent/<pid>` for
+    `trading/sent.json`. It is created exclusively, so where two pods share
+    the folder -- a deposed holder and the one that took its shard, inside
+    the takeover's lapse -- one creates it and the other is told it was
+    noted (`note` answers False), and a note never drops another's. The
+    file given, as an earlier release wrote it whole, is read and never
+    written again."""
 
     def __init__(self, file: Path | None) -> None:
         self._file = file
         self._held: set[str] = set()
-        if file is not None and file.exists():
+        if file is not None and file.is_file():
             with contextlib.suppress(OSError, ValueError):
                 held = json.loads(file.read_text())
                 if isinstance(held, list):
                     self._held = {str(each) for each in held}
 
+    @property
+    def _folder(self) -> Path | None:
+        """Where each name is noted: the given file's path without its
+        suffix (`<name>.d` for a file given none)."""
+        if self._file is None:
+            return None
+        bare = self._file.with_suffix("")
+        return bare if bare != self._file else self._file.with_name(self._file.name + ".d")
+
+    def _marker(self, name: str) -> Path | None:
+        folder = self._folder
+        return None if folder is None else folder / _marker_name(name)
+
     def __contains__(self, name: object) -> bool:
-        return name in self._held
+        if not isinstance(name, str):
+            return False
+        if name in self._held:
+            return True
+        marker = self._marker(name)
+        if marker is not None and marker.exists():
+            self._held.add(name)
+            return True
+        return False
+
+    def _noted(self) -> set[str]:
+        """Every name noted: the file given, and each marker in the folder,
+        another pod's too."""
+        names = set(self._held)
+        folder = self._folder
+        if folder is None or not folder.is_dir():
+            return names
+        for marker in folder.iterdir():
+            if marker.name.startswith(".") or not marker.is_file():
+                continue
+            if marker.name.startswith(_HASHED):
+                with contextlib.suppress(OSError, UnicodeDecodeError):
+                    said = marker.read_text(encoding="utf-8")
+                    if _marker_name(said) == marker.name:
+                        names.add(said)
+                continue
+            names.add(unquote(marker.name))
+        return names
 
     def __iter__(self) -> Iterator[str]:
-        return iter(sorted(self._held))
+        return iter(sorted(self._noted()))
 
     def __len__(self) -> int:
-        return len(self._held)
+        return len(self._noted())
 
-    def note(self, name: str) -> None:
-        """Keep `name`, written to storage before this returns."""
-        self._held.add(name)
-        if self._file is None:
-            return
-        self._file.parent.mkdir(parents=True, exist_ok=True)
-        made, written = tempfile.mkstemp(dir=self._file.parent, suffix=".tmp")
+    def note(self, name: str) -> bool:
+        """Keep `name`, in storage before this returns: True where this
+        noted it, False where it was noted already, by this process or
+        another sharing the folder."""
+        if name in self:
+            return False
+        marker = self._marker(name)
+        if marker is None:
+            self._held.add(name)
+            return True
+        marker.parent.mkdir(parents=True, exist_ok=True)
         try:
-            with os.fdopen(made, "w") as file:
-                json.dump(sorted(self._held), file)
-            os.replace(written, self._file)
-        except BaseException:
-            Path(written).unlink(missing_ok=True)
-            raise
+            made = os.open(marker, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+        except FileExistsError:
+            self._held.add(name)
+            return False
+        try:
+            os.write(made, name.encode("utf-8"))
+            os.fsync(made)
+        finally:
+            os.close(made)
+        _sync_folder(marker.parent)
+        self._held.add(name)
+        return True
+
+
+#: A marker named by its name's digest, the name too long for a file's.
+_HASHED = "~"
+_MOST_MARKER = 200
+
+
+def _marker_name(name: str) -> str:
+    """A name as its marker's file name: percent-encoded, so any name is one
+    file in the folder, a leading dot too (`.`, `..`); a digest where that
+    is empty or too long, the name then read from the marker itself."""
+    said = quote(name, safe="-_@+=,")
+    if said.startswith("."):
+        said = "%2E" + said[1:]
+    if not said or len(said) > _MOST_MARKER or said.startswith(_HASHED):
+        return _HASHED + hashlib.sha256(name.encode("utf-8")).hexdigest()
+    return said
+
+
+def _sync_folder(folder: Path) -> None:
+    """The folder's entry for a new marker made durable, where the file
+    system allows it."""
+    with contextlib.suppress(OSError):
+        held = os.open(folder, os.O_RDONLY)
+        try:
+            os.fsync(held)
+        finally:
+            os.close(held)
 
 
 @dataclass(frozen=True)
@@ -151,14 +241,16 @@ async def place_once(
     source: str,
 ) -> Placed:
     """Send a placement at most once: noted in `sent` before `send` is called,
-    never sent where it was noted before (a restart's queued placement). A
+    never sent where it was noted before (a restart's queued placement, or
+    one another pod noted first on the shard's folder: `sent_before`). A
     `VenueRefused` is reported rejected `venue rejected`, its code and words
     as reported under `<source>:error`; a `VenueUnanswered` outcome unknown,
     `request unanswered`. `send` answers the venue's answer and the raw
     record's key; anything else it raises is raised, the placement noted."""
-    if placement_id in sent:
+    if placement_id in sent or not sent.note(placement_id):
+        # Noted before: by this process, or by another pod on the shard's
+        # folder (a takeover's lapse), whose note alone may send it.
         return Placed("sent_before")
-    sent.note(placement_id)
     try:
         answer, raw_key = await send()
     except VenueRefused as refused:

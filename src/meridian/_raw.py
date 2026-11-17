@@ -154,9 +154,11 @@ def _lock_waiting(fd: int, within: float, what: str) -> None:
 def storage_root(prefix: str = "meridian-raw-") -> Path:
     """The instance's granted storage (`storage_dir()`), else a temporary
     directory, which a restart loses."""
-    from .edge import storage_dir
+    from .edge import _storage_dir
 
-    granted = storage_dir()
+    # Before Register, the storage as a whole, which a RawStore made on it
+    # follows to its shard's folder once registered.
+    granted = _storage_dir()
     if granted is not None:
         return granted
     return Path(tempfile.mkdtemp(prefix=prefix))
@@ -268,8 +270,12 @@ class RawStore:
         from .edge import storage_dir
 
         below = self._sharded()
+        if below is None:
+            return self._given
+        # Registered as a shard, so its folder is known: never the refusal
+        # a read before Register meets on shared storage.
         mine = storage_dir()
-        if below is None or mine is None:
+        if mine is None:
             return self._given
         return mine.joinpath(*below.parts)
 

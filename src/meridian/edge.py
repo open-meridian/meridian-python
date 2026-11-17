@@ -55,7 +55,9 @@ every shard's index. A restore or a deletion names a unit as the instance
 does (one with no prefix is shard 0's), and one of another shard's is
 refused, "the unit <unit> is shard <m>'s: its own pod restores it".
 Before the plugin registers no shard is known, and `storage_dir()` is the
-storage as a whole; an instance of one pod (`shards` 0) has no shard
+storage as a whole -- except on a storage its copy step converted for shards
+(`.meridian/copied-from-<claim>`), where it raises: a plugin reads its
+storage from its class's `on_start` (0.37.0); an instance of one pod (`shards` 0) has no shard
 folders, its keys no prefix, as before.
 
 **The archive** (contract v16; spec/an-edge-plugins-older-records-move-to-
@@ -234,7 +236,37 @@ def storage_dir() -> Path | None:
     """The storage the deployment grants this instance for its raw records
     (decisions/028), or None where it grants none: once the plugin has
     registered as a shard of its instance, its own shard's folder,
-    `<storage>/shard-<n>`, where alone it writes (step 3d, item 30)."""
+    `<storage>/shard-<n>`, where alone it writes (step 3d, item 30).
+
+    Read before Register on a storage its copy step converted for shards
+    (`.meridian/copied-from-<claim>` at its root), it raises RuntimeError:
+    the shard's folder is known only once registered, and the root is no
+    pod's to write. A plugin reads it from its class's `on_start`."""
+    if _serving is None:
+        _refuse_before_register()
+    return _storage_dir()
+
+
+def _refuse_before_register() -> None:
+    """The refusal of a read of the shard's folder before Register, on a
+    storage the copy step converted (sdk4-review H4)."""
+    granted = instance_storage_dir()
+    if granted is None:
+        return
+    with contextlib.suppress(OSError):
+        copied = next((granted / ".meridian").glob("copied-from-*"), None)
+        if copied is not None:
+            raise RuntimeError(
+                f"storage_dir() was read before the plugin registered, on storage converted "
+                f"for shards ({copied.relative_to(granted)}): its shard's folder is known "
+                f"only once registered, and the root is no pod's to write. Read storage from "
+                f"the class's on_start, as `meridian plugin migrate` to 0.37.0 rewrites the "
+                f"connectivity template's trading files"
+            )
+
+
+def _storage_dir() -> Path | None:
+    """`storage_dir()`, before Register too: the storage as a whole then."""
     granted = instance_storage_dir()
     prefix = _shard_prefix()
     if granted is None or not prefix:

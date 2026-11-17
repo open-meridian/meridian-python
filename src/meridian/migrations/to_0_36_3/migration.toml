@@ -34,8 +34,9 @@ first subject, across restarts too, which core enforces from contract 30's stage
 (spec/the-lake rule 5; the plugin step's databento, massive, tradier and \
 unusual-whales). A plugin whose chain is `option_chains.Feed`'s is not this"""
 instead = """hold the series with `option_chains.SeriesTimes(edge.storage_dir() / \
-"series.json")`, kept for the plugin's life and never cleared on a reset or a source \
-switch: build each series through `times.series(build, dataset=..., osi=..., \
+"series.json")`, built in the class's `on_start` (once registered, so on a shard its \
+own folder; 0.37.0), kept for the plugin's life and never cleared on a reset or a \
+source switch: build each series through `times.series(build, dataset=..., osi=..., \
 subject=..., now_ns=..., today=..., waiting=...)`, `build(valid_from_ns, adjusted_on)` \
 calling `option_series` with both, and send them with `await times.record(send_batch, \
 rows, today)`, `send_batch` the plugin's own `record_series` call and counting; \
