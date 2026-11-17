@@ -34,6 +34,14 @@ settings as delivered (`settings=`, from 0.35.2: a `@meridian.settings`
 instance, `meridian.Settings` or their values), `tend` reads the kind's
 window and past-window settings from them, so the plugin copies neither.
 
+On a shard of its instance (step 3d, item 30) a store on the granted
+storage (`storage_root()`) writes in the shard's own folder once the plugin
+has registered, made before or after, and its keys name the record across
+the instance, `shard-<n>/<kind>/...`; `get` reads any shard's record by its
+key, and one with no prefix under `shard-0/`, where the instance's storage
+was copied when it began running as shards. A takeover's pod resumes a live
+file's lines where the shard's last pod left them.
+
 How the plugin reaches its vendor is its own: this keeps what came back,
 whatever the transport.
 """
@@ -109,7 +117,7 @@ class RawStore:
     record is a JSON object holding at least `received_at_ns`."""
 
     def __init__(self, root: Path, kind: str = "responses") -> None:
-        self.root = root
+        self._given = root
         self.kind = kind
         self._kept = 0
         #: The day the latest live line was kept on; what is remembered below
@@ -125,6 +133,47 @@ class RawStore:
         #: The files held open for appending, the one written least lately first.
         self._open: OrderedDict[str, TextIO] = OrderedDict()
 
+    def _follows(self) -> bool:
+        """Whether this store is on the instance's granted storage -- the
+        whole, as `storage_root()` is before Register, or the shard's folder,
+        as it is after -- and so writes in its shard's folder once the plugin
+        registered as one."""
+        from .edge import instance_storage_dir, storage_dir
+
+        given = Path(self._given)
+        return given in (instance_storage_dir(), storage_dir())
+
+    @property
+    def root(self) -> Path:
+        """Where it writes: on the granted storage, the shard's own folder
+        (`storage_dir()`); else the root it was given."""
+        from .edge import storage_dir
+
+        if self._follows():
+            mine = storage_dir()
+            if mine is not None:
+                return mine
+        return self._given
+
+    def _prefix(self) -> str:
+        """What its keys are prefixed with: its shard's, on the granted
+        storage of an instance of shards; else nothing."""
+        from .edge import _shard_prefix
+
+        return _shard_prefix() if self._follows() else ""
+
+    def _path(self, key: str) -> Path:
+        """The file a key names: on the granted storage, in whichever shard's
+        folder it names (shard 0's for one with no prefix, on an instance of
+        shards); else under the root it was given."""
+        from .edge import _shard_folder
+
+        if self._follows():
+            folder, within = _shard_folder(key)
+            if folder is not None:
+                return folder / within
+        return self._given / key
+
     def keep(self, call: str, name: str, record: dict[str, Any]) -> str:
         """Keep one answer; its key. A key is never written twice."""
         self._kept += 1
@@ -137,7 +186,7 @@ class RawStore:
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("x", encoding="utf-8") as out:
             json.dump(record, out, indent=1, sort_keys=True)
-        return key
+        return self._prefix() + key
 
     def keep_line(self, call: str, name: str, record: dict[str, Any]) -> str:
         """Keep one live answer as the next line of its day's file for `call`
@@ -166,7 +215,7 @@ class RawStore:
             self._close(key)
             raise
         self._lines[key] = lines + 1
-        named = f"{key}#{lines}"
+        named = f"{self._prefix()}{key}#{lines}"
         self._last[key] = (body, named)
         self._first[named] = received
         if len(self._first) > _REMEMBERED:
@@ -214,7 +263,10 @@ class RawStore:
         prefix = f"{self.kind}/"
 
         def earlier(key: str) -> bool:
-            return key[len(prefix) : len(prefix) + 10] < before
+            from .edge import _split
+
+            within = _split(key)[1]
+            return within[len(prefix) : len(prefix) + 10] < before
 
         for key in [k for k in self._open if earlier(k)]:
             self._close(key)
@@ -232,7 +284,7 @@ class RawStore:
         """The record a row's reference names: a whole answer, or one line of a
         day's live answers. None once it has moved or gone."""
         key, _, where = ref_key.partition("#")
-        path = self.root / key
+        path = self._path(key)
         if not path.is_file():
             return None
         if path.suffix == ".jsonl":

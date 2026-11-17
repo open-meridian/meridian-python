@@ -807,6 +807,26 @@ async with await meridian.connect(declaration=DECLARATION, interface=INTERFACE) 
   the unit holding it, `outcome` archived (restorable), restored or deleted,
   or None for a record never moved. A row's `record_key` on the plugin's own
   page resolves through it, never to nothing.
+- **A storage per shard.** An instance run as shards, or with a standby,
+  shares one storage among its pods, a folder per shard. The plugin learns
+  its shard when it registers (`RegisterReply.shard`, `.shards`), and from
+  then `edge.storage_dir()` is its own shard's folder, `<storage>/shard-<n>`,
+  the only place it writes; `edge.instance_storage_dir()` is the whole,
+  every shard's folder under it, which any pod reads. A key names a record
+  across the instance: `plugin.raw_record(key)` and `RawStore` prefix a key
+  with `shard-<n>/`, the archive keeps the shard's objects under the same
+  prefix, and a move's unit is reported with it, so two shards' units of one
+  name stay two. A key with no prefix names what the instance kept before
+  it ran as shards, which its storage's copy put under `shard-0/`. Each
+  shard keeps its own index of what moved, and `find_record` reads the index
+  of the shard the key names, whichever pod wrote it. A restore or a
+  deletion of another shard's unit is refused: "the unit <unit> is shard
+  <m>'s: its own pod restores it". No shard is known before the plugin
+  registers, so read `storage_dir()` from `on_start` on: a `RawStore` on
+  `storage_root()` follows its shard whenever it was made, and
+  `connectivity.Trader` reads the trading files it was not given from
+  storage on start. An instance of one pod (`shards` 0) has no shard
+  folders, and its keys no prefix.
 - **What is stored** is the plugin's to say, as its figures are:
   `plugin.stored`, one `StoredSpan` per kind, on every heartbeat. The bytes
   each kind uses of the archive (`StoredSpan.bytes`) are the SDK's: it sums

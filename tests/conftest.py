@@ -49,7 +49,13 @@ holds it: one entry per declared kind, at most 16, no span without records,
 refused INVALID_ARGUMENT naming the field otherwise; any `bytes` (what the
 kind uses of the archive) accepted, with records in storage or none; and
 `report_stored` answers what the last accepted one said, as the plugin's
-report carries it to the Summary.
+report carries it to the Summary. A move whose unit's latest recorded move
+has the same outcome is answered and not recorded again, as the conductor
+keys its moves by instance, kind and unit.
+
+And from step 3d (item 30) its Register answers the pod's shard and the
+instance's shard count (`shard`, `shards`; 0 shards, an instance of one pod,
+by default).
 
 And from contract v18 it mirrors the lake (W10), as core's sidecar and lake
 answer it. A data plugin's catalogue is held from its registration, refused from a
@@ -1196,6 +1202,10 @@ def _entry(kind: str) -> object:
 @dataclass
 class FakeSidecar(sidecar_pb2_grpc.SidecarServiceServicer):
     admitted: bool = True
+    # The shard this pod's sidecar took, and the instance's shard count, as
+    # Register answers them (step 3d, item 30).
+    shard: int = 0
+    shards: int = 0
     refusal_reason: str = ""
     instance_id: str = "custody-snaptrade-1"
     roles: tuple[str, ...] = ("custody",)
@@ -1290,6 +1300,8 @@ class FakeSidecar(sidecar_pb2_grpc.SidecarServiceServicer):
             roles=list(self.roles),
             publish_grants=list(self.publish_grants),
             subscribe_grants=list(self.subscribe_grants),
+            shard=self.shard,
+            shards=self.shards,
         )
 
     def _declaration_refused(self, request: sidecar_pb2.RegisterRequest) -> str:
@@ -1597,6 +1609,14 @@ class FakeSidecar(sidecar_pb2_grpc.SidecarServiceServicer):
                     "days",
                     trailing_metadata=(("meridian-refusal-bin", refusal.SerializeToString()),),
                 )
+        latest = [
+            move
+            for move, _, _ in self.moves
+            if (move.record_kind, move.unit) == (request.record_kind, request.unit)
+        ]
+        if latest and latest[-1].outcome == request.outcome:
+            # The conductor's "again": answered, nothing recorded.
+            return sidecar_pb2.RecordMoveReply()
         kept = sidecar_pb2.RecordMoveRequest()
         kept.CopyFrom(request)
         self.moves.append((kept, caller, self.now_ns or time.time_ns()))

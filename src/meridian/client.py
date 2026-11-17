@@ -2277,6 +2277,11 @@ async def connect(
     if not reply.admitted:
         await channel.close(None)
         raise Refused(reply.refusal_reason)
+    # Its shard, as its sidecar took the shard's Lease (step 3d, item 30):
+    # where `meridian.edge.storage_dir()` writes from now on.
+    from .edge import _registered_as
+
+    _registered_as(reply.shard, reply.shards)
 
     plugin = Plugin(
         identity=Identity(
