@@ -62,9 +62,11 @@ before each Register, for at most one key under its own prefix: a cloud's
 workload identity trusts an account by its name, and the deployment's
 administrator must trust this instance's for the bucket. Refused on auth --
 a 401 or 403, or no credential at all -- the plugin does not register (its
-pod not Ready), says "the archive's bucket refuses this instance's account:
-its workload identity must trust that account (pluginArchive in
-values.yaml)", and asks again once a minute without limit, so a trust added
+pod not Ready), says "the archive's bucket refuses this instance's account
+<namespace>/<account>: its workload identity must trust that account
+(pluginArchive in values.yaml)" -- the account from MERIDIAN_POD_NAMESPACE
+and MERIDIAN_POD_SERVICE_ACCOUNT, or "this instance's account" alone without
+both -- and asks again once a minute without limit, so a trust added
 later is found without a restart; it never exits for it. A network fault, a
 5xx or an ask unanswered in 30 s says nothing of the account: it is said,
 and the plugin goes on to register.
@@ -238,7 +240,7 @@ async def _archive_trusted(stopped: asyncio.Event) -> bool:
         answer = asking.result()
         if answer is None:
             return True
-        log.error(edge._REFUSED)
+        log.error(edge._refused_text())
         log.info(
             "the archive's bucket answered %s; asking it again in %.0f s",
             answer,

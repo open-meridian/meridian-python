@@ -56,8 +56,11 @@ identity trusts by name. So `meridian.run` asks the bucket before each
 Register, for at most one key under the instance's prefix (a list, the least
 the account may do): refused on auth -- a 401 or 403, or no credential at
 all -- the plugin does not register, says "the archive's bucket refuses this
-instance's account: its workload identity must trust that account
-(pluginArchive in values.yaml)", and asks again once a minute, never
+instance's account <namespace>/<account>: its workload identity must trust
+that account (pluginArchive in values.yaml)", naming the account from
+`MERIDIAN_POD_NAMESPACE` and `MERIDIAN_POD_SERVICE_ACCOUNT` where the
+deployment gives both ("this instance's account" alone otherwise), and asks
+again once a minute, never
 exiting, until the administrator's trust is in place. Anything else -- a
 network fault, a 5xx, no answer in 30 s -- is said, and the plugin goes on.
 
@@ -470,13 +473,24 @@ class _Bucket:
         self.client.list_objects_v2(Bucket=self.bucket, Prefix=self._key(""), MaxKeys=1)
 
 
-#: What a plugin says while the archive's bucket refuses its account (PO
-#: items 60 and 61). Its account's name is not among what the plugin's
-#: container is given, so it is "this instance's account".
-_REFUSED = (
-    "the archive's bucket refuses this instance's account: its workload identity must trust "
-    "that account (pluginArchive in values.yaml)"
-)
+#: Where the deployment names the pod's namespace and account, from the
+#: downward API (PO item 64): what a refusal names the account by.
+_POD_NAMESPACE = "MERIDIAN_POD_NAMESPACE"
+_POD_SERVICE_ACCOUNT = "MERIDIAN_POD_SERVICE_ACCOUNT"
+
+
+def _refused_text() -> str:
+    """What a plugin says while the archive's bucket refuses its account
+    (PO items 60, 61 and 64): the account as `<namespace>/<account>` where
+    the deployment gives both, else "this instance's account" alone."""
+    namespace = os.environ.get(_POD_NAMESPACE, "").strip()
+    account = os.environ.get(_POD_SERVICE_ACCOUNT, "").strip()
+    named = f" {namespace}/{account}" if namespace and account else ""
+    return (
+        f"the archive's bucket refuses this instance's account{named}: its workload identity "
+        "must trust that account (pluginArchive in values.yaml)"
+    )
+
 
 #: The codes a refusal of the account is answered with where its HTTP
 #: status alone does not say so: STS's, as the pod's web identity is

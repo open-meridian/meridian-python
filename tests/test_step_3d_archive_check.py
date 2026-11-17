@@ -96,6 +96,8 @@ def _given(monkeypatch: pytest.MonkeyPatch, bucket: _Bucket) -> list[str]:
     monkeypatch.setitem(sys.modules, "boto3", types.SimpleNamespace(client=made_client))
     monkeypatch.setenv("MERIDIAN_ARCHIVE_BUCKET", "s3://firm-archive/meridian/custody-1")
     monkeypatch.delenv("MERIDIAN_ARCHIVE_DIR", raising=False)
+    monkeypatch.delenv("MERIDIAN_POD_NAMESPACE", raising=False)
+    monkeypatch.delenv("MERIDIAN_POD_SERVICE_ACCOUNT", raising=False)
     return made
 
 
@@ -302,6 +304,53 @@ async def test_a_bucket_that_does_not_answer_in_time_is_not_waited_for(
     finally:
         release.set()
         await _ended(task)
+
+
+@pytest.mark.parametrize(
+    ("namespace", "account", "said"),
+    [
+        (
+            "meridian",
+            "om-shards-custody-1",
+            "the archive's bucket refuses this instance's account "
+            "meridian/om-shards-custody-1: its workload identity must trust that account "
+            "(pluginArchive in values.yaml)",
+        ),
+        ("meridian", None, _REFUSAL),
+        (None, "om-shards-custody-1", _REFUSAL),
+        (None, None, _REFUSAL),
+    ],
+    ids=["both", "namespace-only", "account-only", "neither"],
+)
+async def test_the_refusal_names_the_account_where_the_deployment_gives_it(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    namespace: str | None,
+    account: str | None,
+    said: str,
+) -> None:
+    """With the pod's namespace and account both given (the downward API's,
+    PO item 64), the refusal names the account as `<namespace>/<account>`;
+    with either missing, it says "this instance's account" alone."""
+    monkeypatch.setattr(running, "_ARCHIVE_CHECK_SECONDS", 30.0)
+    caplog.set_level(logging.INFO, logger="meridian")
+    _given(monkeypatch, _Bucket([ClientError(403, "AccessDenied")]))
+    for name, value in (
+        ("MERIDIAN_POD_NAMESPACE", namespace),
+        ("MERIDIAN_POD_SERVICE_ACCOUNT", account),
+    ):
+        if value is not None:
+            monkeypatch.setenv(name, value)
+    stopped = asyncio.Event()
+    waiting = asyncio.create_task(running._archive_trusted(stopped))
+    try:
+        await _until(lambda: any("refuses" in r.getMessage() for r in caplog.records))
+        refusals = [r for r in caplog.records if "refuses" in r.getMessage()]
+        assert [r.getMessage() for r in refusals] == [said]
+        assert refusals[0].levelno == logging.ERROR
+    finally:
+        stopped.set()
+        await asyncio.wait_for(waiting, timeout=2)
 
 
 @pytest.mark.parametrize("given", ["none", "directory"])

@@ -777,8 +777,11 @@ async with await meridian.connect(declaration=DECLARATION, interface=INTERFACE) 
   `meridian.run` lists at most one key under the instance's prefix. Refused
   on auth (a 401 or 403, or no credential at all), the plugin does not
   register, so its pod is not Ready; it logs "the archive's bucket refuses
-  this instance's account: its workload identity must trust that account
-  (pluginArchive in values.yaml)" and asks again once a minute, never
+  this instance's account <namespace>/<account>: its workload identity must
+  trust that account (pluginArchive in values.yaml)", naming the account from
+  `MERIDIAN_POD_NAMESPACE` and `MERIDIAN_POD_SERVICE_ACCOUNT` where the
+  deployment gives both ("this instance's account" alone otherwise), and asks
+  again once a minute, never
   exiting, so a trust the administrator adds is found without a restart. A
   network fault, a 5xx or no answer in 30 s is logged, and the plugin goes
   on to register.
