@@ -832,8 +832,12 @@ async with await meridian.connect(declaration=DECLARATION, interface=INTERFACE) 
   `connectivity.Trader` reads the trading files it was not given from
   storage on start. A live file's lines are counted with the file locked,
   so a pod still writing in a takeover's lapse and the shard's new holder
-  each name their own line. An instance of one pod (`shards` 0) has no
-  shard folders, and its keys no prefix.
+  each name their own line; the shard's index of what moved is read and
+  written under a lock of its own, so neither pod's move is lost from it.
+  Both are POSIX record locks (`fcntl.lockf`), so the storage class the
+  instance's storage is made from must support them across its pods, as
+  NFSv4 does. An instance of one pod (`shards` 0) has no shard folders, and
+  its keys no prefix.
 - **What is stored** is the plugin's to say, as its figures are:
   `plugin.stored`, one `StoredSpan` per kind, on every heartbeat. The bytes
   each kind uses of the archive (`StoredSpan.bytes`) are the SDK's: it sums

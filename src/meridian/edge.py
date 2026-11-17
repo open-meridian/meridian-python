@@ -130,6 +130,8 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import dataclasses
+import errno
+import fcntl
 import hashlib
 import json
 import logging
@@ -394,6 +396,9 @@ _RESTORE_RULE = f"restore period {_RESTORE_DAYS} days"
 #: of what moved, and the restore area. Never a unit's path.
 _OWN = ".meridian"
 _INDEX = PurePosixPath(_OWN, "archive", "index.json")
+#: The index's lock across processes: a file beside it that only `_Moves`
+#: opens, so closing any other descriptor on the index never drops it.
+_INDEX_LOCK = PurePosixPath(_OWN, "archive", "index.lock")
 _RESTORED = PurePosixPath(_OWN, "restored")
 
 _OUTCOMES = {
@@ -828,12 +833,69 @@ def _span(record_count: int, first_received_ns: int, last_received_ns: int) -> N
         raise ValueError("last_received_ns is before first_received_ns")
 
 
+class _Moves:
+    """The lock a move holds while it reads, changes and writes the shard's
+    index: this process's moves one at a time, and across the pods holding
+    the shard at once -- a deposed holder still writing through a
+    takeover's lapse and the new one (PO item 79) -- one writer of the
+    index at a time, by a POSIX record lock on `_INDEX_LOCK`, so neither
+    writes over a move the other recorded. Waited for without blocking the
+    loop."""
+
+    def __init__(self) -> None:
+        self._local = asyncio.Lock()
+        self._held: int | None = None
+
+    async def __aenter__(self) -> _Moves:
+        await self._local.acquire()
+        try:
+            granted = storage_dir()
+            if granted is not None:
+                self._held = await _lock_file(granted.joinpath(*_INDEX_LOCK.parts))
+        except BaseException:
+            self._local.release()
+            raise
+        return self
+
+    async def __aexit__(self, *exc: object) -> None:
+        held, self._held = self._held, None
+        try:
+            if held is not None:
+                try:
+                    fcntl.lockf(held, fcntl.LOCK_UN)
+                finally:
+                    os.close(held)
+        finally:
+            self._local.release()
+
+
+async def _lock_file(path: Path) -> int:
+    """`path` opened and locked by this process (lockf), waited for while
+    another holds it: its descriptor, closed to let it go."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    held = os.open(path, os.O_RDWR | os.O_CREAT, 0o644)
+    try:
+        wait = 0.005
+        while True:
+            try:
+                fcntl.lockf(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                return held
+            except OSError as busy:
+                if busy.errno not in (errno.EACCES, errno.EAGAIN):
+                    raise
+            await asyncio.sleep(wait)
+            wait = min(wait * 2, 0.05)
+    except BaseException:
+        os.close(held)
+        raise
+
+
 class _Mover:
     """The plugin's moves of its raw records, through its sidecar."""
 
     def __init__(self, plugin: Plugin) -> None:
         self.plugin = plugin
-        self.lock = asyncio.Lock()
+        self.lock = _Moves()
 
     # What the plugin declared, and its admin set.
 

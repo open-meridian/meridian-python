@@ -554,6 +554,73 @@ async def test_m2_an_unreadable_index_of_another_shard_refuses_the_archive(
     assert not any(archive.rglob("*.json"))
 
 
+def _two_holders(tmp_path: Path, *runs: list[str]) -> list[list[str]]:
+    """Two pods holding one shard at once (PO item 79), each its own process
+    and its own sidecar, on the one storage: started together, released at
+    once, and what each printed."""
+    go = tmp_path / "go"
+    helper = Path(__file__).with_name("_two_holders.py")
+    pods = [
+        subprocess.Popen(
+            [sys.executable, str(helper), run[0], str(go), *run[1:]],
+            cwd=helper.parent,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        for run in runs
+    ]
+    # Each registers before it waits; the file lets them both go together.
+    go.touch()
+    printed = []
+    for pod in pods:
+        out, err = pod.communicate(timeout=120)
+        assert pod.returncode == 0, err
+        printed.append(json.loads(out.strip().splitlines()[-1]))
+    return printed
+
+
+def test_two_holders_of_one_shard_name_every_line_once(tmp_path: Path, root: Path) -> None:
+    """A deposed holder and the new one writing one live file at once each
+    name their own lines: under the file's lock no #line is given twice, and
+    every key names the line it was given for."""
+    deposed, new = _two_holders(tmp_path, ["lines", "deposed", "300"], ["lines", "new", "300"])
+    keys = deposed + new
+    assert len(set(keys)) == 600, "a #line was given twice"
+    store = RawStore(root / "shard-0", kind="responses")
+    for who, given in (("deposed", deposed), ("new", new)):
+        for n, key in enumerate(given):
+            assert key.startswith("shard-0/responses/")
+            line = store.get(key.removeprefix("shard-0/"))
+            assert line is not None and line["body"] == f"{who} {n}", key
+    (path,) = (root / "shard-0" / "responses").rglob("*.jsonl")
+    assert len(path.read_text().splitlines()) == 600
+
+
+def test_two_holders_of_one_shard_keep_the_index_whole(
+    tmp_path: Path, root: Path, archive: Path
+) -> None:
+    """A deposed holder and the new one archiving at once: the shard's index
+    is read, added to and written under a lock both hold in turn, so it
+    stays whole and records every unit either moved; none leaves storage
+    unrecorded."""
+    units = {
+        who: [f"activity/ACC-{who}/2019-{month:02d}" for month in range(1, 13)]
+        for who in ("A", "B")
+    }
+    for given in units.values():
+        for unit in given:
+            folder = root / "shard-0" / unit
+            folder.mkdir(parents=True)
+            (folder / "act.json").write_text(json.dumps({"unit": unit}))
+    _two_holders(tmp_path, ["archive", *units["A"]], ["archive", *units["B"]])
+    index = json.loads(root.joinpath("shard-0", *edge._INDEX.parts).read_text())
+    every = units["A"] + units["B"]
+    assert sorted(index["units"]) == sorted(every), "a move was lost from the index"
+    assert all(index["units"][unit]["state"] == "archived" for unit in every)
+    assert not any((root / "shard-0" / unit).exists() for unit in every)
+
+
 async def test_m2_the_archives_bound_holds_across_every_shard(
     sidecar: Any, root: Path, archive: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
