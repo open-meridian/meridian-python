@@ -22,7 +22,9 @@ plugin reads or writes a partial copy:
 
 The copy is made again whole by a pod that failed part way, and not at all
 once the marker is there. The instance's own claim is never written: it is
-mounted read only, and kept.
+mounted read only, and kept. A claim is a name: one empty, or holding `/`
+or `..`, is refused; and only files, folders and links are copied -- a FIFO,
+a socket or a device is refused, never opened.
 
 Each exits 0 once done and 1, saying why, otherwise; core's launcher reads the
 pod's phase and the init container's exit, nothing else. What each says goes
@@ -97,7 +99,14 @@ class _Copied:
 
 def _marker(root: Path, claim: str) -> Path:
     """The marker in a shared storage `root` saying `claim` was copied into
-    its `shard-0/` whole."""
+    its `shard-0/` whole. A claim names it, so a claim is a name: empty, or
+    holding a path's separator, `..` or a NUL, it is refused, by the copy
+    and the wait alike, before anything is written (review of #57)."""
+    if not claim or "/" in claim or ".." in claim or "\0" in claim:
+        raise _Refused(
+            f"{claim!r} is not a claim's name: the marker it names would not be "
+            f"{root / '.meridian'}'s own"
+        )
     return root / ".meridian" / f"copied-from-{claim}"
 
 
@@ -243,10 +252,18 @@ def _copy_tree(source: Path, into: Path, top: bool, counted: list[int]) -> None:
             continue
         there, target = Path(entry.path), into / entry.name
         try:
-            is_link = entry.is_symlink()
-            is_folder = not is_link and entry.is_dir(follow_symlinks=False)
+            kind = entry.stat(follow_symlinks=False).st_mode
         except OSError as failed:
             raise _Refused(f"{there} could not be read: {failed}") from failed
+        is_link, is_folder = stat.S_ISLNK(kind), stat.S_ISDIR(kind)
+        if not (is_link or is_folder or stat.S_ISREG(kind)):
+            # Never opened: a FIFO would hold the copy until something
+            # writes it, and a device would be read as records (review of
+            # #57). The copy is left unmarked, the instance's pods waiting.
+            raise _Refused(
+                f"{there} is not a file, a folder or a link (a FIFO, a socket or a device): "
+                "it is not the plugin's records, and nothing is copied"
+            )
         if is_folder:
             _copy_tree(there, target, False, counted)
         elif is_link:

@@ -446,3 +446,99 @@ def test_the_command_is_a_console_script() -> None:
         s for s in entry_points(group="console_scripts") if s.name == "meridian-storage"
     ]
     assert script.value == "meridian.storage:main"
+
+
+# -- review of #57: a claim is a name, and only files, folders and links ----
+
+
+@pytest.mark.parametrize("claim", ["../c", "a/b", "/c", "..", "c..d", "", "c\0d"])
+def test_a_claim_that_is_not_a_name_is_refused_before_anything_is_written(
+    two: tuple[Path, Path],
+    claim: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A claim names the marker, `.meridian/copied-from-<claim>`: one with a
+    path's separator or `..` would put it elsewhere, so it is refused, by
+    the copy and the wait alike, with nothing written."""
+    source, to = two
+    tree(source, {"responses/q.jsonl": "a\n"})
+    with pytest.raises(_Refused) as refused:
+        _copy(source, to, claim)
+    assert "is not a claim's name" in str(refused.value), refused.value
+    with pytest.raises(_Refused):
+        _wait(to, claim, 0.01, 0.1)
+    assert list(to.iterdir()) == []
+    monkeypatch.setattr(storage, "_FROM", str(source))
+    monkeypatch.setattr(storage, "_TO", str(to))
+    monkeypatch.setattr(storage, "_STORAGE", str(to))
+    monkeypatch.setattr(storage, "_WAIT_LIMIT", 0.1)
+    for command in ("copy", "copied"):
+        assert storage.main([command, claim]) == 1
+        assert "ERROR meridian-storage:" in capsys.readouterr().err
+    assert list(to.iterdir()) == []
+
+
+def special_files(source: Path) -> list[str]:
+    """A FIFO, a socket and, where the tests run as root, a device in
+    `source`, by their names."""
+    import socket
+
+    made = ["fifo"]
+    os.mkfifo(source / "fifo")
+    held = socket.socket(socket.AF_UNIX)
+    held.bind(str(source / "sock"))
+    held.close()
+    made.append("sock")
+    if os.geteuid() == 0:
+        os.mknod(source / "null", 0o600 | stat.S_IFCHR, os.makedev(1, 3))
+        made.append("null")
+    return made
+
+
+def test_a_fifo_socket_or_device_is_refused_and_never_opened(tmp_path: Path) -> None:
+    """Only files, folders and links are the plugin's records. Anything
+    else is refused, saying what it is, and never opened: a FIFO opened
+    would hold the copy pod until no one writes it, and a device would be
+    read as if it held records. The copy is left unmarked, the instance's
+    pods still waiting."""
+    import threading
+
+    source = tmp_path / "from"
+    tree(source, {"responses/q.jsonl": "a\n"})
+    for name in special_files(source / "responses"):
+        to = tmp_path / f"to-{name}"
+        to.mkdir()
+        held = source / "responses" / f"held-{name}"
+        held.mkdir()
+        os.rename(source / "responses" / name, held / name)
+        ended: list[BaseException | None] = []
+
+        def copying(to: Path = to, ended: list[BaseException | None] = ended) -> None:
+            try:
+                _copy(source, to, "c")
+                ended.append(None)
+            except BaseException as stopped:  # handed to the test
+                ended.append(stopped)
+
+        thread = threading.Thread(target=copying, daemon=True)
+        thread.start()
+        thread.join(10)
+        assert ended, f"the copy opened {name} and is held there"
+        failed = ended[0]
+        assert isinstance(failed, _Refused), (name, failed)
+        assert f"{held / name} is not a file, a folder or a link" in str(failed), failed
+        assert not _copied(to, "c")
+        assert not (to / "shard-0").exists()
+        assert not (to / "shard-0.copying" / "responses" / f"held-{name}" / name).exists()
+        shutil.rmtree(held)
+
+
+def test_the_command_refuses_a_fifo_as_the_plugins_user(folders: Folders) -> None:
+    tree(folders.source, {"responses/q.jsonl": "a\n"})
+    os.mkfifo(folders.source / "responses/pipe")
+    folders.owned()
+    refused = folders.run("copy", "c")
+    assert refused.returncode == 1, refused
+    assert "ERROR" in refused.stderr and "is not a file, a folder or a link" in refused.stderr
+    assert not _copied(folders.to, "c")
