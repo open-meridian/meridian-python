@@ -251,6 +251,8 @@ SHARED := AGENTS.md CLAUDE.md Dockerfile .dockerignore .gitignore \
 # the base's label, run as 65532, and start. Each role's template shares its
 # files, declares its role, builds on the base and starts; the data plugin's
 # declaration prints from its image, as `meridian plugin upload` reads it.
+# And the storage copy pod's command is there, and copies as the plugin's
+# own user (step 3d, item 30; PO 86 and 88).
 check-scaffold: base-image
 	@grep -q '^dependencies = \["open-meridian==$(SDK_VERSION)"\]' template/pyproject.toml \
 		|| { echo "check-scaffold FAILED: the template does not pin open-meridian==$(SDK_VERSION)" >&2; exit 1; }
@@ -269,6 +271,11 @@ check-scaffold: base-image
 		|| { echo "check-scaffold FAILED: the plugin does not run as 65532" >&2; exit 1; }
 	@docker run --rm --entrypoint python reference-plugin:check -c "import meridian, reference_plugin.__main__" \
 		|| { echo "check-scaffold FAILED: the plugin's image does not import the SDK and itself" >&2; exit 1; }
+	@docker run --rm --mount type=tmpfs,dst=/var/lib/meridian/copy/from \
+		--mount type=tmpfs,dst=/var/lib/meridian/copy/to,tmpfs-mode=0777 \
+		--entrypoint sh reference-plugin:check -c \
+		"meridian-storage copy check 2>&1 | grep -q 'copied=now' && test -e /var/lib/meridian/copy/to/.meridian/copied-from-check" \
+		|| { echo "check-scaffold FAILED: meridian-storage does not copy a claim from the plugin's image, as its own user (PO 86, 88)" >&2; exit 1; }
 	@docker run --rm --entrypoint sh reference-plugin:check -c "test ! -e /plugin/AGENTS.md && test ! -e /plugin/CLAUDE.md && test ! -e /plugin/.claude" \
 		|| { echo "check-scaffold FAILED: the plugin's image holds the agents' files, which .dockerignore keeps out" >&2; exit 1; }
 	@for role in $(ROLE_TEMPLATES); do \
@@ -289,7 +296,7 @@ check-scaffold: base-image
 			&& docker run --rm --entrypoint meridian-declaration $$image:check --documentation reference_plugin.declaration:DECLARATION >/dev/null \
 			|| { echo "check-scaffold FAILED: $$image's declaration, or its documentation from /plugin/docs, does not print from its image" >&2; exit 1; }; \
 	done
-	@echo "check-scaffold OK: the template and each role's ($(ROLE_TEMPLATES)) build on plugin-python:$(SDK_VERSION); the template adds only itself, without the agents' files; each declaration and its documentation print from its image"
+	@echo "check-scaffold OK: the template and each role's ($(ROLE_TEMPLATES)) build on plugin-python:$(SDK_VERSION); the template adds only itself, without the agents' files, and copies a claim as its own user with meridian-storage; each declaration and its documentation print from its image"
 
 test:
 	@$(DOCKER) build $(CONTEXTS) -f Dockerfile.python --target test . >/dev/null 2>&1 \
