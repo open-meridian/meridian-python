@@ -1114,7 +1114,9 @@ def _own_unit(unit: str, strict: bool = True) -> str:
 def _archive_used(units: dict[str, _Moved]) -> int:
     """The bytes the instance's archive holds, as the indexes say: this
     shard's (`units`, as read), and on an instance of shards every other
-    shard's, the bound being the instance's (W8.3)."""
+    shard's, the bound being the instance's (W8.3). Another shard's index
+    that cannot be read refuses the archive, never counted as holding
+    nothing, so the bound is never passed unseen."""
     used = sum(moved.archive_bytes for moved in units.values())
     granted = instance_storage_dir()
     if granted is None or _serving is None or not _sharded():
@@ -1125,8 +1127,12 @@ def _archive_used(units: dict[str, _Moved]) -> int:
             continue
         try:
             used += sum(moved.archive_bytes for moved in _Index(folder).read().values())
-        except (OSError, ValueError, TypeError) as unread:
-            log.warning("shard %s's archive index could not be read: %s", shard, unread)
+        except (OSError, ValueError, TypeError, AttributeError) as unread:
+            raise RuntimeError(
+                f"shard {shard}'s archive index could not be read ({unread}): the archive's "
+                f"bound ({_ARCHIVE_MOST_BYTES}) is the instance's, so nothing is archived "
+                "until it can be counted, and the unit stays in storage"
+            ) from unread
     return used
 
 

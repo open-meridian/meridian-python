@@ -15,6 +15,8 @@ import asyncio
 import hashlib
 import json
 import shutil
+import subprocess
+import sys
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -481,6 +483,75 @@ async def test_m1_a_lagging_holder_and_the_new_one_each_name_their_own_line(
         assert new.get(key) == record
     finally:
         await plugin.leave()
+
+
+#: Another pod's try for the line file's lock, not waiting: "refused" or "taken".
+_TRY_LOCK = """
+import fcntl, os, sys
+fd = os.open(sys.argv[1], os.O_RDWR)
+try:
+    fcntl.lockf(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+except OSError:
+    print("refused")
+else:
+    print("taken")
+"""
+
+
+@pytest.mark.parametrize("left", ["a whole line", "an unfinished line"])
+def test_the_line_files_lock_is_held_from_its_count_to_its_write(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, left: str
+) -> None:
+    """Counting another pod's lines never lets the lock go: POSIX record
+    locks are the process's, and closing any descriptor on the file drops
+    them, so the line written after the count would be named unlocked."""
+    store = RawStore(tmp_path, kind="responses")
+    path = tmp_path / "responses/2026-11-17/ticker/BTC-USD.jsonl"
+    path.parent.mkdir(parents=True)
+    line = json.dumps({"received_at_ns": AT, "body": "a"})
+    path.write_text(line + "\n" if left == "a whole line" else line[:9])
+    tried: list[str] = []
+    count = RawStore._count
+
+    def counted(self: RawStore, key: str, out: Any) -> int:
+        lines = count(self, key, out)
+        another = subprocess.run(
+            [sys.executable, "-c", _TRY_LOCK, str(path)],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=True,
+        )
+        tried.append(another.stdout.strip())
+        return lines
+
+    monkeypatch.setattr(RawStore, "_count", counted)
+    record = {"received_at_ns": AT + 1, "body": "b"}
+    key = store.keep_line("ticker", "BTC-USD", record)
+    assert tried == ["refused"]
+    assert key.endswith("#1") and store.get(key) == record
+
+
+async def test_m2_an_unreadable_index_of_another_shard_refuses_the_archive(
+    sidecar: Any, root: Path, archive: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The bound is the instance's: another shard's index that cannot be
+    read is never counted as an empty archive, so nothing is archived past
+    the bound unseen."""
+    service, address = sidecar
+    _unit_in(root / "shard-1", "x" * 100)
+    index = root.joinpath("shard-0", *edge._INDEX.parts)
+    index.parent.mkdir(parents=True)
+    index.write_text('{"units": {"activity/ACC-1/2019-0')
+    monkeypatch.setenv("MERIDIAN_ARCHIVE_MOST_BYTES", str(1 << 30))
+    plugin = await _pod(service, address, shard=1, shards=2)
+    try:
+        with pytest.raises(RuntimeError, match="shard 0's archive index could not be read"):
+            await _archived(plugin)
+    finally:
+        await plugin.leave()
+    assert (root / "shard-1" / UNIT).exists()
+    assert not any(archive.rglob("*.json"))
 
 
 async def test_m2_the_archives_bound_holds_across_every_shard(

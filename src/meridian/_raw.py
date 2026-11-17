@@ -300,16 +300,21 @@ class RawStore:
     def _count(self, key: str, out: TextIO) -> int:
         """The lines the file holds now, its lock held: as last counted
         where its size is unchanged, else counted on from there, reading
-        only what was added. A last line left unfinished is ended."""
+        only what was added. A last line left unfinished is ended. Read
+        through the appender's own descriptor: closing any other on the
+        file would drop the process's lock on it."""
         size = os.fstat(out.fileno()).st_size
         lines, counted = self._lines.get(key, (0, 0))
         if counted == size:
             return lines
         if counted > size:
             lines, counted = 0, 0
-        with (self.root / key).open("rb") as read:
-            read.seek(counted)
-            added = read.read(size - counted)
+        added = b""
+        while counted + len(added) < size:
+            got = os.pread(out.fileno(), size - counted - len(added), counted + len(added))
+            if not got:
+                break
+            added += got
         lines += added.count(b"\n")
         if added and not added.endswith(b"\n"):
             out.write("\n")
@@ -318,7 +323,8 @@ class RawStore:
         return lines
 
     def _appender(self, key: str) -> TextIO:
-        """The file `key` names, held open for appending: its directory made
+        """The file `key` names, held open for appending, and readable, so
+        its lines are counted through it (`_count`): its directory made
         when it is first opened, the file written least lately closed past
         `_HELD_OPEN`."""
         out = self._open.get(key)
@@ -327,7 +333,7 @@ class RawStore:
             return out
         path = self.root / key
         path.parent.mkdir(parents=True, exist_ok=True)
-        out = path.open("a", encoding="utf-8")
+        out = path.open("a+", encoding="utf-8")
         self._open[key] = out
         if len(self._open) > _HELD_OPEN:
             self._open.popitem(last=False)[1].close()
