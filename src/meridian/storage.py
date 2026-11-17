@@ -27,7 +27,14 @@ or `..`, is refused; and only files, folders and links are copied -- a FIFO,
 a socket or a device is refused, never opened.
 
 Each exits 0 once done and 1, saying why, otherwise; core's launcher reads the
-pod's phase and the init container's exit, nothing else. What each says goes
+pod's phase and the init container's exit. The copy also says how far it got
+in its termination message, `/dev/termination-log`, one word written over
+the last before each step (item 89): `unmarked` once it found no marker,
+before it copies; `marking` just before the marker is renamed into place;
+`copied` on exit 0 after copying; `copied before` on exit 0 where the
+marker was there already. A pod stopped anywhere leaves the last word that
+was true. A termination message that cannot be written never fails the copy:
+it is said at warning, and the copy goes on. What each says goes
 to standard error, a line at a time, as core's launcher said it, each
 `<level> meridian-storage: <message>` and its fields:
 
@@ -36,6 +43,7 @@ to standard error, a line at a time, as core's launcher said it, each
     INFO  the instance's own storage is still being copied into its shared
           storage claim=<claim> waited_seconds=<n>
     INFO  its own storage is in its shared storage claim=<claim>
+    WARNING <why>, where the termination message could not be written
     ERROR <why>
 
 The wait looks every 2 seconds, says so once a minute, and past 15 minutes
@@ -79,6 +87,15 @@ _WAIT_LIMIT = 15 * 60.0
 _WAIT_EVERY = 2.0
 _SAY_EVERY = 60.0
 
+# The copy pod's termination message, which core reads to learn how far
+# the copy got (item 89, PO 2026-11-17): one of the words below, each
+# written over the last before the step it names.
+_TERMINATION = "/dev/termination-log"
+_UNMARKED = "unmarked"
+_MARKING = "marking"
+_COPIED = "copied"
+_COPIED_BEFORE = "copied before"
+
 _NAME = "meridian-storage"
 _USAGE = f"usage: {_NAME} copy <claim> | {_NAME} copied <claim>"
 
@@ -120,6 +137,17 @@ def _say(level: str, message: str, **fields: object) -> None:
     print(f"{level} {_NAME}: {message}{said}", file=sys.stderr, flush=True)
 
 
+def _ended(word: str) -> None:
+    """`word` in the copy pod's termination message, in place of what was
+    there. One that cannot be written never fails the copy: said, at
+    warning, and the copy goes on."""
+    try:
+        with open(_TERMINATION, "w") as message:
+            message.write(word)
+    except OSError as failed:
+        _say("WARNING", f"{_TERMINATION} could not be written: {failed}")
+
+
 def _sync(path: Path) -> None:
     held = os.open(path, os.O_RDONLY)
     try:
@@ -141,6 +169,7 @@ def _copy(source: Path, to: Path, claim: str) -> _Copied:
     so a copy stopped after the rename is finished, not refused."""
     if _copied(to, claim):
         return _Copied(before=True)
+    _ended(_UNMARKED)
     into, copying = to / _SHARD_0, to / _COPYING
     marked = _marker(to, claim)
     folder = marked.parent
@@ -179,6 +208,7 @@ def _copy(source: Path, to: Path, claim: str) -> _Copied:
             _sync(to)
         except OSError as failed:
             raise _Refused(f"{copying} was not renamed {into}: {failed}") from failed
+    _ended(_MARKING)
     try:
         os.rename(writing, marked)
         _sync(folder)
@@ -339,6 +369,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             if not claim:
                 raise _Refused("copy names the claim it copies")
             done = _copy(Path(_FROM), Path(_TO), claim)
+            _ended(_COPIED_BEFORE if done.before else _COPIED)
             said: dict[str, object] = (
                 {"copied": "before"}
                 if done.before

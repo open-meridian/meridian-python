@@ -44,6 +44,12 @@ def mode(path: Path) -> int:
     return stat.S_IMODE(os.lstat(path).st_mode)
 
 
+@pytest.fixture(autouse=True)
+def no_pods_termination_message(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Never the test machine's own /dev/termination-log."""
+    monkeypatch.setattr(storage, "_TERMINATION", str(tmp_path / "unread-termination-log"))
+
+
 @pytest.fixture
 def two(tmp_path: Path) -> tuple[Path, Path]:
     source, to = tmp_path / "from", tmp_path / "to"
@@ -250,6 +256,11 @@ class Folders:
         self.to = base / "to"
         self.source.mkdir()
         self.to.mkdir()
+        # The pod's termination message, made writable by anyone, as the
+        # kubelet makes it.
+        self.termination = base / "termination-log"
+        self.termination.touch()
+        os.chmod(self.termination, 0o666)
 
     def owned(self) -> None:
         """Every file the plugin's: as the plugin wrote its own claim, and as
@@ -273,6 +284,7 @@ class Folders:
                 f"s._FROM, s._TO = {str(self.source)!r}, {str(self.to)!r}",
                 f"s._STORAGE = {str(self.to)!r}",
                 "s._WAIT_EVERY, s._WAIT_LIMIT = 0.01, 0.3",
+                f"s._TERMINATION = {str(self.termination)!r}",
                 f"fail_after, fail_marker = {fail_after!r}, {fail_marker!r}",
                 "if fail_after is not None:",
                 "    copied, done = s._copy_file, [0]",
@@ -542,3 +554,169 @@ def test_the_command_refuses_a_fifo_as_the_plugins_user(folders: Folders) -> Non
     assert refused.returncode == 1, refused
     assert "ERROR" in refused.stderr and "is not a file, a folder or a link" in refused.stderr
     assert not _copied(folders.to, "c")
+
+
+# -- item 89: the copy pod says how far it got, in its termination message --
+
+
+@pytest.fixture
+def ended(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """The copy pod's termination message, where the tests read it."""
+    termination = tmp_path / "termination-log"
+    monkeypatch.setattr(storage, "_TERMINATION", str(termination))
+    return termination
+
+
+def copy_pod(source: Path, to: Path, monkeypatch: pytest.MonkeyPatch) -> int:
+    """`meridian-storage copy c`, the copy pod's mounts here."""
+    monkeypatch.setattr(storage, "_FROM", str(source))
+    monkeypatch.setattr(storage, "_TO", str(to))
+    return storage.main(["copy", "c"])
+
+
+def test_the_termination_message_says_copied_then_copied_before(
+    two: tuple[Path, Path], ended: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Item 89 (PO, 2026-11-17): core reads how far the copy pod got from
+    its termination message, one word, each overwriting the last."""
+    source, to = two
+    tree(source, {"responses/q.jsonl": "a\n"})
+    written: list[str] = []
+    said = storage._ended
+
+    def heard(word: str) -> None:
+        said(word)
+        written.append(ended.read_text())
+
+    monkeypatch.setattr(storage, "_ended", heard)
+    assert copy_pod(source, to, monkeypatch) == 0
+    assert written == ["unmarked", "marking", "copied"]
+    assert ended.read_text() == "copied"
+    written.clear()
+    assert copy_pod(source, to, monkeypatch) == 0
+    assert written == ["copied before"]
+    assert ended.read_text() == "copied before"
+    # Overwritten whole, never appended to or left longer.
+    shutil.rmtree(to)
+    to.mkdir()
+    written.clear()
+    assert copy_pod(source, to, monkeypatch) == 0
+    assert ended.read_bytes() == b"copied"
+
+
+def crash(monkeypatch: pytest.MonkeyPatch, where: str) -> None:
+    """The copy pod stopped at `where`, as a crash there would stop it."""
+
+    def stopped(*_: object, **__: object) -> None:
+        raise OSError(5, f"stopped at {where}")
+
+    if where == "a file":
+        monkeypatch.setattr(storage, "_copy_file", stopped)
+    elif where in ("the rename", "the marker's rename"):
+        renamed = os.rename
+
+        def stopping(a: object, b: object) -> None:
+            last = Path(str(b)).name
+            if (last == "shard-0") == (where == "the rename"):
+                stopped()
+            renamed(a, b)  # type: ignore[arg-type]
+
+        monkeypatch.setattr(storage.os, "rename", stopping)
+    elif where == "after the marker":
+        synced = storage._sync
+
+        def stopping_sync(path: Path) -> None:
+            synced(path)
+            if path.name == ".meridian" and storage._copied(path.parent, "c"):
+                stopped()
+
+        monkeypatch.setattr(storage, "_sync", stopping_sync)
+
+
+@pytest.mark.parametrize(
+    ("where", "word", "marked"),
+    [
+        ("a file", "unmarked", False),
+        ("the rename", "unmarked", False),
+        ("the marker's rename", "marking", False),
+        ("after the marker", "marking", True),
+    ],
+)
+def test_a_crash_between_steps_leaves_the_last_true_word(
+    two: tuple[Path, Path],
+    ended: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    where: str,
+    word: str,
+    marked: bool,
+) -> None:
+    """Each step's word is written before the step, so a pod stopped
+    anywhere says the last one that was true; the next pod finishes and
+    says so."""
+    source, to = two
+    tree(source, {"responses/q.jsonl": "a\n"})
+    with monkeypatch.context() as crashing:
+        crash(crashing, where)
+        assert copy_pod(source, to, monkeypatch) == 1
+    assert ended.read_text() == word
+    assert _copied(to, "c") == marked
+    assert copy_pod(source, to, monkeypatch) == 0
+    assert ended.read_text() == ("copied before" if marked else "copied")
+    assert read(to, "shard-0/responses/q.jsonl") == "a\n"
+
+
+def test_a_refused_copy_says_unmarked(
+    two: tuple[Path, Path], ended: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, to = two
+    tree(source, {"responses/q.jsonl": "a\n"})
+    tree(to, {"shard-0/responses/q.jsonl": "a\nb\n"})
+    assert copy_pod(source, to, monkeypatch) == 1
+    assert ended.read_text() == "unmarked"
+
+
+@pytest.mark.parametrize("unwritable", ["missing", "a folder"])
+def test_a_termination_message_that_cannot_be_written_never_fails_the_copy(
+    two: tuple[Path, Path],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    unwritable: str,
+) -> None:
+    source, to = two
+    tree(source, {"responses/q.jsonl": "a\n"})
+    termination = tmp_path / "no-such-folder" / "termination-log"
+    if unwritable == "a folder":
+        termination = tmp_path / "termination-log"
+        termination.mkdir()
+    monkeypatch.setattr(storage, "_TERMINATION", str(termination))
+    assert copy_pod(source, to, monkeypatch) == 0
+    assert _copied(to, "c")
+    said = capsys.readouterr().err
+    assert f"WARNING meridian-storage: {termination} could not be written" in said, said
+    assert "copied=now" in said, said
+    assert copy_pod(source, to, monkeypatch) == 0
+
+
+def test_the_wait_leaves_the_termination_message_alone(
+    tmp_path: Path, ended: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(storage, "_STORAGE", str(tmp_path))
+    monkeypatch.setattr(storage, "_WAIT_LIMIT", 0.05)
+    assert storage.main(["copied", "c"]) == 1
+    assert not ended.exists()
+
+
+def test_the_command_says_each_word_as_the_plugins_user(folders: Folders) -> None:
+    tree(folders.source, {"responses/q.jsonl": "a\n"})
+    folders.owned()
+    assert folders.run("copy", "c", fail_after=0).returncode == 1
+    assert folders.termination.read_text() == "unmarked"
+    assert folders.run("copy", "c", fail_marker=True).returncode == 1
+    assert folders.termination.read_text() == "marking"
+    done = folders.run("copy", "c")
+    assert done.returncode == 0, done
+    assert "WARNING" not in done.stderr, done.stderr
+    assert folders.termination.read_text() == "copied"
+    assert folders.run("copy", "c").returncode == 0
+    assert folders.termination.read_text() == "copied before"
