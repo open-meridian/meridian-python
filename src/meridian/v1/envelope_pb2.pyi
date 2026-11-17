@@ -15,7 +15,7 @@ SUBJECT_KIND_UNSPECIFIED: SubjectKind
 SUBJECT_KIND_SERVICE_ACCOUNT: SubjectKind
 
 class MessageMeta(_message.Message):
-    __slots__ = ("message_id", "correlation_id", "causation_id", "publisher_instance_id", "topic", "schema_version", "published_at_ns", "acting_for_subject", "acting_for_kind", "owner_subject", "algorithm_id", "acting_through_delegation", "acting_through_client", "prepared_call_id", "account_scope", "account_scope_applies", "connectivity_allowed", "connectivity_demo", "on_behalf_of_instance_id", "read_after")
+    __slots__ = ("message_id", "correlation_id", "causation_id", "publisher_instance_id", "topic", "schema_version", "published_at_ns", "acting_for_subject", "acting_for_kind", "owner_subject", "algorithm_id", "acting_through_delegation", "acting_through_client", "prepared_call_id", "account_scope", "account_scope_applies", "connectivity_allowed", "connectivity_demo", "on_behalf_of_instance_id", "read_after", "shard", "shard_epoch")
     MESSAGE_ID_FIELD_NUMBER: _ClassVar[int]
     CORRELATION_ID_FIELD_NUMBER: _ClassVar[int]
     CAUSATION_ID_FIELD_NUMBER: _ClassVar[int]
@@ -36,6 +36,8 @@ class MessageMeta(_message.Message):
     CONNECTIVITY_DEMO_FIELD_NUMBER: _ClassVar[int]
     ON_BEHALF_OF_INSTANCE_ID_FIELD_NUMBER: _ClassVar[int]
     READ_AFTER_FIELD_NUMBER: _ClassVar[int]
+    SHARD_FIELD_NUMBER: _ClassVar[int]
+    SHARD_EPOCH_FIELD_NUMBER: _ClassVar[int]
     message_id: str
     correlation_id: str
     causation_id: str
@@ -56,4 +58,6 @@ class MessageMeta(_message.Message):
     connectivity_demo: bool
     on_behalf_of_instance_id: str
     read_after: _journal_pb2.Watermark
-    def __init__(self, message_id: _Optional[str] = ..., correlation_id: _Optional[str] = ..., causation_id: _Optional[str] = ..., publisher_instance_id: _Optional[str] = ..., topic: _Optional[str] = ..., schema_version: _Optional[str] = ..., published_at_ns: _Optional[int] = ..., acting_for_subject: _Optional[str] = ..., acting_for_kind: _Optional[_Union[SubjectKind, str]] = ..., owner_subject: _Optional[str] = ..., algorithm_id: _Optional[str] = ..., acting_through_delegation: _Optional[str] = ..., acting_through_client: _Optional[str] = ..., prepared_call_id: _Optional[str] = ..., account_scope: _Optional[_Iterable[str]] = ..., account_scope_applies: bool = ..., connectivity_allowed: bool = ..., connectivity_demo: bool = ..., on_behalf_of_instance_id: _Optional[str] = ..., read_after: _Optional[_Union[_journal_pb2.Watermark, _Mapping]] = ...) -> None: ...
+    shard: int
+    shard_epoch: int
+    def __init__(self, message_id: _Optional[str] = ..., correlation_id: _Optional[str] = ..., causation_id: _Optional[str] = ..., publisher_instance_id: _Optional[str] = ..., topic: _Optional[str] = ..., schema_version: _Optional[str] = ..., published_at_ns: _Optional[int] = ..., acting_for_subject: _Optional[str] = ..., acting_for_kind: _Optional[_Union[SubjectKind, str]] = ..., owner_subject: _Optional[str] = ..., algorithm_id: _Optional[str] = ..., acting_through_delegation: _Optional[str] = ..., acting_through_client: _Optional[str] = ..., prepared_call_id: _Optional[str] = ..., account_scope: _Optional[_Iterable[str]] = ..., account_scope_applies: bool = ..., connectivity_allowed: bool = ..., connectivity_demo: bool = ..., on_behalf_of_instance_id: _Optional[str] = ..., read_after: _Optional[_Union[_journal_pb2.Watermark, _Mapping]] = ..., shard: _Optional[int] = ..., shard_epoch: _Optional[int] = ...) -> None: ...

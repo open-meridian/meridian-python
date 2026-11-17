@@ -276,6 +276,7 @@ class RefusalReason(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     REFUSAL_REASON_AGENT_LIVE_ORDER: _ClassVar[RefusalReason]
     REFUSAL_REASON_OVERLOADED: _ClassVar[RefusalReason]
     REFUSAL_REASON_RATE_LIMITED: _ClassVar[RefusalReason]
+    REFUSAL_REASON_SHARD_FENCED: _ClassVar[RefusalReason]
 
 class PreparedCallState(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
@@ -464,6 +465,7 @@ REFUSAL_REASON_LOCAL_RECORD_NOT_ALLOWED: RefusalReason
 REFUSAL_REASON_AGENT_LIVE_ORDER: RefusalReason
 REFUSAL_REASON_OVERLOADED: RefusalReason
 REFUSAL_REASON_RATE_LIMITED: RefusalReason
+REFUSAL_REASON_SHARD_FENCED: RefusalReason
 PREPARED_CALL_STATE_UNSPECIFIED: PreparedCallState
 PREPARED_CALL_STATE_PREPARED: PreparedCallState
 PREPARED_CALL_STATE_SHARED: PreparedCallState
@@ -855,7 +857,7 @@ class SettingCondition(_message.Message):
     def __init__(self, setting: _Optional[str] = ..., one_of: _Optional[_Iterable[str]] = ...) -> None: ...
 
 class RegisterReply(_message.Message):
-    __slots__ = ("admitted", "deployment_id", "refusal_reason", "publish_grants", "subscribe_grants", "instance_id", "roles")
+    __slots__ = ("admitted", "deployment_id", "refusal_reason", "publish_grants", "subscribe_grants", "instance_id", "roles", "shard", "shards")
     ADMITTED_FIELD_NUMBER: _ClassVar[int]
     DEPLOYMENT_ID_FIELD_NUMBER: _ClassVar[int]
     REFUSAL_REASON_FIELD_NUMBER: _ClassVar[int]
@@ -863,6 +865,8 @@ class RegisterReply(_message.Message):
     SUBSCRIBE_GRANTS_FIELD_NUMBER: _ClassVar[int]
     INSTANCE_ID_FIELD_NUMBER: _ClassVar[int]
     ROLES_FIELD_NUMBER: _ClassVar[int]
+    SHARD_FIELD_NUMBER: _ClassVar[int]
+    SHARDS_FIELD_NUMBER: _ClassVar[int]
     admitted: bool
     deployment_id: str
     refusal_reason: str
@@ -870,7 +874,9 @@ class RegisterReply(_message.Message):
     subscribe_grants: _containers.RepeatedScalarFieldContainer[str]
     instance_id: str
     roles: _containers.RepeatedScalarFieldContainer[str]
-    def __init__(self, admitted: bool = ..., deployment_id: _Optional[str] = ..., refusal_reason: _Optional[str] = ..., publish_grants: _Optional[_Iterable[str]] = ..., subscribe_grants: _Optional[_Iterable[str]] = ..., instance_id: _Optional[str] = ..., roles: _Optional[_Iterable[str]] = ...) -> None: ...
+    shard: int
+    shards: int
+    def __init__(self, admitted: bool = ..., deployment_id: _Optional[str] = ..., refusal_reason: _Optional[str] = ..., publish_grants: _Optional[_Iterable[str]] = ..., subscribe_grants: _Optional[_Iterable[str]] = ..., instance_id: _Optional[str] = ..., roles: _Optional[_Iterable[str]] = ..., shard: _Optional[int] = ..., shards: _Optional[int] = ...) -> None: ...
 
 class HeartbeatRequest(_message.Message):
     __slots__ = ("healthy", "detail", "figures", "not_carried_seen", "stored", "model_tokens")
