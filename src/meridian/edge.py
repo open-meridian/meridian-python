@@ -247,7 +247,8 @@ def storage_dir() -> Path | None:
     Read before Register on an instance the launcher says runs shards or a
     standby (`MERIDIAN_PLUGIN_SHARDS` 1 or more), on a storage its copy step
     converted for shards (`.meridian/copied-from-<claim>` at its root), or
-    on one holding a shard's folder (`shard-<n>/`), it raises RuntimeError:
+    on one holding a shard's folder (`shard-<n>/`), or on one it cannot read
+    to tell (it fails closed), it raises RuntimeError:
     the shard's folder is known only once registered, and the root is no
     pod's to write. A plugin reads it from its class's `on_start`."""
     if _serving is None:
@@ -259,9 +260,9 @@ def _refuse_before_register() -> None:
     """The refusal of a read of the shard's folder before Register, on a
     storage shared among an instance's pods: one its copy step converted for
     shards (`.meridian/copied-from-<claim>`), or one a pod of the instance
-    has written a shard's folder in (`shard-<n>/`). A shared storage no pod
-    has written in yet is not told from an instance's own (sdk4-review H4,
-    sdk5-review M3)."""
+    has written a shard's folder in (`shard-<n>/`); and one that cannot be
+    read to tell, which fails closed. A shared storage no pod has written in
+    yet is not told from an instance's own (sdk4-review H4, sdk5-review M3)."""
     granted = instance_storage_dir()
     if granted is None:
         return
@@ -275,19 +276,42 @@ def _refuse_before_register() -> None:
             f"to 0.37.0 rewrites the connectivity template's trading files and names any "
             f"other such read it finds"
         )
-    with contextlib.suppress(OSError):
-        shared = next((granted / ".meridian").glob("copied-from-*"), None) or next(
-            (p for p in granted.glob("shard-*") if _SHARD_KEY.fullmatch(p.name + "/")), None
+    try:
+        shared = next(
+            (
+                f".meridian/{n}"
+                for n in _names(granted / ".meridian")
+                if n.startswith("copied-from-")
+            ),
+            None,
+        ) or next((n for n in _names(granted) if _SHARD_KEY.fullmatch(n + "/")), None)
+    except OSError as unread:
+        # Fails closed: a storage that cannot be read may be shared, and
+        # its root is then no pod's to write (PR #58's review, nit 3).
+        raise RuntimeError(
+            f"storage_dir() was read before the plugin registered, and its storage "
+            f"({granted}) could not be read to tell whether its instance's pods share it "
+            f"({unread}); read storage from the class's on_start, once registered"
+        ) from unread
+    if shared is not None:
+        raise RuntimeError(
+            f"storage_dir() was read before the plugin registered, on storage its "
+            f"instance's pods share ({shared}): its shard's folder "
+            f"is known only once registered, and the root is no pod's to write. Read "
+            f"storage from the class's on_start; `meridian plugin migrate` to 0.37.0 "
+            f"rewrites the connectivity template's trading files and names any other "
+            f"such read it finds"
         )
-        if shared is not None:
-            raise RuntimeError(
-                f"storage_dir() was read before the plugin registered, on storage its "
-                f"instance's pods share ({shared.relative_to(granted)}): its shard's folder "
-                f"is known only once registered, and the root is no pod's to write. Read "
-                f"storage from the class's on_start; `meridian plugin migrate` to 0.37.0 "
-                f"rewrites the connectivity template's trading files and names any other "
-                f"such read it finds"
-            )
+
+
+def _names(folder: Path) -> list[str]:
+    """The names in a folder; none where nothing is there (absent, or not a
+    folder). Any other failure to read it is raised."""
+    try:
+        with os.scandir(folder) as listed:
+            return [entry.name for entry in listed]
+    except (FileNotFoundError, NotADirectoryError):
+        return []
 
 
 def _storage_dir() -> Path | None:

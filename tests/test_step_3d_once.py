@@ -1503,3 +1503,33 @@ def test_a_trader_with_storage_or_one_pod_still_sends(
     asyncio.run(rig.hear(held))
     assert rig.fake.asked == [("place", PLACEMENT)]
     assert rig.trader.shown.error == ""
+
+
+
+def test_storage_dir_before_register_on_an_unreadable_storage_fails_closed(
+    root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Nit 3: a storage that cannot be read to tell whether its pods share
+    it raises, never answering the root."""
+    import errno
+    import os
+
+    real = os.scandir
+
+    def unreadable(path: Any = ".") -> Any:
+        if Path(path) == root:
+            raise OSError(errno.EIO, "Input/output error", str(path))
+        return real(path)
+
+    monkeypatch.setattr(os, "scandir", unreadable)
+    with pytest.raises(RuntimeError, match="could not be read"):
+        edge.storage_dir()
+
+
+def test_storage_dir_before_register_on_storage_not_there_yet_is_the_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Nit 3: a granted path with nothing at it yet holds no shard's folder:
+    the root, as before."""
+    monkeypatch.setenv("MERIDIAN_STORAGE_DIR", str(tmp_path / "absent"))
+    assert edge.storage_dir() == tmp_path / "absent"
