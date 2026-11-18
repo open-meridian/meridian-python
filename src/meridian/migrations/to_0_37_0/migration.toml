@@ -44,10 +44,12 @@ what = """`edge.storage_dir()` read where the plugin's code runs before it regis
 the class, or a connectivity Trader's files built in `main()` otherwise than the \
 template's. On a sharded or standby instance that is the storage's root, not the \
 shard's folder, and on a storage converted for shards it raises"""
-instead = """read it in the class's `on_start`, once registered: there build \
-`self.times = option_chains.SeriesTimes(edge.storage_dir() / "series.json")`, or the \
-`option_chains.Feed` given `series_path=`; a connectivity Trader is given no `sent`, \
-`enabled` or `watched` and reads them from its storage on start itself"""
+instead = """read it in the class's `on_start`, once registered, so that on a shard it is \
+the shard's own folder: there build \
+`self.times = option_chains.SeriesTimes(edge.storage_dir() / "series.json")` (the \
+holder 0.36.3's `series-without-a-holder` asks for, kept for the plugin's life as \
+before), or the `option_chains.Feed` given `series_path=`; a connectivity Trader is \
+given no `sent`, `enabled` or `watched` and reads them from its storage on start itself"""
 
 [[by_hand]]
 rule = "noted-file-read-whole"
