@@ -598,7 +598,10 @@ class Trader(Role):
     from its storage on start, after the plugin registered
     (`trading_files(edge.storage_dir())`): on a shard of its instance, or
     with a standby, the shard's own folder, which is known only then (step
-    3d, item 30). With no storage granted, they are held in memory."""
+    3d, item 30). With no storage granted, they are held in memory; on an
+    instance run as shards or with a standby no placement is sent then, as
+    a pod taking the shard over could send it again: each is held, and the
+    Connections page says why."""
 
     #: The book is read on start (`start`), so nothing is seeded.
     seed = False
@@ -669,6 +672,10 @@ class Trader(Role):
         #: where the deployment holds none (contract v27).
         self._dealers: dict[str, str] = {}
         self.shown = Shown()
+        #: Why nothing is sent, said on the Connections page: no storage is
+        #: granted to an instance run as shards or with a standby, so at most
+        #: once cannot hold (`_from_storage`); "" where it holds.
+        self._unsafe = ""
         self._lock = asyncio.Lock()
         #: Set once it has read the book on start: a placement heard before
         #: then is the start's to find.
@@ -1017,6 +1024,10 @@ class Trader(Role):
             # under a stop too, which cancels its order once found
             # (`_under_stop`).
             await self._sent_before(placement, order, queued=True)
+            return
+        if self._unsafe:
+            self.held[pid] = placement
+            log.warning("holding %s back: %s", pid, self._unsafe)
             return
         if self.in_force(placement.account_id) is not None:
             self.held[pid] = placement
@@ -1638,6 +1649,7 @@ class Trader(Role):
                 held=len(self.held),
                 unknown=sum(1 for w in self.working.values() if w.unknown or w.unanswered),
                 last_poll=self._now(),
+                error=self._unsafe,
             )
 
     async def _read_orders(
@@ -2461,14 +2473,20 @@ class Trader(Role):
         is granted."""
         from ... import edge
 
+        self._unsafe = ""
         sent, enabled, originated = trading_files(edge.storage_dir())
         if sent is None or enabled is None:
             if edge._sharded():
-                log.error(
+                # Fails safe (PO 72): what it sent would be held in memory
+                # only, so a pod taking its shard over could send a placement
+                # again; none is sent, each held, until storage is granted.
+                self._unsafe = (
                     "no storage is granted to this instance, which runs as shards or with a "
-                    "standby: what it sent is held in memory, so a pod taking its shard over "
-                    "may send a placement again; grant it storage (MERIDIAN_STORAGE_DIR)"
+                    "standby: a pod taking its shard over could send a placement again, so "
+                    "placements are held, none sent; grant it storage (MERIDIAN_STORAGE_DIR)"
                 )
+                self.shown.error = self._unsafe
+                log.error("%s", self._unsafe)
             return
         no_sent, no_enabled, no_watched, no_charged = self._not_given
         if no_sent:

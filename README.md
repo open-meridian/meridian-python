@@ -897,9 +897,10 @@ async with await meridian.connect(declaration=DECLARATION, interface=INTERFACE) 
   Rolling a connectivity instance back below 0.37.0 is not supported: an
   earlier release reads only `sent.json`, and would send again what 0.37.0
   noted. **A connectivity instance run as shards or with a
-  standby needs storage granted for this**: with none, what it sent is held
-  in memory, so a pod taking a shard over may send a placement again, and
-  the Trader says so in its log on start. `trading/sent.json`, as earlier
+  standby needs storage granted for this**: with none, what it sent would be
+  held in memory only, so a pod taking a shard over could send a placement
+  again; the Trader sends none, holds each, and says why in its log and on
+  the Connections page until storage is granted. `trading/sent.json`, as earlier
   releases wrote it, is read and no longer written.
 - **What is stored** is the plugin's to say, as its figures are:
   `plugin.stored`, one `StoredSpan` per kind, on every heartbeat. The bytes

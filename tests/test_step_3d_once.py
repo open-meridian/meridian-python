@@ -1459,3 +1459,47 @@ def test_two_charges_on_one_placement_never_share_a_key(tmp_path: Path) -> None:
         asyncio.run(rig.trader._charge(PLACEMENT, charge_id, charge))
     keys = [c.idempotency_key for c in recorder.on("ReportCharge")]
     assert keys == [f"charge:act-1|{PLACEMENT}", f"charge:act-2|{PLACEMENT}"]
+
+
+# ── PR #58 review nits (coordinator, under A) ───────────────────────────────
+
+
+def test_a_sharded_trader_with_no_storage_holds_its_placements(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Nit 1 (PO 72): with no storage on a sharded or standby instance a pod
+    taking the shard over could send a placement again, so none is sent: it
+    is held, and the Connections page says why."""
+    from test_connectivity_trader import Rig
+
+    monkeypatch.delenv("MERIDIAN_STORAGE_DIR", raising=False)
+    monkeypatch.setattr(edge, "_serving", (0, 1))
+    recorder = Recorder("broker")
+    rig = Rig(recorder)
+    asyncio.run(rig.trader.on_start())
+    held = rig.placement()
+    rig.holds(held)
+    asyncio.run(rig.hear(held))
+    assert rig.fake.asked == [], "nothing sent to the venue"
+    assert PLACEMENT in rig.trader.held
+    assert recorder.on("ReportPlacement") == []
+    assert "no storage is granted" in rig.trader.shown.error
+    asyncio.run(rig.trader.poll())
+    assert rig.trader.shown.held == 1
+    assert "no storage is granted" in rig.trader.shown.error, "a poll keeps saying so"
+
+
+def test_a_trader_with_storage_or_one_pod_still_sends(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Nit 1: an instance of one pod with no storage sends as before."""
+    from test_connectivity_trader import Rig
+
+    monkeypatch.delenv("MERIDIAN_STORAGE_DIR", raising=False)
+    rig = Rig(Recorder("broker"))
+    asyncio.run(rig.trader.on_start())
+    held = rig.placement()
+    rig.holds(held)
+    asyncio.run(rig.hear(held))
+    assert rig.fake.asked == [("place", PLACEMENT)]
+    assert rig.trader.shown.error == ""
