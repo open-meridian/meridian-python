@@ -1505,6 +1505,16 @@ def test_a_trader_with_storage_or_one_pod_still_sends(
     assert rig.trader.shown.error == ""
 
 
+def test_0370_is_breaking_and_migrate_says_so() -> None:
+    """Nit 2 (ruling 601): storage_dir() raising before Register is a break,
+    and migrate's output says so."""
+    from meridian.migrations import as_json, migrate
+
+    result = migrate({"src/p/__init__.py": "\n"}, "0.36.3", "0.37.0")
+    (step,) = as_json(result)["steps"]
+    assert step["breaking"] is True
+    assert "raises" in step["summary"]
+
 
 def test_storage_dir_before_register_on_an_unreadable_storage_fails_closed(
     root: Path, monkeypatch: pytest.MonkeyPatch

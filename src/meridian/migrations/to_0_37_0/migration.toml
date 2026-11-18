@@ -7,17 +7,22 @@ summary = """
 Step 3d, with no contract change. An instance running as shards, or with a
 standby, shares one storage among its pods, a folder per shard: once the
 plugin registered, edge.storage_dir() is its shard's folder and
-edge.instance_storage_dir() the whole. On a storage its copy step converted
-for shards (.meridian/copied-from-<claim>), storage_dir() read before
-Register raises RuntimeError rather than answer the root, which no pod
-writes: a plugin reads its storage from its class's on_start. A placement is
+edge.instance_storage_dir() the whole. Breaking: storage_dir() read before
+Register raises RuntimeError, where 0.36.3 answered the storage's root, on a
+pod of an instance run as shards or with a standby (MERIDIAN_PLUGIN_SHARDS),
+on a storage its copy step converted for shards
+(.meridian/copied-from-<claim>), on one holding a shard's folder, and on one
+it cannot read to tell: the root is no pod's to write, and a plugin reads
+its storage from its class's on_start. A sharded or standby connectivity
+instance with no storage granted sends no placement: each is held, as a pod
+taking its shard over could send it again. A placement is
 noted as a marker of its own (trading/sent/<pid>), created exclusively, so
 of two pods inside a takeover's lapse only one sends it; trading/sent.json
 is read and no longer written. `meridian plugin migrate` moves the
 connectivity template's trading files (0.34.0 to 0.36.3) to the Trader's
 start, and names any other storage read before Register.
 """
-breaking = false
+breaking = true
 rewrite = "rewrite.py"
 
 [[rewrites]]
