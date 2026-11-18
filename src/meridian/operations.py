@@ -4348,6 +4348,7 @@ class Operations:
         trade_date: date | str = "",
         settlement_date: date | str = "",
         raw_record: ops.RawRecordRef | None = None,
+        idempotency_key: str = "",
         acting_for: str | None = None,
     ) -> ops.ReportChargeResult:
         """W11.12: W11.12 (stable)."""
@@ -4357,6 +4358,7 @@ class Operations:
             trade_date=_date(trade_date, "trade_date"),
             settlement_date=_date(settlement_date, "settlement_date"),
             raw_record=raw_record,
+            idempotency_key=idempotency_key,
             acting_for=_assertion(acting_for),
         )
         return await self._operate(self._operations().ReportCharge, params)

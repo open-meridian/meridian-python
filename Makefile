@@ -141,12 +141,13 @@ contract-diff:
 # PyPI depends on nothing by URL (PyPI refuses that) and a plugin installs one
 # thing. `make vendor-schema` moves the copy to SCHEMA_REV; `check-vendored`
 # fails when the two disagree, as core's check-codegen does for its bindings.
-# meridian-schema c30d at f6e7145 (contract 30, step 3d checkpoint 5: items
+# meridian-schema c30d at 89b61ef (contract 30, step 3d checkpoint 5: items
 # 32 and 30 -- MessageMeta.shard and .shard_epoch, REFUSAL_REASON_SHARD_FENCED,
-# RegisterReply.shard and .shards and the shared storage's rows -- and PO 74,
-# ReportChargeRequest.idempotency_key; its PR open, before it lands), its
-# gen/ and boundaries/ vendored here byte for byte.
-SCHEMA_REV := f6e7145824141eca8941621c73c482c7b4c5973a
+# RegisterReply.shard and .shards and the shared storage's rows -- PO 74,
+# ReportChargeRequest.idempotency_key, and the boundaries' rows for items 82
+# and 91; its PR open, before it lands), its gen/ and boundaries/ vendored here
+# byte for byte.
+SCHEMA_REV := 89b61ef95ca8cf71435da88a2bc59c57e005ee99
 SCHEMA_REPO := https://github.com/open-meridian/meridian-schema.git
 SCRATCH     := .schema-scratch
 
@@ -193,10 +194,10 @@ DESIGN ?= ../meridian-design
 # pinned here by commit as the schema is pinned in pyproject.toml. Core's own
 # interop gate overrides this with its working tree, so a change to both lands
 # without either waiting on the other's push.
-# Core's contract 30 protos (DESIGN30 at 43528c8), its c30 branch at stage T6
-# (f423c6a), before it lands; journal.proto moved from there into
-# meridian-schema.
-CORE_REV   := f423c6ac62162b629757017fb2ac4d00634f8246
+# Core's contract 30 protos, its c30d branch at 5aa7031 (step 3d checkpoint 5,
+# with PO 74's keyed charge; schema 89b61ef), before it lands; journal.proto
+# moved from there into meridian-schema.
+CORE_REV   := 5aa7031aacd6d703b3360d47940442f6d394b330
 CORE_PROTO ?= https://github.com/open-meridian/meridian-core.git\#$(CORE_REV):proto
 # And meridian-schema's, which core's import, at the revision vendored here.
 SCHEMA_PROTO ?= https://github.com/open-meridian/meridian-schema.git\#$(SCHEMA_REV):proto
