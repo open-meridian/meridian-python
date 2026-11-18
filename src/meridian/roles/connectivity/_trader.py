@@ -297,7 +297,11 @@ class VenueCharge:
     """A charge the venue states apart from its orders (an account's
     activity), naming the venue order it is on: a `fee` (charged on an order
     that filled nothing) or a `commission` (on a trade), its amount as the
-    venue states it, the currency, its dates and the raw record it is in."""
+    venue states it, the currency, its dates and the raw record it is in.
+    `charge_id` is the venue's ID for the charge; a venue that states none
+    gives the fill's ID with the charge's kind, so two charges on one fill
+    (a commission and a fee) never share one: it is the charge's key in the
+    book (PO 74)."""
 
     charge_id: str
     venue_order_id: str
@@ -2345,8 +2349,10 @@ class Trader(Role):
         if noted in self.charged:
             return
         # Noted once reported (0.37.0): a pod whose report is fenced, its
-        # shard taken, leaves the charge for the holder, which shares the
-        # folder; the book takes a charge again by its ID.
+        # shard taken, or whose note fails after the report landed, leaves
+        # the charge for the holder, which shares the folder and reports it
+        # again under the same key; the book records a charge once per key
+        # (PO 74).
         await self.report_charge(
             placement_id=placement_id,
             fee=Fee(
@@ -2356,6 +2362,7 @@ class Trader(Role):
             trade_date=str(charge.get("trade_date") or ""),
             settlement_date=str(charge.get("settlement_date") or ""),
             raw_record=self._raw(str(charge.get("raw") or "")),
+            idempotency_key=f"charge:{noted}",
         )
         self.charged.note(noted)
 

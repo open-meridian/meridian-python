@@ -1417,3 +1417,45 @@ def test_an_rfq_acceptances_quote_outcomes_failing_are_recorded_at_the_next_poll
         assert rig.venue.accepted == ["Q-B"]
 
     asyncio.run(go())
+
+
+# ── PO 74: a charge's idempotency key ───────────────────────────────────────
+
+
+def test_the_same_charge_reported_twice_carries_one_key(tmp_path: Path) -> None:
+    """PO 74: the deposed pod's report landed and its note failed; the holder
+    reports the charge again under the same key, so the book makes one."""
+    from test_connectivity_trader import Rig
+
+    file = tmp_path / "trading" / "charged.json"
+    charge = {"kind": "commission", "amount": "1.25", "currency": "USD"}
+    recorder = Recorder("broker")
+    deposed = Rig(recorder)
+    deposed.trader.charged = Sent(file)
+
+    def full(_: str) -> bool:
+        raise OSError(28, "No space left on device")
+
+    deposed.trader.charged.note = full  # type: ignore[method-assign]
+    with pytest.raises(OSError):
+        asyncio.run(deposed.trader._charge(PLACEMENT, "act-1", charge))
+    holder = Rig(recorder)
+    holder.trader.charged = Sent(file)
+    asyncio.run(holder.trader._charge(PLACEMENT, "act-1", charge))
+    keys = [c.idempotency_key for c in recorder.on("ReportCharge")]
+    assert keys == [f"charge:act-1|{PLACEMENT}"] * 2
+
+
+def test_two_charges_on_one_placement_never_share_a_key(tmp_path: Path) -> None:
+    """PO 74 (c5k-review L1): a commission and a fee on one placement are two
+    charges, each under its own key, so the book records both."""
+    from test_connectivity_trader import Rig
+
+    recorder = Recorder("broker")
+    rig = Rig(recorder)
+    rig.trader.charged = Sent(tmp_path / "trading" / "charged.json")
+    for charge_id, kind in (("act-1", "commission"), ("act-2", "exchange")):
+        charge = {"kind": kind, "amount": "1.25", "currency": "USD"}
+        asyncio.run(rig.trader._charge(PLACEMENT, charge_id, charge))
+    keys = [c.idempotency_key for c in recorder.on("ReportCharge")]
+    assert keys == [f"charge:act-1|{PLACEMENT}", f"charge:act-2|{PLACEMENT}"]
