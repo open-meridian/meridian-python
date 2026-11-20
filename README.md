@@ -2,7 +2,7 @@
 
 The Python SDK for building [Open Meridian](https://open-meridian.com) plugins:
 the tools a trader has an AI agent build, and the bots and analytics a
-developer writes. Python 3.11 or newer. This is release 0.36.3; its reference
+developer writes. Python 3.11 or newer. This is release 0.37.1; its reference
 is at [open-meridian.dev](https://open-meridian.dev/api/python-sdk/).
 
 ## Start here
@@ -867,10 +867,14 @@ async with await meridian.connect(declaration=DECLARATION, interface=INTERFACE) 
   refuses another declaring storage until the first leaves (`meridian.run`
   leaves before it registers again). The moves (`archive_unit`,
   `restore_unit`, `delete_unit`) are made from the loop the plugin
-  registered on, and one from another thread's loop is refused. **Neither
-  the moves nor `RawStore` are thread-safe:** use a store from one thread
-  at a time, as the plugin's loop does; a second thread's `keep_line` while
-  one is in it is refused (`RuntimeError`).
+  registered on, and one from another thread's loop is refused. **The
+  moves are not thread-safe; a `RawStore` keeps records from several
+  threads:** a `keep_line`, `keep` or `tend` while another thread is in
+  `keep_line` -- a market's REST answer kept on a worker thread while a
+  stream message is kept on the loop -- waits its turn, at most two
+  seconds, then `TimeoutError` and nothing written or moved, and none
+  closes a file another thread is writing (0.37.1; 0.37.0 refused a second
+  `keep_line` at once, and the message was dropped).
 - **A placement sent at most once across a takeover** (0.37.0). The
   Trader notes each placement before its send as a file of its own in the
   shard's folder, `trading/sent/<pid>`, created exclusively: of the deposed
@@ -2812,6 +2816,61 @@ plugin. No transports package is shipped (ruling 1027).
 
   **Run 0.36.0 to 0.36.3 on a core of contract 30.**
 
+### Shards and a standby pod (contract 30; 0.37.0 to 0.37.1)
+
+- **0.37.0, step 3d, with no new interface version** (breaking): an
+  instance running as shards, or with a standby pod, shares one storage
+  among its pods, a folder per shard. Once the plugin has registered,
+  `edge.storage_dir()` is its shard's folder, `<storage>/shard-<n>`, the
+  only place it writes, and `edge.instance_storage_dir()` the whole, which
+  any pod reads. Read before Register on storage the pods share, or on one
+  it cannot read to tell, `storage_dir()` raises `RuntimeError`: a plugin
+  reads its storage from its class's `on_start`. On an instance of one pod
+  it answers the whole, as before.
+- **Keys across the instance**: `RawStore` and `plugin.raw_record(key)`
+  prefix a key in the shard's folder with `shard-<n>/`, and the archive
+  keeps its objects under the same prefix; a key with no prefix names what
+  the instance kept before it ran as shards, which the copy put under
+  `shard-0/` (`meridian-storage copy <claim>` and `meridian-storage copied
+  <claim>`, on the base image's PATH). Each shard keeps its own index of
+  what moved; a restore or deletion of another shard's unit is refused.
+- **Two pods on one shard's folder**: a live file's lines and the shard's
+  index are kept under file locks, so the shared storage must support locks
+  across pods (NFSv4 does). A move waits for another's lock at most 30
+  seconds, `keep_line` at most two; past either, `TimeoutError` and nothing
+  done. One `Plugin` per process keeps raw records, and the moves are made
+  from the loop it registered on.
+- **A lost sidecar**: `meridian.run` stops the classes (`on_stop`) and waits
+  in the same process to be registered again, then calls `on_start` again
+  on the same objects; it never exits for a lost sidecar. A standby pod's
+  plugin waits the same way at its start. A plugin that connects by hand
+  with `meridian.connect` is not registered again.
+- **A placement sent at most once across a takeover**: the `Trader` notes
+  each placement as a file of its own, `trading/sent/<pid>`, created
+  exclusively, reads its trading files from its storage on start, and
+  reports a charge under its key, `charge:<charge ID>|<placement ID>`; a
+  connectivity instance run as shards or with a standby pod and granted no
+  storage sends nothing (see "A placement sent at most once across a
+  takeover" above). Don't roll a connectivity instance back below 0.37.0.
+- **An archive bucket checked before registering**: asked for one key under
+  the instance's prefix; refused on auth, the plugin does not register and
+  says why, asking again once a minute.
+- The 0.36.3 to 0.37.0 step rewrites the connectivity template's trading
+  files into the `Trader`'s start (`trading-files-on-start`) and names by
+  hand storage read before Register (`storage-read-before-register`) and a
+  `Sent`'s file read whole (`noted-file-read-whole`).
+- **0.37.1, a fix, with no contract change**: a raw record kept from two
+  threads at once waits instead of being refused, so no stream message is
+  dropped. `RawStore.keep_line` on a second thread while one is in it -- a
+  market's REST answer on a worker thread while a stream message is kept on
+  the loop -- waits its turn, the wait for the thread and for another pod's
+  lock on the file sharing the two seconds; `keep` and `tend` wait the same
+  way rather than close or rotate a file another thread is writing. Past
+  the bound, `TimeoutError` and nothing written or moved.
+
+  **Run 0.37.0 to 0.37.1 on a core of contract 30 (chart 0.1.632 or
+  later).**
+
 ## Moving a plugin to a new release
 
     meridian plugin migrate            # to the latest release
@@ -2905,6 +2964,8 @@ carries libcst.
 | 0.36.0 to 0.36.1: fixes, with no contract change: an event-contract feed states a contract's payout in a cash with no ISO 4217 code by the cash's resolved instrument once held (its category alone before), where 0.36.0 refused every such `ResolveIdentifier`; a range market's bounds stated only with their unit, left out where the venue states none; `EventContractsChecks` admits the contract's own event and its series asked by reference, and still refuses any list; the 0.35.5 to 0.36.0 step names by hand a `meridian.Job` whose measures are not each a `meridian.MeasureRef` and a `Receive` stand-in with no `read()` | only the pins move | nothing; by behaviour, a token venue's contracts resolve and are priced, a range market with no unit is answered, and a check against a venue reading the contract's event or series passes |
 | 0.36.1 to 0.36.2: fixes, with no contract change: the row-key rule (spec/the-lake rule 5) in the helpers: `helpers.chains.statistic` valid from the start of its day (`day_clock=`), its `valid_from_ns` no longer read; `option_series` under its key's first valid time, an adjustment a new key (`adjusted_on=`, `<OSI>:<date>:ADJ`); `option_chains.Feed(series_path=)` holding each series' first valid time, a re-send refused for its valid time taken as recorded; an event contract's outcome keeping its first determination's valid time; a listings withdrawal of a trade not held keeping the trade's valid time, read from the lake | only the pins move | a row's `valid_from_ns` given the plugin's clock (`now`, `self.now()`, `time.time_ns()`), whose key is recorded again (`valid-time-from-the-clock`); by behaviour, a statistic, a series' terms, an outcome and a withdrawal each keep one valid time per row key, and a chains feed given no `series_path` sends its series' terms again after a restart (taken as recorded where the lake refuses them) |
 | 0.36.2 to 0.36.3: fixes, with no contract change: `option_chains.SeriesTimes`, the series' first-valid-time holder, public (`series()`, `record()`, `other_subjects`), `option_chains.Feed` built on it and holding each series' first subject, its day New York's where its calendar names none; `EventContractsChecks` naming the URL it refuses | only the pins move | a series' terms built by the plugin (`helpers.chains.option_series`) in a module holding no `option_chains.SeriesTimes` (`series-without-a-holder`); by behaviour, a chains feed sends no series under an underlying other than its key's first subject, and a series file that does not read starts empty |
+| 0.36.3 to 0.37.0: step 3d, with no new interface version (breaking): on an instance run as shards or with a standby pod, `edge.storage_dir()` is the shard's folder once registered and raises `RuntimeError` read before Register on storage the pods share; `edge.instance_storage_dir()`; keys prefixed `shard-<n>/`; a lost sidecar waited out in the process, `on_start` called again; the `Trader` noting each placement as `trading/sent/<pid>` and sending none where a sharded or standby instance has no storage; an archive bucket checked before registering | the connectivity template's trading files read by the `Trader` on start (`trading-files-on-start`) | `edge.storage_dir()` read before Register, moved to a class's `on_start` (`storage-read-before-register`); a `Sent`'s file read whole (`noted-file-read-whole`); by behaviour, a class's `on_start` run again after a lost sidecar, and no rollback of a connectivity instance below 0.37.0 |
+| 0.37.0 to 0.37.1: a fix, with no contract change: a raw record kept from two threads at once waits instead of being refused, so no stream message is dropped: `RawStore.keep_line` on a second thread while one is in it waits its turn, the wait for the thread and for another pod's lock sharing two seconds (`TimeoutError` past that, nothing written), where 0.37.0 refused it at once (`RuntimeError`); `keep` and `tend` wait the same way rather than close a file another thread is writing | only the pins move | nothing; by behaviour, a pairs feed whose market keeps a REST answer on a worker thread while a stream message is kept on the loop records the message's trades |
 
 `tests/migrations/` holds the plugins the migrations are recorded for, as
 written and as their migration leaves them, and `make check-migrations` holds
