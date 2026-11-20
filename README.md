@@ -2,7 +2,7 @@
 
 The Python SDK for building [Open Meridian](https://open-meridian.com) plugins:
 the tools a trader has an AI agent build, and the bots and analytics a
-developer writes. Python 3.11 or newer. This is release 0.36.3; its reference
+developer writes. Python 3.11 or newer. This is release 0.37.1; its reference
 is at [open-meridian.dev](https://open-meridian.dev/api/python-sdk/).
 
 ## Start here
@@ -867,10 +867,14 @@ async with await meridian.connect(declaration=DECLARATION, interface=INTERFACE) 
   refuses another declaring storage until the first leaves (`meridian.run`
   leaves before it registers again). The moves (`archive_unit`,
   `restore_unit`, `delete_unit`) are made from the loop the plugin
-  registered on, and one from another thread's loop is refused. **Neither
-  the moves nor `RawStore` are thread-safe:** use a store from one thread
-  at a time, as the plugin's loop does; a second thread's `keep_line` while
-  one is in it is refused (`RuntimeError`).
+  registered on, and one from another thread's loop is refused. **The
+  moves are not thread-safe, nor is `RawStore` but for `keep_line`:** a
+  line kept on a second thread while one is in it -- a market's REST answer
+  on a worker thread while a stream message is kept on the loop -- waits its
+  turn, at most two seconds, then `TimeoutError` and nothing written
+  (0.37.1; 0.37.0 refused it at once, and the message was dropped). Keep
+  whole records (`keep`) and tend a store from one thread at a time, as the
+  plugin's loop does.
 - **A placement sent at most once across a takeover** (0.37.0). The
   Trader notes each placement before its send as a file of its own in the
   shard's folder, `trading/sent/<pid>`, created exclusively: of the deposed
@@ -2905,6 +2909,7 @@ carries libcst.
 | 0.36.0 to 0.36.1: fixes, with no contract change: an event-contract feed states a contract's payout in a cash with no ISO 4217 code by the cash's resolved instrument once held (its category alone before), where 0.36.0 refused every such `ResolveIdentifier`; a range market's bounds stated only with their unit, left out where the venue states none; `EventContractsChecks` admits the contract's own event and its series asked by reference, and still refuses any list; the 0.35.5 to 0.36.0 step names by hand a `meridian.Job` whose measures are not each a `meridian.MeasureRef` and a `Receive` stand-in with no `read()` | only the pins move | nothing; by behaviour, a token venue's contracts resolve and are priced, a range market with no unit is answered, and a check against a venue reading the contract's event or series passes |
 | 0.36.1 to 0.36.2: fixes, with no contract change: the row-key rule (spec/the-lake rule 5) in the helpers: `helpers.chains.statistic` valid from the start of its day (`day_clock=`), its `valid_from_ns` no longer read; `option_series` under its key's first valid time, an adjustment a new key (`adjusted_on=`, `<OSI>:<date>:ADJ`); `option_chains.Feed(series_path=)` holding each series' first valid time, a re-send refused for its valid time taken as recorded; an event contract's outcome keeping its first determination's valid time; a listings withdrawal of a trade not held keeping the trade's valid time, read from the lake | only the pins move | a row's `valid_from_ns` given the plugin's clock (`now`, `self.now()`, `time.time_ns()`), whose key is recorded again (`valid-time-from-the-clock`); by behaviour, a statistic, a series' terms, an outcome and a withdrawal each keep one valid time per row key, and a chains feed given no `series_path` sends its series' terms again after a restart (taken as recorded where the lake refuses them) |
 | 0.36.2 to 0.36.3: fixes, with no contract change: `option_chains.SeriesTimes`, the series' first-valid-time holder, public (`series()`, `record()`, `other_subjects`), `option_chains.Feed` built on it and holding each series' first subject, its day New York's where its calendar names none; `EventContractsChecks` naming the URL it refuses | only the pins move | a series' terms built by the plugin (`helpers.chains.option_series`) in a module holding no `option_chains.SeriesTimes` (`series-without-a-holder`); by behaviour, a chains feed sends no series under an underlying other than its key's first subject, and a series file that does not read starts empty |
+| 0.37.0 to 0.37.1: a fix, with no contract change: a raw record kept from two threads at once waits instead of being refused, so no stream message is dropped: `RawStore.keep_line` on a second thread while one is in it waits its turn, at most two seconds (`TimeoutError` past that, nothing written), where 0.37.0 refused it at once (`RuntimeError`) | only the pins move | nothing; by behaviour, a pairs feed whose market keeps a REST answer on a worker thread while a stream message is kept on the loop records the message's trades |
 
 `tests/migrations/` holds the plugins the migrations are recorded for, as
 written and as their migration leaves them, and `make check-migrations` holds

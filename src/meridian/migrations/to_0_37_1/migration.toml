@@ -1,0 +1,16 @@
+# open-meridian 0.37.0 to 0.37.1: a fix, with no contract change: nothing a
+# plugin calls changed shape, so only the pins move.
+from = "0.37.0"
+to = "0.37.1"
+summary = """
+A fix, with no contract change: a raw record kept from two threads at once
+waits instead of being refused, so no stream message is dropped.
+RawStore.keep_line on a second thread while one is in it -- a market's REST
+answer kept on a worker thread (pairs.Feed asks them through
+asyncio.to_thread) while a stream message is kept on the loop -- waits its
+turn, at most two seconds as for another pod's lock on the file, then
+TimeoutError and nothing written, where 0.37.0 refused it at once
+(RuntimeError) and the message was dropped. Nothing a plugin calls changed
+shape: `meridian plugin migrate` moves the pins and changes no code.
+"""
+breaking = false
