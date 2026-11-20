@@ -79,6 +79,7 @@ in the pre-push gate and in CI and is red on a planted violation
 - A baseline or allowlist changes only in a commit with a `Baseline-Change:`
   trailer saying why (`make check-baselines`); baselines only go down.
 
+## Conventions
 
 Type hints everywhere, checked. Formatting and lint are enforced by the gates,
 so do not argue with the formatter. Prefer a dataclass over a dict for anything
