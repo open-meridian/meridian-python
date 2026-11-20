@@ -1169,6 +1169,10 @@ LAUNCH_PLUGIN_REQUEST_SHARDS_RANGE = Range(least=0, most=64, capped=False)
 """meridian.v1.LaunchPluginRequest.shards: asks for an instance's shards (W8.3;
 the launch setting approved by 1057)"""
 
+CREATE_PLUGIN_REQUEST_SHARDS_RANGE = Range(least=0, most=64, capped=False)
+"""meridian.v1.CreatePluginRequest.shards: tells the launcher the shards an
+instance was launched with (W8.3; approved 2026-11-15)"""
+
 RECORD_HOLDINGS_STATEMENT_REQUEST_PROVENANCE_COUNT = Count(least=0, most=32)
 """meridian.v1.RecordHoldingsStatementRequest.provenance: says where each value
 the plugin closed rather than read came from"""

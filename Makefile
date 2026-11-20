@@ -147,7 +147,7 @@ contract-diff:
 # ReportChargeRequest.idempotency_key, and the boundaries' rows for items 82
 # and 91; its PR open, before it lands), its gen/ and boundaries/ vendored here
 # byte for byte.
-SCHEMA_REV := 89b61ef95ca8cf71435da88a2bc59c57e005ee99
+SCHEMA_REV := 9f396f9f043fcf69d41685de9b3aaf23df14b5f9
 SCHEMA_REPO := https://github.com/open-meridian/meridian-schema.git
 SCRATCH     := .schema-scratch
 
@@ -197,7 +197,7 @@ DESIGN ?= ../meridian-design
 # Core's contract 30 protos, its c30d branch at 5aa7031 (step 3d checkpoint 5,
 # with PO 74's keyed charge; schema 89b61ef), before it lands; journal.proto
 # moved from there into meridian-schema.
-CORE_REV   := 5aa7031aacd6d703b3360d47940442f6d394b330
+CORE_REV   := 8599e1fd34ceee4dc663f421eea9f897b49f7073
 CORE_PROTO ?= https://github.com/open-meridian/meridian-core.git\#$(CORE_REV):proto
 # And meridian-schema's, which core's import, at the revision vendored here.
 SCHEMA_PROTO ?= https://github.com/open-meridian/meridian-schema.git\#$(SCHEMA_REV):proto
