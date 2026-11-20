@@ -12,7 +12,6 @@ brokers through the same Trader in their tests."""
 from __future__ import annotations
 
 import asyncio
-import json
 from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -215,9 +214,9 @@ def test_a_refusal_is_the_placement_rejected_as_the_venue_said() -> None:
 def test_a_restart_never_sends_a_placement_twice(tmp_path: Path) -> None:
     recorder = Recorder("broker")
     rig = placed(recorder, sent=Sent(tmp_path / "trading" / "sent.json"))
-    assert json.loads((tmp_path / "trading" / "sent.json").read_text()) == [
-        "PLC-01JAE00000000000000000001"
-    ]
+    # Noted as a marker of its own before the send (0.37.0), never as a whole file.
+    assert (tmp_path / "trading" / "sent" / "PLC-01JAE00000000000000000001").is_file()
+    assert not (tmp_path / "trading" / "sent.json").exists()
     again = Recorder("broker")
     restarted = Rig(again, sent=Sent(tmp_path / "trading" / "sent.json"), broker=rig.fake)
     restarted.holds(restarted.placement())

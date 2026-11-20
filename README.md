@@ -847,8 +847,12 @@ async with await meridian.connect(declaration=DECLARATION, interface=INTERFACE) 
   the next pass, and the sidecar is given 30 seconds to record a move;
   `keep_line` waits at most two seconds, then refuses the line. The
   heartbeat never waits on the lock: it returns restored units only when
-  nothing else holds it. An instance of one pod (`shards` 0) has no shard
-  folders, and its keys no prefix.
+  nothing else holds it. Read before Register on a storage its pods share
+  (on a pod the launcher gave `MERIDIAN_PLUGIN_SHARDS`, on one its copy
+  step converted, `.meridian/copied-from-<claim>`, or on one holding a
+  shard's folder), `storage_dir()` raises rather than answer the root. An
+  instance of one pod (`shards` 0) has no shard folders, and its keys no
+  prefix.
 - **The copy into `shard-0/`.** Before an instance that kept its own
   storage first runs as several pods, the deployment copies that storage
   into the shared one's `shard-0/` with a pod running the plugin's own
@@ -867,6 +871,37 @@ async with await meridian.connect(declaration=DECLARATION, interface=INTERFACE) 
   the moves nor `RawStore` are thread-safe:** use a store from one thread
   at a time, as the plugin's loop does; a second thread's `keep_line` while
   one is in it is refused (`RuntimeError`).
+- **A placement sent at most once across a takeover** (0.37.0). The
+  Trader notes each placement before its send as a file of its own in the
+  shard's folder, `trading/sent/<pid>`, created exclusively: of the deposed
+  pod and the one that took its shard, inside the lapse, only the one that
+  created it sends, and the other finds its order by the placement's ID as
+  its client order ID; one not found is said outcome unknown, `request
+  unanswered`, once per placement (noted as `unknown:<pid>`, and read from
+  the book's condition), never sent again: the trader resolves it. Once its
+  order is found, it is said resolved (`PLACEMENT_EVENT_OUTCOME_RESOLVED`)
+  before what the venue says of it. A placement the book holds sent or
+  working with no venue order ID is looked for and said unknown the same
+  way. While a placement on an account is unanswered and its unknown is
+  still to be said, the account's orders naming no client order ID are held
+  back from the venue-originated ones; once it is said unknown they are
+  reported. A placement noted as sent is worked as sent under a pause or a
+  stop too: its fills are reported on it, and under a stop its order is
+  cancelled once found. The book is read to its last page wherever the
+  Trader looks a placement up, and a Trader stopped (its sidecar lost)
+  forgets what it held of the book and reads it afresh when admitted
+  again. An RFQ's acceptance is noted the same
+  way, and one noted with no order behind it is said unknown once; a
+  charge is noted once reported. An adapter's order made by an acceptance
+  carries the placement's ID as its client order ID, as a placement's does.
+  Rolling a connectivity instance back below 0.37.0 is not supported: an
+  earlier release reads only `sent.json`, and would send again what 0.37.0
+  noted. **A connectivity instance run as shards or with a
+  standby needs storage granted for this**: with none, what it sent would be
+  held in memory only, so a pod taking a shard over could send a placement
+  again; the Trader sends none, holds each, and says why in its log and on
+  the Connections page until storage is granted. `trading/sent.json`, as earlier
+  releases wrote it, is read and no longer written.
 - **What is stored** is the plugin's to say, as its figures are:
   `plugin.stored`, one `StoredSpan` per kind, on every heartbeat. The bytes
   each kind uses of the archive (`StoredSpan.bytes`) are the SDK's: it sums

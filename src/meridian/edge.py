@@ -55,7 +55,10 @@ every shard's index. A restore or a deletion names a unit as the instance
 does (one with no prefix is shard 0's), and one of another shard's is
 refused, "the unit <unit> is shard <m>'s: its own pod restores it".
 Before the plugin registers no shard is known, and `storage_dir()` is the
-storage as a whole; an instance of one pod (`shards` 0) has no shard
+storage as a whole -- except on a storage its copy step converted for shards
+(`.meridian/copied-from-<claim>`), or one holding a shard's folder, where it
+raises: a plugin reads its
+storage from its class's `on_start` (0.37.0); an instance of one pod (`shards` 0) has no shard
 folders, its keys no prefix, as before.
 
 **The archive** (contract v16; spec/an-edge-plugins-older-records-move-to-
@@ -188,6 +191,11 @@ log = logging.getLogger("meridian.edge")
 #: Where the deployment says it mounted the instance's own storage.
 STORAGE_DIR = "MERIDIAN_STORAGE_DIR"
 
+#: The instance's shard count, as the launcher sets it on every container of
+#: a pod of an instance with several shards or a standby (1 for a standby
+#: alone); unset on an instance's one pod (step 3d; PO 73).
+_PLUGIN_SHARDS = "MERIDIAN_PLUGIN_SHARDS"
+
 
 #: The shard this pod serves and how many its instance runs, as its sidecar
 #: answered Register (`RegisterReply.shard`, `.shards`; step 3d, item 30):
@@ -234,7 +242,80 @@ def storage_dir() -> Path | None:
     """The storage the deployment grants this instance for its raw records
     (decisions/028), or None where it grants none: once the plugin has
     registered as a shard of its instance, its own shard's folder,
-    `<storage>/shard-<n>`, where alone it writes (step 3d, item 30)."""
+    `<storage>/shard-<n>`, where alone it writes (step 3d, item 30).
+
+    Read before Register on an instance the launcher says runs shards or a
+    standby (`MERIDIAN_PLUGIN_SHARDS` 1 or more), on a storage its copy step
+    converted for shards (`.meridian/copied-from-<claim>` at its root), or
+    on one holding a shard's folder (`shard-<n>/`), or on one it cannot read
+    to tell (it fails closed), it raises RuntimeError:
+    the shard's folder is known only once registered, and the root is no
+    pod's to write. A plugin reads it from its class's `on_start`."""
+    if _serving is None:
+        _refuse_before_register()
+    return _storage_dir()
+
+
+def _refuse_before_register() -> None:
+    """The refusal of a read of the shard's folder before Register, on a
+    storage shared among an instance's pods: one its copy step converted for
+    shards (`.meridian/copied-from-<claim>`), or one a pod of the instance
+    has written a shard's folder in (`shard-<n>/`); and one that cannot be
+    read to tell, which fails closed. A shared storage no pod has written in
+    yet is not told from an instance's own (sdk4-review H4, sdk5-review M3)."""
+    granted = instance_storage_dir()
+    if granted is None:
+        return
+    shards = os.environ.get(_PLUGIN_SHARDS, "").strip()
+    if shards.isdigit() and int(shards) >= 1:
+        raise RuntimeError(
+            f"storage_dir() was read before the plugin registered, on an instance of "
+            f"{shards} shard(s) or a standby ({_PLUGIN_SHARDS}): its pods share its storage, "
+            f"its shard's folder is known only once registered, and the root is no pod's "
+            f"to write. Read storage from the class's on_start; `meridian plugin migrate` "
+            f"to 0.37.0 rewrites the connectivity template's trading files and names any "
+            f"other such read it finds"
+        )
+    try:
+        shared = next(
+            (
+                f".meridian/{n}"
+                for n in _names(granted / ".meridian")
+                if n.startswith("copied-from-")
+            ),
+            None,
+        ) or next((n for n in _names(granted) if _SHARD_KEY.fullmatch(n + "/")), None)
+    except OSError as unread:
+        # Fails closed: a storage that cannot be read may be shared, and
+        # its root is then no pod's to write (PR #58's review, nit 3).
+        raise RuntimeError(
+            f"storage_dir() was read before the plugin registered, and its storage "
+            f"({granted}) could not be read to tell whether its instance's pods share it "
+            f"({unread}); read storage from the class's on_start, once registered"
+        ) from unread
+    if shared is not None:
+        raise RuntimeError(
+            f"storage_dir() was read before the plugin registered, on storage its "
+            f"instance's pods share ({shared}): its shard's folder "
+            f"is known only once registered, and the root is no pod's to write. Read "
+            f"storage from the class's on_start; `meridian plugin migrate` to 0.37.0 "
+            f"rewrites the connectivity template's trading files and names any other "
+            f"such read it finds"
+        )
+
+
+def _names(folder: Path) -> list[str]:
+    """The names in a folder; none where nothing is there (absent, or not a
+    folder). Any other failure to read it is raised."""
+    try:
+        with os.scandir(folder) as listed:
+            return [entry.name for entry in listed]
+    except (FileNotFoundError, NotADirectoryError):
+        return []
+
+
+def _storage_dir() -> Path | None:
+    """`storage_dir()`, before Register too: the storage as a whole then."""
     granted = instance_storage_dir()
     prefix = _shard_prefix()
     if granted is None or not prefix:

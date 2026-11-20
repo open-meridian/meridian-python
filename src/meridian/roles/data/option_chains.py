@@ -53,9 +53,13 @@ terms changed since are an adjustment, a new key (`<OSI>:<date>:ADJ`) valid
 from the start of today. A re-send the lake refuses naming its valid time,
 the terms unchanged (the storage lost), is taken as recorded, said once per
 series. A plugin running its own chain machine holds the same with a
-`SeriesTimes` (SDK 0.36.3), which the feed is built on:
+`SeriesTimes` (SDK 0.36.3), which the feed is built on, made in its class's
+`on_start`, once registered: on a shard of its instance, or with a standby,
+`storage_dir()` is its shard's folder, known only then (SDK 0.37.0); so is a
+feed given `series_path`:
 
-    times = option_chains.SeriesTimes(edge.storage_dir() / "series.json")
+    async def on_start(self):                         # the plugin's class
+        self.times = option_chains.SeriesTimes(edge.storage_dir() / "series.json")
 
     def build(valid_from_ns, adjusted_on):           # the plugin's terms
         return helpers.chains.option_series(..., valid_from_ns=valid_from_ns,
@@ -260,8 +264,9 @@ class SeriesTimes:
     it). A row key fixes its valid time and its first subject (spec/the-lake
     rule 5), so terms are sent again under that time, never a later read's.
 
-    Kept at `path` -- the plugin's `edge.storage_dir() / "series.json"`, so
-    a restart keeps them too -- as JSON, `{"series": {"<dataset>":
+    Kept at `path` -- the plugin's `edge.storage_dir() / "series.json"`,
+    read in its class's `on_start`, once registered (its shard's folder from
+    0.37.0), so a restart keeps them too -- as JSON, `{"series": {"<dataset>":
     {"<OSI>": {"adjusted_on": "", "subject": "INS-...", "terms": "<hex>",
     "valid_from_ns": <ns>}}}}`; in memory where `path` is None. A file that
     does not read is said and started empty, never a failed start: each

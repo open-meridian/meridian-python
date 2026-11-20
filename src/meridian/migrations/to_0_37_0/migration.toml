@@ -1,0 +1,64 @@
+# open-meridian 0.36.3 to 0.37.0: step 3d, with no contract change. A plugin
+# reads its storage from its class's on_start: the connectivity template's
+# trading files are moved there, and any other read before Register is named.
+from = "0.36.3"
+to = "0.37.0"
+summary = """
+Step 3d, with no contract change. An instance running as shards, or with a
+standby, shares one storage among its pods, a folder per shard: once the
+plugin registered, edge.storage_dir() is its shard's folder and
+edge.instance_storage_dir() the whole. Breaking: storage_dir() read before
+Register raises RuntimeError, where 0.36.3 answered the storage's root, on a
+pod of an instance run as shards or with a standby (MERIDIAN_PLUGIN_SHARDS),
+on a storage its copy step converted for shards
+(.meridian/copied-from-<claim>), on one holding a shard's folder, and on one
+it cannot read to tell: the root is no pod's to write, and a plugin reads
+its storage from its class's on_start. A sharded or standby connectivity
+instance with no storage granted sends no placement: each is held, as a pod
+taking its shard over could send it again. A placement is
+noted as a marker of its own (trading/sent/<pid>), created exclusively, so
+of two pods inside a takeover's lapse only one sends it; trading/sent.json
+is read and no longer written. `meridian plugin migrate` moves the
+connectivity template's trading files (0.34.0 to 0.36.3) to the Trader's
+start, and names any other storage read before Register.
+"""
+breaking = true
+rewrite = "rewrite.py"
+
+[[rewrites]]
+rule = "trading-files-on-start"
+what = """the connectivity template's trading files, `sent, enabled, originated = \
+connectivity.trading_files(edge.storage_dir())` in a function and the Trader built \
+there given `sent=connectivity.Sent(sent)`, `enabled=connectivity.Sent(enabled)` and \
+`watched=connectivity.Watched(originated)`: the assignment and the three arguments \
+go, the Trader reading its files from its storage on start, once registered (its \
+shard's folder, known only then); `from meridian import edge` goes where nothing \
+else names it"""
+
+[[by_hand]]
+rule = "storage-read-before-register"
+what = """`edge.storage_dir()` read where the plugin's code runs before it registers \
+-- a module's top level, a class body, `main()` or an `__init__` -- such as \
+`option_chains.SeriesTimes(edge.storage_dir() / "series.json")` or \
+`option_chains.Feed(series_path=edge.storage_dir() / "series.json")` built with \
+the class, or a connectivity Trader's files built in `main()` otherwise than the \
+template's. On a sharded or standby instance that is the storage's root, not the \
+shard's folder, and on a storage converted for shards it raises"""
+instead = """read it in the class's `on_start`, once registered, so that on a shard it is \
+the shard's own folder: there build \
+`self.times = option_chains.SeriesTimes(edge.storage_dir() / "series.json")` (the \
+holder 0.36.3's `series-without-a-holder` asks for, kept for the plugin's life as \
+before), or the `option_chains.Feed` given `series_path=`; a connectivity Trader is \
+given no `sent`, `enabled` or `watched` and reads them from its storage on start itself"""
+
+[[by_hand]]
+rule = "noted-file-read-whole"
+what = """a `connectivity.Sent`'s file read whole -- `json.loads((... / "sent.json")\
+.read_text())`, or `enabled.json`'s or `charged.json`'s, a test's most often: from \
+0.37.0 a `Sent` notes each name as a file of its own beside its file, \
+`trading/sent/<pid>`, created exclusively so two pods on one shard's folder never \
+both send, and reads the file an earlier release wrote whole without writing it \
+again"""
+instead = """read what is noted through the `Sent` itself (`name in sent`, `list(sent)`, \
+`connectivity.Sent(path)` made again for a restart), or assert the marker \
+(`(tmp_path / "trading" / "sent" / placement_id).is_file()`)"""
