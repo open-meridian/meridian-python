@@ -114,6 +114,45 @@ def test_a_second_thread_waits_at_most_the_line_bound_then_nothing_is_written(
     assert len(lines) == 1 and '"body": "a"' in lines[0]
 
 
+def test_the_wait_for_another_thread_and_for_another_pod_share_one_bound(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A line waits at most `_LINE_WAIT_SECONDS` in all: the time spent
+    waiting for another thread is taken from the wait for another pod's lock
+    on the file, so the loop never blocks for twice the bound."""
+    import time
+
+    bound = 0.6
+    monkeypatch.setattr(_raw, "_LINE_WAIT_SECONDS", bound)
+    store = RawStore(tmp_path, kind="responses")
+    first = threading.Thread(
+        target=store.keep_line,
+        args=("trade", "BTC-USD", {"received_at_ns": AT, "body": "a"}),
+    )
+    inside, release = _stalled_fsync(monkeypatch, on=first)
+    # Once the first is written, another pod holds the file's lock.
+    pod = threading.Event()
+    trying = _raw._try_lock
+    monkeypatch.setattr(_raw, "_try_lock", lambda fd: not pod.is_set() and trying(fd))
+    first.start()
+    assert inside.wait(10)
+    pod.set()
+    timer = threading.Timer(0.45, release.set)
+    timer.start()
+    began = time.monotonic()
+    try:
+        with pytest.raises(TimeoutError, match=r"past 0\.6 s: nothing was written"):
+            store.keep_line("trade", "BTC-USD", {"received_at_ns": AT + 1, "body": "b"})
+        took = time.monotonic() - began
+    finally:
+        release.set()
+        timer.cancel()
+        first.join(10)
+    # 0.45 s for the thread, then the pod's lock within what is left: about
+    # 0.6 s in all, never 0.45 + 0.6.
+    assert took < bound + 0.3, took
+
+
 class _Keeping:
     """The fake pairs venue keeping its raw records in one store, as a
     plugin's market does: a REST answer (`top`, asked on a worker thread)

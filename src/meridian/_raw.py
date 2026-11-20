@@ -82,10 +82,10 @@ _HELD_OPEN = 128
 #: The live lines whose first arrival is remembered, the latest; any other's
 #: is read from its line.
 _REMEMBERED = 10_000
-#: How long `keep_line` waits for its file's lock while another pod holds it,
-#: and for the store while another thread is in `keep_line`, each at most:
-#: past it the line is refused (TimeoutError), never waited for without end
-#: on the loop the heartbeat runs on. Under a heartbeat's period.
+#: How long `keep_line` waits, at most, for the store while another thread is
+#: in `keep_line` and then for its file's lock while another pod holds it, the
+#: two together: past it the line is refused (TimeoutError), never waited for
+#: without end on the loop the heartbeat runs on. Under a heartbeat's period.
 _LINE_WAIT_SECONDS = 2.0
 
 #: Open-file-description locks where the platform has them (Linux 3.15+, and
@@ -135,11 +135,13 @@ def _unlock(fd: int) -> None:
     fcntl.lockf(fd, fcntl.LOCK_UN)
 
 
-def _lock_waiting(fd: int, within: float, what: str) -> None:
+def _lock_waiting(fd: int, within: float, what: str, ends: float | None = None) -> None:
     """`fd`'s file locked, waited for while another holds it, at most
-    `within` seconds: past that, TimeoutError naming `what`, nothing done.
-    Blocks its thread meanwhile."""
-    ends = time.monotonic() + within
+    `within` seconds, or until the monotonic time `ends` where given (what is
+    left of a wait begun earlier): past that, TimeoutError naming `what` and
+    `within`, nothing done. Blocks its thread meanwhile."""
+    if ends is None:
+        ends = time.monotonic() + within
     wait = 0.002
     while not _try_lock(fd):
         left = ends - time.monotonic()
@@ -351,21 +353,25 @@ class RawStore:
         the same lines through the one descriptor: a second thread's
         `keep_line` while one is in it waits for it -- a REST answer kept on
         a worker thread while a stream message is kept on the loop, say --
-        at most `_LINE_WAIT_SECONDS` too, then TimeoutError and nothing
-        written (0.37.1; 0.37.0 refused it at once, and the message was
-        dropped). Blocks its thread meanwhile."""
+        within the same two seconds, the wait for the thread and for the
+        pod together, then TimeoutError and nothing written (0.37.1; 0.37.0
+        refused it at once, and the message was dropped). Blocks its thread
+        meanwhile."""
         within = _LINE_WAIT_SECONDS
+        ends = time.monotonic() + within
         if not self._writing.acquire(timeout=within):
             raise TimeoutError(
                 f"this RawStore's live files are locked by another thread past {within:g} s: "
                 "nothing was written; ask again"
             )
         try:
-            return self._keep_line(call, name, record)
+            return self._keep_line(call, name, record, within, ends)
         finally:
             self._writing.release()
 
-    def _keep_line(self, call: str, name: str, record: dict[str, Any]) -> str:
+    def _keep_line(
+        self, call: str, name: str, record: dict[str, Any], within: float, ends: float
+    ) -> str:
         self._fresh()
         received = int(record["received_at_ns"])
         day = _day_of(received)
@@ -379,7 +385,7 @@ class RawStore:
             return held[1]
         out = self._appender(key)
         try:
-            _lock_waiting(out.fileno(), _LINE_WAIT_SECONDS, f"the live file {key}")
+            _lock_waiting(out.fileno(), within, f"the live file {key}", ends)
             try:
                 lines = self._count(key, out)
                 out.write(json.dumps(record, sort_keys=True) + "\n")
