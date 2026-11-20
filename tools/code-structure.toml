@@ -1,0 +1,26 @@
+# The code-structure rules' settings (CONTRIBUTING.md, "Code structure");
+# tools/code_structure.py reads them. A change to a baseline or an allowlist
+# named here carries a `Baseline-Change:` trailer saying why.
+repository = "open-meridian/meridian-python"
+
+# S4: the version this repository is building. A marker INTERIM(vNN) at or
+# before it fails.
+roadmap_version = "v31a"
+interims_register = "tools/interims.tsv"
+
+# S5: exceptions, each with its INTERIM(vNN) marker.
+pins_allowlist = "tools/pins-allowlist.txt"
+# Plugins as their migrations write them, pinned as each was recorded.
+pins_skip = ["tests/migrations/*"]
+
+# S2: files over 1,500 lines today, and what is generated or vendored.
+size_baseline = "tools/size-baseline.tsv"
+size_exempt = [
+  "src/meridian/v1/*", "src/meridian/plugin/*", "src/meridian/operations.py",
+  "src/meridian/roles/_generated/*", "src/meridian/bounds.py", "src/meridian/*.json",
+  "tests/migrations/*", "tests/oracle/cases/*", "*.lock", "LICENSE",
+]
+
+# S10: the SDK, its template and its role templates ship under Apache-2.0.
+notice = true
+licence_scan = ["src/*", "template/*", "templates/*"]

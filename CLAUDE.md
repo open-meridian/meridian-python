@@ -55,7 +55,30 @@ never a committed configuration file outside sandbox placeholders.
 **Resolution is dated.** Ask what an identifier meant on a date. An undated
 lookup is a bug waiting for the day an identifier gets reassigned.
 
-## Conventions
+## Code structure
+
+Standing rules (2026-11-20), each a check in `make check-structure`, which runs
+in the pre-push gate and in CI and is red on a planted violation
+(`make check-structure-selftest`). CONTRIBUTING.md states each in full.
+
+- **S3 generated is generated:** `make check-vendored` (bindings, bounds and
+  the contract's JSON are the schema's) and `make check-interims` (the
+  register). Never hand-edit a generated file; regenerate it.
+- **S4 interims name their end:** every stop-gap carries
+  `INTERIM(vNN): reason`; `make check-interims` fails on one due at
+  `roadmap_version` (tools/code-structure.toml). Moving a marker's version
+  needs the product owner's word and a trailer.
+- **S5 pins are immutable:** `make check-pins`. Another repository by a
+  release or a full SHA, never a branch or a sibling checkout; an exception
+  goes in tools/pins-allowlist.txt with its marker.
+- **S10 licences by layer:** `make check-licences`. Nothing here carries GPL
+  or AGPL code; NOTICE ships.
+- **S2 file size:** `make check-size` reports a hand-written file over 1,500
+  lines (a warning in v31a, failing from v31b; growth then needs a
+  `Size-Exception:` trailer).
+- A baseline or allowlist changes only in a commit with a `Baseline-Change:`
+  trailer saying why (`make check-baselines`); baselines only go down.
+
 
 Type hints everywhere, checked. Formatting and lint are enforced by the gates,
 so do not argue with the formatter. Prefer a dataclass over a dict for anything

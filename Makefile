@@ -9,12 +9,13 @@ PY    := python3
 unexport GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR \
          GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_PREFIX
 
-.PHONY: help ci-local ci-remote ci-local-deep ci-stage pre-push pre-push-run install-hooks ci-mirror-check contract-diff \
+.PHONY: help check-structure check-structure-selftest check-interims check-pins check-licences check-size check-baselines ci-local ci-remote ci-local-deep ci-stage pre-push pre-push-run install-hooks ci-mirror-check contract-diff \
         build package test lint conformance fmt vendor-schema check-vendored \
         base-image check-scaffold check-migrations oracle-live oracle-regenerate
 
 help:
 	@echo "  make pre-push       the fast gate the pre-push hook runs: lint, and the stages the changed paths select"
+	@echo "  make check-structure  the code-structure rules: S3, S4, S5, S10, and S2 as a warning"
 	@echo "  make ci-local       every gate, CI's and conformance: optional, for when CI is down"
 	@echo "  make ci-stage STAGE=<job>  one CI job, as it runs there ($(CI_STAGES))"
 	@echo "  make build          install the package and prove it imports"
@@ -50,7 +51,7 @@ ci-local: ci-remote conformance
 # pre-push hook runs conformance whenever the package or the suite changed
 # (PRE_PUSH_MAP), so it passes before any such push from a workspace. The uncovered case is a commit made through GitHub's web interface,
 # which nothing in this repo can check and design's next run will.
-ci-remote: contract-diff ci-mirror-check check-vendored build package check-scaffold test \
+ci-remote: contract-diff ci-mirror-check check-structure check-vendored build package check-scaffold test \
            check-migrations lint
 	@echo
 	@echo "ci-remote: GREEN (conformance not included; see this target's comment)"
@@ -118,7 +119,7 @@ pre-push:
 
 pre-push-run: $(addprefix pre-push-,$(PRE_PUSH_STAGES))
 
-pre-push-checks: contract-diff ci-mirror-check lint
+pre-push-checks: contract-diff ci-mirror-check check-structure lint
 pre-push-python: build test
 pre-push-vendored: check-vendored
 pre-push-package: package
@@ -128,6 +129,39 @@ pre-push-conformance: conformance
 
 ci-mirror-check:
 	@$(PY) tools/ci_mirror_check.py --repo-root .
+
+# The code-structure rules (CONTRIBUTING.md, "Code structure"; adopted
+# 2026-11-20), each red on a planted violation (`make check-structure-selftest`):
+#   S3  generated is generated: check-vendored (the wire bindings, bounds and
+#       the contract's JSON are meridian-schema's at SCHEMA_REV) and
+#       check-interims (the register is the markers').
+#   S4  check-interims: INTERIM(vNN): reason, none due at roadmap_version.
+#   S5  check-pins: pyproject and the workflows pin other repositories by a
+#       release or a full SHA; exceptions listed with their marker.
+#   S10 check-licences: nothing shipped carries a GPL or AGPL licence; NOTICE.
+#   S2  check-size: files over 1,500 lines reported, a warning until v31b.
+#   check-baselines: a baseline or allowlist changes only with a
+#       `Baseline-Change:` trailer, and a ratchet only goes down.
+# tools/code_structure.py is the same in every repository that runs it.
+check-structure: check-structure-selftest check-interims check-pins check-licences check-size check-baselines
+
+check-structure-selftest:
+	@$(PY) tools/code_structure.py --self-test
+
+check-interims:
+	@$(PY) tools/code_structure.py interims
+
+check-pins:
+	@$(PY) tools/code_structure.py pins
+
+check-licences:
+	@$(PY) tools/code_structure.py licences
+
+check-size:
+	@$(PY) tools/code_structure.py size
+
+check-baselines:
+	@$(PY) tools/code_structure.py baselines --base "$(PRE_PUSH_BASE)"
 
 # ADR 005 in meridian-design. Contract-tier changes declare themselves in a
 # commit trailer. Reads what changed on disk, so no tool or session root

@@ -1,0 +1,19 @@
+# S2: hand-written files over 1,500 lines today, with their lines. Lowered as each is split;
+# never raised (CONTRIBUTING.md, "Code structure").
+README.md	2994
+src/meridian/analytics/reference.py	1877
+src/meridian/client.py	2696
+src/meridian/edge.py	1569
+src/meridian/migrations/to_0_35_0/rewrite.py	1736
+src/meridian/pages.py	1690
+src/meridian/roles/connectivity/_trader.py	2578
+src/meridian/roles/data/event_contracts.py	1924
+src/meridian/roles/data/listings.py	1834
+src/meridian/roles/data/pairs.py	1773
+src/meridian/roles/data/testing.py	2619
+tests/conftest.py	1868
+tests/order_path_cases.py	1575
+tests/test_interop.py	1751
+tests/test_lake.py	1579
+tests/test_migrations.py	3123
+tests/test_step_3d_once.py	1545
