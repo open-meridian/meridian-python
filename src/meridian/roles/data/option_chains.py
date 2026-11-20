@@ -105,7 +105,6 @@ import asyncio
 import datetime as dt
 import json
 import logging
-import os
 import re
 import time
 from collections import OrderedDict, deque
@@ -115,6 +114,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any, Protocol
 
+from ..._durable import write_whole
 from ...errors import CallFailed, MeridianError
 from ...operations import (
     ListedSeries,
@@ -473,14 +473,8 @@ def _read_time(each: Any) -> dict[str, Any]:
 def _write_times(path: Path, held: Mapping[str, Mapping[str, Any]]) -> None:
     """The file written whole, beside it first and then put in its place, so
     a crash leaves the old file or the new, never half of one."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    written = path.with_name(path.name + ".tmp")
     body = {"series": {d: dict(sorted(by.items())) for d, by in sorted(held.items())}}
-    with written.open("w", encoding="utf-8") as out:
-        out.write(json.dumps(body, indent=1, sort_keys=True))
-        out.flush()
-        os.fsync(out.fileno())
-    os.replace(written, path)
+    write_whole(path, json.dumps(body, indent=1, sort_keys=True))
 
 
 def _held_already(refused: CallFailed, rows: Sequence[Any]) -> int | None:

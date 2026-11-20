@@ -45,12 +45,11 @@ from __future__ import annotations
 
 import json
 import logging
-import os
-import tempfile
 from collections.abc import Awaitable, Callable, Mapping
 from decimal import Decimal
 from pathlib import Path
 
+from .._durable import write_whole
 from ..operations import Money, PricedUnit, ScenarioKey, as_money
 from ..plugin.v1 import operations_pb2 as ops
 from ..receive import Heard
@@ -119,11 +118,7 @@ class Sequence:
         self.value = sequence
         if self.path is None:
             return
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        fd, temporary = tempfile.mkstemp(dir=self.path.parent)
-        with os.fdopen(fd, "w") as out:
-            json.dump({"sequence": sequence}, out)
-        os.replace(temporary, self.path)
+        write_whole(self.path, json.dumps({"sequence": sequence}))
 
 
 class Pricer(Role):

@@ -151,13 +151,13 @@ import logging
 import os
 import re
 import shutil
-import tempfile
 import time
 import urllib.parse
 from collections.abc import AsyncIterator, Iterator, Mapping, Sequence
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any, Protocol
 
+from ._durable import write_whole
 from ._raw import RawStore as RawStore
 from ._raw import StoredUnit as StoredUnit
 from ._raw import _try_lock, _unlock
@@ -554,7 +554,7 @@ class _Directory:
     def put(self, key: str, data: bytes) -> None:
         target = self._path(key)
         target.parent.mkdir(parents=True, exist_ok=True)
-        _write_whole(target, data)
+        write_whole(target, data)
 
     def get(self, key: str) -> bytes:
         return self._path(key).read_bytes()
@@ -748,21 +748,6 @@ def _archive() -> _Objects | None:
     return _Bucket(bucket) if bucket else None
 
 
-def _write_whole(target: Path, data: bytes) -> None:
-    """Written whole or not at all: to a file beside it, flushed, renamed."""
-    handle, temporary = tempfile.mkstemp(dir=target.parent, prefix=".part-")
-    try:
-        with os.fdopen(handle, "wb") as out:
-            out.write(data)
-            out.flush()
-            os.fsync(out.fileno())
-        os.replace(temporary, target)
-    except BaseException:
-        with contextlib.suppress(FileNotFoundError):
-            os.unlink(temporary)
-        raise
-
-
 def _prune(directory: Path, root: Path) -> None:
     """Empty directories removed up to `root`, which stays."""
     while directory != root and root in directory.parents:
@@ -908,7 +893,7 @@ class _Index:
     def write(self, units: dict[str, _Moved]) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         body = {"units": {unit: dataclasses.asdict(moved) for unit, moved in units.items()}}
-        _write_whole(self.path, json.dumps(body, sort_keys=True, indent=1).encode())
+        write_whole(self.path, json.dumps(body, sort_keys=True, indent=1).encode())
 
     def archive_bytes(self) -> dict[str, int]:
         """The bytes each kind uses of the archive, as this index holds it."""
@@ -1433,7 +1418,7 @@ def _copy_back(archive: _Objects, held: _Moved, target: Path) -> None:
             raise OSError(f"{held.unit} did not come back from the archive as it was archived")
         out = staging.joinpath(*PurePosixPath(within).parts) if within else staging
         out.parent.mkdir(parents=True, exist_ok=True)
-        _write_whole(out, data)
+        write_whole(out, data)
     _remove(target, target.parent)
     target.parent.mkdir(parents=True, exist_ok=True)
     os.replace(staging, target)
