@@ -520,8 +520,9 @@ class RawStore:
     def get(self, ref_key: str) -> dict[str, Any] | None:
         """The record a row's reference names: a whole answer, or one line of a
         day's live answers. None once it has moved or gone, or for a line a
-        crash left unfinished."""
-        self._fresh()
+        crash left unfinished. Read from its file, where its shard's is now:
+        nothing the store remembers is read, and none of its files closed,
+        so a line another thread is writing is let be (0.37.1)."""
         key, _, where = ref_key.partition("#")
         path = self._path(key)
         if not path.is_file():

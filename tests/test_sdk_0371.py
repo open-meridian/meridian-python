@@ -199,6 +199,32 @@ def test_a_whole_record_kept_while_another_thread_keeps_a_line_lets_it_finish(
     assert store.get(whole)["body"] == "c"  # type: ignore[index]
 
 
+def test_a_record_read_while_another_thread_keeps_a_line_closes_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`get` after the plugin registered again reads the record from its
+    file and leaves the store's open files alone: a line another thread is
+    writing is kept."""
+    from meridian import edge
+
+    store = RawStore(tmp_path, kind="responses")
+    whole = store.keep("candles", "BTC-USD", {"received_at_ns": AT, "body": "c"})
+    failed: list[BaseException] = []
+    kept: list[str] = []
+    first = _line_on_a_thread(store, AT, failed, kept)
+    inside, release = _stalled_fsync(monkeypatch, on=first)
+    first.start()
+    assert inside.wait(10)
+    monkeypatch.setattr(edge, "_generation", edge._generation + 1)
+    try:
+        assert store.get(whole)["body"] == "c"  # type: ignore[index]
+    finally:
+        release.set()
+        first.join(10)
+    assert failed == [], failed
+    assert kept and kept[0].endswith("#0")
+
+
 async def test_tend_lets_a_line_kept_for_yesterday_on_another_thread_finish(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
