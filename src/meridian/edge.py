@@ -120,8 +120,9 @@ again; the sidecar is given 30 seconds to record a move. The heartbeat never
 waits on a move: it returns restored units only when nothing else holds the
 lock. One `Plugin` per process makes the moves, from the loop it registered
 on: while one declaring storage is registered, `connect` refuses a second,
-and a move from another loop is refused. Neither the moves nor `RawStore`
-are thread-safe.
+and a move from another loop is refused. The moves are not thread-safe,
+nor is `RawStore` but for `keep_line`: a line kept on a second thread while
+one is in it waits its turn, at most two seconds (0.37.1).
 
 What each kind holds in storage is the plugin's to say, as its figures are
 (`plugin.stored`, one `StoredSpan` per kind), on every heartbeat; the bytes

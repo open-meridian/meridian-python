@@ -1064,34 +1064,6 @@ async def test_m2_a_move_from_another_threads_loop_is_refused(
         await plugin.leave()
 
 
-def test_m2_a_store_written_from_two_threads_at_once_refuses_the_second(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Two threads in one store would count the same lines through its one
-    descriptor: the second is refused while the first is in `keep_line`."""
-    store = RawStore(tmp_path, kind="responses")
-    inside, release = threading.Event(), threading.Event()
-    count = RawStore._count
-
-    def counted(self: RawStore, key: str, out: Any) -> int:
-        inside.set()
-        release.wait(3)
-        return count(self, key, out)
-
-    monkeypatch.setattr(RawStore, "_count", counted)
-    first = threading.Thread(
-        target=store.keep_line, args=("ticker", "BTC-USD", {"received_at_ns": AT, "body": "a"})
-    )
-    first.start()
-    assert inside.wait(10)
-    try:
-        with pytest.raises(RuntimeError, match="one thread at a time"):
-            store.keep_line("ticker", "BTC-USD", {"received_at_ns": AT + 1, "body": "b"})
-    finally:
-        release.set()
-        first.join(10)
-
-
 @_OFD
 def test_a_storage_refusing_descriptor_locks_is_locked_by_lockf(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch

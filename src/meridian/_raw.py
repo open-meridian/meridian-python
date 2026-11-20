@@ -83,8 +83,9 @@ _HELD_OPEN = 128
 #: is read from its line.
 _REMEMBERED = 10_000
 #: How long `keep_line` waits for its file's lock while another pod holds it,
-#: at most: past it the line is refused (TimeoutError), never waited for
-#: without end on the loop the heartbeat runs on. Under a heartbeat's period.
+#: and for the store while another thread is in `keep_line`, each at most:
+#: past it the line is refused (TimeoutError), never waited for without end
+#: on the loop the heartbeat runs on. Under a heartbeat's period.
 _LINE_WAIT_SECONDS = 2.0
 
 #: Open-file-description locks where the platform has them (Linux 3.15+, and
@@ -202,9 +203,12 @@ class RawStore:
     """Raw records as files under the storage's `<kind>/`, one unit a day. Each
     record is a JSON object holding at least `received_at_ns`.
 
-    Not thread-safe: use a store from one thread at a time, as a plugin's
-    loop does (a `keep_line` on a second thread while one is in it is
-    refused). Its files' locks hold across the pods of a shard."""
+    Its live lines may be kept from several threads -- a market's REST
+    answers on worker threads and its stream's messages on the loop: a
+    `keep_line` on a second thread while one is in it waits its turn, at
+    most `_LINE_WAIT_SECONDS`. Its other methods are not thread-safe: keep
+    whole records (`keep`) and tend it from one thread at a time, as a
+    plugin's loop does. Its files' locks hold across the pods of a shard."""
 
     def __init__(self, root: Path, kind: str = "responses") -> None:
         self._given = root
@@ -225,7 +229,7 @@ class RawStore:
         self._open: OrderedDict[str, TextIO] = OrderedDict()
         #: The Register it remembers its files under (`_fresh`).
         self._generation = _generation()
-        #: Held while a thread is in `keep_line`: a second is refused.
+        #: Held while a thread is in `keep_line`: a second waits for it.
         self._writing = threading.Lock()
 
     def _fresh(self) -> None:
@@ -343,13 +347,18 @@ class RawStore:
         pod's lock is waited for at most `_LINE_WAIT_SECONDS` (two seconds),
         then the line is refused, TimeoutError, and nothing written.
 
-        A store is written from one thread at a time: a second thread's
-        `keep_line` while one is in it is refused (RuntimeError), since both
-        would count the same lines through the one descriptor."""
-        if not self._writing.acquire(blocking=False):
-            raise RuntimeError(
-                "this RawStore is in keep_line on another thread: a store is written from "
-                "one thread at a time (keep a store per thread, or call it from the loop)"
+        Its lines are written by one thread at a time, as both would count
+        the same lines through the one descriptor: a second thread's
+        `keep_line` while one is in it waits for it -- a REST answer kept on
+        a worker thread while a stream message is kept on the loop, say --
+        at most `_LINE_WAIT_SECONDS` too, then TimeoutError and nothing
+        written (0.37.1; 0.37.0 refused it at once, and the message was
+        dropped). Blocks its thread meanwhile."""
+        within = _LINE_WAIT_SECONDS
+        if not self._writing.acquire(timeout=within):
+            raise TimeoutError(
+                f"this RawStore's live files are locked by another thread past {within:g} s: "
+                "nothing was written; ask again"
             )
         try:
             return self._keep_line(call, name, record)
