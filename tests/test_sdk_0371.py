@@ -122,7 +122,7 @@ def test_the_wait_for_another_thread_and_for_another_pod_share_one_bound(
     on the file, so the loop never blocks for twice the bound."""
     import time
 
-    bound = 0.6
+    bound = 1.0
     monkeypatch.setattr(_raw, "_LINE_WAIT_SECONDS", bound)
     store = RawStore(tmp_path, kind="responses")
     first = threading.Thread(
@@ -137,20 +137,95 @@ def test_the_wait_for_another_thread_and_for_another_pod_share_one_bound(
     first.start()
     assert inside.wait(10)
     pod.set()
-    timer = threading.Timer(0.45, release.set)
+    timer = threading.Timer(0.9, release.set)
     timer.start()
     began = time.monotonic()
     try:
-        with pytest.raises(TimeoutError, match=r"past 0\.6 s: nothing was written"):
+        with pytest.raises(TimeoutError, match=r"past 1 s: nothing was written"):
             store.keep_line("trade", "BTC-USD", {"received_at_ns": AT + 1, "body": "b"})
         took = time.monotonic() - began
     finally:
         release.set()
         timer.cancel()
         first.join(10)
-    # 0.45 s for the thread, then the pod's lock within what is left: about
-    # 0.6 s in all, never 0.45 + 0.6.
-    assert took < bound + 0.3, took
+    # 0.9 s for the thread, then the pod's lock within what is left: about
+    # 1 s in all, never 0.9 + 1. The margin is for a slow runner: a late
+    # timer only ends the wait for the thread at the bound itself.
+    assert took < bound + 0.7, took
+
+
+def _line_on_a_thread(
+    store: RawStore, at: int, failed: list[BaseException], kept: list[str]
+) -> threading.Thread:
+    """A thread keeping one line, what it kept or what it raised said."""
+
+    def keep() -> None:
+        try:
+            record = {"received_at_ns": at, "body": "a"}
+            kept.append(store.keep_line("trade", "BTC-USD", record))
+        except BaseException as raised:  # noqa: BLE001
+            failed.append(raised)
+
+    return threading.Thread(target=keep)
+
+
+def test_a_whole_record_kept_while_another_thread_keeps_a_line_lets_it_finish(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`keep` after the plugin registered again forgets the store's open
+    files; while another thread is writing one, it waits for that line,
+    never closing its file under it."""
+    from meridian import edge
+
+    store = RawStore(tmp_path, kind="responses")
+    failed: list[BaseException] = []
+    kept: list[str] = []
+    first = _line_on_a_thread(store, AT, failed, kept)
+    inside, release = _stalled_fsync(monkeypatch, on=first)
+    first.start()
+    assert inside.wait(10)
+    # Registered again meanwhile: the store's next use closes its files.
+    monkeypatch.setattr(edge, "_generation", edge._generation + 1)
+    timer = threading.Timer(0.2, release.set)
+    timer.start()
+    try:
+        whole = store.keep("candles", "BTC-USD", {"received_at_ns": AT, "body": "c"})
+    finally:
+        release.set()
+        timer.cancel()
+        first.join(10)
+    assert failed == [], failed
+    assert kept and kept[0].endswith("#0")
+    assert store.get(whole)["body"] == "c"  # type: ignore[index]
+
+
+async def test_tend_lets_a_line_kept_for_yesterday_on_another_thread_finish(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`tend` closes the past days' files; a line still being kept for
+    yesterday on another thread is let finish first, never cut off."""
+    from datetime import date
+    from types import SimpleNamespace
+
+    store = RawStore(tmp_path, kind="responses")
+    failed: list[BaseException] = []
+    kept: list[str] = []
+    first = _line_on_a_thread(store, AT, failed, kept)  # 2026-10-10
+    inside, release = _stalled_fsync(monkeypatch, on=first)
+    first.start()
+    assert await asyncio.to_thread(inside.wait, 10)
+    timer = threading.Timer(0.2, release.set)
+    timer.start()
+    plugin = SimpleNamespace(stored=[])
+    try:
+        await store.tend(plugin, window_days=30, past="kept", today=date(2026, 10, 11))
+    finally:
+        release.set()
+        timer.cancel()
+        await asyncio.to_thread(first.join, 10)
+    assert failed == [], failed
+    assert kept and kept[0].endswith("#0")
+    assert plugin.stored and plugin.stored[0].record_count == 1
 
 
 class _Keeping:

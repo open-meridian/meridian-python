@@ -205,12 +205,13 @@ class RawStore:
     """Raw records as files under the storage's `<kind>/`, one unit a day. Each
     record is a JSON object holding at least `received_at_ns`.
 
-    Its live lines may be kept from several threads -- a market's REST
+    Its records may be kept from several threads -- a market's REST
     answers on worker threads and its stream's messages on the loop: a
-    `keep_line` on a second thread while one is in it waits its turn, at
-    most `_LINE_WAIT_SECONDS`. Its other methods are not thread-safe: keep
-    whole records (`keep`) and tend it from one thread at a time, as a
-    plugin's loop does. Its files' locks hold across the pods of a shard."""
+    `keep_line`, `keep` or `tend` while another thread is in `keep_line`
+    waits its turn, at most `_LINE_WAIT_SECONDS`, then TimeoutError and
+    nothing written or moved; none closes a file another thread is writing.
+    The moves `tend` makes are the loop's, as the plugin registered on it.
+    Its files' locks hold across the pods of a shard."""
 
     def __init__(self, root: Path, kind: str = "responses") -> None:
         self._given = root
@@ -231,7 +232,8 @@ class RawStore:
         self._open: OrderedDict[str, TextIO] = OrderedDict()
         #: The Register it remembers its files under (`_fresh`).
         self._generation = _generation()
-        #: Held while a thread is in `keep_line`: a second waits for it.
+        #: Held while a thread reads or changes what the store remembers
+        #: (`keep_line`, `keep`, `tend`): another waits for it.
         self._writing = threading.Lock()
 
     def _fresh(self) -> None:
@@ -322,13 +324,24 @@ class RawStore:
         return granted.joinpath("shard-0", *below.parts) / key
 
     def keep(self, call: str, name: str, record: dict[str, Any]) -> str:
-        """Keep one answer; its key. A key is never written twice."""
-        self._fresh()
-        self._kept += 1
+        """Keep one answer; its key. A key is never written twice.
+
+        What the store remembers is read and changed one thread at a time:
+        while another thread is in `keep_line`, this waits for it, at most
+        `_LINE_WAIT_SECONDS`, then TimeoutError and nothing written, rather
+        than close a file the other is writing (0.37.1). The answer's own
+        file is written after, with no wait."""
         received = int(record["received_at_ns"])
+        self._take("nothing was written; ask again")
+        try:
+            self._fresh()
+            self._kept += 1
+            kept = self._kept
+        finally:
+            self._writing.release()
         key = (
             f"{self.kind}/{_day_of(received)}/{_safe(call)}/"
-            f"{_safe(name)}-{received}-{self._kept}.json"
+            f"{_safe(name)}-{received}-{kept}.json"
         )
         path = self.root / key
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -359,15 +372,25 @@ class RawStore:
         meanwhile."""
         within = _LINE_WAIT_SECONDS
         ends = time.monotonic() + within
-        if not self._writing.acquire(timeout=within):
-            raise TimeoutError(
-                f"this RawStore's live files are locked by another thread past {within:g} s: "
-                "nothing was written; ask again"
-            )
+        self._take("nothing was written; ask again", within)
         try:
             return self._keep_line(call, name, record, within, ends)
         finally:
             self._writing.release()
+
+    def _take(self, unless: str, within: float | None = None) -> None:
+        """What the store remembers held for this thread, waited for while
+        another thread is in it, at most `within` seconds
+        (`_LINE_WAIT_SECONDS` where not given): past that, TimeoutError
+        saying `unless`. Blocks its thread meanwhile; released by the
+        caller."""
+        if within is None:
+            within = _LINE_WAIT_SECONDS
+        if not self._writing.acquire(timeout=within):
+            raise TimeoutError(
+                f"this RawStore's live files are locked by another thread past {within:g} s: "
+                f"{unless}"
+            )
 
     def _keep_line(
         self, call: str, name: str, record: dict[str, Any], within: float, ends: float
@@ -592,7 +615,12 @@ class RawStore:
         window alone, with no settings, nothing moves past it (`kept`, the
         default where no archive is granted, and never a deletion the admin
         did not choose). A window below 0, or a `past` other than
-        `archived`, `kept` or `deleted`, is refused, naming it."""
+        `archived`, `kept` or `deleted`, is refused, naming it.
+
+        From 0.37.1 it closes past days' files only once no other thread is
+        in `keep_line`, waiting at most `_LINE_WAIT_SECONDS` (blocking the
+        loop meanwhile, as a line kept there does); past that, TimeoutError
+        and nothing moved, for the next pass."""
         if past is None and settings is None and window_days is not None:
             past = "kept"
         if window_days is None or past is None:
@@ -601,8 +629,14 @@ class RawStore:
         if today is None:
             today = datetime.now(UTC).date()
         cutoff = today - timedelta(days=window_days)
-        self._fresh()
-        self._forget(before=today.isoformat())
+        # Past days' files closed only once no other thread is writing one
+        # (0.37.1): a line still being kept for yesterday is let finish.
+        self._take("nothing moved; the next pass tries again")
+        try:
+            self._fresh()
+            self._forget(before=today.isoformat())
+        finally:
+            self._writing.release()
         for unit in self.units():
             if unit.day >= cutoff or unit.day >= today or past == "kept":
                 continue
