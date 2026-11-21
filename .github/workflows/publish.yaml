@@ -91,13 +91,13 @@ jobs:
 
       - name: To TestPyPI
         if: github.event_name != 'push' && inputs.index == 'testpypi'
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
         with:
           repository-url: https://test.pypi.org/legacy/
 
       - name: To PyPI
         if: github.event_name == 'push' || inputs.index == 'pypi'
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
 
   # The plugin base image, `ghcr.io/open-meridian/plugin-python:<version>`, for
   # a real release only and only once PyPI has the version: it installs
