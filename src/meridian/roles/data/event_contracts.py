@@ -114,7 +114,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
 import time
 from collections import deque
 from collections.abc import Awaitable, Callable, Iterable, Sequence
@@ -126,6 +125,7 @@ from pathlib import Path
 from typing import Any, Protocol, cast
 from zoneinfo import ZoneInfo
 
+from ..._durable import write_whole
 from ...errors import NotGranted
 from ...figures import Figure
 from ...operations import (
@@ -616,7 +616,6 @@ class ContractMap:
     def save(self) -> None:
         if self.path is None:
             return
-        self.path.parent.mkdir(parents=True, exist_ok=True)
         body = {
             "contracts": [_held(c) for _, c in sorted(self.contracts.items())],
             "subjects": self.subjects,
@@ -626,9 +625,7 @@ class ContractMap:
             "outcomes": {code: asdict(o) for code, o in sorted(self.outcomes.items())},
             "bars": dict(sorted(self.bars.items())),
         }
-        written = self.path.with_suffix(".tmp")
-        written.write_text(json.dumps(body, indent=1, sort_keys=True), encoding="utf-8")
-        os.replace(written, self.path)
+        write_whole(self.path, json.dumps(body, indent=1, sort_keys=True))
 
     def serving(self, subject: str) -> Mapped | None:
         """The contract a subject is, where the cash has resolved; None

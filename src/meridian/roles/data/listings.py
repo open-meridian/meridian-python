@@ -132,6 +132,7 @@ from pathlib import Path
 from typing import Any, Protocol
 from zoneinfo import ZoneInfo
 
+from ..._durable import write_whole
 from ...errors import MeridianError, NotGranted
 from ...figures import Figure
 from ...operations import (
@@ -371,10 +372,7 @@ class Listings:
             return
         self.symbols[entity_id] = symbol
         if self.path is not None:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            partial = self.path.with_suffix(".partial")
-            partial.write_text(json.dumps(self.symbols, sort_keys=True, indent=1))
-            partial.replace(self.path)
+            write_whole(self.path, json.dumps(self.symbols, sort_keys=True, indent=1))
 
 
 def _chunks(items: Sequence[Any], size: int = BATCH) -> Iterable[Sequence[Any]]:

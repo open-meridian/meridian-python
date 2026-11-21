@@ -6,11 +6,16 @@ tests on it."""
 from __future__ import annotations
 
 import datetime as dt
+import os
 from dataclasses import dataclass, field
 from decimal import Decimal
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
+import pytest
+
+from meridian import _durable
 from meridian.operations import as_decimal
 from meridian.plugin.v1 import operations_pb2 as ops
 from meridian.receive import Heard
@@ -225,6 +230,26 @@ async def test_a_range_of_trades_is_read_only_from_a_source_with_history() -> No
 def test_the_listing_map_is_kept_in_storage(tmp_path: Path) -> None:
     kept = listings.Listings(tmp_path / "products.json")
     kept.put(SPY, "SPY")
+    assert listings.Listings(tmp_path / "products.json").symbols == {SPY: "SPY"}
+
+
+def test_the_listing_map_is_written_whole_and_synced(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The map goes through meridian._durable.write_whole (PR #60 review): its
+    data and its directory synced, under a temporary name of its own, so two
+    holders in a takeover's lapse never share one `.partial` file."""
+    synced: list[int] = []
+
+    def fsync(handle: int) -> None:
+        synced.append(handle)
+        os.fsync(handle)
+
+    monkeypatch.setattr(_durable, "os", SimpleNamespace(**{**vars(os), "fsync": fsync}))
+    kept = listings.Listings(tmp_path / "products.json")
+    kept.put(SPY, "SPY")
+    assert len(synced) >= 2, "the map's data and its directory are each synced"
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["products.json"]
     assert listings.Listings(tmp_path / "products.json").symbols == {SPY: "SPY"}
 
 
