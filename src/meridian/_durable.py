@@ -21,6 +21,8 @@ Each step is needed:
 4. The directory is synced, so the rename itself is on disk before the call
    returns. A directory this makes is synced into its parent the same way.
 
+The file is made 0o600, readable and writable by its owner only.
+
 Two writers in a lapse still end with one of them: the last rename wins,
 whole. Which one is the role's to settle, by its epoch or the book.
 
@@ -46,8 +48,9 @@ def write_whole(path: str | os.PathLike[str], data: bytes | str) -> None:
     body = data.encode("utf-8") if isinstance(data, str) else data
     _make_directory(target.parent)
     temporary = target.with_name(f".{target.name}.{secrets.token_hex(8)}.part")
-    # Read and write for whoever the umask allows, as open(path, "w") makes it.
-    handle = os.open(temporary, _OPEN_FLAGS, 0o666)
+    # Read and write for its owner only: a kept file holds a plugin's state.
+    # The rename keeps this mode, so a target that was wider ends 0o600 too.
+    handle = os.open(temporary, _OPEN_FLAGS, 0o600)
     try:
         try:
             left = memoryview(body)

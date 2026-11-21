@@ -15,6 +15,7 @@ from __future__ import annotations
 import errno
 import json
 import os
+import stat
 import threading
 import zlib
 from collections.abc import Callable
@@ -293,6 +294,26 @@ def test_a_failed_write_leaves_the_old_file_and_no_part(
 
     assert target.read_bytes() == OLD
     assert [p.name for p in tmp_path.iterdir()] == ["state.json"]
+
+
+def test_a_kept_file_is_readable_and_writable_by_its_owner_only(tmp_path: Path) -> None:
+    """A kept file holds a plugin's state (the trader's originated orders, a
+    listing map, a pricing sequence): write_whole makes it 0o600 whatever the
+    umask allows, and a file it replaces that was wider ends 0o600 too."""
+    made = tmp_path / "kept" / "state.json"
+    _durable.write_whole(made, NEW)
+    assert stat.S_IMODE(os.lstat(made).st_mode) == 0o600
+
+    wider = tmp_path / "originated.json"
+    wider.write_bytes(OLD)
+    os.chmod(wider, 0o644)
+    old_umask = os.umask(0)
+    try:
+        _durable.write_whole(wider, NEW)
+    finally:
+        os.umask(old_umask)
+    assert stat.S_IMODE(os.lstat(wider).st_mode) == 0o600
+    assert wider.read_bytes() == NEW
 
 
 # -- two writers in a takeover's lapse ---------------------------------------
