@@ -81,7 +81,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
 import time
 from collections import deque
 from collections.abc import Awaitable, Callable, Iterable, Sequence
@@ -91,6 +90,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any, Protocol, cast
 
+from ..._durable import write_whole
 from ...errors import MeridianError, NotGranted
 from ...figures import Figure
 from ...helpers.sessions import Link, Supervisor
@@ -619,7 +619,6 @@ class ProductMap:
     def save(self) -> None:
         if self.path is None:
             return
-        self.path.parent.mkdir(parents=True, exist_ok=True)
         body = {
             "listed": [asdict(item) for item in self.listed],
             "ids": self.ids,
@@ -627,9 +626,7 @@ class ProductMap:
             "missing": self.missing,
             "read_at_ns": self.read_at_ns,
         }
-        written = self.path.with_suffix(".tmp")
-        written.write_text(json.dumps(body, indent=1, sort_keys=True), encoding="utf-8")
-        os.replace(written, self.path)
+        write_whole(self.path, json.dumps(body, indent=1, sort_keys=True))
 
     def assets(self) -> list[Asset]:
         """Each asset of a product the venue trades, once, by its code."""

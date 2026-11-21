@@ -114,8 +114,6 @@ import contextlib
 import inspect
 import json
 import logging
-import os
-import tempfile
 from collections.abc import AsyncIterator, Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, tzinfo
@@ -123,6 +121,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any, Protocol, cast
 
+from ..._durable import write_whole
 from ..._numbers import number
 from ...client import AccountScope
 from ...errors import MeridianError
@@ -558,22 +557,16 @@ class Watched:
     def save(self) -> None:
         if self._file is None:
             return
-        self._file.parent.mkdir(parents=True, exist_ok=True)
-        made, written = tempfile.mkstemp(dir=self._file.parent, suffix=".tmp")
-        try:
-            with os.fdopen(made, "w") as file:
-                json.dump(
-                    {
-                        "since": {c: at.isoformat() for c, at in sorted(self.since.items())},
-                        "orders": [o.held() for o in self.orders.values()],
-                    },
-                    file,
-                    sort_keys=True,
-                )
-            os.replace(written, self._file)
-        except BaseException:
-            Path(written).unlink(missing_ok=True)
-            raise
+        write_whole(
+            self._file,
+            json.dumps(
+                {
+                    "since": {c: at.isoformat() for c, at in sorted(self.since.items())},
+                    "orders": [o.held() for o in self.orders.values()],
+                },
+                sort_keys=True,
+            ),
+        )
 
 
 @dataclass
